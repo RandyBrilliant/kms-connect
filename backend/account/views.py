@@ -15,8 +15,21 @@ from django.conf import settings as django_settings
 from django.core.cache import cache
 from django.shortcuts import get_object_or_404
 from urllib.parse import urlencode
+from datetime import timedelta
 
-from .models import CustomUser, UserRole, ApplicantProfile, WorkExperience, ApplicantDocument, DocumentType
+from django.db.models import Count
+from django.db.models.functions import TruncDate
+from django.utils import timezone
+
+from .models import (
+    CustomUser,
+    UserRole,
+    ApplicantProfile,
+    WorkExperience,
+    ApplicantDocument,
+    DocumentType,
+    ApplicantVerificationStatus,
+)
 from .permissions import IsBackofficeAdmin
 from .email_utils import verification_link, send_verification_email, send_password_reset_email
 from .serializers import (
@@ -484,9 +497,11 @@ class ApplicantDocumentViewSet(viewsets.ModelViewSet):
         applicant_pk = self.kwargs.get("applicant_pk")
         if not applicant_pk:
             return ApplicantDocument.objects.none()
-        return ApplicantDocument.objects.filter(
-            applicant_profile__user_id=applicant_pk
-        ).select_related("document_type").order_by("document_type__sort_order")
+        return (
+            ApplicantDocument.objects.filter(applicant_profile__user_id=applicant_pk)
+            .select_related("document_type", "reviewed_by")
+            .order_by("document_type__sort_order")
+        )
 
     def get_applicant_profile(self):
         applicant_pk = self.kwargs.get("applicant_pk")
@@ -494,3 +509,103 @@ class ApplicantDocumentViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(applicant_profile=self.get_applicant_profile())
+
+
+# ---------------------------------------------------------------------------
+# Admin dashboard: applicant statistics & latest applicants
+# ---------------------------------------------------------------------------
+
+
+class AdminApplicantDashboardSummaryView(APIView):
+    """
+    Ringkasan statistik pelamar untuk dashboard Admin.
+
+    - total_applicants: jumlah seluruh pelamar terdaftar
+    - total_active_workers: pelamar dengan status verifikasi DITERIMA
+    - total_inactive_workers: pelamar lain (belum diterima)
+    - growth_rate_30d: persen pertumbuhan pendaftaran pelamar 30 hari terakhir
+      dibanding 30 hari sebelumnya.
+    """
+
+    permission_classes = [IsBackofficeAdmin]
+
+    def get(self, request):
+        now = timezone.now()
+        total_applicants = ApplicantProfile.objects.count()
+        total_active_workers = ApplicantProfile.objects.filter(
+            verification_status=ApplicantVerificationStatus.ACCEPTED
+        ).count()
+        total_inactive_workers = max(total_applicants - total_active_workers, 0)
+
+        # Growth rate: 30 hari terakhir vs 30 hari sebelumnya
+        current_start = now - timedelta(days=30)
+        prev_start = now - timedelta(days=60)
+
+        current_count = ApplicantProfile.objects.filter(created_at__gte=current_start).count()
+        prev_count = ApplicantProfile.objects.filter(
+            created_at__gte=prev_start, created_at__lt=current_start
+        ).count()
+
+        if prev_count == 0:
+            growth_rate_30d = 100.0 if current_count > 0 else 0.0
+        else:
+            growth_rate_30d = ((current_count - prev_count) / prev_count) * 100.0
+
+        data = {
+            "total_applicants": total_applicants,
+            "total_active_workers": total_active_workers,
+            "total_inactive_workers": total_inactive_workers,
+            "growth_rate_30d": round(growth_rate_30d, 2),
+        }
+        return Response(data, status=status.HTTP_200_OK)
+
+
+class AdminApplicantDashboardTimeseriesView(APIView):
+    """
+    Time series pelamar baru per hari untuk 90 hari terakhir.
+    Frontend dapat memfilter 90/30/7 hari dari data ini.
+    """
+
+    permission_classes = [IsBackofficeAdmin]
+
+    def get(self, request):
+        now = timezone.now()
+        start = now - timedelta(days=90)
+        qs = (
+            ApplicantProfile.objects.filter(created_at__gte=start)
+            .annotate(day=TruncDate("created_at"))
+            .values("day")
+            .order_by("day")
+            .annotate(count=Count("id"))
+        )
+        data = [
+            {"date": row["day"].isoformat(), "count": row["count"]}
+            for row in qs
+        ]
+        return Response(data, status=status.HTTP_200_OK)
+
+
+class AdminApplicantDashboardLatestView(APIView):
+    """
+    Top 10 pelamar terbaru (berdasarkan created_at ApplicantProfile).
+    Dipakai untuk tabel di dashboard Admin.
+    """
+
+    permission_classes = [IsBackofficeAdmin]
+
+    def get(self, request):
+        profiles = (
+            ApplicantProfile.objects.select_related("user")
+            .order_by("-created_at")[:10]
+        )
+        data = [
+            {
+                "id": p.user_id,
+                "full_name": p.full_name,
+                "email": p.user.email if p.user_id else "",
+                "verification_status": p.verification_status,
+                "created_at": p.created_at,
+            }
+            for p in profiles
+        ]
+        return Response(data, status=status.HTTP_200_OK)

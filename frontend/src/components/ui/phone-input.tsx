@@ -78,7 +78,7 @@ export function PhoneInput({
   }
 
   return (
-    <div className="flex gap-2">
+    <div className="flex gap-2 items-center">
       <Select
         value={selectedCountry.dialCode}
         onValueChange={(dialCode) => {

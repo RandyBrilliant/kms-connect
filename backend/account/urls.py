@@ -68,9 +68,29 @@ public_document_types = [
     ),
 ]
 
+# Admin dashboard (applicants overview)
+dashboard_paths = [
+    path(
+        "dashboard/applicants/summary/",
+        views.AdminApplicantDashboardSummaryView.as_view(),
+        name="dashboard-applicants-summary",
+    ),
+    path(
+        "dashboard/applicants/timeseries/",
+        views.AdminApplicantDashboardTimeseriesView.as_view(),
+        name="dashboard-applicants-timeseries",
+    ),
+    path(
+        "dashboard/applicants/latest/",
+        views.AdminApplicantDashboardLatestView.as_view(),
+        name="dashboard-applicants-latest",
+    ),
+]
+
 urlpatterns = [
     path("me/", views.MeView.as_view(), name="me"),
     path("", include(public_document_types)),
+    path("", include(dashboard_paths)),
     path("", include(admin_email_paths)),
     path("", include(nested_applicant)),
     path("", include(router.urls)),

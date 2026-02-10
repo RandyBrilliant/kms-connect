@@ -42,6 +42,9 @@ export function ApplicantMetadataTab({
   const updateMutation = useUpdateApplicantMutation(applicant.id)
 
   const handleStatusChange = async (value: ApplicantVerificationStatus) => {
+    // Don't do anything if selecting the same value
+    if (value === profile.verification_status) return
+    
     try {
       await updateMutation.mutateAsync({
         applicant_profile: {
@@ -51,8 +54,38 @@ export function ApplicantMetadataTab({
       toast.success("Status verifikasi diperbarui")
       onUpdated?.()
     } catch (err: unknown) {
-      const res = err as { response?: { data?: { detail?: string } } }
-      toast.error("Gagal", res?.response?.data?.detail ?? "Coba lagi nanti")
+      const res = err as {
+        response?: {
+          data?: {
+            errors?: Record<string, unknown>
+            detail?: string
+          }
+        }
+      }
+      const errors = res?.response?.data?.errors
+      const detail = res?.response?.data?.detail
+      if (errors) {
+        const msgs = Object.entries(errors).flatMap(([k, v]) => {
+          if (
+            k === "applicant_profile" &&
+            v &&
+            typeof v === "object" &&
+            !Array.isArray(v)
+          ) {
+            return Object.entries(v as Record<string, unknown>).flatMap(
+              ([subK, subV]) => {
+                const arr = Array.isArray(subV) ? subV : [subV]
+                return arr.map((m) => `${subK}: ${String(m)}`)
+              }
+            )
+          }
+          const arr = Array.isArray(v) ? v : [v]
+          return arr.map((m) => `${k}: ${String(m)}`)
+        })
+        toast.error("Validasi gagal", msgs.join(". "))
+      } else {
+        toast.error("Gagal", detail ?? "Coba lagi nanti")
+      }
     }
   }
 
@@ -75,8 +108,12 @@ export function ApplicantMetadataTab({
               }
               disabled={updateMutation.isPending}
             >
-              <SelectTrigger className="w-[180px] cursor-pointer">
-                <SelectValue />
+              <SelectTrigger className="w-[180px] cursor-pointer" disabled={updateMutation.isPending}>
+                <SelectValue>
+                  {updateMutation.isPending
+                    ? "Menyimpan..."
+                    : VERIFICATION_LABELS[profile.verification_status]}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {Object.entries(VERIFICATION_LABELS).map(([val, label]) => (

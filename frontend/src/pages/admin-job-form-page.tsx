@@ -1,0 +1,142 @@
+/**
+ * Job form page - shared for create and edit.
+ * /lowongan-kerja/new (create) and /lowongan-kerja/:id/edit (edit)
+ */
+
+import { Link, useNavigate, useParams } from "react-router-dom"
+import { IconArrowLeft } from "@tabler/icons-react"
+
+import { JobForm } from "@/components/jobs/job-form"
+import { BreadcrumbNav } from "@/components/breadcrumb-nav"
+import { Button } from "@/components/ui/button"
+import {
+  useJobQuery,
+  useCreateJobMutation,
+  useUpdateJobMutation,
+} from "@/hooks/use-jobs-query"
+import { toast } from "@/lib/toast"
+import type { JobStatus, EmploymentType } from "@/types/jobs"
+
+const BASE_PATH = "/lowongan-kerja"
+
+export function AdminJobFormPage() {
+  const navigate = useNavigate()
+  const { id } = useParams<{ id: string }>()
+  const isEdit = id !== "new" && id != null
+  const jobId = isEdit ? parseInt(id, 10) : null
+
+  const { data: job, isLoading: loadingJob } = useJobQuery(
+    jobId ?? null,
+    isEdit
+  )
+  const createMutation = useCreateJobMutation()
+  const updateMutation = useUpdateJobMutation(jobId ?? 0)
+
+  const handleSubmit = async (values: {
+    title: string
+    slug: string
+    company: number
+    location_country: string
+    location_city: string
+    description: string
+    requirements: string
+    employment_type: EmploymentType
+    salary_min: number | null
+    salary_max: number | null
+    currency: string
+    status: JobStatus
+    posted_at?: string | null
+    deadline?: string | null
+  }) => {
+    try {
+      if (isEdit && jobId) {
+        await updateMutation.mutateAsync(values)
+        toast.success("Lowongan diperbarui", "Perubahan berhasil disimpan")
+        navigate(BASE_PATH)
+      } else {
+        await createMutation.mutateAsync(values)
+        toast.success("Lowongan ditambahkan", "Lowongan baru berhasil dibuat")
+        navigate(BASE_PATH)
+      }
+    } catch (err: unknown) {
+      const res = err as {
+        response?: { data?: { errors?: Record<string, string[]>; detail?: string } }
+      }
+      const errors = res?.response?.data?.errors
+      const detail = res?.response?.data?.detail
+      if (errors) {
+        toast.error("Validasi gagal", Object.values(errors).flat().join(". "))
+      } else {
+        toast.error("Gagal menyimpan", detail ?? "Coba lagi nanti")
+      }
+      throw err
+    }
+  }
+
+  if (isEdit && loadingJob) {
+    return (
+      <div className="flex min-h-[200px] items-center justify-center px-6 py-8">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    )
+  }
+
+  if (isEdit && !job && !loadingJob) {
+    return (
+      <div className="px-6 py-8">
+        <p className="text-destructive">Lowongan tidak ditemukan.</p>
+        <Button variant="link" asChild>
+          <Link to={BASE_PATH}>Kembali ke daftar</Link>
+        </Button>
+      </div>
+    )
+  }
+
+  const isSubmitting =
+    createMutation.isPending || updateMutation.isPending
+  const pageTitle = isEdit ? "Edit Lowongan" : "Tambah Lowongan"
+  const breadcrumbItems = isEdit
+    ? [
+        { label: "Dashboard", href: "/" },
+        { label: "Lowongan Kerja", href: BASE_PATH },
+        { label: "Edit" },
+      ]
+    : [
+        { label: "Dashboard", href: "/" },
+        { label: "Lowongan Kerja", href: BASE_PATH },
+        { label: "Tambah Baru" },
+      ]
+
+  return (
+    <div className="w-full px-6 py-6 md:px-8 md:py-8">
+      <div className="w-full">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex flex-col gap-2">
+            <BreadcrumbNav items={breadcrumbItems} />
+            <h1 className="text-2xl font-bold">{pageTitle}</h1>
+            <p className="text-muted-foreground">
+              {isEdit
+                ? "Perbarui data lowongan kerja"
+                : "Tambah lowongan kerja baru"}
+            </p>
+          </div>
+          <Button variant="ghost" size="sm" className="w-fit cursor-pointer" asChild>
+            <Link to={BASE_PATH}>
+              <IconArrowLeft className="mr-2 size-4" />
+              Kembali
+            </Link>
+          </Button>
+        </div>
+
+        <div className="max-w-3xl">
+          <JobForm
+            job={job ?? null}
+            onSubmit={handleSubmit}
+            isSubmitting={isSubmitting}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+

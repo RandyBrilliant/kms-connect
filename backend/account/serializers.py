@@ -5,6 +5,7 @@ Mendukung partial update (PATCH); pesan error/detail dari api_responses untuk fr
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.utils import timezone
 
 from .models import (
     CustomUser,
@@ -15,6 +16,8 @@ from .models import (
     WorkExperience,
     DocumentType,
     ApplicantDocument,
+    ApplicantVerificationStatus,
+    DocumentReviewStatus,
 )
 from .api_responses import (
     ApiMessage,
@@ -353,11 +356,62 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
         return validate_email_unique(CustomUser, value, self.instance)
 
     def validate(self, attrs):
-        """NIK uniqueness butuh profile instance (untuk update); dicek di sini."""
+        """
+        Validasi tambahan pada level user + profil:
+        - Uniqueness NIK (butuh instance profil untuk update)
+        - Auto-set verified_by untuk status Diterima/Ditolak jika belum diisi
+        """
         profile_data = attrs.get("applicant_profile")
-        if profile_data and profile_data.get("nik"):
-            profile_instance = getattr(self.instance, "applicant_profile", None) if self.instance else None
-            validate_nik_unique(profile_data["nik"], profile_instance)
+        if profile_data:
+            # NIK uniqueness
+            if profile_data.get("nik"):
+                profile_instance = (
+                    getattr(self.instance, "applicant_profile", None)
+                    if self.instance
+                    else None
+                )
+                validate_nik_unique(profile_data["nik"], profile_instance)
+
+            # Auto-fill verified_by when status becomes ACCEPTED/REJECTED
+            status = profile_data.get("verification_status")
+            if status in (
+                ApplicantVerificationStatus.ACCEPTED,
+                ApplicantVerificationStatus.REJECTED,
+            ):
+                # When moving to ACCEPTED, ensure all documents are approved
+                if (
+                    status == ApplicantVerificationStatus.ACCEPTED
+                    and self.instance
+                    and hasattr(self.instance, "applicant_profile")
+                ):
+                    profile_instance = self.instance.applicant_profile
+                    docs_qs = ApplicantDocument.objects.filter(applicant_profile=profile_instance)
+                    # If there are documents and any of them is not APPROVED, block acceptance
+                    if docs_qs.exists() and docs_qs.exclude(
+                        review_status=DocumentReviewStatus.APPROVED
+                    ).exists():
+                        raise serializers.ValidationError(
+                            {
+                                "applicant_profile": {
+                                    "verification_status": [
+                                        "Semua dokumen harus berstatus Diterima sebelum pelamar dapat diverifikasi."
+                                    ]
+                                }
+                            }
+                        )
+
+                if not profile_data.get("verified_by"):
+                    request = self.context.get("request")
+                    user = getattr(request, "user", None)
+                    # Hanya Admin/Staff yang boleh menjadi verified_by
+                    if user and getattr(user, "is_authenticated", False) and user.role in (
+                        UserRole.ADMIN,
+                        UserRole.STAFF,
+                    ):
+                        # update() di ApplicantUserSerializer melakukan setattr(profile, attr, value)
+                        # sehingga kita harus mengisi instance CustomUser, bukan PK saja.
+                        profile_data["verified_by"] = user
+
         return attrs
 
     def create(self, validated_data):
@@ -389,16 +443,46 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         profile_data = validated_data.pop("applicant_profile", None)
         password = validated_data.pop("password", None)
+
+        # Update user fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         if password is not None:
             instance.set_password(password)
         instance.save()
+
         if profile_data is not None:
             profile = getattr(instance, "applicant_profile", None)
             if profile:
+                # Capture previous status/timestamps to detect transitions
+                old_status = profile.verification_status
+                old_submitted_at = profile.submitted_at
+                old_verified_at = profile.verified_at
+
+                # Apply incoming profile changes
                 for attr, value in profile_data.items():
                     setattr(profile, attr, value)
+
+                new_status = profile.verification_status
+
+                # Auto-set submitted_at when first moved into SUBMITTED
+                if (
+                    new_status == ApplicantVerificationStatus.SUBMITTED
+                    and old_status != ApplicantVerificationStatus.SUBMITTED
+                    and not old_submitted_at
+                    and not profile.submitted_at
+                ):
+                    profile.submitted_at = timezone.now()
+
+                # Auto-set verified_at when first moved into ACCEPTED/REJECTED
+                if (
+                    new_status
+                    in (ApplicantVerificationStatus.ACCEPTED, ApplicantVerificationStatus.REJECTED)
+                    and not old_verified_at
+                    and not profile.verified_at
+                ):
+                    profile.verified_at = timezone.now()
+
                 try:
                     profile.full_clean()
                 except DjangoValidationError as e:
@@ -434,15 +518,47 @@ class WorkExperienceSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
 
+    def create(self, validated_data):
+        instance = WorkExperience(**validated_data)
+        try:
+            instance.full_clean()
+        except DjangoValidationError as e:
+            raise serializers.ValidationError(
+                e.message_dict if hasattr(e, "message_dict") else e.messages
+            )
+        instance.save()
+        return instance
+
+    def update(self, instance, validated_data):
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        try:
+            instance.full_clean()
+        except DjangoValidationError as e:
+            raise serializers.ValidationError(
+                e.message_dict if hasattr(e, "message_dict") else e.messages
+            )
+        instance.save()
+        return instance
+
 
 # ---------------------------------------------------------------------------
 # ApplicantDocument (nested under applicant, file upload)
 # ---------------------------------------------------------------------------
 
 class ApplicantDocumentSerializer(serializers.ModelSerializer):
-    """Dokumen pelamar (satu per tipe: KTP, ijasah, dll.). File + OCR fields read-only."""
+    """
+    Dokumen pelamar (satu per tipe: KTP, ijasah, dll.).
+    File + OCR fields read-only. Review fields writable by admin/staff.
+    """
 
     document_type = serializers.PrimaryKeyRelatedField(queryset=DocumentType.objects.all())
+    reviewed_by = serializers.PrimaryKeyRelatedField(
+        queryset=CustomUser.objects.filter(role__in=[UserRole.STAFF, UserRole.ADMIN]),
+        required=False,
+        allow_null=True,
+    )
+    reviewed_by_name = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = ApplicantDocument
@@ -454,8 +570,20 @@ class ApplicantDocumentSerializer(serializers.ModelSerializer):
             "ocr_text",
             "ocr_data",
             "ocr_processed_at",
+            "review_status",
+            "reviewed_by",
+            "reviewed_at",
+            "review_notes",
+            "reviewed_by_name",
         ]
-        read_only_fields = ["id", "uploaded_at", "ocr_text", "ocr_data", "ocr_processed_at"]
+        read_only_fields = [
+            "id",
+            "uploaded_at",
+            "ocr_text",
+            "ocr_data",
+            "ocr_processed_at",
+            "reviewed_at",
+        ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -463,6 +591,74 @@ class ApplicantDocumentSerializer(serializers.ModelSerializer):
         if self.instance:
             self.fields["file"].required = False
             self.fields["document_type"].required = False
+
+    def get_reviewed_by_name(self, obj) -> str | None:
+        """
+        Human-readable name for the reviewer (Admin/Staff) who changed the status.
+        Prefer full_name, fallback to email.
+        """
+        user = getattr(obj, "reviewed_by", None)
+        if not user:
+            return None
+        return user.full_name or user.email
+
+    def validate(self, attrs):
+        """
+        Require review_notes when status is REJECTED.
+        """
+        # Only validate if review_status is being set to REJECTED
+        if "review_status" in attrs and attrs["review_status"] == DocumentReviewStatus.REJECTED:
+            review_notes = attrs.get("review_notes", "")
+            # Check if notes are provided (either in attrs or already on instance)
+            if not review_notes and (not self.instance or not self.instance.review_notes):
+                raise serializers.ValidationError(
+                    {
+                        "review_notes": ["Catatan review wajib diisi ketika status ditolak."],
+                    }
+                )
+        
+        return attrs
+
+    def update(self, instance, validated_data):
+        """
+        Update document with review fields.
+        Auto-set reviewed_at and reviewed_by when status changes to APPROVED/REJECTED.
+        """
+        old_status = instance.review_status
+        old_reviewed_at = instance.reviewed_at
+
+        # Apply changes
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        new_status = instance.review_status
+
+        # Auto-set reviewed_at and reviewed_by when first approved/rejected
+        if (
+            new_status in (DocumentReviewStatus.APPROVED, DocumentReviewStatus.REJECTED)
+            and old_status != new_status
+            and not old_reviewed_at
+        ):
+            instance.reviewed_at = timezone.now()
+            # Auto-set reviewed_by if not provided and request.user is available
+            if not instance.reviewed_by:
+                request = self.context.get("request")
+                user = getattr(request, "user", None)
+                if (
+                    user
+                    and getattr(user, "is_authenticated", False)
+                    and user.role in (UserRole.ADMIN, UserRole.STAFF)
+                ):
+                    instance.reviewed_by = user
+
+        # Reset reviewed_at if status goes back to PENDING
+        if new_status == DocumentReviewStatus.PENDING and old_status != DocumentReviewStatus.PENDING:
+            instance.reviewed_at = None
+            instance.reviewed_by = None
+            instance.review_notes = ""
+
+        instance.save()
+        return instance
 
 
 # ---------------------------------------------------------------------------

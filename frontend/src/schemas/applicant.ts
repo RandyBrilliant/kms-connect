@@ -52,15 +52,33 @@ export const applicantProfileUpdateSchema = z.object({
   verification_notes: z.string().optional(),
 })
 
-export const workExperienceSchema = z.object({
-  company_name: z.string().min(1, "Nama perusahaan wajib diisi"),
-  position: z.string().optional(),
-  start_date: z.string().nullable().optional(),
-  end_date: z.string().nullable().optional(),
-  still_employed: z.boolean().optional(),
-  description: z.string().optional(),
-  sort_order: z.number().int().min(0).optional(),
-})
+export const workExperienceSchema = z
+  .object({
+    company_name: z.string().min(1, "Nama perusahaan wajib diisi"),
+    position: z.string().optional(),
+    start_date: z.string().nullable().optional(),
+    end_date: z.string().nullable().optional(),
+    still_employed: z.boolean().optional(),
+    description: z.string().optional(),
+    sort_order: z.number().int().min(0).optional(),
+  })
+  .refine(
+    (data) => {
+      // If still_employed is true, end_date should be null (handled by UI)
+      if (data.still_employed) return true
+      // If both dates are provided, end_date must be >= start_date
+      if (data.start_date && data.end_date) {
+        const start = new Date(data.start_date)
+        const end = new Date(data.end_date)
+        return end >= start
+      }
+      return true
+    },
+    {
+      message: "Tanggal selesai harus lebih besar atau sama dengan tanggal mulai",
+      path: ["end_date"],
+    }
+  )
 
 export type ApplicantCreateSchema = z.infer<typeof applicantCreateSchema>
 export type ApplicantProfileUpdateSchema = z.infer<

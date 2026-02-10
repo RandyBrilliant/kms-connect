@@ -1,6 +1,6 @@
 /**
- * Admin users table with server-side pagination, search, and filters.
- * Uses TanStack Table for display and TanStack Query for data.
+ * News table with server-side pagination, search, and filters.
+ * Mirrors AdminTable style and UX.
  */
 
 import { useState, useMemo, useCallback } from "react"
@@ -12,13 +12,12 @@ import {
   type ColumnDef,
 } from "@tanstack/react-table"
 import {
-  IconCircleCheck,
-  IconCircleX,
   IconPencil,
   IconPlus,
   IconSearch,
-  IconUserCheck,
-  IconUserOff,
+  IconPinned,
+  IconPinnedOff,
+  IconTrash,
 } from "@tabler/icons-react"
 import { format } from "date-fns"
 import { id } from "date-fns/locale"
@@ -42,30 +41,46 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { useAdminsQuery, useDeactivateAdminMutation, useActivateAdminMutation } from "@/hooks/use-admins-query"
+import { useNewsQuery, useDeleteNewsMutation } from "@/hooks/use-news-query"
 import { toast } from "@/lib/toast"
-import type { AdminUser } from "@/types/admin"
-import type { AdminsListParams } from "@/types/admin"
+import type { NewsItem, NewsListParams, NewsStatus } from "@/types/news"
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
 
-interface AdminTableProps {
+interface NewsTableProps {
   basePath: string
 }
 
-export function AdminTable({ basePath }: AdminTableProps) {
+function formatDate(value: string | null) {
+  if (!value) return "-"
+  return format(new Date(value), "dd MMM yyyy HH:mm", { locale: id })
+}
+
+function statusLabel(status: NewsStatus) {
+  switch (status) {
+    case "DRAFT":
+      return "Draf"
+    case "PUBLISHED":
+      return "Dipublikasikan"
+    case "ARCHIVED":
+      return "Diarsipkan"
+    default:
+      return status
+  }
+}
+
+export function NewsTable({ basePath }: NewsTableProps) {
   const navigate = useNavigate()
-  const [params, setParams] = useState<AdminsListParams>({
+  const [params, setParams] = useState<NewsListParams>({
     page: 1,
     page_size: 20,
     search: "",
-    ordering: "email",
+    ordering: "-published_at",
   })
   const [searchInput, setSearchInput] = useState("")
 
-  const { data, isLoading, isError, error } = useAdminsQuery(params)
-  const deactivateMutation = useDeactivateAdminMutation()
-  const activateMutation = useActivateAdminMutation()
+  const { data, isLoading, isError, error } = useNewsQuery(params)
+  const deleteMutation = useDeleteNewsMutation()
 
   const handleSearch = () => {
     setParams((p) => ({
@@ -75,9 +90,9 @@ export function AdminTable({ basePath }: AdminTableProps) {
     }))
   }
 
-  const handleFilterChange = <K extends keyof AdminsListParams>(
+  const handleFilterChange = <K extends keyof NewsListParams>(
     key: K,
-    value: AdminsListParams[K]
+    value: NewsListParams[K]
   ) => {
     setParams((p) => ({ ...p, [key]: value, page: 1 }))
   }
@@ -86,138 +101,106 @@ export function AdminTable({ basePath }: AdminTableProps) {
     setParams((p) => ({ ...p, page }))
   }
 
-  const handleActivate = useCallback(
-    async (admin: AdminUser) => {
+  const handleDelete = useCallback(
+    async (item: NewsItem) => {
+      if (!window.confirm(`Hapus berita "${item.title}"? Tindakan ini tidak dapat dibatalkan.`)) {
+        return
+      }
       try {
-        await activateMutation.mutateAsync(admin.id)
-        toast.success("Admin diaktifkan", "Akun berhasil diaktifkan kembali")
+        await deleteMutation.mutateAsync(item.id)
+        toast.success("Berita dihapus", "Data berita berhasil dihapus")
       } catch {
-        toast.error("Gagal mengaktifkan", "Coba lagi nanti")
+        toast.error("Gagal menghapus", "Coba lagi nanti")
       }
     },
-    [activateMutation]
+    [deleteMutation]
   )
 
-  const handleDeactivate = useCallback(
-    async (admin: AdminUser) => {
-      try {
-        await deactivateMutation.mutateAsync(admin.id)
-        toast.success("Admin dinonaktifkan", "Akun berhasil dinonaktifkan")
-      } catch {
-        toast.error("Gagal menonaktifkan", "Coba lagi nanti")
-      }
-    },
-    [deactivateMutation]
-  )
-
-  const columns = useMemo<ColumnDef<AdminUser>[]>(
+  const columns = useMemo<ColumnDef<NewsItem>[]>(
     () => [
       {
-        accessorKey: "full_name",
-        header: "Nama",
+        accessorKey: "title",
+        header: "Judul",
         cell: ({ row }) => (
-          <span className="font-medium">
-            {row.original.full_name || "-"}
-          </span>
+          <div className="flex items-center gap-1">
+            {row.original.is_pinned && (
+              <IconPinned className="text-amber-500 size-4" aria-hidden />
+            )}
+            <span className="font-medium line-clamp-2">{row.original.title}</span>
+          </div>
         ),
       },
       {
-        accessorKey: "email",
-        header: "Email",
-        cell: ({ row }) => (
-          <span>{row.original.email}</span>
-        ),
-      },
-      {
-        accessorKey: "is_active",
+        accessorKey: "status",
         header: "Status",
-        cell: ({ row }) =>
-          row.original.is_active ? (
-            <Badge variant="default" className="gap-1">
-              <IconCircleCheck className="size-3" />
-              Aktif
+        cell: ({ row }) => {
+          const status = row.original.status
+          let variant: "default" | "secondary" | "outline" = "outline"
+          if (status === "PUBLISHED") variant = "default"
+          if (status === "DRAFT") variant = "secondary"
+          return (
+            <Badge variant={variant} className="gap-1">
+              {status === "PUBLISHED" ? <IconPinnedOff className="size-3" /> : null}
+              {statusLabel(status)}
             </Badge>
-          ) : (
-            <Badge variant="secondary" className="gap-1">
-              <IconCircleX className="size-3" />
-              Nonaktif
-            </Badge>
-          ),
+          )
+        },
       },
       {
-        accessorKey: "email_verified",
-        header: "Email Terverifikasi",
-        cell: ({ row }) =>
-          row.original.email_verified ? (
-            <Badge variant="outline">Ya</Badge>
-          ) : (
-            <Badge variant="outline" className="text-muted-foreground">
-              Belum
-            </Badge>
-          ),
-      },
-      {
-        accessorKey: "date_joined",
-        header: "Bergabung",
-        cell: ({ row }) =>
-          format(new Date(row.original.date_joined), "dd MMM yyyy HH:mm", {
-            locale: id,
-          }),
+        accessorKey: "published_at",
+        header: "Diterbitkan",
+        cell: ({ row }) => formatDate(row.original.published_at),
       },
       {
         accessorKey: "updated_at",
         header: "Diperbarui",
+        cell: ({ row }) => formatDate(row.original.updated_at),
+      },
+      {
+        accessorKey: "is_pinned",
+        header: "Disematkan",
         cell: ({ row }) =>
-          format(new Date(row.original.updated_at), "dd MMM yyyy HH:mm", {
-            locale: id,
-          }),
+          row.original.is_pinned ? (
+            <Badge variant="outline">Ya</Badge>
+          ) : (
+            <Badge variant="outline" className="text-muted-foreground">
+              Tidak
+            </Badge>
+          ),
       },
       {
         id: "actions",
         header: "",
         cell: ({ row }) => {
-          const admin = row.original
+          const item = row.original
           return (
             <div className="flex items-center gap-1">
               <Button
                 variant="ghost"
                 size="icon"
                 className="size-8 cursor-pointer"
-                onClick={() => navigate(`${basePath}/${admin.id}/edit`)}
+                onClick={() => navigate(`${basePath}/${item.id}/edit`)}
                 title="Edit"
               >
                 <IconPencil className="size-4" />
                 <span className="sr-only">Edit</span>
               </Button>
-              {admin.is_active ? (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-8 cursor-pointer text-destructive hover:text-destructive"
-                  onClick={() => handleDeactivate(admin)}
-                  title="Nonaktifkan"
-                >
-                  <IconUserOff className="size-4" />
-                  <span className="sr-only">Nonaktifkan</span>
-                </Button>
-              ) : (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-8 cursor-pointer"
-                  onClick={() => handleActivate(admin)}
-                  title="Aktifkan"
-                >
-                  <IconUserCheck className="size-4" />
-                  <span className="sr-only">Aktifkan</span>
-                </Button>
-              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8 cursor-pointer text-destructive hover:text-destructive"
+                onClick={() => handleDelete(item)}
+                title="Hapus"
+              >
+                <IconTrash className="size-4" />
+                <span className="sr-only">Hapus</span>
+              </Button>
             </div>
           )
         },
       },
     ],
-    [basePath, navigate, handleActivate, handleDeactivate]
+    [basePath, navigate, handleDelete]
   )
 
   const table = useReactTable({
@@ -248,7 +231,7 @@ export function AdminTable({ basePath }: AdminTableProps) {
           <div className="relative flex-1">
             <IconSearch className="text-muted-foreground absolute left-3 top-1/2 size-4 -translate-y-1/2" />
             <Input
-              placeholder="Cari email..."
+              placeholder="Cari judul atau konten..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
@@ -264,47 +247,19 @@ export function AdminTable({ basePath }: AdminTableProps) {
           </Button>
           <div className="flex gap-2">
             <Select
-              value={
-                params.is_active === undefined
-                  ? "all"
-                  : String(params.is_active)
-              }
+              value={params.status ?? "ALL"}
               onValueChange={(v) =>
-                handleFilterChange(
-                  "is_active",
-                  v === "all" ? undefined : v === "true"
-                )
-              }
-            >
-              <SelectTrigger className="w-[130px] cursor-pointer">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Semua status</SelectItem>
-                <SelectItem value="true">Aktif</SelectItem>
-                <SelectItem value="false">Nonaktif</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select
-              value={
-                params.email_verified === undefined
-                  ? "all"
-                  : String(params.email_verified)
-              }
-              onValueChange={(v) =>
-                handleFilterChange(
-                  "email_verified",
-                  v === "all" ? undefined : v === "true"
-                )
+                handleFilterChange("status", v === "ALL" ? "ALL" : (v as NewsStatus))
               }
             >
               <SelectTrigger className="w-[150px] cursor-pointer">
-                <SelectValue placeholder="Verifikasi" />
+                <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Semua verifikasi</SelectItem>
-                <SelectItem value="true">Terverifikasi</SelectItem>
-                <SelectItem value="false">Belum</SelectItem>
+                <SelectItem value="ALL">Semua status</SelectItem>
+                <SelectItem value="DRAFT">Draf</SelectItem>
+                <SelectItem value="PUBLISHED">Dipublikasikan</SelectItem>
+                <SelectItem value="ARCHIVED">Diarsipkan</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -312,7 +267,7 @@ export function AdminTable({ basePath }: AdminTableProps) {
         <Button asChild className="cursor-pointer">
           <Link to={`${basePath}/new`} className="cursor-pointer">
             <IconPlus className="mr-2 size-4" />
-            Tambah Admin
+            Tambah Berita
           </Link>
         </Button>
       </div>
@@ -360,7 +315,7 @@ export function AdminTable({ basePath }: AdminTableProps) {
                     colSpan={columns.length}
                     className="h-24 text-center"
                   >
-                    Tidak ada data admin.
+                    Tidak ada data berita.
                   </TableCell>
                 </TableRow>
               )}
@@ -377,7 +332,7 @@ export function AdminTable({ basePath }: AdminTableProps) {
               currentPage * (params.page_size ?? 20),
               data.count
             )}{" "}
-            dari {data.count} admin
+            dari {data.count} berita
           </div>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
@@ -431,3 +386,4 @@ export function AdminTable({ basePath }: AdminTableProps) {
     </div>
   )
 }
+

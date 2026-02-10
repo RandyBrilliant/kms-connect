@@ -22,8 +22,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { DatePicker } from "@/components/ui/date-picker"
+import { PhoneInput } from "@/components/ui/phone-input"
 import { applicantProfileUpdateSchema } from "@/schemas/applicant"
 import type { ApplicantProfile } from "@/types/applicant"
+import { format } from "date-fns"
 
 interface ApplicantBiodataTabProps {
   profile: ApplicantProfile
@@ -101,7 +104,6 @@ export function ApplicantBiodataTab({
 
       const payload = {
         full_name: value.full_name || undefined,
-        nik: value.nik || undefined,
         birth_place: value.birth_place || undefined,
         birth_date: value.birth_date || null,
         address: value.address || undefined,
@@ -195,10 +197,7 @@ export function ApplicantBiodataTab({
                     id={field.name}
                     maxLength={16}
                     value={field.state.value}
-                    onChange={(e) =>
-                      field.handleChange(e.target.value.replace(/\D/g, "").slice(0, 16))
-                    }
-                    onBlur={field.handleBlur}
+                    disabled
                   />
                   <FieldError
                     errors={[
@@ -227,18 +226,25 @@ export function ApplicantBiodataTab({
                 )}
               </form.Field>
               <form.Field name="birth_date">
-                {(field) => (
-                  <Field>
-                    <FieldLabel htmlFor={field.name}>Tanggal Lahir</FieldLabel>
-                    <Input
-                      id={field.name}
-                      type="date"
-                      value={field.state.value}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                      onBlur={field.handleBlur}
-                    />
-                  </Field>
-                )}
+                {(field) => {
+                  const selectedDate = field.state.value
+                    ? new Date(field.state.value)
+                    : null
+                  return (
+                    <Field>
+                      <FieldLabel htmlFor={field.name}>Tanggal Lahir</FieldLabel>
+                      <DatePicker
+                        date={selectedDate}
+                        onDateChange={(d) =>
+                          field.handleChange(
+                            d ? format(d, "yyyy-MM-dd") : ""
+                          )
+                        }
+                        placeholder="Pilih tanggal lahir"
+                      />
+                    </Field>
+                  )
+                }}
               </form.Field>
             </div>
 
@@ -284,12 +290,12 @@ export function ApplicantBiodataTab({
               {(field) => (
                 <Field>
                   <FieldLabel htmlFor={field.name}>No. HP / WA</FieldLabel>
-                  <Input
+                  <PhoneInput
                     id={field.name}
-                    type="tel"
                     value={field.state.value}
-                    onChange={(e) => field.handleChange(e.target.value)}
-                    onBlur={field.handleBlur}
+                    onChange={(val) => field.handleChange(val)}
+                    disabled={isSubmitting}
+                    placeholder="No. HP aktif"
                   />
                 </Field>
               )}
@@ -488,12 +494,12 @@ export function ApplicantBiodataTab({
               {(field) => (
                 <Field>
                   <FieldLabel htmlFor={field.name}>No. HP Keluarga</FieldLabel>
-                  <Input
+                  <PhoneInput
                     id={field.name}
-                    type="tel"
                     value={field.state.value}
-                    onChange={(e) => field.handleChange(e.target.value)}
-                    onBlur={field.handleBlur}
+                    onChange={(val) => field.handleChange(val)}
+                    disabled={isSubmitting}
+                    placeholder="No. HP keluarga"
                   />
                 </Field>
               )}

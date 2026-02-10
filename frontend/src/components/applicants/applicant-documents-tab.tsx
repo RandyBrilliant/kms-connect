@@ -1,9 +1,9 @@
 /**
- * Dokumen tab - CRUD ApplicantDocument (upload, delete).
+ * Dokumen tab - CRUD ApplicantDocument (upload, delete, review).
  */
 
 import { useRef, useState } from "react"
-import { IconPlus, IconTrash, IconFileUpload } from "@tabler/icons-react"
+import { IconPlus, IconTrash, IconFileUpload, IconPencil } from "@tabler/icons-react"
 import { format } from "date-fns"
 import { id } from "date-fns/locale"
 
@@ -19,8 +19,11 @@ import {
 import {
   Field,
   FieldError,
+  FieldGroup,
   FieldLabel,
 } from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
+import { cn } from "@/lib/utils"
 import {
   Table,
   TableBody,
@@ -30,17 +33,31 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
   useApplicantDocumentsQuery,
   useCreateApplicantDocumentMutation,
+  useUpdateApplicantDocumentMutation,
   useDeleteApplicantDocumentMutation,
   useDocumentTypesQuery,
 } from "@/hooks/use-applicants-query"
 import { toast } from "@/lib/toast"
-import type { ApplicantDocument, DocumentType } from "@/types/applicant"
+import type { ApplicantDocument, DocumentType, DocumentReviewStatus } from "@/types/applicant"
 import { env } from "@/lib/env"
 
 interface ApplicantDocumentsTabProps {
   applicantId: number
+}
+
+const REVIEW_STATUS_LABELS: Record<DocumentReviewStatus, string> = {
+  PENDING: "Menunggu Review",
+  APPROVED: "Diterima",
+  REJECTED: "Ditolak",
 }
 
 function getFileUrl(filePath: string): string {
@@ -55,13 +72,22 @@ export function ApplicantDocumentsTab({
   applicantId,
 }: ApplicantDocumentsTabProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [dialogOpen, setDialogOpen] = useState(false)
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [editingDoc, setEditingDoc] = useState<ApplicantDocument | null>(null)
+  const [deletingDoc, setDeletingDoc] = useState<ApplicantDocument | null>(null)
   const [selectedTypeId, setSelectedTypeId] = useState<string>("")
   const [fileError, setFileError] = useState<string>("")
+  const [selectedFileName, setSelectedFileName] = useState<string>("")
+  const [reviewStatus, setReviewStatus] = useState<DocumentReviewStatus>("PENDING")
+  const [reviewNotes, setReviewNotes] = useState<string>("")
+  const [reviewError, setReviewError] = useState<string>("")
 
   const { data: documents = [], isLoading } = useApplicantDocumentsQuery(applicantId)
   const { data: docTypes = [] } = useDocumentTypesQuery()
   const createMutation = useCreateApplicantDocumentMutation(applicantId)
+  const updateMutation = useUpdateApplicantDocumentMutation(applicantId)
   const deleteMutation = useDeleteApplicantDocumentMutation(applicantId)
 
   const list = Array.isArray(documents)
@@ -73,6 +99,10 @@ export function ApplicantDocumentsTab({
 
   const uploadedTypeIds = new Set(list.map((d) => d.document_type))
   const availableTypes = types.filter((t) => !uploadedTypeIds.has(t.id))
+
+  const selectedType = selectedTypeId
+    ? types.find((t) => String(t.id) === selectedTypeId) ?? null
+    : null
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -97,20 +127,95 @@ export function ApplicantDocumentsTab({
     try {
       await createMutation.mutateAsync(formData)
       toast.success("Dokumen berhasil diunggah")
-      setDialogOpen(false)
+      setUploadDialogOpen(false)
       setSelectedTypeId("")
-      if (fileInputRef.current) fileInputRef.current.value = ""
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""
+      }
+      setSelectedFileName("")
     } catch (err: unknown) {
       const res = err as { response?: { data?: { detail?: string } } }
       toast.error("Gagal mengunggah", res?.response?.data?.detail ?? "Coba lagi nanti")
     }
   }
 
-  const handleDelete = async (doc: ApplicantDocument) => {
-    if (!confirm("Hapus dokumen ini?")) return
+  const openEdit = (doc: ApplicantDocument) => {
+    setEditingDoc(doc)
+    setReviewStatus(doc.review_status)
+    setReviewNotes(doc.review_notes || "")
+    setReviewError("")
+    setEditDialogOpen(true)
+  }
+
+  const handleReviewSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setReviewError("")
+
+    if (!editingDoc) return
+
+    // Validate: review_notes required when REJECTED
+    if (reviewStatus === "REJECTED" && !reviewNotes.trim()) {
+      setReviewError("Catatan review wajib diisi ketika status ditolak")
+      return
+    }
+
     try {
-      await deleteMutation.mutateAsync(doc.id)
+      await updateMutation.mutateAsync({
+        id: editingDoc.id,
+        input: {
+          review_status: reviewStatus,
+          review_notes: reviewStatus === "APPROVED" ? "" : reviewNotes.trim() || undefined,
+        },
+      })
+      toast.success("Status review diperbarui")
+      setEditDialogOpen(false)
+      setEditingDoc(null)
+      setReviewStatus("PENDING")
+      setReviewNotes("")
+    } catch (err: unknown) {
+      const res = err as {
+        response?: {
+          data?: {
+            errors?: Record<string, unknown>
+            detail?: string
+          }
+        }
+      }
+      const errors = res?.response?.data?.errors
+      const detail = res?.response?.data?.detail
+      if (errors) {
+        const msgs = Object.entries(errors)
+          .flatMap(([k, v]) => {
+            if (
+              k === "review_notes" &&
+              v &&
+              typeof v === "object" &&
+              !Array.isArray(v)
+            ) {
+              return Object.values(v as Record<string, unknown>).map((m) => String(m))
+            }
+            const arr = Array.isArray(v) ? v : [v]
+            return arr.map((m) => `${k}: ${String(m)}`)
+          })
+        toast.error("Validasi gagal", msgs.join(". "))
+      } else {
+        toast.error("Gagal", detail ?? "Coba lagi nanti")
+      }
+    }
+  }
+
+  const openDelete = (doc: ApplicantDocument) => {
+    setDeletingDoc(doc)
+    setDeleteDialogOpen(true)
+  }
+
+  const handleDelete = async () => {
+    if (!deletingDoc) return
+    try {
+      await deleteMutation.mutateAsync(deletingDoc.id)
       toast.success("Dokumen dihapus")
+      setDeleteDialogOpen(false)
+      setDeletingDoc(null)
     } catch {
       toast.error("Gagal menghapus")
     }
@@ -121,13 +226,24 @@ export function ApplicantDocumentsTab({
     return t?.name ?? `Tipe ${typeId}`
   }
 
+  const getStatusBadgeClass = (status: DocumentReviewStatus) => {
+    switch (status) {
+      case "APPROVED":
+        return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+      case "REJECTED":
+        return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+      default:
+        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <p className="text-muted-foreground text-sm">
           Kelola dokumen pelamar (KTP, Ijasah, dll.).
         </p>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
           <DialogTrigger asChild>
             <Button
               type="button"
@@ -145,40 +261,64 @@ export function ApplicantDocumentsTab({
             </DialogHeader>
             <form onSubmit={handleUpload} className="space-y-6">
               <Field>
-                <FieldLabel>Tipe Dokumen *</FieldLabel>
-                <select
-                  className="border-input bg-background flex h-9 w-full rounded-md border px-3 py-1 text-sm"
+                <FieldLabel>
+                  Tipe Dokumen <span className="text-destructive">*</span>
+                </FieldLabel>
+                <Select
                   value={selectedTypeId}
-                  onChange={(e) => setSelectedTypeId(e.target.value)}
-                  required
+                  onValueChange={(val) => setSelectedTypeId(val)}
                 >
-                  <option value="">Pilih tipe</option>
-                  {availableTypes.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                      {t.is_required ? " (wajib)" : ""}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger className="cursor-pointer">
+                    <SelectValue placeholder="Pilih tipe" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableTypes.map((t) => (
+                      <SelectItem key={t.id} value={String(t.id)}>
+                        {t.name}
+                        {t.is_required ? " (wajib)" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {selectedType?.description && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {selectedType.description}
+                  </p>
+                )}
               </Field>
               <Field>
-                <FieldLabel>File *</FieldLabel>
+                <FieldLabel>
+                  File <span className="text-destructive">*</span>
+                </FieldLabel>
                 <input
                   ref={fileInputRef}
                   type="file"
                   accept="image/*,.pdf"
-                  className="border-input bg-background flex h-9 w-full rounded-md border px-3 py-1 text-sm file:mr-4 file:rounded file:border-0 file:bg-primary file:px-4 file:py-2 file:text-sm file:text-primary-foreground"
-                  onChange={() => setFileError("")}
+                  className="hidden"
+                  onChange={() => {
+                    setFileError("")
+                    const file = fileInputRef.current?.files?.[0]
+                    setSelectedFileName(file ? file.name : "")
+                  }}
                 />
-                {fileError && (
-                  <FieldError errors={[{ message: fileError }]} />
-                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex w-full justify-start gap-2 cursor-pointer"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <IconFileUpload className="size-4" />
+                  <span className="truncate">
+                    {selectedFileName || "Pilih file (PDF atau gambar)"}
+                  </span>
+                </Button>
+                {fileError && <FieldError errors={[{ message: fileError }]} />}
               </Field>
               <div className="flex justify-end gap-2">
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setDialogOpen(false)}
+                  onClick={() => setUploadDialogOpen(false)}
                 >
                   Batal
                 </Button>
@@ -215,9 +355,11 @@ export function ApplicantDocumentsTab({
               <TableHeader>
                 <TableRow>
                   <TableHead>Tipe</TableHead>
+                  <TableHead>Status Review</TableHead>
+                  <TableHead>Direview Oleh</TableHead>
                   <TableHead>Diunggah</TableHead>
                   <TableHead>File</TableHead>
-                  <TableHead className="w-[80px]"></TableHead>
+                  <TableHead className="w-[140px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -225,6 +367,24 @@ export function ApplicantDocumentsTab({
                   <TableRow key={doc.id}>
                     <TableCell className="font-medium">
                       {getTypeName(doc.document_type)}
+                    </TableCell>
+                    <TableCell>
+                      <span
+                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getStatusBadgeClass(
+                          doc.review_status
+                        )}`}
+                      >
+                        {REVIEW_STATUS_LABELS[doc.review_status]}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      {doc.reviewed_by_name ? (
+                        <span className="text-sm font-medium">
+                          {doc.reviewed_by_name}
+                        </span>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">-</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       {format(new Date(doc.uploaded_at), "dd MMM yyyy HH:mm", {
@@ -242,15 +402,26 @@ export function ApplicantDocumentsTab({
                       </a>
                     </TableCell>
                     <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-8 cursor-pointer text-destructive"
-                        onClick={() => handleDelete(doc)}
-                        title="Hapus"
-                      >
-                        <IconTrash className="size-4" />
-                      </Button>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-8 cursor-pointer"
+                          onClick={() => openEdit(doc)}
+                          title="Edit Review"
+                        >
+                          <IconPencil className="size-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-8 cursor-pointer text-destructive"
+                          onClick={() => openDelete(doc)}
+                          title="Hapus"
+                        >
+                          <IconTrash className="size-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -259,6 +430,163 @@ export function ApplicantDocumentsTab({
           )}
         </CardContent>
       </Card>
+
+      {/* Edit Review Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Review Dokumen</DialogTitle>
+          </DialogHeader>
+          {editingDoc && (
+            <form onSubmit={handleReviewSubmit} className="space-y-6">
+              <FieldGroup>
+                <Field>
+                  <FieldLabel>
+                    Tipe Dokumen
+                  </FieldLabel>
+                  <Input
+                    value={getTypeName(editingDoc.document_type)}
+                    disabled
+                    className="bg-muted"
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel>
+                    Status Review <span className="text-destructive">*</span>
+                  </FieldLabel>
+                  <Select
+                    value={reviewStatus}
+                    onValueChange={(val) => {
+                      setReviewStatus(val as DocumentReviewStatus)
+                      setReviewError("")
+                      // Clear notes when switching to APPROVED
+                      if (val === "APPROVED") {
+                        setReviewNotes("")
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="cursor-pointer">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(REVIEW_STATUS_LABELS).map(([val, label]) => (
+                        <SelectItem key={val} value={val}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                {reviewStatus !== "APPROVED" && (
+                  <Field>
+                    <FieldLabel>
+                      Catatan Review{" "}
+                      {reviewStatus === "REJECTED" && (
+                        <span className="text-destructive">*</span>
+                      )}
+                    </FieldLabel>
+                    <textarea
+                      value={reviewNotes}
+                      onChange={(e) => {
+                        setReviewNotes(e.target.value)
+                        setReviewError("")
+                      }}
+                      rows={4}
+                      className={cn(
+                        "flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+                        "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
+                        "aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"
+                      )}
+                      placeholder={
+                        reviewStatus === "REJECTED"
+                          ? "Alasan dokumen ditolak..."
+                          : "Catatan tambahan (opsional)..."
+                      }
+                    />
+                    {(reviewError || (reviewStatus === "REJECTED" && !reviewNotes.trim())) && (
+                      <FieldError
+                        errors={[
+                          {
+                            message:
+                              reviewError ||
+                              (reviewStatus === "REJECTED" && !reviewNotes.trim()
+                                ? "Catatan review wajib diisi ketika status ditolak"
+                                : ""),
+                          },
+                        ].filter((e) => e.message)}
+                      />
+                    )}
+                  </Field>
+                )}
+              </FieldGroup>
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setEditDialogOpen(false)
+                    setEditingDoc(null)
+                    setReviewStatus("PENDING")
+                    setReviewNotes("")
+                    setReviewError("")
+                  }}
+                >
+                  Batal
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={updateMutation.isPending}
+                  className="cursor-pointer"
+                >
+                  {updateMutation.isPending ? "Menyimpan..." : "Simpan"}
+                </Button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Hapus Dokumen</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Apakah Anda yakin ingin menghapus dokumen{" "}
+              <span className="font-medium text-foreground">
+                {deletingDoc ? getTypeName(deletingDoc.document_type) : ""}
+              </span>
+              ?
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Tindakan ini tidak dapat dibatalkan.
+            </p>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setDeleteDialogOpen(false)
+                setDeletingDoc(null)
+              }}
+            >
+              Batal
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={deleteMutation.isPending}
+              className="cursor-pointer"
+            >
+              {deleteMutation.isPending ? "Menghapus..." : "Hapus"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

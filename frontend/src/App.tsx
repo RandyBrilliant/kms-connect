@@ -9,6 +9,10 @@ import { LoginPage } from "@/pages/login-page"
 import { AdminDashboardPage } from "@/pages/admin-dashboard-page"
 import { AdminAdminListPage } from "@/pages/admin-admin-list-page"
 import { AdminAdminFormPage } from "@/pages/admin-admin-form-page"
+import { AdminNewsListPage } from "@/pages/admin-news-list-page"
+import { AdminNewsFormPage } from "@/pages/admin-news-form-page"
+import { AdminJobListPage } from "@/pages/admin-job-list-page"
+import { AdminJobFormPage } from "@/pages/admin-job-form-page"
 import { StaffStaffListPage } from "@/pages/staff-staff-list-page"
 import { StaffStaffFormPage } from "@/pages/staff-staff-form-page"
 import { StaffDashboardPage } from "@/pages/staff-dashboard-page"
@@ -38,6 +42,12 @@ function AppRoutes() {
         <Route path="admin" element={<AdminAdminListPage />} />
         <Route path="admin/new" element={<AdminAdminFormPage />} />
         <Route path="admin/:id/edit" element={<AdminAdminFormPage />} />
+        <Route path="berita" element={<AdminNewsListPage />} />
+        <Route path="berita/new" element={<AdminNewsFormPage />} />
+        <Route path="berita/:id/edit" element={<AdminNewsFormPage />} />
+        <Route path="lowongan-kerja" element={<AdminJobListPage />} />
+        <Route path="lowongan-kerja/new" element={<AdminJobFormPage />} />
+        <Route path="lowongan-kerja/:id/edit" element={<AdminJobFormPage />} />
         <Route path="pelamar" element={<AdminPelamarListPage />} />
         <Route path="pelamar/new" element={<AdminPelamarFormPage />} />
         <Route path="pelamar/:id" element={<AdminPelamarDetailPage />} />

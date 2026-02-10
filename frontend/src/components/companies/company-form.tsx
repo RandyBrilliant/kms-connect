@@ -5,6 +5,7 @@
 
 import { useState } from "react"
 import { useForm } from "@tanstack/react-form"
+import { IconEye, IconEyeOff } from "@tabler/icons-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -16,6 +17,7 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { PhoneInput } from "@/components/ui/phone-input"
+import { cn } from "@/lib/utils"
 import type { CompanyUser } from "@/types/company"
 import { companyCreateSchema, companyUpdateSchema } from "@/schemas/company"
 import type { CompanyCreateSchema } from "@/schemas/company"
@@ -43,12 +45,65 @@ type CompanyFormValues = {
   confirmPassword: string
 }
 
+function PasswordInput({
+  id,
+  value,
+  onChange,
+  placeholder,
+  showPassword,
+  onToggleVisibility,
+  error,
+  disabled,
+}: {
+  id: string
+  value: string
+  onChange: (value: string) => void
+  placeholder: string
+  showPassword: boolean
+  onToggleVisibility: () => void
+  error?: string
+  disabled?: boolean
+}) {
+  return (
+    <>
+      <div className="relative">
+        <Input
+          id={id}
+          type={showPassword ? "text" : "password"}
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+          autoComplete="new-password"
+          className={cn("pr-10", error && "border-destructive")}
+        />
+        <button
+          type="button"
+          onClick={onToggleVisibility}
+          className="text-muted-foreground hover:text-foreground absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer"
+          tabIndex={-1}
+          aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
+        >
+          {showPassword ? (
+            <IconEyeOff className="size-4" />
+          ) : (
+            <IconEye className="size-4" />
+          )}
+        </button>
+      </div>
+      {error && <FieldError errors={[{ message: error }]} />}
+    </>
+  )
+}
+
 export function CompanyForm({
   company,
   onSubmit,
   isSubmitting = false,
 }: CompanyFormProps) {
   const isEdit = !!company
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [errors, setErrors] = useState<
     Partial<Record<keyof CompanyFormValues, string>>
   >({})
@@ -245,25 +300,25 @@ export function CompanyForm({
                 >
                   {(field) => (
                     <Field>
-                      <FieldLabel htmlFor={field.name} className="mb-2 block">
-                        Password <span className="text-destructive">*</span>
-                      </FieldLabel>
-                      <Input
-                        id={field.name}
-                        type="password"
-                        placeholder="Min. 8 karakter"
-                        value={field.state.value}
-                        onChange={(e) => field.handleChange(e.target.value)}
-                        onBlur={field.handleBlur}
-                      />
-                      <FieldError>
-                        {(() => {
-                          const err = field.state.meta.errors[0]
-                          if (!err) return errors.password
-                          if (typeof err === "string") return err
-                          return (err as { message?: string }).message ?? errors.password
-                        })()}
-                      </FieldError>
+                  <FieldLabel htmlFor={field.name} className="mb-2 block">
+                    Password <span className="text-destructive">*</span>
+                  </FieldLabel>
+                  <PasswordInput
+                    id={field.name}
+                    value={field.state.value}
+                    onChange={(v) => field.handleChange(v)}
+                    placeholder="Min. 8 karakter"
+                    showPassword={showPassword}
+                    onToggleVisibility={() => setShowPassword((p) => !p)}
+                    error={
+                      (() => {
+                        const err = field.state.meta.errors[0]
+                        if (!err) return errors.password
+                        if (typeof err === "string") return err
+                        return (err as { message?: string }).message ?? errors.password
+                      })()
+                    }
+                  />
                     </Field>
                   )}
                 </form.Field>
@@ -276,22 +331,24 @@ export function CompanyForm({
                         Konfirmasi Password{" "}
                         <span className="text-destructive">*</span>
                       </FieldLabel>
-                      <Input
-                        id={field.name}
-                        type="password"
-                        placeholder="Ulangi password"
-                        value={field.state.value}
-                        onChange={(e) => field.handleChange(e.target.value)}
-                        onBlur={field.handleBlur}
-                      />
-                      <FieldError>
-                        {(() => {
-                          const err = field.state.meta.errors[0]
-                          if (!err) return errors.confirmPassword
-                          if (typeof err === "string") return err
-                          return (err as { message?: string }).message ?? errors.confirmPassword
-                        })()}
-                      </FieldError>
+                  <PasswordInput
+                    id={field.name}
+                    value={field.state.value}
+                    onChange={(v) => field.handleChange(v)}
+                    placeholder="Ulangi password"
+                    showPassword={showConfirmPassword}
+                    onToggleVisibility={() =>
+                      setShowConfirmPassword((p) => !p)
+                    }
+                    error={
+                      (() => {
+                        const err = field.state.meta.errors[0]
+                        if (!err) return errors.confirmPassword
+                        if (typeof err === "string") return err
+                        return (err as { message?: string }).message ?? errors.confirmPassword
+                      })()
+                    }
+                  />
                     </Field>
                   )}
                 </form.Field>

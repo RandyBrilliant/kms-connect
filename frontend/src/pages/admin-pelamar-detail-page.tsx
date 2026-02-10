@@ -1,12 +1,14 @@
 /**
- * Pelamar detail page with tabs: Biodata, Pengalaman Kerja, Dokumen, Metadata.
+ * Pelamar detail page with tabs: Biodata, Pengalaman Kerja, Dokumen.
+ * Metadata & account actions are shown on the Biodata tab sidebar.
  */
 
 import { Link, useParams } from "react-router-dom"
-import { IconArrowLeft } from "@tabler/icons-react"
+import { IconArrowLeft, IconMail, IconKey } from "@tabler/icons-react"
 
 import { BreadcrumbNav } from "@/components/breadcrumb-nav"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ApplicantBiodataTab } from "@/components/applicants/applicant-biodata-tab"
 import { ApplicantWorkExperienceTab } from "@/components/applicants/applicant-work-experience-tab"
@@ -15,10 +17,146 @@ import { ApplicantMetadataTab } from "@/components/applicants/applicant-metadata
 import {
   useApplicantQuery,
   useUpdateApplicantMutation,
+  useDeactivateApplicantMutation,
+  useActivateApplicantMutation,
+  useSendVerificationEmailMutation,
+  useSendPasswordResetMutation,
 } from "@/hooks/use-applicants-query"
 import { toast } from "@/lib/toast"
+import type { ApplicantUser } from "@/types/applicant"
 
 const BASE_PATH = "/pelamar"
+
+function ApplicantSidebar({ applicant }: { applicant: ApplicantUser }) {
+  const deactivateMutation = useDeactivateApplicantMutation()
+  const activateMutation = useActivateApplicantMutation()
+  const sendVerificationMutation = useSendVerificationEmailMutation()
+  const sendPasswordResetMutation = useSendPasswordResetMutation()
+
+  const handleToggleActive = async () => {
+    try {
+      if (applicant.is_active) {
+        await deactivateMutation.mutateAsync(applicant.id)
+        toast.success("Pelamar dinonaktifkan", "Akun tidak dapat login")
+      } else {
+        await activateMutation.mutateAsync(applicant.id)
+        toast.success("Pelamar diaktifkan", "Akun dapat login kembali")
+      }
+    } catch (err: unknown) {
+      const res = err as { response?: { data?: { detail?: string } } }
+      toast.error("Gagal", res?.response?.data?.detail ?? "Coba lagi nanti")
+    }
+  }
+
+  const handleSendVerification = async () => {
+    try {
+      await sendVerificationMutation.mutateAsync(applicant.id)
+      toast.success(
+        "Email terkirim",
+        "Email verifikasi telah dikirim ke " + applicant.email
+      )
+    } catch (err: unknown) {
+      const res = err as { response?: { data?: { detail?: string } } }
+      toast.error("Gagal mengirim", res?.response?.data?.detail ?? "Coba lagi nanti")
+    }
+  }
+
+  const handleSendPasswordReset = async () => {
+    try {
+      await sendPasswordResetMutation.mutateAsync(applicant.id)
+      toast.success(
+        "Email terkirim",
+        "Email reset password telah dikirim ke " + applicant.email
+      )
+    } catch (err: unknown) {
+      const res = err as { response?: { data?: { detail?: string } } }
+      toast.error("Gagal mengirim", res?.response?.data?.detail ?? "Coba lagi nanti")
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      {/* Status: Aktif / Nonaktif */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Status Akun</CardTitle>
+          <CardDescription>
+            {applicant.is_active
+              ? "Akun aktif dan dapat login"
+              : "Akun nonaktif dan tidak dapat login"}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            type="button"
+            variant={applicant.is_active ? "destructive" : "default"}
+            className={
+              applicant.is_active
+                ? "cursor-pointer"
+                : "cursor-pointer border-green-600 bg-green-600 hover:bg-green-700 hover:text-white"
+            }
+            onClick={handleToggleActive}
+            disabled={
+              deactivateMutation.isPending || activateMutation.isPending
+            }
+          >
+            {applicant.is_active ? "Nonaktifkan" : "Aktifkan"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Send email verification */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Email Verifikasi</CardTitle>
+          <CardDescription>
+            Kirim email verifikasi ke {applicant.email}. Hanya untuk akun yang
+            belum terverifikasi.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="cursor-pointer"
+            onClick={handleSendVerification}
+            disabled={
+              applicant.email_verified || sendVerificationMutation.isPending
+            }
+          >
+            <IconMail className="mr-2 size-4" />
+            Kirim Email Verifikasi
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Send password reset */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Reset Password</CardTitle>
+          <CardDescription>
+            Kirim email reset password ke {applicant.email}. Pengguna akan
+            menerima tautan untuk mengganti password.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="cursor-pointer"
+            onClick={handleSendPasswordReset}
+            disabled={sendPasswordResetMutation.isPending}
+          >
+            <IconKey className="mr-2 size-4" />
+            Kirim Email Reset Password
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
 
 export function AdminPelamarDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -33,10 +171,48 @@ export function AdminPelamarDetailPage() {
   const handleBiodataSubmit = async (
     data: Parameters<typeof updateMutation.mutateAsync>[0]["applicant_profile"]
   ) => {
-    await updateMutation.mutateAsync({
-      applicant_profile: data,
-    })
-    toast.success("Biodata diperbarui")
+    try {
+      await updateMutation.mutateAsync({
+        applicant_profile: data,
+      })
+      toast.success("Biodata diperbarui")
+    } catch (err: unknown) {
+      const res = err as {
+        response?: {
+          data?: {
+            errors?: Record<string, unknown>
+            detail?: string
+          }
+        }
+      }
+      const errors = res?.response?.data?.errors
+      const detail = res?.response?.data?.detail
+      if (errors) {
+        const msgs: string[] = []
+        Object.entries(errors).forEach(([key, value]) => {
+          if (
+            key === "applicant_profile" &&
+            value &&
+            typeof value === "object" &&
+            !Array.isArray(value)
+          ) {
+            // Flatten nested applicant_profile errors like { birth_date: ["..."], nik: ["..."] }
+            Object.entries(value as Record<string, unknown>).forEach(
+              ([subKey, subVal]) => {
+                const arr = Array.isArray(subVal) ? subVal : [subVal]
+                arr.forEach((m) => msgs.push(`${subKey}: ${String(m)}`))
+              }
+            )
+          } else {
+            const arr = Array.isArray(value) ? value : [value]
+            arr.forEach((m) => msgs.push(`${key}: ${String(m)}`))
+          }
+        })
+        toast.error("Validasi gagal", msgs.join(". "))
+      } else {
+        toast.error("Gagal menyimpan", detail ?? "Coba lagi nanti")
+      }
+    }
   }
 
   if (isLoading || !applicantId) {
@@ -87,7 +263,7 @@ export function AdminPelamarDetailPage() {
       </div>
 
       <Tabs defaultValue="biodata" className="space-y-6">
-        <TabsList className="w-full justify-start overflow-x-auto">
+        <TabsList className="justify-start">
           <TabsTrigger value="biodata" className="cursor-pointer">
             Biodata
           </TabsTrigger>
@@ -97,18 +273,21 @@ export function AdminPelamarDetailPage() {
           <TabsTrigger value="dokumen" className="cursor-pointer">
             Dokumen
           </TabsTrigger>
-          <TabsTrigger value="metadata" className="cursor-pointer">
-            Metadata
-          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="biodata" className="mt-6">
-          <div className="max-w-2xl">
-          <ApplicantBiodataTab
-            profile={profile}
-            onSubmit={handleBiodataSubmit}
-            isSubmitting={updateMutation.isPending}
-          />
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)]">
+            <div>
+              <ApplicantBiodataTab
+                profile={profile}
+                onSubmit={handleBiodataSubmit}
+                isSubmitting={updateMutation.isPending}
+              />
+            </div>
+            <div className="flex flex-col gap-6">
+              <ApplicantSidebar applicant={applicant} />
+              <ApplicantMetadataTab applicant={applicant} />
+            </div>
           </div>
         </TabsContent>
 
@@ -118,10 +297,6 @@ export function AdminPelamarDetailPage() {
 
         <TabsContent value="dokumen">
           <ApplicantDocumentsTab applicantId={applicant.id} />
-        </TabsContent>
-
-        <TabsContent value="metadata">
-          <ApplicantMetadataTab applicant={applicant} />
         </TabsContent>
       </Tabs>
     </div>

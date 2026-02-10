@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
+import { DatePicker } from "@/components/ui/date-picker"
 import {
   Table,
   TableBody,
@@ -54,6 +55,8 @@ export function ApplicantWorkExperienceTab({
   applicantId,
 }: ApplicantWorkExperienceTabProps) {
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deletingItem, setDeletingItem] = useState<WorkExperience | null>(null)
   const [editing, setEditing] = useState<WorkExperience | null>(null)
   const [values, setValues] = useState({
     company_name: "",
@@ -149,11 +152,18 @@ export function ApplicantWorkExperienceTab({
     }
   }
 
-  const handleDelete = async (we: WorkExperience) => {
-    if (!confirm("Hapus pengalaman kerja ini?")) return
+  const openDelete = (we: WorkExperience) => {
+    setDeletingItem(we)
+    setDeleteDialogOpen(true)
+  }
+
+  const handleDelete = async () => {
+    if (!deletingItem) return
     try {
-      await deleteMutation.mutateAsync(we.id)
+      await deleteMutation.mutateAsync(deletingItem.id)
       toast.success("Pengalaman kerja dihapus")
+      setDeleteDialogOpen(false)
+      setDeletingItem(null)
     } catch {
       toast.error("Gagal menghapus")
     }
@@ -188,7 +198,9 @@ export function ApplicantWorkExperienceTab({
             <form onSubmit={handleSubmit} className="space-y-6">
               <FieldGroup>
                 <Field>
-                  <FieldLabel htmlFor="company_name">Nama Perusahaan *</FieldLabel>
+                  <FieldLabel htmlFor="company_name">
+                    Nama Perusahaan <span className="text-destructive">*</span>
+                  </FieldLabel>
                   <Input
                     id="company_name"
                     value={values.company_name}
@@ -213,31 +225,32 @@ export function ApplicantWorkExperienceTab({
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field>
                     <FieldLabel htmlFor="start_date">Tanggal Mulai</FieldLabel>
-                    <Input
-                      id="start_date"
-                      type="date"
-                      value={values.start_date ?? ""}
-                      onChange={(e) =>
+                    <DatePicker
+                      date={values.start_date ? new Date(values.start_date) : null}
+                      onDateChange={(d) =>
                         setValues((v) => ({
                           ...v,
-                          start_date: e.target.value || null,
+                          start_date: d ? format(d, "yyyy-MM-dd") : null,
                         }))
                       }
+                      placeholder="Pilih tanggal mulai"
                     />
                   </Field>
                   <Field>
                     <FieldLabel htmlFor="end_date">Tanggal Selesai</FieldLabel>
-                    <Input
-                      id="end_date"
-                      type="date"
-                      value={values.end_date ?? ""}
-                      onChange={(e) =>
+                    <DatePicker
+                      date={values.end_date ? new Date(values.end_date) : null}
+                      onDateChange={(d) =>
                         setValues((v) => ({
                           ...v,
-                          end_date: e.target.value || null,
+                          end_date: d ? format(d, "yyyy-MM-dd") : null,
                         }))
                       }
+                      placeholder="Pilih tanggal selesai"
                       disabled={values.still_employed}
+                    />
+                    <FieldError
+                      errors={errors.end_date ? [{ message: errors.end_date }] : []}
                     />
                   </Field>
                 </div>
@@ -348,7 +361,7 @@ export function ApplicantWorkExperienceTab({
                           variant="ghost"
                           size="icon"
                           className="size-8 cursor-pointer text-destructive"
-                          onClick={() => handleDelete(we)}
+                          onClick={() => openDelete(we)}
                           title="Hapus"
                         >
                           <IconTrash className="size-4" />
@@ -362,6 +375,48 @@ export function ApplicantWorkExperienceTab({
           )}
         </CardContent>
       </Card>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Hapus Pengalaman Kerja</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Apakah Anda yakin ingin menghapus pengalaman kerja di{" "}
+              <span className="font-medium text-foreground">
+                {deletingItem?.company_name}
+              </span>
+              ?
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Tindakan ini tidak dapat dibatalkan.
+            </p>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setDeleteDialogOpen(false)
+                setDeletingItem(null)
+              }}
+            >
+              Batal
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={deleteMutation.isPending}
+              className="cursor-pointer"
+            >
+              {deleteMutation.isPending ? "Menghapus..." : "Hapus"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

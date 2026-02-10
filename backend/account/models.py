@@ -57,6 +57,17 @@ class ApplicantVerificationStatus(models.TextChoices):
 APPLICANT_STATUS_MAX_LENGTH = 9
 
 
+class DocumentReviewStatus(models.TextChoices):
+    """Status review dokumen oleh admin/staff."""
+
+    PENDING = "PENDING", _("Menunggu Review")
+    APPROVED = "APPROVED", _("Diterima")
+    REJECTED = "REJECTED", _("Ditolak")
+
+
+DOCUMENT_REVIEW_STATUS_MAX_LENGTH = 8
+
+
 # ---------------------------------------------------------------------------
 # User
 # ---------------------------------------------------------------------------
@@ -560,6 +571,19 @@ class WorkExperience(models.Model):
             models.Index(fields=["applicant_profile", "sort_order"]),
         ]
 
+    def clean(self) -> None:
+        """Validate that end_date >= start_date when both are provided."""
+        super().clean()
+        if self.start_date and self.end_date and not self.still_employed:
+            if self.end_date < self.start_date:
+                raise ValidationError(
+                    {
+                        "end_date": _(
+                            "Tanggal selesai harus lebih besar atau sama dengan tanggal mulai."
+                        )
+                    }
+                )
+
     def __str__(self) -> str:
         return f"{self.company_name} – {self.position or '-'} ({self.applicant_profile.full_name})"
 
@@ -705,6 +729,36 @@ class ApplicantDocument(models.Model):
         blank=True,
         help_text=_("Waktu ekstraksi OCR terakhir dijalankan untuk dokumen ini."),
     )
+    # ---- Review/Verification (admin review per dokumen) ----
+    review_status = models.CharField(
+        _("status review"),
+        max_length=DOCUMENT_REVIEW_STATUS_MAX_LENGTH,
+        choices=DocumentReviewStatus.choices,
+        default=DocumentReviewStatus.PENDING,
+        db_index=True,
+        help_text=_("Status review dokumen oleh admin/staff."),
+    )
+    reviewed_by = models.ForeignKey(
+        CustomUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reviewed_documents",
+        limit_choices_to={"role__in": [UserRole.STAFF, UserRole.ADMIN]},
+        verbose_name=_("direview oleh"),
+        help_text=_("Admin atau Staff yang mereview dokumen ini."),
+    )
+    reviewed_at = models.DateTimeField(
+        _("direview pada"),
+        null=True,
+        blank=True,
+        help_text=_("Waktu dokumen direview (APPROVED atau REJECTED)."),
+    )
+    review_notes = models.TextField(
+        _("catatan review"),
+        blank=True,
+        help_text=_("Catatan admin/staff terkait review dokumen (mis. alasan ditolak, catatan khusus)."),
+    )
 
     class Meta:
         verbose_name = _("dokumen pelamar")
@@ -718,6 +772,8 @@ class ApplicantDocument(models.Model):
         indexes = [
             models.Index(fields=["applicant_profile", "document_type"]),
             models.Index(fields=["uploaded_at"]),
+            models.Index(fields=["review_status"]),
+            models.Index(fields=["applicant_profile", "review_status"]),
         ]
 
     def __str__(self) -> str:

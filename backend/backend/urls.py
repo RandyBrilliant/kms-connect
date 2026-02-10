@@ -41,6 +41,7 @@ urlpatterns = [
     path("api/auth/request-password-reset/", RequestPasswordResetView.as_view(), name="request_password_reset"),
     path("api/auth/confirm-reset-password/", ConfirmResetPasswordView.as_view(), name="confirm_reset_password"),
     path("api/", include("account.urls")),
+    path("api/", include("main.urls")),
 ]
 
 if settings.DEBUG and settings.MEDIA_ROOT:

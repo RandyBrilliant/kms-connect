@@ -16,8 +16,11 @@ import {
   deleteWorkExperience,
   getApplicantDocuments,
   createApplicantDocument,
+  updateApplicantDocument,
   deleteApplicantDocument,
   getDocumentTypes,
+  sendVerificationEmail,
+  sendPasswordResetEmail,
 } from "@/api/applicants"
 import type {
   ApplicantsListParams,
@@ -102,6 +105,22 @@ export function useActivateApplicantMutation() {
   })
 }
 
+export function useSendVerificationEmailMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (userId: number) => sendVerificationEmail(userId),
+    onSuccess: (_, userId) => {
+      queryClient.invalidateQueries({ queryKey: applicantsKeys.detail(userId) })
+    },
+  })
+}
+
+export function useSendPasswordResetMutation() {
+  return useMutation({
+    mutationFn: (userId: number) => sendPasswordResetEmail(userId),
+  })
+}
+
 // --- Work Experiences ---
 export function useWorkExperiencesQuery(applicantId: number | null, enabled = true) {
   return useQuery({
@@ -174,6 +193,28 @@ export function useCreateApplicantDocumentMutation(applicantId: number) {
   return useMutation({
     mutationFn: (formData: FormData) =>
       createApplicantDocument(applicantId, formData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: applicantsKeys.documents(applicantId),
+      })
+      queryClient.invalidateQueries({ queryKey: applicantsKeys.detail(applicantId) })
+    },
+  })
+}
+
+export function useUpdateApplicantDocumentMutation(applicantId: number) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      id,
+      input,
+    }: {
+      id: number
+      input: {
+        review_status?: "PENDING" | "APPROVED" | "REJECTED"
+        review_notes?: string
+      }
+    }) => updateApplicantDocument(applicantId, id, input),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: applicantsKeys.documents(applicantId),

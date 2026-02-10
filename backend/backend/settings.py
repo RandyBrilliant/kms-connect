@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from celery.schedules import crontab
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -47,6 +48,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'anymail',
     'account.apps.AccountConfig',
+    'main.apps.MainConfig',
 ]
 
 AUTH_USER_MODEL = 'account.CustomUser'
@@ -312,3 +314,11 @@ CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes max per task
+CELERY_BEAT_SCHEDULE = {
+    # Tutup lowongan kerja yang sudah melewati deadline.
+    # Jalan tiap 15 menit; sesuaikan di env jika perlu.
+    "close-expired-jobs-every-15-min": {
+        "task": "main.tasks.close_expired_jobs",
+        "schedule": crontab(minute="*/15"),
+    },
+}

@@ -109,6 +109,8 @@ export interface DocumentType {
   description: string
 }
 
+export type DocumentReviewStatus = "PENDING" | "APPROVED" | "REJECTED"
+
 export interface ApplicantDocument {
   id: number
   document_type: number
@@ -117,6 +119,11 @@ export interface ApplicantDocument {
   ocr_text: string
   ocr_data: Record<string, unknown> | null
   ocr_processed_at: string | null
+  review_status: DocumentReviewStatus
+  reviewed_by: number | null
+  reviewed_at: string | null
+  review_notes: string
+  reviewed_by_name?: string | null
 }
 
 export interface ApplicantsListParams {

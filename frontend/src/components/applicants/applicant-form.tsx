@@ -23,9 +23,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { PhoneInput } from "@/components/ui/phone-input"
+import { DatePicker } from "@/components/ui/date-picker"
 import { cn } from "@/lib/utils"
 import { applicantCreateSchema } from "@/schemas/applicant"
 import type { ApplicantCreateSchema } from "@/schemas/applicant"
+import { format } from "date-fns"
 
 interface ApplicantFormProps {
   onSubmit: (values: {
@@ -334,20 +337,25 @@ export function ApplicantForm({
                 )}
               </form.Field>
               <form.Field name="birth_date">
-                {(field) => (
-                  <Field>
-                    <FieldLabel htmlFor={field.name}>Tanggal Lahir</FieldLabel>
-                    <Input
-                      id={field.name}
-                      type="date"
-                      value={field.state.value}
-                      onChange={(e) =>
-                        field.handleChange(e.target.value || "")
-                      }
-                      onBlur={field.handleBlur}
-                    />
-                  </Field>
-                )}
+                {(field) => {
+                  const selectedDate = field.state.value
+                    ? new Date(field.state.value)
+                    : null
+                  return (
+                    <Field>
+                      <FieldLabel htmlFor={field.name}>Tanggal Lahir</FieldLabel>
+                      <DatePicker
+                        date={selectedDate}
+                        onDateChange={(d) =>
+                          field.handleChange(
+                            d ? format(d, "yyyy-MM-dd") : ""
+                          )
+                        }
+                        placeholder="Pilih tanggal lahir"
+                      />
+                    </Field>
+                  )
+                }}
               </form.Field>
             </div>
 
@@ -395,13 +403,12 @@ export function ApplicantForm({
               {(field) => (
                 <Field>
                   <FieldLabel htmlFor={field.name}>No. HP / WA</FieldLabel>
-                  <Input
+                  <PhoneInput
                     id={field.name}
-                    type="tel"
-                    placeholder="08xxxxxxxxxx"
                     value={field.state.value}
-                    onChange={(e) => field.handleChange(e.target.value)}
-                    onBlur={field.handleBlur}
+                    onChange={(val) => field.handleChange(val)}
+                    disabled={isSubmitting}
+                    placeholder="No. HP aktif"
                   />
                 </Field>
               )}

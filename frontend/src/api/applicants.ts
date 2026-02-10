@@ -81,6 +81,26 @@ export async function activateApplicant(id: number): Promise<ApplicantUser> {
   return data.data
 }
 
+/** POST /api/applicants/:id/send_verification_email/ */
+export async function sendVerificationEmail(
+  userId: number
+): Promise<{ user_id: number; email: string }> {
+  const { data } = await api.post<{ user_id: number; email: string }>(
+    `/api/applicants/${userId}/send_verification_email/`
+  )
+  return data
+}
+
+/** POST /api/applicants/:id/send_password_reset_email/ */
+export async function sendPasswordResetEmail(
+  userId: number
+): Promise<{ user_id: number; email: string }> {
+  const { data } = await api.post<{ user_id: number; email: string }>(
+    `/api/applicants/${userId}/send_password_reset_email/`
+  )
+  return data
+}
+
 // --- Work Experiences ---
 /** GET /api/applicants/:applicantId/work_experiences/ */
 export async function getWorkExperiences(
@@ -149,6 +169,22 @@ export async function createApplicantDocument(
         "Content-Type": "multipart/form-data",
       },
     }
+  )
+  return data
+}
+
+/** PATCH /api/applicants/:applicantId/documents/:id/ */
+export async function updateApplicantDocument(
+  applicantId: number,
+  id: number,
+  input: {
+    review_status?: "PENDING" | "APPROVED" | "REJECTED"
+    review_notes?: string
+  }
+): Promise<ApplicantDocument> {
+  const { data } = await api.patch<ApplicantDocument>(
+    `/api/applicants/${applicantId}/documents/${id}/`,
+    input
   )
   return data
 }

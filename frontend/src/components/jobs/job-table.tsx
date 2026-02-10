@@ -1,6 +1,6 @@
 /**
- * Admin users table with server-side pagination, search, and filters.
- * Uses TanStack Table for display and TanStack Query for data.
+ * Jobs table with server-side pagination, search, and filters.
+ * Mirrors NewsTable/AdminTable style and UX.
  */
 
 import { useState, useMemo, useCallback } from "react"
@@ -12,13 +12,11 @@ import {
   type ColumnDef,
 } from "@tanstack/react-table"
 import {
-  IconCircleCheck,
-  IconCircleX,
+  IconBriefcase,
   IconPencil,
   IconPlus,
   IconSearch,
-  IconUserCheck,
-  IconUserOff,
+  IconTrash,
 } from "@tabler/icons-react"
 import { format } from "date-fns"
 import { id } from "date-fns/locale"
@@ -42,30 +40,63 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { useAdminsQuery, useDeactivateAdminMutation, useActivateAdminMutation } from "@/hooks/use-admins-query"
+import { useJobsQuery, useDeleteJobMutation } from "@/hooks/use-jobs-query"
 import { toast } from "@/lib/toast"
-import type { AdminUser } from "@/types/admin"
-import type { AdminsListParams } from "@/types/admin"
+import type { JobItem, JobsListParams, JobStatus, EmploymentType } from "@/types/jobs"
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
 
-interface AdminTableProps {
+interface JobTableProps {
   basePath: string
 }
 
-export function AdminTable({ basePath }: AdminTableProps) {
+function formatDate(value: string | null) {
+  if (!value) return "-"
+  return format(new Date(value), "dd MMM yyyy", { locale: id })
+}
+
+function statusLabel(status: JobStatus) {
+  switch (status) {
+    case "DRAFT":
+      return "Draf"
+    case "OPEN":
+      return "Dibuka"
+    case "CLOSED":
+      return "Ditutup"
+    case "ARCHIVED":
+      return "Diarsipkan"
+    default:
+      return status
+  }
+}
+
+function employmentLabel(type: EmploymentType) {
+  switch (type) {
+    case "FULL_TIME":
+      return "Penuh waktu"
+    case "PART_TIME":
+      return "Paruh waktu"
+    case "CONTRACT":
+      return "Kontrak"
+    case "INTERNSHIP":
+      return "Magang"
+    default:
+      return type
+  }
+}
+
+export function JobTable({ basePath }: JobTableProps) {
   const navigate = useNavigate()
-  const [params, setParams] = useState<AdminsListParams>({
+  const [params, setParams] = useState<JobsListParams>({
     page: 1,
     page_size: 20,
     search: "",
-    ordering: "email",
+    ordering: "-posted_at",
   })
   const [searchInput, setSearchInput] = useState("")
 
-  const { data, isLoading, isError, error } = useAdminsQuery(params)
-  const deactivateMutation = useDeactivateAdminMutation()
-  const activateMutation = useActivateAdminMutation()
+  const { data, isLoading, isError, error } = useJobsQuery(params)
+  const deleteMutation = useDeleteJobMutation()
 
   const handleSearch = () => {
     setParams((p) => ({
@@ -75,9 +106,9 @@ export function AdminTable({ basePath }: AdminTableProps) {
     }))
   }
 
-  const handleFilterChange = <K extends keyof AdminsListParams>(
+  const handleFilterChange = <K extends keyof JobsListParams>(
     key: K,
-    value: AdminsListParams[K]
+    value: JobsListParams[K]
   ) => {
     setParams((p) => ({ ...p, [key]: value, page: 1 }))
   }
@@ -86,138 +117,112 @@ export function AdminTable({ basePath }: AdminTableProps) {
     setParams((p) => ({ ...p, page }))
   }
 
-  const handleActivate = useCallback(
-    async (admin: AdminUser) => {
+  const handleDelete = useCallback(
+    async (item: JobItem) => {
+      if (!window.confirm(`Hapus lowongan "${item.title}"? Tindakan ini tidak dapat dibatalkan.`)) {
+        return
+      }
       try {
-        await activateMutation.mutateAsync(admin.id)
-        toast.success("Admin diaktifkan", "Akun berhasil diaktifkan kembali")
+        await deleteMutation.mutateAsync(item.id)
+        toast.success("Lowongan dihapus", "Data lowongan berhasil dihapus")
       } catch {
-        toast.error("Gagal mengaktifkan", "Coba lagi nanti")
+        toast.error("Gagal menghapus", "Coba lagi nanti")
       }
     },
-    [activateMutation]
+    [deleteMutation]
   )
 
-  const handleDeactivate = useCallback(
-    async (admin: AdminUser) => {
-      try {
-        await deactivateMutation.mutateAsync(admin.id)
-        toast.success("Admin dinonaktifkan", "Akun berhasil dinonaktifkan")
-      } catch {
-        toast.error("Gagal menonaktifkan", "Coba lagi nanti")
-      }
-    },
-    [deactivateMutation]
-  )
-
-  const columns = useMemo<ColumnDef<AdminUser>[]>(
+  const columns = useMemo<ColumnDef<JobItem>[]>(
     () => [
       {
-        accessorKey: "full_name",
-        header: "Nama",
+        accessorKey: "title",
+        header: "Judul",
         cell: ({ row }) => (
-          <span className="font-medium">
-            {row.original.full_name || "-"}
-          </span>
+          <div className="flex items-center gap-1">
+            <IconBriefcase className="text-muted-foreground size-4" />
+            <div className="flex flex-col">
+              <span className="font-medium line-clamp-2">{row.original.title}</span>
+              {row.original.company_name && (
+                <span className="text-muted-foreground text-xs">
+                  {row.original.company_name}
+                </span>
+              )}
+            </div>
+          </div>
         ),
       },
       {
-        accessorKey: "email",
-        header: "Email",
+        accessorKey: "employment_type",
+        header: "Tipe",
         cell: ({ row }) => (
-          <span>{row.original.email}</span>
+          <Badge variant="outline">{employmentLabel(row.original.employment_type)}</Badge>
         ),
       },
       {
-        accessorKey: "is_active",
+        accessorKey: "location",
+        header: "Lokasi",
+        cell: ({ row }) => {
+          const { location_city, location_country } = row.original
+          if (!location_city && !location_country) return "-"
+          if (!location_city) return location_country
+          if (!location_country) return location_city
+          return `${location_city}, ${location_country}`
+        },
+      },
+      {
+        accessorKey: "status",
         header: "Status",
-        cell: ({ row }) =>
-          row.original.is_active ? (
-            <Badge variant="default" className="gap-1">
-              <IconCircleCheck className="size-3" />
-              Aktif
-            </Badge>
-          ) : (
-            <Badge variant="secondary" className="gap-1">
-              <IconCircleX className="size-3" />
-              Nonaktif
-            </Badge>
-          ),
+        cell: ({ row }) => {
+          const status = row.original.status
+          let variant: "default" | "secondary" | "outline" = "outline"
+          if (status === "OPEN") variant = "default"
+          if (status === "DRAFT") variant = "secondary"
+          return <Badge variant={variant}>{statusLabel(status)}</Badge>
+        },
       },
       {
-        accessorKey: "email_verified",
-        header: "Email Terverifikasi",
-        cell: ({ row }) =>
-          row.original.email_verified ? (
-            <Badge variant="outline">Ya</Badge>
-          ) : (
-            <Badge variant="outline" className="text-muted-foreground">
-              Belum
-            </Badge>
-          ),
+        accessorKey: "posted_at",
+        header: "Diposting",
+        cell: ({ row }) => formatDate(row.original.posted_at),
       },
       {
-        accessorKey: "date_joined",
-        header: "Bergabung",
-        cell: ({ row }) =>
-          format(new Date(row.original.date_joined), "dd MMM yyyy HH:mm", {
-            locale: id,
-          }),
-      },
-      {
-        accessorKey: "updated_at",
-        header: "Diperbarui",
-        cell: ({ row }) =>
-          format(new Date(row.original.updated_at), "dd MMM yyyy HH:mm", {
-            locale: id,
-          }),
+        accessorKey: "deadline",
+        header: "Batas Akhir",
+        cell: ({ row }) => formatDate(row.original.deadline),
       },
       {
         id: "actions",
         header: "",
         cell: ({ row }) => {
-          const admin = row.original
+          const item = row.original
           return (
             <div className="flex items-center gap-1">
               <Button
                 variant="ghost"
                 size="icon"
                 className="size-8 cursor-pointer"
-                onClick={() => navigate(`${basePath}/${admin.id}/edit`)}
+                onClick={() => navigate(`${basePath}/${item.id}/edit`)}
                 title="Edit"
               >
                 <IconPencil className="size-4" />
                 <span className="sr-only">Edit</span>
               </Button>
-              {admin.is_active ? (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-8 cursor-pointer text-destructive hover:text-destructive"
-                  onClick={() => handleDeactivate(admin)}
-                  title="Nonaktifkan"
-                >
-                  <IconUserOff className="size-4" />
-                  <span className="sr-only">Nonaktifkan</span>
-                </Button>
-              ) : (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-8 cursor-pointer"
-                  onClick={() => handleActivate(admin)}
-                  title="Aktifkan"
-                >
-                  <IconUserCheck className="size-4" />
-                  <span className="sr-only">Aktifkan</span>
-                </Button>
-              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8 cursor-pointer text-destructive hover:text-destructive"
+                onClick={() => handleDelete(item)}
+                title="Hapus"
+              >
+                <IconTrash className="size-4" />
+                <span className="sr-only">Hapus</span>
+              </Button>
             </div>
           )
         },
       },
     ],
-    [basePath, navigate, handleActivate, handleDeactivate]
+    [basePath, navigate, handleDelete]
   )
 
   const table = useReactTable({
@@ -248,7 +253,7 @@ export function AdminTable({ basePath }: AdminTableProps) {
           <div className="relative flex-1">
             <IconSearch className="text-muted-foreground absolute left-3 top-1/2 size-4 -translate-y-1/2" />
             <Input
-              placeholder="Cari email..."
+              placeholder="Cari judul, perusahaan, atau lokasi..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
@@ -262,49 +267,42 @@ export function AdminTable({ basePath }: AdminTableProps) {
           >
             Cari
           </Button>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Select
-              value={
-                params.is_active === undefined
-                  ? "all"
-                  : String(params.is_active)
-              }
+              value={params.status ?? "ALL"}
               onValueChange={(v) =>
-                handleFilterChange(
-                  "is_active",
-                  v === "all" ? undefined : v === "true"
-                )
-              }
-            >
-              <SelectTrigger className="w-[130px] cursor-pointer">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Semua status</SelectItem>
-                <SelectItem value="true">Aktif</SelectItem>
-                <SelectItem value="false">Nonaktif</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select
-              value={
-                params.email_verified === undefined
-                  ? "all"
-                  : String(params.email_verified)
-              }
-              onValueChange={(v) =>
-                handleFilterChange(
-                  "email_verified",
-                  v === "all" ? undefined : v === "true"
-                )
+                handleFilterChange("status", v === "ALL" ? "ALL" : (v as JobStatus))
               }
             >
               <SelectTrigger className="w-[150px] cursor-pointer">
-                <SelectValue placeholder="Verifikasi" />
+                <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Semua verifikasi</SelectItem>
-                <SelectItem value="true">Terverifikasi</SelectItem>
-                <SelectItem value="false">Belum</SelectItem>
+                <SelectItem value="ALL">Semua status</SelectItem>
+                <SelectItem value="DRAFT">Draf</SelectItem>
+                <SelectItem value="OPEN">Dibuka</SelectItem>
+                <SelectItem value="CLOSED">Ditutup</SelectItem>
+                <SelectItem value="ARCHIVED">Diarsipkan</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              value={params.employment_type ?? "ALL"}
+              onValueChange={(v) =>
+                handleFilterChange(
+                  "employment_type",
+                  v === "ALL" ? "ALL" : (v as EmploymentType)
+                )
+              }
+            >
+              <SelectTrigger className="w-[170px] cursor-pointer">
+                <SelectValue placeholder="Jenis kerja" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Semua jenis</SelectItem>
+                <SelectItem value="FULL_TIME">Penuh waktu</SelectItem>
+                <SelectItem value="PART_TIME">Paruh waktu</SelectItem>
+                <SelectItem value="CONTRACT">Kontrak</SelectItem>
+                <SelectItem value="INTERNSHIP">Magang</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -312,7 +310,7 @@ export function AdminTable({ basePath }: AdminTableProps) {
         <Button asChild className="cursor-pointer">
           <Link to={`${basePath}/new`} className="cursor-pointer">
             <IconPlus className="mr-2 size-4" />
-            Tambah Admin
+            Tambah Lowongan
           </Link>
         </Button>
       </div>
@@ -360,7 +358,7 @@ export function AdminTable({ basePath }: AdminTableProps) {
                     colSpan={columns.length}
                     className="h-24 text-center"
                   >
-                    Tidak ada data admin.
+                    Tidak ada data lowongan.
                   </TableCell>
                 </TableRow>
               )}
@@ -377,7 +375,7 @@ export function AdminTable({ basePath }: AdminTableProps) {
               currentPage * (params.page_size ?? 20),
               data.count
             )}{" "}
-            dari {data.count} admin
+            dari {data.count} lowongan
           </div>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
@@ -431,3 +429,4 @@ export function AdminTable({ basePath }: AdminTableProps) {
     </div>
   )
 }
+
