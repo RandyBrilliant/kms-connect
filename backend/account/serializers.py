@@ -38,14 +38,17 @@ class AdminUserSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "email",
+            "full_name",
+            "role",
             "password",
             "is_active",
             "email_verified",
             "email_verified_at",
             "date_joined",
+            "last_login",
             "updated_at",
         ]
-        read_only_fields = ["id", "email_verified_at", "date_joined", "updated_at"]
+        read_only_fields = ["id", "role", "email_verified_at", "date_joined", "last_login", "updated_at"]
         extra_kwargs = {"password": {"write_only": True, "required": False}}
 
     def __init__(self, *args, **kwargs):
@@ -64,6 +67,8 @@ class AdminUserSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({
                 "password": [ApiMessage.PASSWORD_REQUIRED_ON_CREATE],
             })
+        validated_data.setdefault("is_active", True)
+        validated_data.setdefault("email_verified", False)
         user = CustomUser.objects.create_user(
             role=UserRole.ADMIN,
             **validated_data,
@@ -106,6 +111,7 @@ class StaffUserSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "email",
+            "role",
             "password",
             "is_active",
             "email_verified",
@@ -114,7 +120,7 @@ class StaffUserSerializer(serializers.ModelSerializer):
             "updated_at",
             "staff_profile",
         ]
-        read_only_fields = ["id", "email_verified_at", "date_joined", "updated_at"]
+        read_only_fields = ["id", "role", "email_verified_at", "date_joined", "updated_at"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -186,6 +192,7 @@ class CompanyUserSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "email",
+            "role",
             "password",
             "is_active",
             "email_verified",
@@ -194,7 +201,7 @@ class CompanyUserSerializer(serializers.ModelSerializer):
             "updated_at",
             "company_profile",
         ]
-        read_only_fields = ["id", "email_verified_at", "date_joined", "updated_at"]
+        read_only_fields = ["id", "role", "email_verified_at", "date_joined", "updated_at"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -324,6 +331,7 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "email",
+            "role",
             "password",
             "is_active",
             "email_verified",
@@ -332,7 +340,7 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
             "updated_at",
             "applicant_profile",
         ]
-        read_only_fields = ["id", "email_verified_at", "date_joined", "updated_at"]
+        read_only_fields = ["id", "role", "email_verified_at", "date_joined", "updated_at"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

@@ -1,0 +1,371 @@
+/**
+ * Shared staff form for create and edit.
+ * Displays all fields from backend StaffUserSerializer.
+ */
+
+import { useState } from "react"
+import { useForm } from "@tanstack/react-form"
+import { zodValidator } from "@tanstack/zod-form-adapter"
+import { IconEye, IconEyeOff } from "@tabler/icons-react"
+
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+    Field,
+    FieldError,
+    FieldGroup,
+    FieldLabel,
+} from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
+import { PhoneInput } from "@/components/ui/phone-input"
+import { cn } from "@/lib/utils"
+import type { StaffUser } from "@/types/staff"
+import { staffCreateSchema, staffUpdateSchema } from "@/schemas/staff"
+import type { StaffCreateSchema } from "@/schemas/staff"
+
+interface StaffFormProps {
+    staff?: StaffUser | null
+    onSubmit: (values: {
+        email: string
+        full_name?: string
+        contact_phone?: string
+        password?: string
+        is_active?: boolean
+        email_verified?: boolean
+    }) => Promise<void>
+    isSubmitting?: boolean
+}
+
+type StaffFormValues = {
+    email: string
+    full_name: string
+    contact_phone: string
+    password: string
+    confirmPassword: string
+}
+
+function PasswordInput({
+    id,
+    value,
+    onChange,
+    placeholder,
+    showPassword,
+    onToggleVisibility,
+    error,
+    disabled,
+}: {
+    id: string
+    value: string
+    onChange: (value: string) => void
+    placeholder: string
+    showPassword: boolean
+    onToggleVisibility: () => void
+    error?: string
+    disabled?: boolean
+}) {
+    return (
+        <>
+            <div className="relative">
+                <Input
+                    id={id}
+                    type={showPassword ? "text" : "password"}
+                    placeholder={placeholder}
+                    value={value}
+                    onChange={(e) => onChange(e.target.value)}
+                    disabled={disabled}
+                    autoComplete="new-password"
+                    className={cn("pr-10", error && "border-destructive")}
+                />
+                <button
+                    type="button"
+                    onClick={onToggleVisibility}
+                    className="text-muted-foreground hover:text-foreground absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer"
+                    tabIndex={-1}
+                    aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
+                >
+                    {showPassword ? (
+                        <IconEyeOff className="size-4" />
+                    ) : (
+                        <IconEye className="size-4" />
+                    )}
+                </button>
+            </div>
+            {error && <FieldError errors={[{ message: error }]} />}
+        </>
+    )
+}
+
+export function StaffForm({
+    staff,
+    onSubmit,
+    isSubmitting = false,
+}: StaffFormProps) {
+    const isEdit = !!staff
+    const [showPassword, setShowPassword] = useState(false)
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+    const [errors, setErrors] = useState<
+        Partial<Record<keyof StaffFormValues, string>>
+    >({})
+
+    const form = useForm<StaffFormValues>({
+        defaultValues: {
+            email: staff?.email ?? "",
+            full_name: staff?.staff_profile?.full_name ?? "",
+            contact_phone: staff?.staff_profile?.contact_phone ?? "",
+            password: "",
+            confirmPassword: "",
+        },
+        validatorAdapter: zodValidator(),
+        onSubmit: async ({ value }) => {
+            setErrors({})
+
+            if (isEdit) {
+                const result = staffUpdateSchema.safeParse({
+                    email: value.email,
+                    full_name: value.full_name || undefined,
+                    contact_phone: value.contact_phone || undefined,
+                })
+                if (!result.success) {
+                    const errs: Partial<Record<keyof StaffFormValues, string>> = {}
+                    for (const issue of result.error.issues) {
+                        const path = issue.path[0] as keyof StaffFormValues
+                        if (path) errs[path] = issue.message
+                    }
+                    setErrors(errs)
+                    return
+                }
+                await onSubmit({
+                    email: result.data.email,
+                    full_name: result.data.full_name,
+                    contact_phone: result.data.contact_phone,
+                })
+                return
+            }
+
+            const result = staffCreateSchema.safeParse(value)
+            if (!result.success) {
+                const errs: Partial<Record<keyof StaffFormValues, string>> = {}
+                for (const issue of result.error.issues) {
+                    const path = issue.path[0] as keyof StaffFormValues
+                    if (path) errs[path] = issue.message
+                }
+                setErrors(errs)
+                return
+            }
+
+            const payload = result.data as StaffCreateSchema
+            const submitData = {
+                email: payload.email,
+                full_name: payload.full_name,
+                contact_phone: payload.contact_phone || undefined,
+                password: payload.password,
+                is_active: true,
+                email_verified: false,
+            }
+            await onSubmit(submitData)
+        },
+    })
+
+    return (
+        <form
+            onSubmit={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                void form.handleSubmit()
+            }}
+            className="flex flex-col gap-6"
+        >
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Informasi Akun</CardTitle>
+                        <CardDescription>
+                            {isEdit
+                                ? "Perbarui data staff. Password tidak dapat diubah dari sini—gunakan Kirim Email Reset Password di sisi kanan."
+                                : "Masukkan informasi akun staff baru. Field yang ditandai dengan * wajib diisi."}
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                        <FieldGroup>
+                            <form.Field
+                                name="full_name"
+                                validators={{ onChange: staffCreateSchema.shape.full_name }}
+                            >
+                                {(field) => (
+                                    <Field>
+                                        <FieldLabel htmlFor={field.name}>
+                                            Nama Lengkap <span className="text-destructive">*</span>
+                                        </FieldLabel>
+                                        <Input
+                                            id={field.name}
+                                            type="text"
+                                            placeholder="Contoh: John Doe"
+                                            value={field.state.value}
+                                            onChange={(e) => field.handleChange(e.target.value)}
+                                            onBlur={field.handleBlur}
+                                        />
+                                        <FieldError
+                                            errors={[
+                                                ...field.state.meta.errors.map((err) =>
+                                                    typeof err === "string"
+                                                        ? { message: err }
+                                                        : { message: err.message ?? String(err) }
+                                                ),
+                                                ...(errors.full_name
+                                                    ? [{ message: errors.full_name }]
+                                                    : []),
+                                            ]}
+                                        />
+                                    </Field>
+                                )}
+                            </form.Field>
+
+                            <form.Field
+                                name="contact_phone"
+                                validators={{ onChange: staffCreateSchema.shape.contact_phone }}
+                            >
+                                {(field) => (
+                                    <Field>
+                                        <FieldLabel htmlFor={field.name}>Telepon</FieldLabel>
+                                        <PhoneInput
+                                            id={field.name}
+                                            placeholder="Contoh: +62 812 3456 7890"
+                                            value={field.state.value}
+                                            onChange={(val) => field.handleChange(val)}
+                                            onBlur={field.handleBlur}
+                                        />
+                                        <FieldError
+                                            errors={[
+                                                ...field.state.meta.errors.map((err) =>
+                                                    typeof err === "string"
+                                                        ? { message: err }
+                                                        : { message: err.message ?? String(err) }
+                                                ),
+                                                ...(errors.contact_phone
+                                                    ? [{ message: errors.contact_phone }]
+                                                    : []),
+                                            ]}
+                                        />
+                                    </Field>
+                                )}
+                            </form.Field>
+
+                            <form.Field
+                                name="email"
+                                validators={{ onChange: staffCreateSchema.shape.email }}
+                            >
+                                {(field) => (
+                                    <Field>
+                                        <FieldLabel htmlFor={field.name}>
+                                            Email <span className="text-destructive">*</span>
+                                        </FieldLabel>
+                                        <Input
+                                            id={field.name}
+                                            type="email"
+                                            placeholder="Contoh: staff@example.com"
+                                            value={field.state.value}
+                                            onChange={(e) => field.handleChange(e.target.value)}
+                                            onBlur={field.handleBlur}
+                                        />
+                                        <FieldError
+                                            errors={[
+                                                ...field.state.meta.errors.map((err) =>
+                                                    typeof err === "string"
+                                                        ? { message: err }
+                                                        : { message: err.message ?? String(err) }
+                                                ),
+                                                ...(errors.email
+                                                    ? [{ message: errors.email }]
+                                                    : []),
+                                            ]}
+                                        />
+                                    </Field>
+                                )}
+                            </form.Field>
+
+                            {!isEdit && (
+                                <div className="flex flex-col gap-6">
+                                    <form.Field
+                                        name="password"
+                                        validators={{ onChange: staffCreateSchema.shape.password }}
+                                    >
+                                        {(field) => (
+                                            <Field>
+                                                <FieldLabel htmlFor={field.name} className="mb-2 block">
+                                                    Password{" "}
+                                                    <span className="text-destructive">*</span>
+                                                </FieldLabel>
+                                                <PasswordInput
+                                                    id={field.name}
+                                                    value={field.state.value}
+                                                    onChange={(v) => field.handleChange(v)}
+                                                    placeholder="Min. 8 karakter"
+                                                    showPassword={showPassword}
+                                                    onToggleVisibility={() =>
+                                                        setShowPassword((p) => !p)
+                                                    }
+                                                    error={
+                                                        (() => {
+                                                            const err = field.state.meta.errors[0]
+                                                            if (!err) return errors.password
+                                                            if (typeof err === "string") return err
+                                                            return err.message ?? errors.password
+                                                        })()
+                                                    }
+                                                />
+                                            </Field>
+                                        )}
+                                    </form.Field>
+                                    <form.Field
+                                        name="confirmPassword"
+                                        validators={{
+                                            onChange: staffCreateSchema.shape.confirmPassword,
+                                        }}
+                                    >
+                                        {(field) => (
+                                            <Field>
+                                                <FieldLabel
+                                                    htmlFor={field.name}
+                                                    className="mb-2 block"
+                                                >
+                                                    Konfirmasi Password{" "}
+                                                    <span className="text-destructive">*</span>
+                                                </FieldLabel>
+                                                <PasswordInput
+                                                    id={field.name}
+                                                    value={field.state.value}
+                                                    onChange={(v) => field.handleChange(v)}
+                                                    placeholder="Ulangi password"
+                                                    showPassword={showConfirmPassword}
+                                                    onToggleVisibility={() =>
+                                                        setShowConfirmPassword((p) => !p)
+                                                    }
+                                                    error={
+                                                        (() => {
+                                                            const err = field.state.meta.errors[0]
+                                                            if (!err) return errors.confirmPassword
+                                                            if (typeof err === "string") return err
+                                                            return err.message ?? errors.confirmPassword
+                                                        })()
+                                                    }
+                                                />
+                                            </Field>
+                                        )}
+                                    </form.Field>
+                                </div>
+                            )}
+                        </FieldGroup>
+                    </CardContent>
+                </Card>
+
+                <div className="flex gap-2">
+                    <Button type="submit" disabled={isSubmitting} className="cursor-pointer">
+                        {isSubmitting
+                            ? "Menyimpan..."
+                            : isEdit
+                                ? "Simpan Perubahan"
+                                : "Tambah Staff"}
+                    </Button>
+                </div>
+            </form>
+    )
+}

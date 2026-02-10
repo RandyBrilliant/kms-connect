@@ -73,6 +73,12 @@ class CustomUser(AbstractUser):
         db_index=True,
         help_text=_("Digunakan untuk login dan notifikasi."),
     )
+    full_name = models.CharField(
+        _("nama lengkap"),
+        max_length=255,
+        blank=True,
+        help_text=_("Nama lengkap pengguna (untuk Admin; peran lain dapat memakai profil)."),
+    )
     role = models.CharField(
         _("peran"),
         max_length=USER_ROLE_MAX_LENGTH,

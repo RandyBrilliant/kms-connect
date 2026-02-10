@@ -50,6 +50,7 @@ def _user_summary(user):
     return {
         "id": user.id,
         "email": user.email,
+        "full_name": getattr(user, "full_name", "") or "",
         "role": user.role,
         "is_active": user.is_active,
         "email_verified": user.email_verified,
@@ -293,6 +294,45 @@ class VerifyEmailView(APIView):
                 data={"email": user.email},
                 detail="Email berhasil diverifikasi.",
                 code=ApiCode.SUCCESS,
+            ),
+            status=status.HTTP_200_OK,
+        )
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class RequestPasswordResetView(APIView):
+    """
+    Public. POST { "email": "user@example.com" } → send password reset email if user exists.
+    Always returns success to prevent email enumeration.
+    Throttled per IP.
+    """
+    permission_classes = ()
+    authentication_classes = ()
+    throttle_classes = [AuthPublicRateThrottle]
+
+    def post(self, request):
+        from django.contrib.auth import get_user_model
+        from .email_utils import send_password_reset_email
+
+        User = get_user_model()
+        email = (request.data.get("email") or "").strip().lower()
+        if not email:
+            return Response(
+                error_response(
+                    detail="Email wajib diisi.",
+                    code=ApiCode.VALIDATION_ERROR,
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        user = User.objects.filter(email__iexact=email).first()
+        if user:
+            logo_url = getattr(django_settings, "LOGO_URL", "") or ""
+            send_password_reset_email(user, logo_url=logo_url)
+        return Response(
+            success_response(
+                detail="Jika email terdaftar, tautan reset password akan dikirim.",
+                code=ApiCode.EMAIL_SENT,
             ),
             status=status.HTTP_200_OK,
         )

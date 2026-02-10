@@ -26,6 +26,7 @@ from account.auth_cookie_views import (
     CookieTokenRefreshView,
     CookieLogoutView,
     VerifyEmailView,
+    RequestPasswordResetView,
     ConfirmResetPasswordView,
 )
 
@@ -37,6 +38,7 @@ urlpatterns = [
     path("api/auth/token/verify/", TokenVerifyView.as_view(), name="token_verify"),
     path("api/auth/logout/", CookieLogoutView.as_view(), name="auth_logout"),
     path("api/auth/verify-email/", VerifyEmailView.as_view(), name="verify_email"),
+    path("api/auth/request-password-reset/", RequestPasswordResetView.as_view(), name="request_password_reset"),
     path("api/auth/confirm-reset-password/", ConfirmResetPasswordView.as_view(), name="confirm_reset_password"),
     path("api/", include("account.urls")),
 ]

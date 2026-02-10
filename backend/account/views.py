@@ -190,8 +190,8 @@ class AdminUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
     permission_classes = [IsBackofficeAdmin]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ["is_active", "email_verified"]
-    search_fields = ["email"]
-    ordering_fields = ["email", "date_joined", "updated_at"]
+    search_fields = ["email", "full_name"]
+    ordering_fields = ["email", "full_name", "date_joined", "updated_at"]
     ordering = ["email"]
 
     def get_queryset(self):
