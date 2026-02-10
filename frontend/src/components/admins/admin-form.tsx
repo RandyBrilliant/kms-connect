@@ -5,7 +5,6 @@
 
 import { useState } from "react"
 import { useForm } from "@tanstack/react-form"
-import { zodValidator } from "@tanstack/zod-form-adapter"
 import { IconEye, IconEyeOff } from "@tabler/icons-react"
 
 import { Button } from "@/components/ui/button"
@@ -105,14 +104,13 @@ export function AdminForm({
     Partial<Record<keyof AdminFormValues, string>>
   >({})
 
-  const form = useForm<AdminFormValues>({
+  const form = useForm({
     defaultValues: {
       email: admin?.email ?? "",
       full_name: admin?.full_name ?? "",
       password: "",
       confirmPassword: "",
     },
-    validatorAdapter: zodValidator(),
     onSubmit: async ({ value }) => {
       setErrors({})
 
@@ -182,7 +180,6 @@ export function AdminForm({
             <FieldGroup>
               <form.Field
                 name="full_name"
-                validators={{ onChange: adminCreateSchema.shape.full_name }}
               >
                 {(field) => (
                   <Field>
@@ -197,12 +194,12 @@ export function AdminForm({
                     />
                     <FieldError
                       errors={[
-                        ...field.state.meta.errors.map((err) =>
-                          typeof err === "string"
-                            ? { message: err }
-                            : { message: err.message ?? String(err) }
-                        ),
-                        ...(errors.full_name ? [{ message: errors.full_name }] : []),
+                        ...(field.state.meta.errors as unknown[]).map((err) => {
+                          const e = err as { message?: string } | string
+                          if (typeof e === "string") return { message: e }
+                          return { message: e?.message ?? String(e) }
+                        }),
+                        ...(errors.full_name ? [{ message: errors.full_name! }] : []),
                       ]}
                     />
                   </Field>
@@ -211,7 +208,6 @@ export function AdminForm({
 
               <form.Field
                 name="email"
-                validators={{ onChange: adminCreateSchema.shape.email }}
               >
                 {(field) => (
                   <Field>
@@ -228,12 +224,12 @@ export function AdminForm({
                     />
                     <FieldError
                       errors={[
-                        ...field.state.meta.errors.map((err) =>
-                          typeof err === "string"
-                            ? { message: err }
-                            : { message: err.message ?? String(err) }
-                        ),
-                        ...(errors.email ? [{ message: errors.email }] : []),
+                        ...(field.state.meta.errors as unknown[]).map((err) => {
+                          const e = err as { message?: string } | string
+                          if (typeof e === "string") return { message: e }
+                          return { message: e?.message ?? String(e) }
+                        }),
+                        ...(errors.email ? [{ message: errors.email! }] : []),
                       ]}
                     />
                   </Field>
@@ -244,7 +240,6 @@ export function AdminForm({
                 <div className="flex flex-col gap-6">
                   <form.Field
                     name="password"
-                    validators={{ onChange: adminCreateSchema.shape.password }}
                   >
                     {(field) => (
                       <Field>
@@ -263,7 +258,7 @@ export function AdminForm({
                               const err = field.state.meta.errors[0]
                               if (!err) return errors.password
                               if (typeof err === "string") return err
-                              return err.message ?? errors.password
+                              return (err as { message?: string }).message ?? errors.password
                             })()
                           }
                         />
@@ -272,9 +267,6 @@ export function AdminForm({
                   </form.Field>
                   <form.Field
                     name="confirmPassword"
-                    validators={{
-                      onChange: adminCreateSchema.shape.confirmPassword,
-                    }}
                   >
                     {(field) => (
                       <Field>
@@ -296,7 +288,7 @@ export function AdminForm({
                               const err = field.state.meta.errors[0]
                               if (!err) return errors.confirmPassword
                               if (typeof err === "string") return err
-                              return err.message ?? errors.confirmPassword
+                              return (err as { message?: string }).message ?? errors.confirmPassword
                             })()
                           }
                         />

@@ -5,7 +5,6 @@
 
 import { useState } from "react"
 import { useForm } from "@tanstack/react-form"
-import { zodValidator } from "@tanstack/zod-form-adapter"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -95,9 +94,8 @@ export function ApplicantBiodataTab({
 }: ApplicantBiodataTabProps) {
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({})
 
-  const form = useForm<BiodataFormValues>({
+  const form = useForm({
     defaultValues: toFormValues(profile),
-    validatorAdapter: zodValidator(),
     onSubmit: async ({ value }) => {
       setErrors({})
 
@@ -161,7 +159,6 @@ export function ApplicantBiodataTab({
           <FieldGroup>
             <form.Field
               name="full_name"
-              validators={{ onChange: applicantProfileUpdateSchema.shape.full_name }}
             >
               {(field) => (
                 <Field>
@@ -188,7 +185,6 @@ export function ApplicantBiodataTab({
 
             <form.Field
               name="nik"
-              validators={{ onChange: applicantProfileUpdateSchema.shape.nik }}
             >
               {(field) => (
                 <Field>

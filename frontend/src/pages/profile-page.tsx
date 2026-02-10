@@ -132,10 +132,10 @@ function StaffProfileForm({ profile }: { profile: StaffUser }) {
       await updateMutation.mutateAsync({
         email: result.data.email,
         staff_profile: {
-          full_name: result.data.full_name,
-          contact_phone: result.data.contact_phone,
+          full_name: result.data.full_name ?? "",
+          contact_phone: result.data.contact_phone ?? "",
         },
-      })
+      } as any)
       toast.success("Profil diperbarui", "Perubahan berhasil disimpan")
     } catch (err: unknown) {
       const res = err as { response?: { data?: { detail?: string } } }
@@ -236,11 +236,11 @@ function CompanyProfileForm({ profile }: { profile: CompanyUser }) {
       await updateMutation.mutateAsync({
         email: result.data.email,
         company_profile: {
-          company_name: result.data.company_name,
-          contact_phone: result.data.contact_phone,
-          address: result.data.address,
+          company_name: result.data.company_name ?? "",
+          contact_phone: result.data.contact_phone ?? "",
+          address: result.data.address ?? "",
         },
-      })
+      } as any)
       toast.success("Profil diperbarui", "Perubahan berhasil disimpan")
     } catch (err: unknown) {
       const res = err as { response?: { data?: { detail?: string } } }

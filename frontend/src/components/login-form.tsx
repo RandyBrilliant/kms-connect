@@ -1,7 +1,6 @@
 import { useState } from "react"
 import type { AxiosError } from "axios"
 import { useForm } from "@tanstack/react-form"
-import { zodValidator } from "@tanstack/zod-form-adapter"
 import { EyeIcon, EyeOffIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "@/lib/toast"
@@ -32,7 +31,7 @@ import { Input } from "@/components/ui/input"
 import { useLoginMutation } from "@/hooks/use-login-mutation"
 import { requestPasswordReset } from "@/api/auth"
 import type { ApiErrorResponse } from "@/types/api"
-import { loginSchema, type LoginFormValues } from "@/schemas/login"
+import type { LoginFormValues } from "@/schemas/login"
 import { forgotPasswordSchema } from "@/schemas/forgot-password"
 
 import logoImg from "@/img/logo.png"
@@ -50,12 +49,11 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
 
   const mutation = useLoginMutation()
 
-  const form = useForm<LoginFormValues>({
+  const form = useForm({
     defaultValues: {
       email: "",
       password: "",
     },
-    validatorAdapter: zodValidator(),
     onSubmit: async ({ value }) => {
       setServerFieldErrors({})
       try {
@@ -141,9 +139,6 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
             <FieldGroup>
               <form.Field
                 name="email"
-                validators={{
-                  onChange: loginSchema.shape.email,
-                }}
               >
                 {(field) => (
                   <Field>
@@ -163,7 +158,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                         const err = field.state.meta.errors[0]
                         if (!err) return serverFieldErrors.email
                         if (typeof err === "string") return err
-                        return err.message ?? serverFieldErrors.email
+                        return (err as { message?: string }).message ?? serverFieldErrors.email
                       })()}
                     </FieldError>
                   </Field>
@@ -171,9 +166,6 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
               </form.Field>
               <form.Field
                 name="password"
-                validators={{
-                  onChange: loginSchema.shape.password,
-                }}
               >
                 {(field) => (
                   <Field>
@@ -255,7 +247,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                         const err = field.state.meta.errors[0]
                         if (!err) return serverFieldErrors.password
                         if (typeof err === "string") return err
-                        return err.message ?? serverFieldErrors.password
+                        return (err as { message?: string }).message ?? serverFieldErrors.password
                       })()}
                     </FieldError>
                   </Field>

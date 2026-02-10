@@ -5,7 +5,6 @@
 
 import { useState } from "react"
 import { useForm } from "@tanstack/react-form"
-import { zodValidator } from "@tanstack/zod-form-adapter"
 import { IconEye, IconEyeOff } from "@tabler/icons-react"
 
 import { Button } from "@/components/ui/button"
@@ -107,7 +106,7 @@ export function StaffForm({
         Partial<Record<keyof StaffFormValues, string>>
     >({})
 
-    const form = useForm<StaffFormValues>({
+    const form = useForm({
         defaultValues: {
             email: staff?.email ?? "",
             full_name: staff?.staff_profile?.full_name ?? "",
@@ -115,7 +114,6 @@ export function StaffForm({
             password: "",
             confirmPassword: "",
         },
-        validatorAdapter: zodValidator(),
         onSubmit: async ({ value }) => {
             setErrors({})
 
@@ -188,7 +186,6 @@ export function StaffForm({
                         <FieldGroup>
                             <form.Field
                                 name="full_name"
-                                validators={{ onChange: staffCreateSchema.shape.full_name }}
                             >
                                 {(field) => (
                                     <Field>
@@ -205,13 +202,13 @@ export function StaffForm({
                                         />
                                         <FieldError
                                             errors={[
-                                                ...field.state.meta.errors.map((err) =>
-                                                    typeof err === "string"
-                                                        ? { message: err }
-                                                        : { message: err.message ?? String(err) }
-                                                ),
+                                            ...(field.state.meta.errors as unknown[]).map((err) => {
+                                                const e = err as { message?: string } | string
+                                                if (typeof e === "string") return { message: e }
+                                                return { message: e?.message ?? String(e) }
+                                            }),
                                                 ...(errors.full_name
-                                                    ? [{ message: errors.full_name }]
+                                                    ? [{ message: errors.full_name! }]
                                                     : []),
                                             ]}
                                         />
@@ -221,7 +218,6 @@ export function StaffForm({
 
                             <form.Field
                                 name="contact_phone"
-                                validators={{ onChange: staffCreateSchema.shape.contact_phone }}
                             >
                                 {(field) => (
                                     <Field>
@@ -235,13 +231,13 @@ export function StaffForm({
                                         />
                                         <FieldError
                                             errors={[
-                                                ...field.state.meta.errors.map((err) =>
-                                                    typeof err === "string"
-                                                        ? { message: err }
-                                                        : { message: err.message ?? String(err) }
-                                                ),
+                                            ...(field.state.meta.errors as unknown[]).map((err) => {
+                                                const e = err as { message?: string } | string
+                                                if (typeof e === "string") return { message: e }
+                                                return { message: e?.message ?? String(e) }
+                                            }),
                                                 ...(errors.contact_phone
-                                                    ? [{ message: errors.contact_phone }]
+                                                    ? [{ message: errors.contact_phone! }]
                                                     : []),
                                             ]}
                                         />
@@ -251,7 +247,6 @@ export function StaffForm({
 
                             <form.Field
                                 name="email"
-                                validators={{ onChange: staffCreateSchema.shape.email }}
                             >
                                 {(field) => (
                                     <Field>
@@ -268,13 +263,13 @@ export function StaffForm({
                                         />
                                         <FieldError
                                             errors={[
-                                                ...field.state.meta.errors.map((err) =>
-                                                    typeof err === "string"
-                                                        ? { message: err }
-                                                        : { message: err.message ?? String(err) }
-                                                ),
+                                            ...(field.state.meta.errors as unknown[]).map((err) => {
+                                                const e = err as { message?: string } | string
+                                                if (typeof e === "string") return { message: e }
+                                                return { message: e?.message ?? String(e) }
+                                            }),
                                                 ...(errors.email
-                                                    ? [{ message: errors.email }]
+                                                    ? [{ message: errors.email! }]
                                                     : []),
                                             ]}
                                         />
@@ -286,7 +281,6 @@ export function StaffForm({
                                 <div className="flex flex-col gap-6">
                                     <form.Field
                                         name="password"
-                                        validators={{ onChange: staffCreateSchema.shape.password }}
                                     >
                                         {(field) => (
                                             <Field>
@@ -308,7 +302,7 @@ export function StaffForm({
                                                             const err = field.state.meta.errors[0]
                                                             if (!err) return errors.password
                                                             if (typeof err === "string") return err
-                                                            return err.message ?? errors.password
+                                                            return (err as { message?: string }).message ?? errors.password
                                                         })()
                                                     }
                                                 />
@@ -317,9 +311,6 @@ export function StaffForm({
                                     </form.Field>
                                     <form.Field
                                         name="confirmPassword"
-                                        validators={{
-                                            onChange: staffCreateSchema.shape.confirmPassword,
-                                        }}
                                     >
                                         {(field) => (
                                             <Field>
@@ -344,7 +335,7 @@ export function StaffForm({
                                                             const err = field.state.meta.errors[0]
                                                             if (!err) return errors.confirmPassword
                                                             if (typeof err === "string") return err
-                                                            return err.message ?? errors.confirmPassword
+                                                            return (err as { message?: string }).message ?? errors.confirmPassword
                                                         })()
                                                     }
                                                 />
