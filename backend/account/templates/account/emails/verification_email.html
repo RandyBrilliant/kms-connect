@@ -1,0 +1,13 @@
+{% extends "account/emails/base_email.html" %}
+{% block title %}Verifikasi Email – {{ company_name }}{% endblock %}
+{% block content %}
+<p>Halo{% if user.email %} {{ user.email }}{% endif %},</p>
+<p>Silakan verifikasi alamat email Anda dengan mengklik tombol di bawah ini:</p>
+<p style="text-align: center;">
+  <a href="{{ verify_url }}" class="btn">Verifikasi Email</a>
+</p>
+<p>Atau salin dan buka tautan ini di peramban:</p>
+<p style="word-break: break-all; font-size: 13px; color: #6b7280;">{{ verify_url }}</p>
+<p>Tautan ini berlaku terbatas. Jika Anda tidak mendaftar atau meminta verifikasi ini, abaikan email ini.</p>
+<p>Salam,<br>{{ company_name }}</p>
+{% endblock %}

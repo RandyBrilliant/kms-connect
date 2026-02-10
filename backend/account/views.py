@@ -1,0 +1,496 @@
+"""
+API views untuk account (admin-side CRUD: Admin, Staff, Company).
+Endpoint terpisah per role; partial update didukung; hanya deactivate (no hard delete).
+Pesan dan response format konsisten via api_responses (frontend-friendly).
+"""
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import SearchFilter, OrderingFilter
+
+from django.conf import settings as django_settings
+from django.core.cache import cache
+from django.shortcuts import get_object_or_404
+from urllib.parse import urlencode
+
+from .models import CustomUser, UserRole, ApplicantProfile, WorkExperience, ApplicantDocument, DocumentType
+from .permissions import IsBackofficeAdmin
+from .email_utils import verification_link, send_verification_email, send_password_reset_email
+from .serializers import (
+    AdminUserSerializer,
+    StaffUserSerializer,
+    CompanyUserSerializer,
+    ApplicantUserSerializer,
+    WorkExperienceSerializer,
+    ApplicantDocumentSerializer,
+    DocumentTypeSerializer,
+)
+from .api_responses import (
+    ApiCode,
+    ApiMessage,
+    error_response,
+    success_response,
+)
+
+
+# ---------------------------------------------------------------------------
+# Current user profile (any role: view & edit own profile)
+# ---------------------------------------------------------------------------
+
+def _get_serializer_class_for_role(role):
+    """Return the user serializer class for the given role (for /api/me/)."""
+    return {
+        UserRole.ADMIN: AdminUserSerializer,
+        UserRole.STAFF: StaffUserSerializer,
+        UserRole.COMPANY: CompanyUserSerializer,
+        UserRole.APPLICANT: ApplicantUserSerializer,
+    }.get(role, ApplicantUserSerializer)
+
+
+class MeView(APIView):
+    """
+    Endpoint untuk setiap pengguna (semua role) melihat dan mengubah profil sendiri.
+    GET: data user + profil sesuai role.
+    PUT/PATCH: update profil sendiri (is_active, email_verified, verification fields read-only).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get_serializer_class(self):
+        return _get_serializer_class_for_role(self.request.user.role)
+
+    def get_serializer(self, instance=None, data=None, partial=False):
+        context = {"request": self.request, "is_own_profile": True}
+        cls = self.get_serializer_class()
+        if data is not None:
+            return cls(instance=instance, data=data, partial=partial, context=context)
+        return cls(instance=instance, context=context)
+
+    def get(self, request):
+        serializer = self.get_serializer(instance=request.user)
+        return Response(
+            success_response(data=serializer.data),
+            status=status.HTTP_200_OK,
+        )
+
+    def put(self, request):
+        serializer = self.get_serializer(instance=request.user, data=request.data, partial=False)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(
+            success_response(
+                data=serializer.data,
+                detail=ApiMessage.PROFILE_UPDATED,
+                code=ApiCode.PROFILE_UPDATED,
+            ),
+            status=status.HTTP_200_OK,
+        )
+
+    def patch(self, request):
+        serializer = self.get_serializer(instance=request.user, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(
+            success_response(
+                data=serializer.data,
+                detail=ApiMessage.PROFILE_UPDATED,
+                code=ApiCode.PROFILE_UPDATED,
+            ),
+            status=status.HTTP_200_OK,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Reusable: no-delete + deactivate/activate
+# ---------------------------------------------------------------------------
+
+def destroy_disallowed_response():
+    """Response 405 untuk aksi delete; gunakan deactivate."""
+    return Response(
+        error_response(
+            detail=ApiMessage.DELETE_NOT_ALLOWED,
+            code=ApiCode.DELETE_NOT_ALLOWED,
+            status_code=status.HTTP_405_METHOD_NOT_ALLOWED,
+        ),
+        status=status.HTTP_405_METHOD_NOT_ALLOWED,
+    )
+
+
+class DeactivateActivateMixin:
+    """
+    Mixin untuk ViewSet yang mengelola user: deactivate/activate (no hard delete).
+    Asumsi: get_object() mengembalikan CustomUser (atau model dengan is_active).
+    """
+
+    @action(detail=True, methods=["post"], url_path="deactivate")
+    def deactivate(self, request, pk=None):
+        """Nonaktifkan akun (set is_active=False)."""
+        user = self.get_object()
+        if not user.is_active:
+            return Response(
+                error_response(
+                    detail=ApiMessage.ALREADY_DEACTIVATED,
+                    code=ApiCode.ALREADY_DEACTIVATED,
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        user.is_active = False
+        user.save(update_fields=["is_active"])
+        serializer = self.get_serializer(user)
+        return Response(
+            success_response(
+                data=serializer.data,
+                detail=ApiMessage.DEACTIVATED,
+                code=ApiCode.DEACTIVATED,
+            ),
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["post"], url_path="activate")
+    def activate(self, request, pk=None):
+        """Aktifkan kembali akun (set is_active=True)."""
+        user = self.get_object()
+        if user.is_active:
+            return Response(
+                error_response(
+                    detail=ApiMessage.ALREADY_ACTIVATED,
+                    code=ApiCode.ALREADY_ACTIVATED,
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        user.is_active = True
+        user.save(update_fields=["is_active"])
+        serializer = self.get_serializer(user)
+        return Response(
+            success_response(
+                data=serializer.data,
+                detail=ApiMessage.ACTIVATED,
+                code=ApiCode.ACTIVATED,
+            ),
+            status=status.HTTP_200_OK,
+        )
+
+
+# ---------------------------------------------------------------------------
+# ViewSets
+# ---------------------------------------------------------------------------
+
+class AdminUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
+    """
+    CRUD untuk pengguna Admin (CustomUser role=ADMIN).
+    List, create, retrieve, update, partial_update. Tidak ada delete; gunakan deactivate.
+    """
+
+    http_method_names = ["get", "post", "put", "patch", "head", "options"]
+    serializer_class = AdminUserSerializer
+    permission_classes = [IsBackofficeAdmin]
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ["is_active", "email_verified"]
+    search_fields = ["email"]
+    ordering_fields = ["email", "date_joined", "updated_at"]
+    ordering = ["email"]
+
+    def get_queryset(self):
+        return CustomUser.objects.filter(role=UserRole.ADMIN)
+
+    def destroy(self, request, *args, **kwargs):
+        return destroy_disallowed_response()
+
+
+class StaffUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
+    """
+    CRUD untuk pengguna Staff (CustomUser + StaffProfile).
+    List, create, retrieve, update, partial_update. Tidak ada delete; gunakan deactivate.
+    """
+
+    http_method_names = ["get", "post", "put", "patch", "head", "options"]
+    serializer_class = StaffUserSerializer
+    permission_classes = [IsBackofficeAdmin]
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ["is_active", "email_verified"]
+    search_fields = ["email", "staff_profile__full_name", "staff_profile__contact_phone"]
+    ordering_fields = ["email", "date_joined", "updated_at", "staff_profile__full_name"]
+    ordering = ["email"]
+
+    def get_queryset(self):
+        return (
+            CustomUser.objects.filter(role=UserRole.STAFF)
+            .select_related("staff_profile")
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        return destroy_disallowed_response()
+
+
+class CompanyUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
+    """
+    CRUD untuk pengguna Perusahaan (CustomUser + CompanyProfile).
+    List, create, retrieve, update, partial_update. Tidak ada delete; gunakan deactivate.
+    """
+
+    http_method_names = ["get", "post", "put", "patch", "head", "options"]
+    serializer_class = CompanyUserSerializer
+    permission_classes = [IsBackofficeAdmin]
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ["is_active", "email_verified"]
+    search_fields = [
+        "email",
+        "company_profile__company_name",
+        "company_profile__contact_phone",
+    ]
+    ordering_fields = [
+        "email",
+        "date_joined",
+        "updated_at",
+        "company_profile__company_name",
+    ]
+    ordering = ["email"]
+
+    def get_queryset(self):
+        return (
+            CustomUser.objects.filter(role=UserRole.COMPANY)
+            .select_related("company_profile")
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        return destroy_disallowed_response()
+
+
+class ApplicantUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
+    """
+    CRUD untuk pelamar (CustomUser + ApplicantProfile).
+    Admin: list, create (backdoor), retrieve, update, partial_update. Review data pelamar.
+    Tidak ada delete; gunakan deactivate/activate.
+    """
+
+    http_method_names = ["get", "post", "put", "patch", "head", "options"]
+    serializer_class = ApplicantUserSerializer
+    permission_classes = [IsBackofficeAdmin]
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ["is_active", "email_verified", "applicant_profile__verification_status"]
+    search_fields = [
+        "email",
+        "applicant_profile__full_name",
+        "applicant_profile__nik",
+        "applicant_profile__contact_phone",
+    ]
+    ordering_fields = [
+        "email",
+        "date_joined",
+        "updated_at",
+        "applicant_profile__full_name",
+        "applicant_profile__verification_status",
+        "applicant_profile__created_at",
+    ]
+    ordering = ["-applicant_profile__created_at"]
+
+    def get_queryset(self):
+        return (
+            CustomUser.objects.filter(role=UserRole.APPLICANT)
+            .select_related("applicant_profile")
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        return destroy_disallowed_response()
+
+
+# ---------------------------------------------------------------------------
+# Admin: kirim email verifikasi & reset password (user_id di body)
+# ---------------------------------------------------------------------------
+
+def _admin_email_logo_url(request):
+    """URL logo untuk email: LOGO_URL atau build dari request + static."""
+    url = getattr(django_settings, "LOGO_URL", None) or ""
+    if url:
+        return url.strip()
+    try:
+        base = request.build_absolute_uri("/").rstrip("/")
+        static = getattr(django_settings, "STATIC_URL", "static/").lstrip("/")
+        return f"{base}/{static}image/logo.jpg"
+    except Exception:
+        return ""
+
+
+class SendVerificationEmailView(APIView):
+    """
+    Admin only. POST { "user_id": <id> } → kirim email verifikasi ke user.
+    """
+    permission_classes = [IsBackofficeAdmin]
+
+    def post(self, request):
+        user_id = request.data.get("user_id")
+        if user_id is None:
+            return Response(
+                error_response(
+                    detail="user_id wajib diisi.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        user = CustomUser.objects.filter(pk=user_id).first()
+        if not user:
+            return Response(
+                error_response(
+                    detail=ApiMessage.NOT_FOUND,
+                    code=ApiCode.NOT_FOUND,
+                    status_code=status.HTTP_404_NOT_FOUND,
+                ),
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if user.email_verified:
+            return Response(
+                error_response(
+                    detail=ApiMessage.EMAIL_ALREADY_VERIFIED,
+                    code=ApiCode.EMAIL_ALREADY_VERIFIED,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        verify_token = verification_link(user)
+        verify_url = request.build_absolute_uri("/api/auth/verify-email/") + "?" + urlencode({"token": verify_token})
+        logo_url = _admin_email_logo_url(request)
+        send_verification_email(user, logo_url=logo_url, verify_url=verify_url)
+        return Response(
+            success_response(
+                data={"user_id": user.pk, "email": user.email},
+                detail=ApiMessage.EMAIL_SENT,
+                code=ApiCode.EMAIL_SENT,
+            ),
+            status=status.HTTP_200_OK,
+        )
+
+
+class SendPasswordResetEmailView(APIView):
+    """
+    Admin only. POST { "user_id": <id> } → kirim email reset password ke user.
+    """
+    permission_classes = [IsBackofficeAdmin]
+
+    def post(self, request):
+        user_id = request.data.get("user_id")
+        if user_id is None:
+            return Response(
+                error_response(
+                    detail="user_id wajib diisi.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        user = CustomUser.objects.filter(pk=user_id).first()
+        if not user:
+            return Response(
+                error_response(
+                    detail=ApiMessage.NOT_FOUND,
+                    code=ApiCode.NOT_FOUND,
+                    status_code=status.HTTP_404_NOT_FOUND,
+                ),
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        logo_url = _admin_email_logo_url(request)
+        send_password_reset_email(user, logo_url=logo_url)
+        return Response(
+            success_response(
+                data={"user_id": user.pk, "email": user.email},
+                detail=ApiMessage.EMAIL_SENT,
+                code=ApiCode.EMAIL_SENT,
+            ),
+            status=status.HTTP_200_OK,
+        )
+
+
+# ---------------------------------------------------------------------------
+# DocumentType (read-only untuk dropdown / daftar tipe)
+# ---------------------------------------------------------------------------
+
+class DocumentTypeViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Daftar tipe dokumen (read-only). Untuk dropdown di admin/frontend.
+    """
+
+    queryset = DocumentType.objects.all().order_by("sort_order", "code")
+    serializer_class = DocumentTypeSerializer
+    permission_classes = [IsBackofficeAdmin]
+
+
+class DocumentTypePublicListView(APIView):
+    """
+    Public read-only list of document types (for mobile/applicant upload checklist).
+    Cached to reduce DB hits. GET only; no auth required.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        cache_key = "document_types_public_list"
+        timeout = getattr(django_settings, "DOCUMENT_TYPES_CACHE_TIMEOUT", 900)
+        data = cache.get(cache_key)
+        if data is None:
+            qs = DocumentType.objects.all().order_by("sort_order", "code")
+            serializer = DocumentTypeSerializer(qs, many=True)
+            data = serializer.data
+            cache.set(cache_key, data, timeout=timeout)
+        return Response(
+            success_response(data=data),
+            status=status.HTTP_200_OK,
+        )
+
+
+# ---------------------------------------------------------------------------
+# WorkExperience (nested under applicant)
+# ---------------------------------------------------------------------------
+
+class WorkExperienceViewSet(viewsets.ModelViewSet):
+    """
+    CRUD pengalaman kerja per pelamar.
+    Nested: /api/applicants/<applicant_pk>/work_experiences/
+    """
+
+    serializer_class = WorkExperienceSerializer
+    permission_classes = [IsBackofficeAdmin]
+
+    def get_queryset(self):
+        applicant_pk = self.kwargs.get("applicant_pk")
+        if not applicant_pk:
+            return WorkExperience.objects.none()
+        return WorkExperience.objects.filter(
+            applicant_profile__user_id=applicant_pk
+        ).order_by("sort_order", "-start_date")
+
+    def get_applicant_profile(self):
+        applicant_pk = self.kwargs.get("applicant_pk")
+        return get_object_or_404(ApplicantProfile, user_id=applicant_pk)
+
+    def perform_create(self, serializer):
+        serializer.save(applicant_profile=self.get_applicant_profile())
+
+
+# ---------------------------------------------------------------------------
+# ApplicantDocument (nested under applicant, file upload)
+# ---------------------------------------------------------------------------
+
+class ApplicantDocumentViewSet(viewsets.ModelViewSet):
+    """
+    CRUD dokumen pelamar (file upload). Nested: /api/applicants/<applicant_pk>/documents/
+    """
+
+    serializer_class = ApplicantDocumentSerializer
+    permission_classes = [IsBackofficeAdmin]
+
+    def get_queryset(self):
+        applicant_pk = self.kwargs.get("applicant_pk")
+        if not applicant_pk:
+            return ApplicantDocument.objects.none()
+        return ApplicantDocument.objects.filter(
+            applicant_profile__user_id=applicant_pk
+        ).select_related("document_type").order_by("document_type__sort_order")
+
+    def get_applicant_profile(self):
+        applicant_pk = self.kwargs.get("applicant_pk")
+        return get_object_or_404(ApplicantProfile, user_id=applicant_pk)
+
+    def perform_create(self, serializer):
+        serializer.save(applicant_profile=self.get_applicant_profile())
