@@ -34,6 +34,9 @@ if [ "${DEBUG:-0}" = "0" ]; then
     fi
 fi
 
+# Create migrations if missing (e.g. first run with no migration files)
+python manage.py makemigrations --noinput
+
 # Run migrations
 python manage.py migrate --noinput
 
