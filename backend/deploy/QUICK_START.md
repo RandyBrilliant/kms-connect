@@ -46,9 +46,14 @@ docker compose -f docker-compose.prod.yml restart api
 
 ## 🔄 Updating Code
 
+After a code change, run the update script once (it pulls code, rebuilds, restarts, runs migrations and collectstatic):
+
 ```bash
+cd ~/kms-connect/backend
 sudo ./deploy/update.sh
 ```
+
+The script automatically uses Block Storage if `docker-compose.prod.block.yml` exists, so you don’t need to pass extra compose files.
 
 ---
 

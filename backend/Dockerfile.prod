@@ -30,7 +30,11 @@ FROM base AS runtime
 COPY --from=deps /usr/local/lib/python3.12 /usr/local/lib/python3.12
 COPY --from=deps /usr/local/bin /usr/local/bin
 
-# Create non-root user
+# gosu: so entrypoint can fix volume permissions then run app as appuser
+RUN apt-get update && apt-get install -y --no-install-recommends gosu \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user (UID 1000; entrypoint will chown volumes to this)
 RUN groupadd -r appuser && useradd -r -g appuser -u 1000 appuser
 
 # Copy application code
@@ -41,11 +45,12 @@ RUN mkdir -p /app/media/account/staff \
     /app/media/account/applicants \
     /app/media/account/documents \
     /app/logs \
+    /app/staticfiles \
     && chmod +x entrypoint.sh \
     && chown -R appuser:appuser /app
 
-# Switch to non-root user
-USER appuser
+# Run as root so entrypoint can chown mounted volumes; app runs as appuser via gosu
+# USER appuser
 
 # Expose port
 EXPOSE 8000

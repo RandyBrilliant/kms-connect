@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Automated Update Script for CI/CD
-# Non-interactive version of update.sh
+# Update script: pull code, rebuild, restart, migrate, collectstatic.
+# Uses block storage override automatically if docker-compose.prod.block.yml exists.
 
 set -e
 
@@ -17,8 +17,12 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 APP_DIR="${APP_DIR:-$PROJECT_DIR}"
 
+# Compose: use block storage override when present (so one script works for both setups)
+COMPOSE_OPTS="-f docker-compose.prod.yml"
+[ -f "$APP_DIR/docker-compose.prod.block.yml" ] && COMPOSE_OPTS="$COMPOSE_OPTS -f docker-compose.prod.block.yml"
+
 echo -e "${BLUE}=========================================="
-echo "Travel Marketplace - Automated Update"
+echo "KMS-Connect - Update"
 echo "==========================================${NC}"
 echo ""
 
@@ -28,7 +32,7 @@ cd "$APP_DIR" || {
 }
 
 # Check if services are running
-if ! docker compose -f docker-compose.prod.yml ps | grep -q "Up"; then
+if ! docker compose $COMPOSE_OPTS ps | grep -q "Up"; then
     echo -e "${YELLOW}⚠ No services are running. Use deploy.sh instead.${NC}"
     exit 1
 fi
@@ -46,12 +50,12 @@ fi
 
 echo ""
 echo -e "${BLUE}[2/5] Stopping services...${NC}"
-docker compose -f docker-compose.prod.yml down
+docker compose $COMPOSE_OPTS down
 echo -e "${GREEN}✓ Services stopped${NC}"
 
 echo ""
 echo -e "${BLUE}[3/5] Building new images...${NC}"
-docker compose -f docker-compose.prod.yml build --no-cache api celery celery-beat || {
+docker compose $COMPOSE_OPTS build --no-cache api celery celery-beat || {
     echo -e "${RED}Error: Failed to build images${NC}"
     exit 1
 }
@@ -59,33 +63,32 @@ echo -e "${GREEN}✓ Images built${NC}"
 
 echo ""
 echo -e "${BLUE}[4/5] Starting services...${NC}"
-docker compose -f docker-compose.prod.yml up -d
+docker compose $COMPOSE_OPTS up -d
 echo -e "${GREEN}✓ Services started${NC}"
 
 echo ""
 echo -e "${BLUE}[5/5] Running migrations...${NC}"
-# Wait for database
 sleep 5
-docker compose -f docker-compose.prod.yml exec -T api python manage.py migrate --noinput || {
+docker compose $COMPOSE_OPTS exec -T api python manage.py migrate --noinput || {
     echo -e "${YELLOW}⚠ Migrations had issues${NC}"
 }
 echo -e "${GREEN}✓ Migrations completed${NC}"
 
 echo ""
 echo -e "${BLUE}Collecting static files...${NC}"
-docker compose -f docker-compose.prod.yml exec -T api python manage.py collectstatic --noinput --clear || {
+docker compose $COMPOSE_OPTS exec -T api python manage.py collectstatic --noinput --clear || {
     echo -e "${YELLOW}⚠ Static files collection had warnings${NC}"
 }
 echo -e "${GREEN}✓ Static files collected${NC}"
 
 echo ""
 echo -e "${GREEN}=========================================="
-echo "✅ Automated Update Complete!"
+echo "✅ Update Complete!"
 echo "==========================================${NC}"
 echo ""
 
 # Show service status
-docker compose -f docker-compose.prod.yml ps
+docker compose $COMPOSE_OPTS ps
 
 echo ""
 echo -e "${GREEN}Update successful! 🎉${NC}"

@@ -7,21 +7,15 @@ if [ -z "${DATABASE_URL:-}" ] && [ -n "${SQL_DATABASE:-}" ]; then
     export DATABASE_URL="postgres://${SQL_USER:-postgres}:${SQL_PASSWORD:-}@${SQL_HOST:-db}:${SQL_PORT:-5432}/${SQL_DATABASE}"
 fi
 
-# Create logs directory (for Django logging). When bind-mounted, chmod may fail; ignore.
-mkdir -p /app/logs
-chmod 755 /app/logs 2>/dev/null || true
-
-# Create media directories (KMS-connect). When bind/volume-mounted, chmod may fail; ignore.
-if [ ! -d /app/media ]; then
-    mkdir -p /app/media
-fi
+# Run as root: fix ownership of mounted volumes so appuser (1000) can write
+APP_UID=1000
+APP_GID=1000
+mkdir -p /app/logs /app/media /app/staticfiles
+mkdir -p /app/media/account/staff /app/media/account/applicants /app/media/account/documents
+chown -R ${APP_UID}:${APP_GID} /app/logs /app/media /app/staticfiles 2>/dev/null || true
 if [ -f /app/media/profile_photos ]; then
     rm -f /app/media/profile_photos
 fi
-mkdir -p /app/media/account/staff \
-         /app/media/account/applicants \
-         /app/media/account/documents 2>/dev/null || true
-chmod -R 755 /app/media 2>/dev/null || true
 
 # Production checks
 if [ "${DEBUG:-0}" = "0" ]; then
@@ -34,15 +28,17 @@ if [ "${DEBUG:-0}" = "0" ]; then
     fi
 fi
 
+# Run Django commands as appuser (so DB/files are owned correctly)
 # Create migrations if missing (e.g. first run with no migration files)
-python manage.py makemigrations --noinput
+gosu ${APP_UID}:${APP_GID} python manage.py makemigrations --noinput
 
 # Run migrations
-python manage.py migrate --noinput
+gosu ${APP_UID}:${APP_GID} python manage.py migrate --noinput
 
 # Production: collect static files (for nginx to serve)
 if [ "${DEBUG:-0}" = "0" ]; then
-    python manage.py collectstatic --noinput --clear 2>/dev/null || true
+    gosu ${APP_UID}:${APP_GID} python manage.py collectstatic --noinput --clear 2>/dev/null || true
 fi
 
-exec "$@"
+# Run the main command (gunicorn) as appuser
+exec gosu ${APP_UID}:${APP_GID} "$@"
