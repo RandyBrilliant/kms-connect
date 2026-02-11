@@ -160,10 +160,9 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
-# Media storage: local by default (MEDIA_ROOT); DigitalOcean Spaces when DO_SPACES_* is set (e.g. production on DO).
-# Local dev: leave DO_SPACES_BUCKET_NAME unset → files go to MEDIA_ROOT.
+# Media storage: local when DEBUG (development), Spaces when not DEBUG and DO_SPACES_* set (production).
 _do_spaces_bucket = _env("DO_SPACES_BUCKET_NAME", "").strip()
-if _do_spaces_bucket:
+if _do_spaces_bucket and not DEBUG:
     _do_spaces_region = _env("DO_SPACES_REGION", "sgp1").strip()
     AWS_STORAGE_BUCKET_NAME = _do_spaces_bucket
     AWS_ACCESS_KEY_ID = _env("DO_SPACES_ACCESS_KEY_ID", "")
@@ -171,7 +170,8 @@ if _do_spaces_bucket:
     AWS_S3_REGION_NAME = _do_spaces_region
     AWS_S3_ENDPOINT_URL = f"https://{_do_spaces_region}.digitaloceanspaces.com"
     AWS_S3_CUSTOM_DOMAIN = _env("DO_SPACES_CDN_DOMAIN", "")
-    AWS_DEFAULT_ACL = "private"
+    # public-read needed for CDN to serve files; use private if you serve via signed URLs only
+    AWS_DEFAULT_ACL = _env("DO_SPACES_ACL", "private").strip() or "private"
     AWS_S3_OBJECT_PARAMETERS = {"CacheControl": "max-age=86400"}
     try:
         import storages.backends.s3boto3  # noqa: F401

@@ -136,13 +136,36 @@ docker compose -f docker-compose.prod.yml logs nginx
 
 ---
 
+## 📦 Spaces for media (optional, better performance)
+
+To serve media (documents, photos) from DigitalOcean Spaces + CDN for faster delivery to mobile users:
+
+1. Create a Space in DO (same region as Droplet), enable CDN.
+2. Create Spaces API keys; set `DO_SPACES_*` in `.env` (see `env.example`).
+3. Set `DO_SPACES_CDN_DOMAIN` and `DO_SPACES_ACL=public-read`.
+4. Redeploy: `sudo ./deploy/update.sh`.
+
+Full steps: [SPACES.md](./SPACES.md)
+
+---
+
 ## 💾 Block Storage (optional)
 
-To use DigitalOcean Block Storage for database and media:
+**Using only the Droplet (no block volume):**  
+Deploy and update scripts use Block Storage only if `docker-compose.prod.block.yml` exists. To run without block storage (all data on the Droplet), run once:
+
+```bash
+sudo ./deploy/reset-no-block.sh
+```
+
+Then deploy as usual: `sudo ./deploy/deploy.sh`. Updates with `sudo ./deploy/update.sh` will also use the Droplet only.
+
+**To use Block Storage** for database and media:
 
 1. Create a Volume in DO and attach it to your Droplet.
 2. `sudo ./deploy/mount-block-storage.sh`
-3. Start with override: `docker compose -f docker-compose.prod.yml -f docker-compose.prod.block.yml up -d`
+3. Ensure `docker-compose.prod.block.yml` exists (if you had run reset-no-block.sh, rename it back).
+4. Start with override or run `deploy.sh` (it auto-detects the block file).
 
 Full steps: [BLOCK_STORAGE.md](./BLOCK_STORAGE.md)
 

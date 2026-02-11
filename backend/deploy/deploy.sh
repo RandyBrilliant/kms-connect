@@ -151,8 +151,8 @@ echo -e "${GREEN}✓ Static files collected${NC}"
 
 echo ""
 echo -e "${GREEN}=========================================="
-echo "✅ Deployment Complete!"
-echo "==========================================${NC}"
+echo -e "✅ Deployment Complete!"
+echo -e "==========================================${NC}"
 echo ""
 
 # Show service status
@@ -162,16 +162,16 @@ docker compose $COMPOSE_OPTS ps
 echo ""
 echo -e "${BLUE}Next Steps:${NC}"
 echo "1. Check service health:"
-echo "   ${YELLOW}docker compose $COMPOSE_OPTS ps${NC}"
+echo -e "   ${YELLOW}docker compose $COMPOSE_OPTS ps${NC}"
 echo ""
 echo "2. View logs:"
-echo "   ${YELLOW}docker compose $COMPOSE_OPTS logs -f${NC}"
+echo -e "   ${YELLOW}docker compose $COMPOSE_OPTS logs -f${NC}"
 echo ""
 echo "3. Create superuser (if needed):"
-echo "   ${YELLOW}docker compose $COMPOSE_OPTS exec api python manage.py createsuperuser${NC}"
+echo -e "   ${YELLOW}docker compose $COMPOSE_OPTS exec api python manage.py createsuperuser${NC}"
 echo ""
 echo "4. Setup SSL (after DNS is configured):"
-echo "   ${YELLOW}sudo ./deploy/ssl-setup.sh${NC}"
+echo -e "   ${YELLOW}sudo ./deploy/ssl-setup.sh${NC}"
 echo ""
 
 # Health check
