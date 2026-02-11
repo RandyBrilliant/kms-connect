@@ -24,6 +24,7 @@ import {
 } from "@/hooks/use-applicants-query"
 import { toast } from "@/lib/toast"
 import type { ApplicantUser } from "@/types/applicant"
+import { usePageTitle } from "@/hooks/use-page-title"
 
 const BASE_PATH = "/pelamar"
 
@@ -161,6 +162,8 @@ function ApplicantSidebar({ applicant }: { applicant: ApplicantUser }) {
 export function AdminPelamarDetailPage() {
   const { id } = useParams<{ id: string }>()
   const applicantId = id ? parseInt(id, 10) : null
+
+  usePageTitle("Detail Pelamar")
 
   const { data: applicant, isLoading, isError } = useApplicantQuery(
     applicantId,

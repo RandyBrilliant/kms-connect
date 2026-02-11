@@ -20,6 +20,7 @@ import { staffUpdateSchema } from "@/schemas/staff"
 import { adminUpdateSchema } from "@/schemas/admin"
 import { companyUpdateSchema } from "@/schemas/company"
 import { toast } from "@/lib/toast"
+import { usePageTitle } from "@/hooks/use-page-title"
 
 type Role = "ADMIN" | "STAFF" | "COMPANY" | "APPLICANT"
 
@@ -319,6 +320,8 @@ function CompanyProfileForm({ profile }: { profile: CompanyUser }) {
 }
 
 export function ProfilePage() {
+  usePageTitle("Profil Saya")
+  
   const { user } = useAuth()
   const { data, isLoading, isError, error } = useMeProfileQuery()
 

@@ -16,6 +16,7 @@ import {
 } from "@/hooks/use-jobs-query"
 import { toast } from "@/lib/toast"
 import type { JobStatus, EmploymentType } from "@/types/jobs"
+import { usePageTitle } from "@/hooks/use-page-title"
 
 const BASE_PATH = "/lowongan-kerja"
 
@@ -24,6 +25,8 @@ export function AdminJobFormPage() {
   const { id } = useParams<{ id: string }>()
   const isEdit = id !== "new" && id != null
   const jobId = isEdit ? parseInt(id, 10) : null
+
+  usePageTitle(isEdit ? "Edit Lowongan Kerja" : "Tambah Lowongan Kerja")
 
   const { data: job, isLoading: loadingJob } = useJobQuery(
     jobId ?? null,

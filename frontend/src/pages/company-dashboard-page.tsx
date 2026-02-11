@@ -2,8 +2,10 @@ import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
 import { Separator } from "@/components/ui/separator"
 import { SiteHeader } from "@/components/site-header"
+import { usePageTitle } from "@/hooks/use-page-title"
 
 export function CompanyDashboardPage({ children }: { children?: React.ReactNode }) {
+  usePageTitle("Dashboard Perusahaan")
   return (
     <SidebarProvider>
       <AppSidebar />

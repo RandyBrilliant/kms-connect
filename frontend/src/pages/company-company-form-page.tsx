@@ -21,6 +21,7 @@ import {
 } from "@/hooks/use-companies-query"
 import { toast } from "@/lib/toast"
 import type { CompanyUser } from "@/types/company"
+import { usePageTitle } from "@/hooks/use-page-title"
 
 const BASE_PATH = "/perusahaan"
 
@@ -204,6 +205,8 @@ export function CompanyCompanyFormPage() {
   const { id } = useParams<{ id: string }>()
   const isEdit = id !== "new" && id != null
   const companyId = isEdit ? parseInt(id, 10) : null
+
+  usePageTitle(isEdit ? "Edit Perusahaan" : "Tambah Perusahaan")
 
   const { data: company, isLoading: loadingCompany } = useCompanyQuery(
     companyId ?? null,

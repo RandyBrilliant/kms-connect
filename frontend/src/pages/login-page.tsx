@@ -6,8 +6,10 @@ import {
   getDashboardRouteForRole,
 } from "@/types/auth"
 import { Button } from "@/components/ui/button"
+import { usePageTitle } from "@/hooks/use-page-title"
 
 export function LoginPage() {
+  usePageTitle("Login")
   const { user, isLoading, logout } = useAuth()
 
   if (isLoading) {

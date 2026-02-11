@@ -10,10 +10,13 @@ import { BreadcrumbNav } from "@/components/breadcrumb-nav"
 import { Button } from "@/components/ui/button"
 import { useCreateApplicantMutation } from "@/hooks/use-applicants-query"
 import { toast } from "@/lib/toast"
+import { usePageTitle } from "@/hooks/use-page-title"
 
 const BASE_PATH = "/pelamar"
 
 export function AdminPelamarFormPage() {
+  usePageTitle("Tambah Pelamar")
+
   const navigate = useNavigate()
   const createMutation = useCreateApplicantMutation()
 

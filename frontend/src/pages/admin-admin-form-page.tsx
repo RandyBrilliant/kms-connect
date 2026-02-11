@@ -21,6 +21,7 @@ import {
 } from "@/hooks/use-admins-query"
 import { toast } from "@/lib/toast"
 import type { AdminUser } from "@/types/admin"
+import { usePageTitle } from "@/hooks/use-page-title"
 
 const BASE_PATH = "/admin"
 
@@ -196,6 +197,8 @@ export function AdminAdminFormPage() {
   const { id } = useParams<{ id: string }>()
   const isEdit = id !== "new" && id != null
   const adminId = isEdit ? parseInt(id, 10) : null
+
+  usePageTitle(isEdit ? "Edit Admin" : "Tambah Admin")
 
   const { data: admin, isLoading: loadingAdmin } = useAdminQuery(
     adminId ?? null,

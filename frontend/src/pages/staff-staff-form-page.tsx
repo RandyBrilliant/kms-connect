@@ -21,6 +21,7 @@ import {
 } from "@/hooks/use-staffs-query"
 import { toast } from "@/lib/toast"
 import type { StaffUser } from "@/types/staff"
+import { usePageTitle } from "@/hooks/use-page-title"
 
 const BASE_PATH = "/staff"
 
@@ -192,6 +193,8 @@ export function StaffStaffFormPage() {
     const { id } = useParams<{ id: string }>()
     const isEdit = id !== "new" && id != null
     const staffId = isEdit ? parseInt(id, 10) : null
+
+    usePageTitle(isEdit ? "Edit Staff" : "Tambah Staff")
 
     const { data: staff, isLoading: loadingStaff } = useStaffQuery(
         staffId ?? null,

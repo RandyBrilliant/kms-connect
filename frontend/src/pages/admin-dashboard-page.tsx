@@ -6,8 +6,10 @@ import {
   useAdminApplicantTimeseriesQuery,
   useAdminLatestApplicantsQuery,
 } from "@/hooks/use-dashboard-query"
+import { usePageTitle } from "@/hooks/use-page-title"
 
 export function AdminDashboardPage() {
+  usePageTitle("Dashboard")
   const { data: summary, isLoading: loadingSummary } =
     useAdminApplicantSummaryQuery()
   const { data: timeseries = [], isLoading: loadingTimeseries } =

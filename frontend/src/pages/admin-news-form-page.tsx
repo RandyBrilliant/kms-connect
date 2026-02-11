@@ -16,6 +16,7 @@ import {
 } from "@/hooks/use-news-query"
 import { toast } from "@/lib/toast"
 import type { NewsStatus } from "@/types/news"
+import { usePageTitle } from "@/hooks/use-page-title"
 
 // Admin sidebar "Berita" menu points to "/berita"
 const BASE_PATH = "/berita"
@@ -25,6 +26,8 @@ export function AdminNewsFormPage() {
   const { id } = useParams<{ id: string }>()
   const isEdit = id !== "new" && id != null
   const newsId = isEdit ? parseInt(id, 10) : null
+
+  usePageTitle(isEdit ? "Edit Berita" : "Tambah Berita")
 
   const { data: news, isLoading: loadingNews } = useNewsItemQuery(
     newsId ?? null,
