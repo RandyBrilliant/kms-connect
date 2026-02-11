@@ -1,10 +1,14 @@
 /**
  * TanStack Query hooks for authentication and user session management.
- * Provides automatic token refresh, retry logic, and session persistence.
+ *
+ * Token refresh is handled transparently by the axios interceptor (lib/api.ts).
+ * This hook simply fetches the current user.  If the access token is expired,
+ * the interceptor will refresh it automatically before this query ever sees a 401.
+ * A 401 that reaches this hook means the refresh token itself is expired.
  */
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { getMe, refreshToken as refreshTokenApi } from "@/api/auth"
+import { useQuery } from "@tanstack/react-query"
+import { getMe } from "@/api/auth"
 
 export const authKeys = {
   all: ["auth"] as const,
@@ -13,85 +17,28 @@ export const authKeys = {
 
 /**
  * Query for current authenticated user.
- * Automatically refetches on window focus and reconnect.
- * Retries on network errors but not on 401 (not authenticated).
+ *
+ * - On mount: calls GET /api/me/.  If access token expired, the axios interceptor
+ *   will silently refresh it first, so the query sees a successful response.
+ * - While authenticated: refetches every 4 minutes (keeps access token alive)
+ *   and on window focus / reconnect.
+ * - If not authenticated: runs once, gets 401 (after interceptor tried refresh),
+ *   and then stops.  No infinite loop.
  */
 export function useMeQuery() {
   return useQuery({
     queryKey: authKeys.me(),
     queryFn: getMe,
-    // Keep user data in cache for session duration
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 30 * 60 * 1000, // 30 minutes
-    // Retry on network errors but not on 401
-    retry: (failureCount, error: any) => {
-      // Don't retry if user is not authenticated (401)
-      if (error?.response?.status === 401) {
-        return false
-      }
-      // Retry network errors up to 2 times
-      return failureCount < 2
-    },
-    retryDelay: 1000,
-    // Refetch on window focus only if previously successful
-    refetchOnWindowFocus: (query) => {
-      // Don't refetch if last attempt failed with 401
-      return query.state.status !== "error" || (query.state.error as any)?.response?.status !== 401
-    },
-    // Refetch on network reconnect only if not 401
-    refetchOnReconnect: (query) => {
-      return query.state.status !== "error" || (query.state.error as any)?.response?.status !== 401
-    },
-    // Only refetch every 4 minutes if user is authenticated (not errored with 401)
-    refetchInterval: (query) => {
-      // Stop interval if query errored with 401 (not authenticated)
-      if (query.state.status === "error") {
-        const status = (query.state.error as any)?.response?.status
-        if (status === 401) {
-          return false // Stop refetching
-        }
-      }
-      // Continue refetching if successful or other error
-      return query.state.status === "success" ? 4 * 60 * 1000 : false
-    },
-    // Don't refetch in background
+    // Cache user data
+    staleTime: 5 * 60 * 1000,  // 5 min - data considered fresh
+    gcTime: 30 * 60 * 1000,    // 30 min - keep in garbage-collection cache
+    // Don't retry on failure - the interceptor already tried refreshing
+    retry: false,
+    // Only auto-refetch when we have a user (authenticated)
+    refetchOnWindowFocus: (query) => query.state.data != null,
+    refetchOnReconnect: (query) => query.state.data != null,
+    refetchInterval: (query) =>
+      query.state.data != null ? 4 * 60 * 1000 : false,
     refetchIntervalInBackground: false,
   })
-}
-
-/**
- * Mutation for refreshing the access token.
- * Should be called before token expires or when 401 is received.
- */
-export function useRefreshTokenMutation() {
-  const queryClient = useQueryClient()
-  
-  return useMutation({
-    mutationFn: refreshTokenApi,
-    onSuccess: () => {
-      // After successful refresh, refetch user data to ensure session is valid
-      queryClient.invalidateQueries({ queryKey: authKeys.me() })
-    },
-    onError: () => {
-      // If refresh fails, clear user data (session expired)
-      queryClient.setQueryData(authKeys.me(), null)
-      queryClient.clear()
-    },
-    // Don't retry refresh - if it fails, session is likely expired
-    retry: false,
-  })
-}
-
-/**
- * Custom hook to trigger token refresh manually.
- * Useful for proactive refresh before token expires.
- */
-export function useTokenRefresh() {
-  const refreshMutation = useRefreshTokenMutation()
-  
-  return {
-    refresh: refreshMutation.mutate,
-    refreshAsync: refreshMutation.mutateAsync,
-    isRefreshing: refreshMutation.isPending,
-  }
 }

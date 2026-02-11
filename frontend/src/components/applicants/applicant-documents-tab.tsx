@@ -120,6 +120,30 @@ export function ApplicantDocumentsTab({
       return
     }
 
+    // Validate file type and size
+    const fileType = file.type.toLowerCase()
+    const fileName = file.name.toLowerCase()
+    const fileSize = file.size
+    
+    const isPDF = fileType === "application/pdf" || fileName.endsWith(".pdf")
+    const isJPG = fileType === "image/jpeg" || fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")
+    
+    // Only allow PDF and JPG files
+    if (!isPDF && !isJPG) {
+      setFileError("Hanya file PDF atau JPG yang diperbolehkan")
+      return
+    }
+    
+    // Validate file size: PDF max 2MB, JPG max 500KB
+    const maxSize = isPDF ? 2 * 1024 * 1024 : 500 * 1024  // 2MB for PDF, 500KB for JPG
+    const maxSizeLabel = isPDF ? "2MB" : "500KB"
+    const fileTypeLabel = isPDF ? "PDF" : "JPG"
+    
+    if (fileSize > maxSize) {
+      setFileError(`Ukuran file ${fileTypeLabel} maksimal ${maxSizeLabel}. File Anda: ${(fileSize / 1024 / 1024).toFixed(2)}MB`)
+      return
+    }
+
     const formData = new FormData()
     formData.append("document_type", String(typeId))
     formData.append("file", file)
@@ -293,7 +317,7 @@ export function ApplicantDocumentsTab({
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*,.pdf"
+                  accept=".pdf,.jpg,.jpeg,image/jpeg,application/pdf"
                   className="hidden"
                   onChange={() => {
                     setFileError("")
@@ -309,7 +333,7 @@ export function ApplicantDocumentsTab({
                 >
                   <IconFileUpload className="size-4" />
                   <span className="truncate">
-                    {selectedFileName || "Pilih file (PDF atau gambar)"}
+                    {selectedFileName || "Pilih file (PDF maks 2MB, JPG maks 500KB)"}
                   </span>
                 </Button>
                 {fileError && <FieldError errors={[{ message: fileError }]} />}

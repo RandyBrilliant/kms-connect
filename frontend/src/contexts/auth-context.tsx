@@ -9,6 +9,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "@/lib/toast"
 import { login as loginApi, logout as logoutApi } from "@/api/auth"
 import { setOnUnauthorized } from "@/lib/auth-config"
+import { markSessionExpired, resetSessionState } from "@/lib/api"
 import { useMeQuery, authKeys } from "@/hooks/use-auth-query"
 import type { User } from "@/types/auth"
 import {
@@ -34,9 +35,9 @@ export const AuthContext = createContext<AuthContextValue | null>(null)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  
+
   // Use TanStack Query for user session management
-  const { data: user, isLoading, error } = useMeQuery()
+  const { data: user, isLoading } = useMeQuery()
 
   const login = useCallback(
     async (email: string, password: string) => {
@@ -46,10 +47,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           "Akun pelamar tidak dapat mengakses dashboard. Gunakan aplikasi pelamar."
         )
       }
-      
+
+      // Reset interceptor state so it can handle refreshes again
+      resetSessionState()
       // Update query cache with logged-in user
       queryClient.setQueryData(authKeys.me(), loggedInUser)
-      
+
       toast.success("Login berhasil", "Mengalihkan ke dashboard...")
       const route = getDashboardRouteForRole(loggedInUser.role as UserRole)
       navigate(route)
@@ -58,15 +61,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const logout = useCallback(async () => {
+    // 1. Kill the interceptor's refresh loop FIRST
+    markSessionExpired()
+    // 2. Cancel every in-flight & pending query so nothing fires after logout
+    await queryClient.cancelQueries()
+    // 3. Clear all cached data (removes query cache entirely)
+    queryClient.clear()
+
     try {
       await logoutApi()
       toast.success("Logout berhasil", "Anda telah keluar dari akun")
     } catch (error) {
-      // Even if logout API fails, clear local session
+      // Even if logout API fails, local session is already cleared
       console.error("Logout error:", error)
     } finally {
-      // Clear all cached data
-      queryClient.clear()
       navigate("/login")
     }
   }, [navigate, queryClient])
@@ -78,9 +86,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [queryClient]
   )
 
-  // Handle unauthorized errors (401)
-  const handleUnauthorized = useCallback(() => {
-    // Clear all cache
+  // Handle unauthorized errors (401) — called by interceptor when refresh fails
+  const handleUnauthorized = useCallback(async () => {
+    markSessionExpired()
+    await queryClient.cancelQueries()
     queryClient.clear()
     navigate("/login")
     toast.error("Sesi berakhir", "Silakan login kembali")
@@ -92,18 +101,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => setOnUnauthorized(null)
   }, [handleUnauthorized])
 
-  // Handle query errors (e.g., 401 from getMe)
-  useEffect(() => {
-    if (error) {
-      const status = (error as any)?.response?.status
-      // Don't show toast on initial 401 (user not logged in)
-      // The login page will handle that
-      if (status === 401 && user) {
-        // Only show toast if user was previously authenticated
-        handleUnauthorized()
-      }
-    }
-  }, [error, user, handleUnauthorized])
+  // NOTE: 401 handling is done inside the axios interceptor (lib/api.ts).
+  // When the interceptor fails to refresh, it calls getOnUnauthorized(),
+  // which invokes handleUnauthorized above. No extra useEffect needed.
 
   const value: AuthContextValue = {
     user: user ?? null,
