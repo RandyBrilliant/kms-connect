@@ -33,6 +33,12 @@ DEBUG = _env("DEBUG", "True").lower() in ("true", "1", "yes")
 
 ALLOWED_HOSTS = _env("ALLOWED_HOSTS", "").split(",") if _env("ALLOWED_HOSTS") else []
 
+# Production SSL / secure cookies (set in .env after SSL setup)
+SECURE_SSL_REDIRECT = _env("SECURE_SSL_REDIRECT", "0") == "1"
+SESSION_COOKIE_SECURE = _env("SESSION_COOKIE_SECURE", "0") == "1"
+CSRF_COOKIE_SECURE = _env("CSRF_COOKIE_SECURE", "0") == "1"
+CSRF_TRUSTED_ORIGINS = _env("CSRF_TRUSTED_ORIGINS", "").split(",") if _env("CSRF_TRUSTED_ORIGINS") else []
+
 
 # Application definition
 

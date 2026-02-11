@@ -44,6 +44,25 @@ services:
       redis:
         condition: service_started
 
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A backend beat -l info
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgres://${SQL_USER:-postgres}:${SQL_PASSWORD:-}@db:5432/${SQL_DATABASE:-kmsconnect}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    volumes:
+      - .:/app
+      - media_volume:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
   redis:
     image: redis:7-alpine
     ports:

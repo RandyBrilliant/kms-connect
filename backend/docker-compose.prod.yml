@@ -17,9 +17,13 @@ services:
     container_name: kms-connect-nginx
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/kms-connect.conf:/etc/nginx/conf.d/default.conf:ro
+      # HTTP-only (default); replace with data.kms-connect.com.conf + ssl volume after SSL setup
+      - ./nginx/data.kms-connect.com.http-only.conf:/etc/nginx/conf.d/data.kms-connect.com.conf:ro
+      # - ./nginx/data.kms-connect.com.conf:/etc/nginx/conf.d/data.kms-connect.com.conf:ro
+      # - ./nginx/ssl:/etc/nginx/ssl:ro
       - media_volume:/app/media:ro
       - static_volume:/app/staticfiles:ro
       - ./logs/nginx:/var/log/nginx
@@ -65,6 +69,29 @@ services:
       dockerfile: Dockerfile.prod
     container_name: kms-connect-celery
     command: celery -A backend worker -l info
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgres://${SQL_USER:-postgres}:${SQL_PASSWORD:-}@db:5432/${SQL_DATABASE:-kmsconnect}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    volumes:
+      - media_volume:/app/media
+      - static_volume:/app/staticfiles
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - kms-network
+
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: kms-connect-celery-beat
+    command: celery -A backend beat -l info
     env_file:
       - .env
     environment:
