@@ -39,7 +39,7 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data:; connect-src 'self' http://localhost:8000 https://api.kms-connect.com https://*.kms-connect.com; frame-ancestors 'self'; base-uri 'self'; form-action 'self'"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data:; connect-src 'self' http://localhost:8000 https://data.kms-connect.com https://*.kms-connect.com; frame-ancestors 'self'; base-uri 'self'; form-action 'self'"
         }
       ]
     },
@@ -76,4 +76,3 @@
     }
   ]
 }
-
