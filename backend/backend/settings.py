@@ -39,6 +39,9 @@ SESSION_COOKIE_SECURE = _env("SESSION_COOKIE_SECURE", "0") == "1"
 CSRF_COOKIE_SECURE = _env("CSRF_COOKIE_SECURE", "0") == "1"
 CSRF_TRUSTED_ORIGINS = _env("CSRF_TRUSTED_ORIGINS", "").split(",") if _env("CSRF_TRUSTED_ORIGINS") else []
 
+# Trust X-Forwarded-Proto header from Nginx (required when behind a reverse proxy)
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
 
 # Application definition
 
