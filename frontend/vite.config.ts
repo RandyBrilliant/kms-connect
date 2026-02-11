@@ -37,8 +37,14 @@ export default defineConfig({
         manualChunks: (id) => {
           // Vendor chunk: node_modules dependencies
           if (id.includes('node_modules')) {
-            // React ecosystem in separate chunk
-            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
+            // React ecosystem - be very specific to avoid breaking dependencies
+            if (
+              id.includes('/node_modules/react/') ||
+              id.includes('/node_modules/react-dom/') ||
+              id.includes('/node_modules/react-router-dom/') ||
+              id.includes('/node_modules/react-router/') ||
+              id.includes('/node_modules/scheduler/')
+            ) {
               return 'react-vendor'
             }
             // TanStack ecosystem (Query, Table, Form)
