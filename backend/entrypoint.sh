@@ -7,11 +7,11 @@ if [ -z "${DATABASE_URL:-}" ] && [ -n "${SQL_DATABASE:-}" ]; then
     export DATABASE_URL="postgres://${SQL_USER:-postgres}:${SQL_PASSWORD:-}@${SQL_HOST:-db}:${SQL_PORT:-5432}/${SQL_DATABASE}"
 fi
 
-# Create logs directory (for Django logging)
+# Create logs directory (for Django logging). When bind-mounted, chmod may fail; ignore.
 mkdir -p /app/logs
-chmod 755 /app/logs
+chmod 755 /app/logs 2>/dev/null || true
 
-# Create media directories (KMS-connect: account/staff, account/applicants, account/documents)
+# Create media directories (KMS-connect). When bind/volume-mounted, chmod may fail; ignore.
 if [ ! -d /app/media ]; then
     mkdir -p /app/media
 fi

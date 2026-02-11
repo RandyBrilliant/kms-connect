@@ -81,42 +81,75 @@ The script will:
 
 ## Step 3: Use Block Storage with Docker Compose
 
-**First time (existing deployment with data in Docker volumes):**
+### I already ran mount-block-storage.sh and deploy.sh (first-time deployment)
 
-1. Stop the stack:
-   ```bash
-   cd /path/to/kms-connect/backend
-   docker compose -f docker-compose.prod.yml down
-   ```
+Switch the running stack to use the volume so **all new data** goes to Block Storage:
+
+```bash
+cd /path/to/kms-connect/backend   # replace with your backend path
+
+# 1. Stop the stack (containers only; old named volumes stay but we won’t use them)
+docker compose -f docker-compose.prod.yml down
+
+# 2. Start with Block Storage (postgres/media/static on /mnt/kms-data)
+docker compose -f docker-compose.prod.yml -f docker-compose.prod.block.yml up -d
+
+# 3. Wait for DB to be ready, then run migrations (entrypoint may have run them; this ensures they’re applied on the new volume)
+sleep 10
+docker compose -f docker-compose.prod.yml -f docker-compose.prod.block.yml exec api python manage.py migrate --noinput
+
+# 4. Collect static files onto the volume
+docker compose -f docker-compose.prod.yml -f docker-compose.prod.block.yml exec api python manage.py collectstatic --noinput --clear
+
+# 5. Create admin user (database on block storage is fresh)
+docker compose -f docker-compose.prod.yml -f docker-compose.prod.block.yml exec api python manage.py createsuperuser
+```
+
+From now on **always** use both compose files (see [below](#from-now-on-always-use-both-compose-files)).
+
+---
+
+**First time (existing deployment with data you want to keep):**
+
+1. Stop the stack: `docker compose -f docker-compose.prod.yml down`
 2. (Optional) Copy existing data from Docker volumes to Block Storage, then start with the override. If you skip this, you’ll start with an empty database and empty media (see [Migrating existing data](#migrating-existing-data) below).
 3. Start with the Block Storage override:
    ```bash
    docker compose -f docker-compose.prod.yml -f docker-compose.prod.block.yml up -d
    ```
 
-**New deployment (no existing data):**
+**New deployment (no existing data, block storage mounted before first deploy):**
 
-Just run deploy as usual, but use the override so data goes to Block Storage from the start:
+Use the override from the first `up` so data goes to Block Storage from the start:
 
 ```bash
 sudo ./deploy/deploy.sh
 # Then switch to block storage and restart:
 docker compose -f docker-compose.prod.yml down
 docker compose -f docker-compose.prod.yml -f docker-compose.prod.block.yml up -d
-# Run migrations and collectstatic if needed
 docker compose -f docker-compose.prod.yml -f docker-compose.prod.block.yml exec api python manage.py migrate --noinput
 docker compose -f docker-compose.prod.yml -f docker-compose.prod.block.yml exec api python manage.py collectstatic --noinput --clear
 ```
 
-**From now on**, always use both compose files when starting/stopping/updating:
+### From now on, always use both compose files
+
+When using Block Storage, **always** pass both files when starting, stopping, or updating:
 
 ```bash
 docker compose -f docker-compose.prod.yml -f docker-compose.prod.block.yml up -d
 docker compose -f docker-compose.prod.yml -f docker-compose.prod.block.yml down
 docker compose -f docker-compose.prod.yml -f docker-compose.prod.block.yml logs -f
+docker compose -f docker-compose.prod.yml -f docker-compose.prod.block.yml ps
 ```
 
-To make this the default for your deploy/update scripts, you can set an env var or add a wrapper that always passes `-f docker-compose.prod.block.yml` when the block volume is in use.
+**Optional:** so you don’t have to type both files every time, set this in your shell or in `.env` on the server (Docker Compose reads `COMPOSE_FILE`):
+
+```bash
+export COMPOSE_FILE=docker-compose.prod.yml:docker-compose.prod.block.yml
+# then you can run:
+docker compose up -d
+docker compose down
+```
 
 ---
 

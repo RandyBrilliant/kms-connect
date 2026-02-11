@@ -43,11 +43,13 @@ mkdir -p nginx/logs
 mkdir -p media
 mkdir -p staticfiles
 mkdir -p nginx/ssl
-# Ensure logs directory is writable
+# Ensure logs directory is writable by API container (runs as UID 1000)
 chmod 755 logs nginx/logs media staticfiles nginx/ssl 2>/dev/null || true
+chown -R 1000:1000 logs 2>/dev/null || true
 # Create log file if it doesn't exist (to avoid permission issues)
 touch logs/django.log 2>/dev/null || true
 chmod 666 logs/django.log 2>/dev/null || true
+chown 1000:1000 logs/django.log 2>/dev/null || true
 echo -e "${GREEN}✓ Directories created${NC}"
 
 echo ""

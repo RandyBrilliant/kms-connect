@@ -79,7 +79,15 @@ apt-get install -y -qq \
 echo -e "${GREEN}✓ Essential packages installed${NC}"
 
 echo ""
-echo -e "${BLUE}[3/8] Installing Docker...${NC}"
+echo -e "${BLUE}[3/9] Disabling system nginx/apache (Docker nginx will use ports 80/443)...${NC}"
+systemctl stop nginx 2>/dev/null || true
+systemctl disable nginx 2>/dev/null || true
+systemctl stop apache2 2>/dev/null || true
+systemctl disable apache2 2>/dev/null || true
+echo -e "${GREEN}✓ Ports 80 and 443 left for Docker nginx${NC}"
+
+echo ""
+echo -e "${BLUE}[4/9] Installing Docker...${NC}"
 if ! command -v docker &> /dev/null; then
     # Remove old versions
     apt-get remove -y docker docker-engine docker.io containerd runc 2>/dev/null || true
@@ -107,7 +115,7 @@ else
 fi
 
 echo ""
-echo -e "${BLUE}[4/8] Optimizing system for 2GB RAM...${NC}"
+echo -e "${BLUE}[5/9] Optimizing system for 2GB RAM...${NC}"
 
 # Configure memory overcommit for Redis
 if ! grep -q "vm.overcommit_memory = 1" /etc/sysctl.conf; then
@@ -126,7 +134,7 @@ sysctl -p 2>/dev/null || true
 echo -e "${GREEN}✓ System optimized${NC}"
 
 echo ""
-echo -e "${BLUE}[5/8] Setting up swap space...${NC}"
+echo -e "${BLUE}[6/9] Setting up swap space...${NC}"
 if ! swapon --show | grep -q '/swapfile'; then
     # Create 2GB swap file (fallocate is fast; dd fallback for some filesystems)
     if ! fallocate -l 2G /swapfile 2>/dev/null; then
@@ -144,7 +152,7 @@ else
 fi
 
 echo ""
-echo -e "${BLUE}[6/8] Configuring firewall (UFW)...${NC}"
+echo -e "${BLUE}[7/9] Configuring firewall (UFW)...${NC}"
 # Allow SSH (important!)
 ufw allow 22/tcp
 # Allow HTTP and HTTPS
@@ -155,7 +163,7 @@ ufw --force enable
 echo -e "${GREEN}✓ Firewall configured${NC}"
 
 echo ""
-echo -e "${BLUE}[7/8] Optimizing Docker for low memory...${NC}"
+echo -e "${BLUE}[8/9] Optimizing Docker for low memory...${NC}"
 # Configure Docker daemon
 mkdir -p /etc/docker
 cat > /etc/docker/daemon.json <<EOF
@@ -173,7 +181,7 @@ sleep 2
 echo -e "${GREEN}✓ Docker optimized${NC}"
 
 echo ""
-echo -e "${BLUE}[8/8] Creating necessary directories...${NC}"
+echo -e "${BLUE}[9/9] Creating necessary directories...${NC}"
 mkdir -p "$PROJECT_DIR/logs"
 mkdir -p "$PROJECT_DIR/nginx/logs"
 mkdir -p "$PROJECT_DIR/media"
