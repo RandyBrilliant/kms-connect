@@ -322,9 +322,13 @@ CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes max per task
 CELERY_BEAT_SCHEDULE = {
     # Tutup lowongan kerja yang sudah melewati deadline.
-    # Jalan tiap 15 menit; sesuaikan di env jika perlu.
-    "close-expired-jobs-every-15-min": {
+    # Jalan tiap tengah malam; sesuaikan di env jika perlu.
+    "close-expired-jobs-every-midnight": {
         "task": "main.tasks.close_expired_jobs",
-        "schedule": crontab(minute="*/15"),
+        "schedule": crontab(minute=0, hour=0),
     },
+    # "close-expired-jobs-every-15-min": {
+    #     "task": "main.tasks.close_expired_jobs",
+    #     "schedule": crontab(minute="*/15"),
+    # },
 }
