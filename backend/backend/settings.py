@@ -174,11 +174,23 @@ if _do_spaces_bucket and not DEBUG:
     AWS_S3_ENDPOINT_URL = f"https://{_do_spaces_region}.digitaloceanspaces.com"
     AWS_S3_CUSTOM_DOMAIN = _env("DO_SPACES_CDN_DOMAIN", "")
     # public-read needed for CDN to serve files; use private if you serve via signed URLs only
-    AWS_DEFAULT_ACL = _env("DO_SPACES_ACL", "private").strip() or "private"
+    AWS_DEFAULT_ACL = _env("DO_SPACES_ACL", "public-read").strip() or "public-read"
     AWS_S3_OBJECT_PARAMETERS = {"CacheControl": "max-age=86400"}
+    
+    # Django 4.2+ uses STORAGES setting
     try:
         import storages.backends.s3boto3  # noqa: F401
-        DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
+        STORAGES = {
+            "default": {
+                "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+            },
+            "staticfiles": {
+                "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+            },
+        }
+        # Update MEDIA_URL to use CDN if available
+        if AWS_S3_CUSTOM_DOMAIN:
+            MEDIA_URL = f"https://{AWS_S3_CUSTOM_DOMAIN}/media/"
     except ImportError:
         pass
 
