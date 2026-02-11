@@ -1,0 +1,24 @@
+# KMS-Connect – use with DigitalOcean Block Storage
+# Run: docker compose -f docker-compose.prod.yml -f docker-compose.prod.block.yml up -d
+# Requires: Block Storage mounted at /mnt/kms-data (run deploy/mount-block-storage.sh first)
+
+volumes:
+  postgres_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/kms-data/postgres
+  media_volume:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/kms-data/media
+  static_volume:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/kms-data/static
+  # redis_data stays as default named volume (not on block storage)

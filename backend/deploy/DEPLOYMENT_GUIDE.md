@@ -392,6 +392,19 @@ If you're running out of memory:
 
 ---
 
+## 💾 Optional: DigitalOcean Block Storage
+
+To store database and media on a separate Block Storage volume (persists across Droplet rebuilds, resizable, snapshot-friendly):
+
+1. Create and attach a Volume in DigitalOcean (same datacenter as your Droplet).
+2. On the server: `sudo ./deploy/mount-block-storage.sh`
+3. Start the stack with the override:  
+   `docker compose -f docker-compose.prod.yml -f docker-compose.prod.block.yml up -d`
+
+See **[deploy/BLOCK_STORAGE.md](./BLOCK_STORAGE.md)** for the full guide and migration steps.
+
+---
+
 ## 📁 File Structure
 
 ```

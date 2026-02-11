@@ -131,5 +131,17 @@ docker compose -f docker-compose.prod.yml logs nginx
 
 ---
 
+## 💾 Block Storage (optional)
+
+To use DigitalOcean Block Storage for database and media:
+
+1. Create a Volume in DO and attach it to your Droplet.
+2. `sudo ./deploy/mount-block-storage.sh`
+3. Start with override: `docker compose -f docker-compose.prod.yml -f docker-compose.prod.block.yml up -d`
+
+Full steps: [BLOCK_STORAGE.md](./BLOCK_STORAGE.md)
+
+---
+
 For detailed instructions, see [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md)
 
