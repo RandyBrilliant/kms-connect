@@ -5,7 +5,7 @@
 
 import { useState } from "react"
 
-import { useAuth } from "@/contexts/auth-context"
+import { useAuth } from "@/hooks/use-auth"
 import { useMeProfileQuery, useUpdateMeProfileMutation } from "@/hooks/use-me-profile"
 import { BreadcrumbNav } from "@/components/breadcrumb-nav"
 import { Button } from "@/components/ui/button"

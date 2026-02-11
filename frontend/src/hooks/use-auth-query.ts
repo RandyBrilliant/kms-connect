@@ -33,13 +33,28 @@ export function useMeQuery() {
       return failureCount < 2
     },
     retryDelay: 1000,
-    // Refetch on window focus to keep session fresh
-    refetchOnWindowFocus: true,
-    // Refetch on network reconnect
-    refetchOnReconnect: true,
-    // Refetch every 4 minutes to keep session alive (before 5min token expiry)
-    refetchInterval: 4 * 60 * 1000,
-    // Only refetch in background if user is authenticated
+    // Refetch on window focus only if previously successful
+    refetchOnWindowFocus: (query) => {
+      // Don't refetch if last attempt failed with 401
+      return query.state.status !== "error" || (query.state.error as any)?.response?.status !== 401
+    },
+    // Refetch on network reconnect only if not 401
+    refetchOnReconnect: (query) => {
+      return query.state.status !== "error" || (query.state.error as any)?.response?.status !== 401
+    },
+    // Only refetch every 4 minutes if user is authenticated (not errored with 401)
+    refetchInterval: (query) => {
+      // Stop interval if query errored with 401 (not authenticated)
+      if (query.state.status === "error") {
+        const status = (query.state.error as any)?.response?.status
+        if (status === 401) {
+          return false // Stop refetching
+        }
+      }
+      // Continue refetching if successful or other error
+      return query.state.status === "success" ? 4 * 60 * 1000 : false
+    },
+    // Don't refetch in background
     refetchIntervalInBackground: false,
   })
 }

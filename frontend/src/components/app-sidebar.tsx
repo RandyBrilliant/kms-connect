@@ -10,7 +10,7 @@ import {
   IconUsersGroup,
 } from "@tabler/icons-react"
 
-import { useAuth } from "@/contexts/auth-context"
+import { useAuth } from "@/hooks/use-auth"
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
 import {

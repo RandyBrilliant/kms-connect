@@ -6,7 +6,7 @@ import {
 } from "@tabler/icons-react"
 import { useNavigate } from "react-router-dom"
 
-import { useAuth } from "@/contexts/auth-context"
+import { useAuth } from "@/hooks/use-auth"
 
 import {
   Avatar,
