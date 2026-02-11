@@ -112,7 +112,8 @@ echo -e "${GREEN}✓ Nginx configuration ready${NC}"
 
 echo ""
 echo -e "${BLUE}[5/7] Starting services...${NC}"
-docker compose $COMPOSE_OPTS up -d
+# Non-interactive: auto-accept "Recreate?" when volume config changed (e.g. switching to block storage)
+echo y | docker compose $COMPOSE_OPTS up -d
 echo -e "${GREEN}✓ Services started${NC}"
 
 echo ""
