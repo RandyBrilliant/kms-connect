@@ -7,9 +7,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# Install system dependencies and gosu
 RUN apt-get update \
-    && apt-get install --no-install-recommends -y build-essential libpq-dev curl \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get install --no-install-recommends -y \
+        build-essential \
+        libpq-dev \
+        curl \
+        gosu \
+    && rm -rf /var/lib/apt/lists/* \
+    && gosu nobody true
 
 FROM base AS deps
 COPY requirements.txt .
@@ -34,8 +40,9 @@ RUN mkdir -p /app/media/account/staff \
     && chmod +x entrypoint.sh \
     && chown -R appuser:appuser /app
 
-# Switch to non-root user
-USER appuser
+# Note: Don't switch to USER appuser here
+# The entrypoint.sh script needs to run as root first to fix volume permissions,
+# then it will switch to appuser using gosu
 
 EXPOSE 8000
 

@@ -3,22 +3,14 @@ import {
   useCallback,
   useContext,
   useEffect,
-  useRef,
-  useState,
   type ReactNode,
 } from "react"
 import { useNavigate } from "react-router-dom"
+import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "@/lib/toast"
-import {
-  login as loginApi,
-  logout as logoutApi,
-  getMe,
-  refreshToken,
-} from "@/api/auth"
-import {
-  REFRESH_INTERVAL_MS,
-  setOnUnauthorized,
-} from "@/lib/auth-config"
+import { login as loginApi, logout as logoutApi } from "@/api/auth"
+import { setOnUnauthorized } from "@/lib/auth-config"
+import { useMeQuery, authKeys } from "@/hooks/use-auth-query"
 import type { User } from "@/types/auth"
 import {
   canAccessDashboard,
@@ -41,92 +33,81 @@ interface AuthContextValue extends AuthState {
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  
+  // Use TanStack Query for user session management
+  const { data: user, isLoading, error } = useMeQuery()
 
-  const login = useCallback(async (email: string, password: string) => {
-    const loggedInUser = await loginApi({ email, password })
-    if (!canAccessDashboard(loggedInUser.role as UserRole)) {
-      throw new Error(
-        "Akun pelamar tidak dapat mengakses dashboard. Gunakan aplikasi pelamar."
-      )
-    }
-    setUser(loggedInUser)
-    toast.success("Login berhasil", "Mengalihkan ke dashboard...")
-    const route = getDashboardRouteForRole(loggedInUser.role as UserRole)
-    navigate(route)
-  }, [navigate])
+  const login = useCallback(
+    async (email: string, password: string) => {
+      const loggedInUser = await loginApi({ email, password })
+      if (!canAccessDashboard(loggedInUser.role as UserRole)) {
+        throw new Error(
+          "Akun pelamar tidak dapat mengakses dashboard. Gunakan aplikasi pelamar."
+        )
+      }
+      
+      // Update query cache with logged-in user
+      queryClient.setQueryData(authKeys.me(), loggedInUser)
+      
+      toast.success("Login berhasil", "Mengalihkan ke dashboard...")
+      const route = getDashboardRouteForRole(loggedInUser.role as UserRole)
+      navigate(route)
+    },
+    [navigate, queryClient]
+  )
 
   const logout = useCallback(async () => {
     try {
       await logoutApi()
       toast.success("Logout berhasil", "Anda telah keluar dari akun")
+    } catch (error) {
+      // Even if logout API fails, clear local session
+      console.error("Logout error:", error)
     } finally {
-      setUser(null)
+      // Clear all cached data
+      queryClient.clear()
       navigate("/login")
     }
-  }, [navigate])
+  }, [navigate, queryClient])
 
-  const refreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const setUser = useCallback(
+    (newUser: User | null) => {
+      queryClient.setQueryData(authKeys.me(), newUser)
+    },
+    [queryClient]
+  )
 
+  // Handle unauthorized errors (401)
   const handleUnauthorized = useCallback(() => {
-    setUser(null)
+    // Clear all cache
+    queryClient.clear()
     navigate("/login")
     toast.error("Sesi berakhir", "Silakan login kembali")
-  }, [navigate])
+  }, [navigate, queryClient])
 
+  // Register unauthorized callback for API interceptor
   useEffect(() => {
     setOnUnauthorized(handleUnauthorized)
     return () => setOnUnauthorized(null)
   }, [handleUnauthorized])
 
+  // Handle query errors (e.g., 401 from getMe)
   useEffect(() => {
-    let cancelled = false
-    getMe()
-      .then((u) => {
-        if (!cancelled) setUser(u)
-      })
-      .catch(() => {
-        if (!cancelled) setUser(null)
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!user) return
-
-    const doRefresh = () => {
-      refreshToken().catch(() => {
+    if (error) {
+      const status = (error as any)?.response?.status
+      // Don't show toast on initial 401 (user not logged in)
+      // The login page will handle that
+      if (status === 401 && user) {
+        // Only show toast if user was previously authenticated
         handleUnauthorized()
-      })
-    }
-
-    refreshIntervalRef.current = setInterval(doRefresh, REFRESH_INTERVAL_MS)
-
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        doRefresh()
       }
     }
-    document.addEventListener("visibilitychange", onVisibilityChange)
-
-    return () => {
-      if (refreshIntervalRef.current) {
-        clearInterval(refreshIntervalRef.current)
-        refreshIntervalRef.current = null
-      }
-      document.removeEventListener("visibilitychange", onVisibilityChange)
-    }
-  }, [user, handleUnauthorized])
+  }, [error, user, handleUnauthorized])
 
   const value: AuthContextValue = {
-    user,
+    user: user ?? null,
     isLoading,
     isAuthenticated: !!user,
     login,
@@ -134,11 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser,
   }
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  )
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {
