@@ -61,7 +61,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 120s
 
   celery:
     build:
@@ -88,6 +88,8 @@ services:
     restart: unless-stopped
     networks:
       - kms-network
+    healthcheck:
+      disable: true
 
   celery-beat:
     build:
@@ -114,6 +116,8 @@ services:
     restart: unless-stopped
     networks:
       - kms-network
+    healthcheck:
+      disable: true
 
   db:
     image: postgres:15-alpine
