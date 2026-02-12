@@ -34,6 +34,33 @@ export async function requestPasswordReset(email: string): Promise<void> {
   await api.post("/api/auth/request-password-reset/", { email })
 }
 
+/** GET /api/auth/verify-email/ - Verify email via token (public link from email) */
+export async function verifyEmail(token: string): Promise<ApiSuccessResponse<{ email: string }>> {
+  const { data } = await api.get<ApiSuccessResponse<{ email: string }>>(
+    "/api/auth/verify-email/",
+    {
+      params: { token },
+    }
+  )
+  return data
+}
+
+/**
+ * POST /api/auth/confirm-reset-password/ - Confirm password reset with uid + token.
+ * Payload: { uid: string, token: string, new_password: string }
+ */
+export async function confirmResetPassword(input: {
+  uid: string
+  token: string
+  new_password: string
+}): Promise<ApiSuccessResponse<unknown>> {
+  const { data } = await api.post<ApiSuccessResponse<unknown>>(
+    "/api/auth/confirm-reset-password/",
+    input
+  )
+  return data
+}
+
 /** GET /api/me/ - Current user (requires auth). Returns serialized user in data. */
 export async function getMe(): Promise<User> {
   const { data } = await api.get<ApiSuccessResponse<User>>("/api/me/")

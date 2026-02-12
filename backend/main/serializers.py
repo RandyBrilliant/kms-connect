@@ -7,7 +7,7 @@ Serializers untuk konten main app:
 from rest_framework import serializers
 from django.utils import timezone
 
-from .models import News, LowonganKerja, NewsStatus, JobStatus
+from .models import News, LowonganKerja, NewsStatus, JobStatus, JobApplication, ApplicationStatus
 
 
 # ---------------------------------------------------------------------------
@@ -180,4 +180,68 @@ class LowonganKerjaSerializer(serializers.ModelSerializer):
                     ]
                 }
             )
+
+
+# ---------------------------------------------------------------------------
+# JobApplication
+# ---------------------------------------------------------------------------
+
+
+class JobApplicationSerializer(serializers.ModelSerializer):
+    """Serializer untuk lamaran kerja."""
+
+    applicant_name = serializers.SerializerMethodField(read_only=True)
+    applicant_email = serializers.SerializerMethodField(read_only=True)
+    job_title = serializers.SerializerMethodField(read_only=True)
+    company_name = serializers.SerializerMethodField(read_only=True)
+    reviewed_by_name = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = JobApplication
+        fields = [
+            "id",
+            "applicant",
+            "applicant_name",
+            "applicant_email",
+            "job",
+            "job_title",
+            "company_name",
+            "status",
+            "applied_at",
+            "reviewed_at",
+            "reviewed_by",
+            "reviewed_by_name",
+            "notes",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "applicant_name",
+            "applicant_email",
+            "job_title",
+            "company_name",
+            "reviewed_by_name",
+            "applied_at",
+            "reviewed_at",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_applicant_name(self, obj) -> str:
+        return obj.applicant.full_name if obj.applicant else ""
+
+    def get_applicant_email(self, obj) -> str:
+        return obj.applicant.user.email if obj.applicant and obj.applicant.user else ""
+
+    def get_job_title(self, obj) -> str:
+        return obj.job.title if obj.job else ""
+
+    def get_company_name(self, obj) -> str:
+        return obj.job.company.company_name if obj.job and obj.job.company else ""
+
+    def get_reviewed_by_name(self, obj) -> str | None:
+        if not obj.reviewed_by:
+            return None
+        return obj.reviewed_by.full_name or obj.reviewed_by.email
 

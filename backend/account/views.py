@@ -30,8 +30,14 @@ from .models import (
     DocumentType,
     ApplicantVerificationStatus,
 )
-from .permissions import IsBackofficeAdmin
-from .email_utils import verification_link, send_verification_email, send_password_reset_email
+from .permissions import IsBackofficeAdmin, IsApplicant
+from .throttles import AuthPublicRateThrottle
+from .email_utils import (
+    FRONTEND_URL,
+    verification_link,
+    send_verification_email,
+    send_password_reset_email,
+)
 from .serializers import (
     AdminUserSerializer,
     StaffUserSerializer,
@@ -363,7 +369,12 @@ class SendVerificationEmailView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         verify_token = verification_link(user)
-        verify_url = request.build_absolute_uri("/api/auth/verify-email/") + "?" + urlencode({"token": verify_token})
+        # Prefer frontend URL for a friendly verification page; fallback to API endpoint.
+        if FRONTEND_URL:
+            base = FRONTEND_URL.rstrip("/")
+            verify_url = f"{base}/verify-email?token={verify_token}"
+        else:
+            verify_url = request.build_absolute_uri("/api/auth/verify-email/") + "?" + urlencode({"token": verify_token})
         logo_url = _admin_email_logo_url(request)
         send_verification_email(user, logo_url=logo_url, verify_url=verify_url)
         return Response(
@@ -435,7 +446,11 @@ class DocumentTypePublicListView(APIView):
     """
 
     permission_classes = [AllowAny]
-    authentication_classes = []
+    authentication_classes = ()  # Empty tuple disables authentication
+
+    def get_authenticators(self):
+        """Override to ensure no authentication is performed."""
+        return []
 
     def get(self, request):
         cache_key = "document_types_public_list"

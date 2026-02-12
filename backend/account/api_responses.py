@@ -19,6 +19,7 @@ class ApiCode:
     NOT_FOUND = "not_found"
     PERMISSION_DENIED = "permission_denied"
     METHOD_NOT_ALLOWED = "method_not_allowed"
+    INTERNAL_ERROR = "internal_error"
 
     # Akun / status
     DELETE_NOT_ALLOWED = "delete_not_allowed"

@@ -276,3 +276,95 @@ class LowonganKerja(models.Model):
     def __str__(self) -> str:
         return f"{self.title} – {self.company.company_name}"
 
+
+# ---------------------------------------------------------------------------
+# Job Application (Lamaran Kerja)
+# ---------------------------------------------------------------------------
+
+
+class ApplicationStatus(models.TextChoices):
+    """Status lamaran kerja."""
+
+    APPLIED = "APPLIED", _("Dilamar")
+    UNDER_REVIEW = "UNDER_REVIEW", _("Dalam Review")
+    ACCEPTED = "ACCEPTED", _("Diterima")
+    REJECTED = "REJECTED", _("Ditolak")
+
+
+class JobApplication(models.Model):
+    """
+    Lamaran kerja pelamar untuk lowongan tertentu.
+    Menghubungkan ApplicantProfile dengan LowonganKerja.
+    """
+
+    applicant = models.ForeignKey(
+        "account.ApplicantProfile",
+        on_delete=models.CASCADE,
+        related_name="job_applications",
+        verbose_name=_("pelamar"),
+        help_text=_("Pelamar yang melamar pekerjaan ini."),
+    )
+    job = models.ForeignKey(
+        LowonganKerja,
+        on_delete=models.CASCADE,
+        related_name="applications",
+        verbose_name=_("lowongan"),
+        help_text=_("Lowongan kerja yang dilamar."),
+    )
+    status = models.CharField(
+        _("status"),
+        max_length=20,
+        choices=ApplicationStatus.choices,
+        default=ApplicationStatus.APPLIED,
+        db_index=True,
+        help_text=_("Status lamaran kerja."),
+    )
+    applied_at = models.DateTimeField(
+        _("dilamar pada"),
+        auto_now_add=True,
+        db_index=True,
+        help_text=_("Waktu pelamar mengajukan lamaran."),
+    )
+    reviewed_at = models.DateTimeField(
+        _("direview pada"),
+        null=True,
+        blank=True,
+        help_text=_("Waktu lamaran direview oleh admin/staff."),
+    )
+    reviewed_by = models.ForeignKey(
+        CustomUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reviewed_applications",
+        limit_choices_to={"role__in": [UserRole.ADMIN, UserRole.STAFF]},
+        verbose_name=_("direview oleh"),
+        help_text=_("Admin atau Staff yang mereview lamaran ini."),
+    )
+    notes = models.TextField(
+        _("catatan"),
+        blank=True,
+        help_text=_("Catatan internal atau feedback untuk pelamar."),
+    )
+    created_at = models.DateTimeField(_("dibuat pada"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("diperbarui pada"), auto_now=True)
+
+    class Meta:
+        verbose_name = _("lamaran kerja")
+        verbose_name_plural = _("daftar lamaran kerja")
+        ordering = ["-applied_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["applicant", "job"],
+                name="main_jobapplication_unique_applicant_job",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["applicant", "status"]),
+            models.Index(fields=["job", "status"]),
+            models.Index(fields=["status", "applied_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.applicant.full_name} – {self.job.title} ({self.get_status_display()})"
+

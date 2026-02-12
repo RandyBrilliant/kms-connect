@@ -1,0 +1,355 @@
+"""
+Public registration and Google OAuth views for mobile app.
+Separate file to keep account/views.py focused on admin CRUD.
+"""
+from django.conf import settings as django_settings
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework.permissions import AllowAny
+
+from .models import (
+    CustomUser,
+    UserRole,
+    ApplicantProfile,
+    ApplicantDocument,
+    DocumentType,
+    ApplicantVerificationStatus,
+)
+from .serializers import ApplicantUserSerializer
+from .api_responses import (
+    ApiCode,
+    ApiMessage,
+    error_response,
+    success_response,
+)
+from .throttles import AuthPublicRateThrottle
+from .document_specs import validate_document_file
+from .tasks import process_document_ocr, optimize_document_image
+
+
+class ApplicantRegistrationView(APIView):
+    """
+    Public endpoint untuk registrasi pelamar dengan KTP upload.
+    Menerima email, password, dan file KTP.
+    Membuat user + applicant profile, upload KTP, trigger OCR processing.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [AuthPublicRateThrottle]
+
+    def post(self, request):
+        from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+
+        email = request.data.get("email", "").strip().lower()
+        password = request.data.get("password")
+        ktp_file = request.FILES.get("ktp")
+
+        # Validasi email
+        if not email:
+            return Response(
+                error_response(
+                    detail="Email wajib diisi.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validasi password
+        if not password:
+            return Response(
+                error_response(
+                    detail="Password wajib diisi untuk registrasi dengan email.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validasi KTP file
+        if not ktp_file:
+            return Response(
+                error_response(
+                    detail="File KTP wajib diunggah.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validasi format dan ukuran KTP
+        try:
+            validate_document_file(ktp_file, "ktp")
+        except Exception as e:
+            return Response(
+                error_response(
+                    detail=str(e),
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Cek apakah email sudah terdaftar
+        if CustomUser.objects.filter(email=email).exists():
+            return Response(
+                error_response(
+                    detail="Email sudah terdaftar. Gunakan email lain atau lakukan login.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Buat user
+        try:
+            user = CustomUser.objects.create_user(
+                email=email,
+                password=password,
+                role=UserRole.APPLICANT,
+                is_active=True,
+                email_verified=False,  # Perlu verifikasi email
+            )
+        except Exception as e:
+            return Response(
+                error_response(
+                    detail=f"Gagal membuat akun: {str(e)}",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Buat applicant profile (minimal, akan diisi dari OCR atau user input)
+        try:
+            applicant_profile = ApplicantProfile.objects.create(
+                user=user,
+                full_name="",  # Akan diisi dari OCR atau user input
+                nik="",  # Akan diisi dari OCR atau user input
+                verification_status=ApplicantVerificationStatus.DRAFT,
+            )
+        except Exception as e:
+            user.delete()  # Rollback
+            return Response(
+                error_response(
+                    detail=f"Gagal membuat profil pelamar: {str(e)}",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Upload KTP document
+        try:
+            ktp_doc_type = DocumentType.objects.filter(code="ktp").first()
+            if not ktp_doc_type:
+                # Jika document type KTP belum ada, buat default
+                ktp_doc_type = DocumentType.objects.create(
+                    code="ktp",
+                    name="KTP",
+                    is_required=True,
+                    sort_order=1,
+                )
+
+            ktp_document = ApplicantDocument.objects.create(
+                applicant_profile=applicant_profile,
+                document_type=ktp_doc_type,
+                file=ktp_file,
+            )
+
+            # Trigger OCR processing (async)
+            process_document_ocr.delay(ktp_document.id)
+
+            # Trigger image optimization (async)
+            optimize_document_image.delay(ktp_document.id)
+
+        except Exception as e:
+            # Jika upload gagal, hapus user dan profile
+            applicant_profile.delete()
+            user.delete()
+            return Response(
+                error_response(
+                    detail=f"Gagal mengunggah KTP: {str(e)}",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Generate JWT tokens
+        try:
+            token_serializer = TokenObtainPairSerializer()
+            token_serializer.user = user
+            tokens = token_serializer.get_token(user)
+            access_token = str(tokens.access_token)
+            refresh_token = str(tokens)
+        except Exception as e:
+            return Response(
+                error_response(
+                    detail=f"Gagal membuat token: {str(e)}",
+                    code=ApiCode.INTERNAL_ERROR,
+                ),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        # Return user data + tokens
+        serializer = ApplicantUserSerializer(instance=user, context={"request": request})
+        return Response(
+            success_response(
+                data={
+                    "user": serializer.data,
+                    "access": access_token,
+                    "refresh": refresh_token,
+                },
+                detail="Registrasi berhasil. KTP sedang diproses dengan OCR.",
+            ),
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class GoogleOAuthView(APIView):
+    """
+    Public endpoint untuk Google Sign-In authentication.
+    Menerima Google ID token, verifikasi dengan Google, buat/login user.
+    Mendukung registrasi dan login.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [AuthPublicRateThrottle]
+
+    def post(self, request):
+        from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+
+        id_token = request.data.get("id_token", "").strip()
+
+        if not id_token:
+            return Response(
+                error_response(
+                    detail="Google ID token wajib diisi.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Verifikasi Google ID token
+        try:
+            from google.auth.transport import requests
+            from google.oauth2 import id_token
+
+            google_client_id = getattr(django_settings, "GOOGLE_CLIENT_ID", "")
+            if not google_client_id:
+                return Response(
+                    error_response(
+                        detail="Google OAuth tidak dikonfigurasi di server.",
+                        code=ApiCode.INTERNAL_ERROR,
+                    ),
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+            # Verifikasi token
+            try:
+                idinfo = id_token.verify_oauth2_token(id_token, requests.Request(), google_client_id)
+            except ValueError:
+                return Response(
+                    error_response(
+                        detail="Google ID token tidak valid.",
+                        code=ApiCode.PERMISSION_DENIED,
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                    ),
+                    status=status.HTTP_401_UNAUTHORIZED,
+                )
+
+            google_id = idinfo.get("sub")
+            email = idinfo.get("email", "").strip().lower()
+            name = idinfo.get("name", "")
+
+            if not email:
+                return Response(
+                    error_response(
+                        detail="Email tidak ditemukan di Google account.",
+                        code=ApiCode.VALIDATION_ERROR,
+                    ),
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        except ImportError:
+            return Response(
+                error_response(
+                    detail="Google authentication library tidak tersedia.",
+                    code=ApiCode.INTERNAL_ERROR,
+                ),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        except Exception as e:
+            return Response(
+                error_response(
+                    detail=f"Gagal verifikasi Google token: {str(e)}",
+                    code=ApiCode.INTERNAL_ERROR,
+                ),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        # Cari atau buat user
+        user = None
+        created = False
+
+        # Cek berdasarkan google_id dulu
+        if google_id:
+            try:
+                user = CustomUser.objects.get(google_id=google_id)
+            except CustomUser.DoesNotExist:
+                pass
+
+        # Jika tidak ditemukan, cek berdasarkan email
+        if not user:
+            try:
+                user = CustomUser.objects.get(email=email)
+                # Update google_id jika belum ada
+                if not user.google_id and google_id:
+                    user.google_id = google_id
+                    user.save(update_fields=["google_id"])
+            except CustomUser.DoesNotExist:
+                # Buat user baru
+                user = CustomUser.objects.create_user(
+                    email=email,
+                    password=None,  # OAuth users tidak punya password
+                    role=UserRole.APPLICANT,
+                    is_active=True,
+                    email_verified=True,  # Google sudah verifikasi email
+                    google_id=google_id,
+                    full_name=name or "",
+                )
+                created = True
+
+                # Buat applicant profile minimal
+                ApplicantProfile.objects.create(
+                    user=user,
+                    full_name=name or "",
+                    nik="",  # Perlu diisi manual atau dari KTP OCR
+                    verification_status=ApplicantVerificationStatus.DRAFT,
+                )
+
+        # Generate JWT tokens
+        try:
+            token_serializer = TokenObtainPairSerializer()
+            token_serializer.user = user
+            tokens = token_serializer.get_token(user)
+            access_token = str(tokens.access_token)
+            refresh_token = str(tokens)
+        except Exception as e:
+            return Response(
+                error_response(
+                    detail=f"Gagal membuat token: {str(e)}",
+                    code=ApiCode.INTERNAL_ERROR,
+                ),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        # Return user data + tokens
+        serializer = ApplicantUserSerializer(instance=user, context={"request": request})
+        return Response(
+            success_response(
+                data={
+                    "user": serializer.data,
+                    "access": access_token,
+                    "refresh": refresh_token,
+                },
+                detail="Login dengan Google berhasil." if not created else "Registrasi dengan Google berhasil.",
+            ),
+            status=status.HTTP_200_OK if not created else status.HTTP_201_CREATED,
+        )

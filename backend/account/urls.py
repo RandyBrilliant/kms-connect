@@ -2,11 +2,13 @@
 Account API URLs.
 Admin-side CRUD: Admin, Staff, Company (endpoint terpisah per role).
 Nested: work_experiences dan documents di bawah applicants.
+Self-service endpoints untuk pelamar: /api/applicants/me/
 """
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
 from . import views
+from . import applicant_self_service_views
 
 app_name = "account"
 
@@ -68,6 +70,24 @@ public_document_types = [
     ),
 ]
 
+# Applicant self-service endpoints (must be before router for /me/ paths)
+applicant_self_service_router = DefaultRouter()
+applicant_self_service_router.register(
+    r"applicants/me/profile",
+    applicant_self_service_views.ApplicantProfileSelfServiceViewSet,
+    basename="applicant-me-profile",
+)
+applicant_self_service_router.register(
+    r"applicants/me/work_experiences",
+    applicant_self_service_views.ApplicantWorkExperienceSelfServiceViewSet,
+    basename="applicant-me-work-experiences",
+)
+applicant_self_service_router.register(
+    r"applicants/me/documents",
+    applicant_self_service_views.ApplicantDocumentSelfServiceViewSet,
+    basename="applicant-me-documents",
+)
+
 # Admin dashboard (applicants overview)
 dashboard_paths = [
     path(
@@ -92,6 +112,7 @@ urlpatterns = [
     path("", include(public_document_types)),
     path("", include(dashboard_paths)),
     path("", include(admin_email_paths)),
+    path("", include(applicant_self_service_router.urls)),  # Self-service endpoints
     path("", include(nested_applicant)),
     path("", include(router.urls)),
 ]

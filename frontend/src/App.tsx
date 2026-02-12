@@ -12,6 +12,8 @@ import { ErrorBoundary, RouteErrorBoundary } from "@/components/error-boundary"
 
 // Lazy-loaded page components for code splitting
 const LoginPage = lazy(() => import("@/pages/login-page").then(m => ({ default: m.LoginPage })))
+const VerifyEmailPage = lazy(() => import("@/pages/verify-email-page").then(m => ({ default: m.VerifyEmailPage })))
+const ResetPasswordPage = lazy(() => import("@/pages/reset-password-page").then(m => ({ default: m.ResetPasswordPage })))
 const AdminDashboardPage = lazy(() => import("@/pages/admin-dashboard-page").then(m => ({ default: m.AdminDashboardPage })))
 const AdminAdminListPage = lazy(() => import("@/pages/admin-admin-list-page").then(m => ({ default: m.AdminAdminListPage })))
 const AdminAdminFormPage = lazy(() => import("@/pages/admin-admin-form-page").then(m => ({ default: m.AdminAdminFormPage })))
@@ -90,6 +92,8 @@ function AppRoutes() {
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route
         path="/"
         element={
