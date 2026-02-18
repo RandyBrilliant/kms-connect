@@ -1,5 +1,6 @@
 """
 Admin for account models: CustomUser, role-based profiles, and document types.
+Aligned with account models: full_name on CustomUser, regions FK, WorkExperience.country.
 """
 
 from django.contrib import admin
@@ -19,15 +20,17 @@ from .models import (
 
 @admin.register(CustomUser)
 class CustomUserAdmin(BaseUserAdmin):
-    list_display = ("email", "role", "email_verified", "is_active", "date_joined")
+    list_display = ("email", "full_name", "role", "referral_code", "email_verified", "is_active", "date_joined")
     list_filter = ("role", "is_active", "email_verified")
-    search_fields = ("email",)
+    search_fields = ("email", "full_name", "referral_code")
     ordering = ("-date_joined",)
     readonly_fields = ("date_joined", "last_login", "updated_at", "email_verified_at")
 
     fieldsets = (
         (None, {"fields": ("email", "password")}),
+        (_("Profil"), {"fields": ("full_name",)}),
         (_("Peran & status"), {"fields": ("role", "is_active", "is_staff", "is_superuser")}),
+        (_("Kode Rujukan"), {"fields": ("referral_code",)}),
         (_("Verifikasi email"), {"fields": ("email_verified", "email_verified_at")}),
         (_("OAuth"), {"fields": ("google_id",)}),
         (_("Tanggal penting"), {"fields": ("date_joined", "last_login", "updated_at")}),
@@ -38,7 +41,7 @@ class CustomUserAdmin(BaseUserAdmin):
             None,
             {
                 "classes": ("wide",),
-                "fields": ("email", "role", "password1", "password2"),
+                "fields": ("email", "full_name", "role", "password1", "password2"),
             },
         ),
     )
@@ -46,9 +49,9 @@ class CustomUserAdmin(BaseUserAdmin):
 
 @admin.register(StaffProfile)
 class StaffProfileAdmin(admin.ModelAdmin):
-    list_display = ("full_name", "user", "contact_phone", "created_at")
+    list_display = ("user", "contact_phone", "created_at")
     list_filter = ("created_at",)
-    search_fields = ("full_name", "user__email", "contact_phone")
+    search_fields = ("user__full_name", "user__email", "contact_phone")
     raw_id_fields = ("user",)
     readonly_fields = ("created_at", "updated_at")
 
@@ -70,7 +73,6 @@ class ApplicantDocumentInline(admin.TabularInline):
 @admin.register(ApplicantProfile)
 class ApplicantProfileAdmin(admin.ModelAdmin):
     list_display = (
-        "full_name",
         "user",
         "nik",
         "verification_status",
@@ -80,22 +82,32 @@ class ApplicantProfileAdmin(admin.ModelAdmin):
         "verified_at",
         "created_at",
     )
-    list_filter = ("gender", "verification_status", "created_at")
-    search_fields = ("full_name", "user__email", "nik", "contact_phone")
+    list_filter = ("gender", "verification_status", "destination_country", "province", "religion", "education_level", "created_at")
+    search_fields = ("user__full_name", "user__email", "nik", "contact_phone")
     raw_id_fields = ("user", "referrer", "verified_by")
+    autocomplete_fields = ("province", "district", "village", "family_province", "family_district", "family_village")
     readonly_fields = ("created_at", "updated_at")
     inlines = [WorkExperienceInline, ApplicantDocumentInline]
 
     fieldsets = (
         (_("Pengguna & perujuk"), {"fields": ("user", "referrer")}),
         (
+            _("Pendaftaran & tujuan"),
+            {
+                "fields": ("registration_date", "destination_country"),
+                "description": _("Form: tanggal pendaftaran, negara yang dituju."),
+            },
+        ),
+        (
             _("I. Data CPMI (Biodata)"),
             {
                 "fields": (
-                    "full_name",
                     "birth_place",
                     "birth_date",
                     "address",
+                    "district",
+                    "province",
+                    "village",
                     "contact_phone",
                     "sibling_count",
                     "birth_order",
@@ -116,14 +128,47 @@ class ApplicantProfileAdmin(admin.ModelAdmin):
                     "spouse_age",
                     "spouse_occupation",
                     "family_address",
+                    "family_district",
+                    "family_province",
+                    "family_village",
                     "family_contact_phone",
                 ),
                 "description": _("Ayah, Ibu, dan Suami/Istri (isi sesuai yang berlaku)."),
             },
         ),
         (
-            _("Identitas & foto"),
-            {"fields": ("nik", "gender", "photo", "notes")},
+            _("Pernyataan CPMI"),
+            {
+                "fields": ("data_declaration_confirmed", "zero_cost_understood"),
+                "description": _("Data benar? Paham zero cost?"),
+            },
+        ),
+        (
+            _("Identitas & data lainnya"),
+            {
+                "fields": (
+                    "nik",
+                    "gender",
+                    "religion",
+                    "education_level",
+                    "education_major",
+                    "height_cm",
+                    "weight_kg",
+                    "wears_glasses",
+                    "writing_hand",
+                    "marital_status",
+                    "has_passport",
+                    "passport_number",
+                    "passport_expiry_date",
+                    "family_card_number",
+                    "diploma_number",
+                    "bpjs_number",
+                    "shoe_size",
+                    "shirt_size",
+                    "photo",
+                    "notes",
+                ),
+            },
         ),
         (
             _("Verifikasi / seleksi"),
@@ -146,9 +191,21 @@ class ApplicantProfileAdmin(admin.ModelAdmin):
 
 @admin.register(WorkExperience)
 class WorkExperienceAdmin(admin.ModelAdmin):
-    list_display = ("applicant_profile", "company_name", "position", "start_date", "end_date", "still_employed", "sort_order")
-    list_filter = ("still_employed", "created_at")
-    search_fields = ("company_name", "position", "applicant_profile__full_name")
+    list_display = (
+        "applicant_profile",
+        "company_name",
+        "location",
+        "country",
+        "industry_type",
+        "position",
+        "department",
+        "start_date",
+        "end_date",
+        "still_employed",
+        "sort_order",
+    )
+    list_filter = ("country", "industry_type", "still_employed", "created_at")
+    search_fields = ("company_name", "position", "applicant_profile__user__full_name")
     raw_id_fields = ("applicant_profile",)
     readonly_fields = ("created_at", "updated_at")
     ordering = ("applicant_profile", "sort_order", "-end_date", "-start_date")
@@ -172,7 +229,7 @@ class ApplicantDocumentAdmin(admin.ModelAdmin):
         "has_ocr_data",
     )
     list_filter = ("document_type", "uploaded_at")
-    search_fields = ("applicant_profile__full_name", "document_type__name")
+    search_fields = ("applicant_profile__user__full_name", "document_type__name")
     raw_id_fields = ("applicant_profile", "document_type")
     readonly_fields = ("uploaded_at", "ocr_processed_at", "ocr_data", "ocr_text")
 

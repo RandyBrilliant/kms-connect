@@ -44,7 +44,9 @@ class ApplicantRegistrationView(APIView):
 
         email = request.data.get("email", "").strip().lower()
         password = request.data.get("password")
+        nik = request.data.get("nik", "").strip()
         ktp_file = request.FILES.get("ktp")
+        referral_code = request.data.get("referral_code", "").strip().upper()
 
         # Validasi email
         if not email:
@@ -61,6 +63,52 @@ class ApplicantRegistrationView(APIView):
             return Response(
                 error_response(
                     detail="Password wajib diisi untuk registrasi dengan email.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validasi NIK (REQUIRED - dari KTP atau input manual)
+        if not nik or len(nik) != 16 or not nik.isdigit():
+            return Response(
+                error_response(
+                    detail="NIK wajib diisi, 16 digit angka. Gunakan NIK dari KTP.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Cek NIK sudah terdaftar
+        if ApplicantProfile.objects.filter(nik=nik).exists():
+            return Response(
+                error_response(
+                    detail="NIK ini sudah terdaftar untuk pelamar lain.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validasi referral code (REQUIRED)
+        if not referral_code:
+            return Response(
+                error_response(
+                    detail="Kode rujukan wajib diisi. Hubungi staff atau admin untuk mendapatkan kode rujukan.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Verifikasi referral code exists and belongs to staff/admin
+        try:
+            referrer_user = CustomUser.objects.get(
+                referral_code=referral_code,
+                role__in=[UserRole.STAFF, UserRole.ADMIN],
+                is_active=True,
+            )
+        except CustomUser.DoesNotExist:
+            return Response(
+                error_response(
+                    detail="Kode rujukan tidak valid atau sudah tidak aktif. Pastikan Anda memasukkan kode dengan benar.",
                     code=ApiCode.VALIDATION_ERROR,
                 ),
                 status=status.HTTP_400_BAD_REQUEST,
@@ -116,13 +164,13 @@ class ApplicantRegistrationView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Buat applicant profile (minimal, akan diisi dari OCR atau user input)
+        # Buat applicant profile (NIK wajib dari input/OCR saat pendaftaran)
         try:
             applicant_profile = ApplicantProfile.objects.create(
                 user=user,
-                full_name="",  # Akan diisi dari OCR atau user input
-                nik="",  # Akan diisi dari OCR atau user input
+                nik=nik,
                 verification_status=ApplicantVerificationStatus.DRAFT,
+                referrer=referrer_user,
             )
         except Exception as e:
             user.delete()  # Rollback
@@ -316,11 +364,10 @@ class GoogleOAuthView(APIView):
                 )
                 created = True
 
-                # Buat applicant profile minimal
+                # Buat applicant profile - NIK sementara (max 16 char), wajib diganti saat lengkapi profil
                 ApplicantProfile.objects.create(
                     user=user,
-                    full_name=name or "",
-                    nik="",  # Perlu diisi manual atau dari KTP OCR
+                    nik=f"G{user.pk:015d}",  # Placeholder Google OAuth; wajib diganti NIK asli dari KTP
                     verification_status=ApplicantVerificationStatus.DRAFT,
                 )
 

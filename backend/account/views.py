@@ -43,6 +43,7 @@ from .serializers import (
     StaffUserSerializer,
     CompanyUserSerializer,
     ApplicantUserSerializer,
+    ApplicantProfileSerializer,
     WorkExperienceSerializer,
     ApplicantDocumentSerializer,
     DocumentTypeSerializer,
@@ -209,7 +210,7 @@ class AdminUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
     permission_classes = [IsBackofficeAdmin]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ["is_active", "email_verified"]
-    search_fields = ["email", "full_name"]
+    search_fields = ["email", "full_name"]  # full_name on CustomUser
     ordering_fields = ["email", "full_name", "date_joined", "updated_at"]
     ordering = ["email"]
 
@@ -231,8 +232,8 @@ class StaffUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
     permission_classes = [IsBackofficeAdmin]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ["is_active", "email_verified"]
-    search_fields = ["email", "staff_profile__full_name", "staff_profile__contact_phone"]
-    ordering_fields = ["email", "date_joined", "updated_at", "staff_profile__full_name"]
+    search_fields = ["email", "staff_profile__user__full_name", "staff_profile__contact_phone"]
+    ordering_fields = ["email", "date_joined", "updated_at", "staff_profile__user__full_name"]
     ordering = ["email"]
 
     def get_queryset(self):
@@ -293,7 +294,7 @@ class ApplicantUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
     filterset_fields = ["is_active", "email_verified", "applicant_profile__verification_status"]
     search_fields = [
         "email",
-        "applicant_profile__full_name",
+        "applicant_profile__user__full_name",
         "applicant_profile__nik",
         "applicant_profile__contact_phone",
     ]
@@ -301,7 +302,7 @@ class ApplicantUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
         "email",
         "date_joined",
         "updated_at",
-        "applicant_profile__full_name",
+        "applicant_profile__user__full_name",
         "applicant_profile__verification_status",
         "applicant_profile__created_at",
     ]
@@ -310,11 +311,248 @@ class ApplicantUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
     def get_queryset(self):
         return (
             CustomUser.objects.filter(role=UserRole.APPLICANT)
-            .select_related("applicant_profile")
+            .select_related("applicant_profile__user")
+            .select_related(
+                "applicant_profile__province",
+                "applicant_profile__district",
+                "applicant_profile__referrer",
+                "applicant_profile__verified_by",
+            )
         )
 
     def destroy(self, request, *args, **kwargs):
         return destroy_disallowed_response()
+
+
+# ---------------------------------------------------------------------------
+# ApplicantProfile ViewSet (Admin approval/rejection workflow)
+# ---------------------------------------------------------------------------
+
+class ApplicantProfileViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Admin-only ViewSet untuk ApplicantProfile.
+    Provides actions for approving/rejecting individual or bulk applicants.
+    """
+
+    permission_classes = [IsBackofficeAdmin]
+    serializer_class = ApplicantProfileSerializer
+
+    def get_queryset(self):
+        return ApplicantProfile.objects.with_related()
+    
+    @action(detail=True, methods=["post"], url_path="approve")
+    def approve(self, request, pk=None):
+        """
+        Approve single applicant profile.
+        POST /api/applicant-profiles/{id}/approve/
+        Body: { "notes": "Optional approval notes" }
+        """
+        profile = self.get_object()
+        notes = request.data.get("notes", "")
+        
+        # Validate status
+        if profile.verification_status != ApplicantVerificationStatus.SUBMITTED:
+            return Response(
+                error_response(
+                    detail=f"Hanya pelamar dengan status SUBMITTED yang dapat disetujui. Status saat ini: {profile.verification_status}",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        # Use the model helper method
+        try:
+            profile.approve(verified_by=request.user, notes=notes)
+            return Response(
+                success_response(
+                    data={
+                        "id": profile.id,
+                        "full_name": profile.user.full_name,
+                        "verification_status": profile.verification_status,
+                    },
+                    detail="Pelamar berhasil disetujui.",
+                    code=ApiCode.SUCCESS,
+                ),
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            from django.core.exceptions import ValidationError as DjangoValidationError
+            if isinstance(e, DjangoValidationError):
+                msg = getattr(e, "message_dict", None) or getattr(e, "messages", None) or str(e)
+                return Response(
+                    error_response(detail=str(msg), code=ApiCode.VALIDATION_ERROR),
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            return Response(
+                error_response(
+                    detail=f"Gagal menyetujui pelamar: {str(e)}",
+                    code=ApiCode.SERVER_ERROR,
+                ),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @action(detail=True, methods=["post"], url_path="reject")
+    def reject(self, request, pk=None):
+        """
+        Reject single applicant profile.
+        POST /api/applicant-profiles/{id}/reject/
+        Body: { "notes": "Required rejection reason" }
+        """
+        profile = self.get_object()
+        notes = request.data.get("notes", "")
+        
+        # Validate notes required for rejection
+        if not notes or not notes.strip():
+            return Response(
+                error_response(
+                    detail="Catatan penolakan wajib diisi.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        # Validate status
+        if profile.verification_status != ApplicantVerificationStatus.SUBMITTED:
+            return Response(
+                error_response(
+                    detail=f"Hanya pelamar dengan status SUBMITTED yang dapat ditolak. Status saat ini: {profile.verification_status}",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        # Use the model helper method
+        try:
+            profile.reject(verified_by=request.user, notes=notes)
+            return Response(
+                success_response(
+                    data={
+                        "id": profile.id,
+                        "full_name": profile.user.full_name,
+                        "verification_status": profile.verification_status,
+                    },
+                    detail="Pelamar berhasil ditolak.",
+                    code=ApiCode.SUCCESS,
+                ),
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            from django.core.exceptions import ValidationError as DjangoValidationError
+            if isinstance(e, DjangoValidationError):
+                msg = getattr(e, "message_dict", None) or getattr(e, "messages", None) or str(e)
+                return Response(
+                    error_response(detail=str(msg), code=ApiCode.VALIDATION_ERROR),
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            return Response(
+                error_response(
+                    detail=f"Gagal menolak pelamar: {str(e)}",
+                    code=ApiCode.SERVER_ERROR,
+                ),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @action(detail=False, methods=["post"], url_path="bulk-approve")
+    def bulk_approve(self, request):
+        """
+        Bulk approve applicant profiles.
+        POST /api/applicant-profiles/bulk-approve/
+        Body: { "profile_ids": [1, 2, 3], "notes": "Optional approval notes" }
+        """
+        profile_ids = request.data.get("profile_ids", [])
+        notes = request.data.get("notes", "")
+        
+        # Validate input
+        if not profile_ids or not isinstance(profile_ids, list):
+            return Response(
+                error_response(
+                    detail="profile_ids harus berupa array yang tidak kosong.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        # Use the optimized bulk update from manager
+        try:
+            updated = ApplicantProfile.objects.bulk_update_status(
+                profile_ids=profile_ids,
+                status=ApplicantVerificationStatus.ACCEPTED,
+                verified_by=request.user,
+                notes=notes,
+            )
+            
+            return Response(
+                success_response(
+                    data={"updated": updated},
+                    detail=f"{updated} pelamar berhasil disetujui.",
+                    code=ApiCode.SUCCESS,
+                ),
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            return Response(
+                error_response(
+                    detail=f"Gagal menyetujui pelamar: {str(e)}",
+                    code=ApiCode.SERVER_ERROR,
+                ),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+    
+    @action(detail=False, methods=["post"], url_path="bulk-reject")
+    def bulk_reject(self, request):
+        """
+        Bulk reject applicant profiles.
+        POST /api/applicant-profiles/bulk-reject/
+        Body: { "profile_ids": [1, 2, 3], "notes": "Required rejection reason" }
+        """
+        profile_ids = request.data.get("profile_ids", [])
+        notes = request.data.get("notes", "")
+        
+        # Validate input
+        if not profile_ids or not isinstance(profile_ids, list):
+            return Response(
+                error_response(
+                    detail="profile_ids harus berupa array yang tidak kosong.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        # Validate notes required for rejection
+        if not notes or not notes.strip():
+            return Response(
+                error_response(
+                    detail="Catatan penolakan wajib diisi.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        # Use the optimized bulk update from manager
+        try:
+            updated = ApplicantProfile.objects.bulk_update_status(
+                profile_ids=profile_ids,
+                status=ApplicantVerificationStatus.REJECTED,
+                verified_by=request.user,
+                notes=notes,
+            )
+            
+            return Response(
+                success_response(
+                    data={"updated": updated},
+                    detail=f"{updated} pelamar berhasil ditolak.",
+                    code=ApiCode.SUCCESS,
+                ),
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            return Response(
+                error_response(
+                    detail=f"Gagal menolak pelamar: {str(e)}",
+                    code=ApiCode.SERVER_ERROR,
+                ),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -484,9 +722,11 @@ class WorkExperienceViewSet(viewsets.ModelViewSet):
         applicant_pk = self.kwargs.get("applicant_pk")
         if not applicant_pk:
             return WorkExperience.objects.none()
-        return WorkExperience.objects.filter(
-            applicant_profile__user_id=applicant_pk
-        ).order_by("sort_order", "-start_date")
+        return (
+            WorkExperience.objects.filter(applicant_profile__user_id=applicant_pk)
+            .select_related("applicant_profile__user")
+            .order_by("sort_order", "-start_date")
+        )
 
     def get_applicant_profile(self):
         applicant_pk = self.kwargs.get("applicant_pk")
@@ -616,7 +856,7 @@ class AdminApplicantDashboardLatestView(APIView):
         data = [
             {
                 "id": p.user_id,
-                "full_name": p.full_name,
+                "full_name": p.user.full_name,
                 "email": p.user.email if p.user_id else "",
                 "verification_status": p.verification_status,
                 "created_at": p.created_at,

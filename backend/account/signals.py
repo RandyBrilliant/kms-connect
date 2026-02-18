@@ -2,13 +2,15 @@
 Signals for account app.
 Queue OCR when an ApplicantDocument is created or when its file is replaced.
 Queue image optimization when an image doc is uploaded and size > 500 KB.
+Auto-generate referral codes for new staff/admin users.
 """
-from django.db.models.signals import pre_save, post_save
+from django.db.models.signals import pre_save, post_save, post_delete
 from django.dispatch import receiver
 
 from .document_specs import MAX_IMAGE_BYTES, is_image_type
-from .models import ApplicantDocument
+from .models import ApplicantDocument, ApplicantProfile, CustomUser, UserRole
 from .tasks import process_document_ocr, optimize_document_image
+from django.core.cache import cache
 
 
 def _previous_file_name(instance: ApplicantDocument) -> str | None:
@@ -63,3 +65,25 @@ def queue_optimize_image_on_upload(sender, instance: ApplicantDocument, created,
     except (OSError, ValueError):
         return
     optimize_document_image.delay(instance.pk)
+
+
+@receiver(post_save, sender=ApplicantDocument)
+@receiver(post_delete, sender=ApplicantDocument)
+def invalidate_applicant_document_cache(sender, instance: ApplicantDocument, **kwargs):
+    """Invalidate applicant document cache when documents change or are deleted."""
+    if instance.applicant_profile_id:
+        cache.delete(f"applicant_{instance.applicant_profile_id}_doc_approval_rate")
+        cache.delete(f"applicant_{instance.applicant_profile_id}_complete_docs")
+
+
+@receiver(post_save, sender=CustomUser)
+def auto_generate_referral_code(sender, instance: CustomUser, created, **kwargs):
+    """
+    Auto-generate referral code for new staff/admin users.
+    Also ensures existing staff/admin get codes if they don't have one.
+    """
+    if instance.role not in (UserRole.STAFF, UserRole.ADMIN):
+        return
+    
+    if not instance.referral_code:
+        instance.ensure_referral_code()

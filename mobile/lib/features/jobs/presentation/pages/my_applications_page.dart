@@ -29,7 +29,7 @@ class _MyApplicationsPageState extends ConsumerState<MyApplicationsPage> {
           Padding(
             padding: const EdgeInsets.all(16),
             child: DropdownButtonFormField<String>(
-              value: _selectedStatus,
+              initialValue: _selectedStatus,
               decoration: const InputDecoration(
                 labelText: 'Filter Status',
                 prefixIcon: Icon(Icons.filter_list),

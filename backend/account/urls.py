@@ -17,6 +17,7 @@ router.register(r"admins", views.AdminUserViewSet, basename="admin-user")
 router.register(r"staff", views.StaffUserViewSet, basename="staff-user")
 router.register(r"companies", views.CompanyUserViewSet, basename="company-user")
 router.register(r"applicants", views.ApplicantUserViewSet, basename="applicant-user")
+router.register(r"applicant-profiles", views.ApplicantProfileViewSet, basename="applicant-profile")
 router.register(r"document-types", views.DocumentTypeViewSet, basename="document-type")
 
 # Admin: send verification & password reset email (before router)

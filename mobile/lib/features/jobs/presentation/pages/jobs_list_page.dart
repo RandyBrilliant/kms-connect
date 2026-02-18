@@ -95,7 +95,7 @@ class _JobsListPageState extends ConsumerState<JobsListPage> {
                   children: [
                     Expanded(
                       child: DropdownButtonFormField<String>(
-                        value: _selectedEmploymentType,
+                        initialValue: _selectedEmploymentType,
                         isExpanded: true,
                         decoration: const InputDecoration(
                           labelText: 'Jenis Kerja',

@@ -37,8 +37,20 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { workExperienceSchema } from "@/schemas/applicant"
 import type { WorkExperience } from "@/types/applicant"
+import {
+  WORK_COUNTRY_OPTIONS,
+  INDUSTRY_TYPE_LABELS,
+  getCountryLabel,
+} from "@/constants/applicant"
 import {
   useWorkExperiencesQuery,
   useCreateWorkExperienceMutation,
@@ -60,7 +72,11 @@ export function ApplicantWorkExperienceTab({
   const [editing, setEditing] = useState<WorkExperience | null>(null)
   const [values, setValues] = useState({
     company_name: "",
+    location: "",
+    country: "" as string,
+    industry_type: "",
     position: "",
+    department: "",
     start_date: "" as string | null,
     end_date: "" as string | null,
     still_employed: false,
@@ -78,7 +94,11 @@ export function ApplicantWorkExperienceTab({
     setEditing(null)
     setValues({
       company_name: "",
+      location: "",
+      country: "",
+      industry_type: "",
       position: "",
+      department: "",
       start_date: null,
       end_date: null,
       still_employed: false,
@@ -97,7 +117,11 @@ export function ApplicantWorkExperienceTab({
     setEditing(we)
     setValues({
       company_name: we.company_name,
+      location: we.location || "",
+      country: we.country || "",
+      industry_type: we.industry_type || "",
       position: we.position || "",
+      department: we.department || "",
       start_date: we.start_date || null,
       end_date: we.end_date || null,
       still_employed: we.still_employed,
@@ -114,7 +138,11 @@ export function ApplicantWorkExperienceTab({
 
     const payload = {
       company_name: values.company_name,
+      location: values.location || undefined,
+      country: values.country || undefined,
+      industry_type: values.industry_type || undefined,
       position: values.position || undefined,
+      department: values.department || undefined,
       start_date: values.start_date || null,
       end_date: values.end_date || null,
       still_employed: values.still_employed,
@@ -213,6 +241,62 @@ export function ApplicantWorkExperienceTab({
                   />
                 </Field>
                 <Field>
+                  <FieldLabel htmlFor="location">Kota / Lokasi Perusahaan</FieldLabel>
+                  <Input
+                    id="location"
+                    value={values.location}
+                    onChange={(e) =>
+                      setValues((v) => ({ ...v, location: e.target.value }))
+                    }
+                    placeholder="Contoh: Medan"
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="country">Negara</FieldLabel>
+                  <Select
+                    value={values.country || "none"}
+                    onValueChange={(v) =>
+                      setValues((prev) => ({ ...prev, country: v === "none" ? "" : v }))
+                    }
+                  >
+                    <SelectTrigger id="country" className="cursor-pointer">
+                      <SelectValue placeholder="Pilih negara" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Pilih negara</SelectItem>
+                      {WORK_COUNTRY_OPTIONS.map(([code, label]) => (
+                        <SelectItem key={code} value={code}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="industry_type">Jenis Industri</FieldLabel>
+                  <Select
+                    value={values.industry_type || "none"}
+                    onValueChange={(v) =>
+                      setValues((prev) => ({
+                        ...prev,
+                        industry_type: v === "none" ? "" : v,
+                      }))
+                    }
+                  >
+                    <SelectTrigger id="industry_type" className="cursor-pointer">
+                      <SelectValue placeholder="Pilih jenis industri" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Pilih jenis industri</SelectItem>
+                      {Object.entries(INDUSTRY_TYPE_LABELS).map(([key, label]) => (
+                        <SelectItem key={key} value={key}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field>
                   <FieldLabel htmlFor="position">Jabatan / Posisi</FieldLabel>
                   <Input
                     id="position"
@@ -220,6 +304,18 @@ export function ApplicantWorkExperienceTab({
                     onChange={(e) =>
                       setValues((v) => ({ ...v, position: e.target.value }))
                     }
+                    placeholder="Contoh: Operator, Leader"
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="department">Bagian / Bidang</FieldLabel>
+                  <Input
+                    id="department"
+                    value={values.department}
+                    onChange={(e) =>
+                      setValues((v) => ({ ...v, department: e.target.value }))
+                    }
+                    placeholder="Contoh: QC, SMT, Packing"
                   />
                 </Field>
                 <div className="grid gap-4 sm:grid-cols-2">
@@ -321,6 +417,8 @@ export function ApplicantWorkExperienceTab({
               <TableHeader>
                 <TableRow>
                   <TableHead>Perusahaan</TableHead>
+                  <TableHead>Lokasi</TableHead>
+                  <TableHead>Negara</TableHead>
                   <TableHead>Jabatan</TableHead>
                   <TableHead>Periode</TableHead>
                   <TableHead className="w-[100px]"></TableHead>
@@ -330,6 +428,8 @@ export function ApplicantWorkExperienceTab({
                 {list.map((we) => (
                   <TableRow key={we.id}>
                     <TableCell className="font-medium">{we.company_name}</TableCell>
+                    <TableCell>{we.location || "-"}</TableCell>
+                    <TableCell>{getCountryLabel(we.country) || "-"}</TableCell>
                     <TableCell>{we.position || "-"}</TableCell>
                     <TableCell>
                       {we.start_date

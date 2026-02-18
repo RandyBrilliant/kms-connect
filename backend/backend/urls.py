@@ -43,6 +43,7 @@ urlpatterns = [
     path("api/auth/confirm-reset-password/", ConfirmResetPasswordView.as_view(), name="confirm_reset_password"),
     path("api/auth/register/", ApplicantRegistrationView.as_view(), name="applicant_register"),
     path("api/auth/google/", GoogleOAuthView.as_view(), name="google_oauth"),
+    path("api/", include("regions.urls")),
     path("api/", include("account.urls")),
     path("api/", include("main.urls")),
 ]

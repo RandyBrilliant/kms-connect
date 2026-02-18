@@ -366,5 +366,5 @@ class JobApplication(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"{self.applicant.full_name} – {self.job.title} ({self.get_status_display()})"
+        return f"{self.applicant.user.full_name} – {self.job.title} ({self.get_status_display()})"
 

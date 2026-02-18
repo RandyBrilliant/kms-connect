@@ -27,6 +27,13 @@ import { PhoneInput } from "@/components/ui/phone-input"
 import { applicantProfileUpdateSchema } from "@/schemas/applicant"
 import type { ApplicantProfile } from "@/types/applicant"
 import { format } from "date-fns"
+import {
+  RELIGION_LABELS,
+  EDUCATION_LEVEL_LABELS,
+  WRITING_HAND_LABELS,
+  MARITAL_STATUS_LABELS,
+} from "@/constants/applicant"
+import { RegionAddressFields } from "./region-address-fields"
 
 interface ApplicantBiodataTabProps {
   profile: ApplicantProfile
@@ -56,6 +63,23 @@ type BiodataFormValues = {
   family_address: string
   family_contact_phone: string
   notes: string
+  province: number | null
+  district: number | null
+  village: number | null
+  family_province: number | null
+  family_district: number | null
+  family_village: number | null
+  religion: string
+  education_level: string
+  marital_status: string
+  height_cm: string
+  weight_kg: string
+  writing_hand: string
+  passport_number: string
+  passport_issue_date: string
+  passport_expiry_date: string
+  passport_issue_place: string
+  referrer: number | null
 }
 
 function toFormValues(p: ApplicantProfile): BiodataFormValues {
@@ -81,6 +105,23 @@ function toFormValues(p: ApplicantProfile): BiodataFormValues {
     family_address: p.family_address || "",
     family_contact_phone: p.family_contact_phone || "",
     notes: p.notes || "",
+    province: p.province ?? null,
+    district: p.district ?? null,
+    village: p.village ?? null,
+    family_province: p.family_province ?? null,
+    family_district: p.family_district ?? null,
+    family_village: p.family_village ?? null,
+    religion: p.religion || "",
+    education_level: p.education_level || "",
+    marital_status: p.marital_status || "",
+    height_cm: p.height_cm != null ? String(p.height_cm) : "",
+    weight_kg: p.weight_kg != null ? String(p.weight_kg) : "",
+    writing_hand: p.writing_hand || "",
+    passport_number: p.passport_number || "",
+    passport_issue_date: p.passport_issue_date || "",
+    passport_expiry_date: p.passport_expiry_date || "",
+    passport_issue_place: p.passport_issue_place || "",
+    referrer: p.referrer ?? null,
   }
 }
 
@@ -123,6 +164,23 @@ export function ApplicantBiodataTab({
         family_address: value.family_address || undefined,
         family_contact_phone: value.family_contact_phone || undefined,
         notes: value.notes || undefined,
+        province: value.province ?? undefined,
+        district: value.district ?? undefined,
+        village: value.village ?? undefined,
+        family_province: value.family_province ?? undefined,
+        family_district: value.family_district ?? undefined,
+        family_village: value.family_village ?? undefined,
+        religion: value.religion || undefined,
+        education_level: value.education_level || undefined,
+        marital_status: value.marital_status || undefined,
+        height_cm: toNum(value.height_cm),
+        weight_kg: toNum(value.weight_kg),
+        writing_hand: value.writing_hand || undefined,
+        passport_number: value.passport_number || undefined,
+        passport_issue_date: value.passport_issue_date || null,
+        passport_expiry_date: value.passport_expiry_date || null,
+        passport_issue_place: value.passport_issue_place || undefined,
+        referrer: value.referrer ?? undefined,
       }
 
       const result = applicantProfileUpdateSchema.safeParse(payload)
@@ -136,7 +194,14 @@ export function ApplicantBiodataTab({
         return
       }
 
-      await onSubmit(result.data)
+      const raw = result.data as Record<string, unknown>
+      const data: Partial<ApplicantProfile> = { ...raw }
+      if (raw.gender === "") data.gender = undefined
+      if (raw.religion === "") data.religion = undefined
+      if (raw.education_level === "") data.education_level = undefined
+      if (raw.marital_status === "") data.marital_status = undefined
+      if (raw.writing_hand === "") data.writing_hand = undefined
+      await onSubmit(data)
     },
   })
 
@@ -286,6 +351,20 @@ export function ApplicantBiodataTab({
               )}
             </form.Field>
 
+            <RegionAddressFields
+              value={{
+                province: form.getFieldValue("province") ?? null,
+                district: form.getFieldValue("district") ?? null,
+                village: form.getFieldValue("village") ?? null,
+              }}
+              onChange={(v) => {
+                form.setFieldValue("province", v.province)
+                form.setFieldValue("district", v.district)
+                form.setFieldValue("village", v.village)
+              }}
+              disabled={isSubmitting}
+            />
+
             <form.Field name="contact_phone">
               {(field) => (
                 <Field>
@@ -333,6 +412,292 @@ export function ApplicantBiodataTab({
                 )}
               </form.Field>
             </div>
+          </FieldGroup>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Data Pribadi Tambahan</CardTitle>
+          <CardDescription>
+            Informasi agama, pendidikan, dan status pernikahan
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <FieldGroup>
+            <div className="grid gap-6 sm:grid-cols-3">
+              <form.Field name="religion">
+                {(field) => (
+                  <Field>
+                    <FieldLabel htmlFor={field.name}>Agama</FieldLabel>
+                    <Select
+                      value={field.state.value || "none"}
+                      onValueChange={(v) =>
+                        field.handleChange(v === "none" ? "" : v)
+                      }
+                    >
+                      <SelectTrigger className="cursor-pointer">
+                        <SelectValue placeholder="Pilih agama" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Pilih agama</SelectItem>
+                        {Object.entries(RELIGION_LABELS).map(([key, label]) => (
+                          <SelectItem key={key} value={key}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                )}
+              </form.Field>
+
+              <form.Field name="education_level">
+                {(field) => (
+                  <Field>
+                    <FieldLabel htmlFor={field.name}>Pendidikan Terakhir</FieldLabel>
+                    <Select
+                      value={field.state.value || "none"}
+                      onValueChange={(v) =>
+                        field.handleChange(v === "none" ? "" : v)
+                      }
+                    >
+                      <SelectTrigger className="cursor-pointer">
+                        <SelectValue placeholder="Pilih pendidikan" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Pilih pendidikan</SelectItem>
+                        {Object.entries(EDUCATION_LEVEL_LABELS).map(([key, label]) => (
+                          <SelectItem key={key} value={key}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                )}
+              </form.Field>
+
+              <form.Field name="marital_status">
+                {(field) => (
+                  <Field>
+                    <FieldLabel htmlFor={field.name}>Status Pernikahan</FieldLabel>
+                    <Select
+                      value={field.state.value || "none"}
+                      onValueChange={(v) =>
+                        field.handleChange(v === "none" ? "" : v)
+                      }
+                    >
+                      <SelectTrigger className="cursor-pointer">
+                        <SelectValue placeholder="Pilih status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Pilih status</SelectItem>
+                        {Object.entries(MARITAL_STATUS_LABELS).map(([key, label]) => (
+                          <SelectItem key={key} value={key}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                )}
+              </form.Field>
+            </div>
+          </FieldGroup>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Ciri Fisik</CardTitle>
+          <CardDescription>
+            Tinggi, berat badan, dan tangan dominan
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <FieldGroup>
+            <div className="grid gap-6 sm:grid-cols-3">
+              <form.Field name="height_cm">
+                {(field) => (
+                  <Field>
+                    <FieldLabel htmlFor={field.name}>Tinggi Badan (cm)</FieldLabel>
+                    <Input
+                      id={field.name}
+                      type="number"
+                      min={0}
+                      value={field.state.value}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      onBlur={field.handleBlur}
+                      placeholder="Contoh: 165"
+                    />
+                  </Field>
+                )}
+              </form.Field>
+
+              <form.Field name="weight_kg">
+                {(field) => (
+                  <Field>
+                    <FieldLabel htmlFor={field.name}>Berat Badan (kg)</FieldLabel>
+                    <Input
+                      id={field.name}
+                      type="number"
+                      min={0}
+                      value={field.state.value}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      onBlur={field.handleBlur}
+                      placeholder="Contoh: 55"
+                    />
+                  </Field>
+                )}
+              </form.Field>
+
+              <form.Field name="writing_hand">
+                {(field) => (
+                  <Field>
+                    <FieldLabel htmlFor={field.name}>Tangan Menulis</FieldLabel>
+                    <Select
+                      value={field.state.value || "none"}
+                      onValueChange={(v) =>
+                        field.handleChange(v === "none" ? "" : v)
+                      }
+                    >
+                      <SelectTrigger className="cursor-pointer">
+                        <SelectValue placeholder="Pilih tangan" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Pilih tangan</SelectItem>
+                        {Object.entries(WRITING_HAND_LABELS).map(([key, label]) => (
+                          <SelectItem key={key} value={key}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                )}
+              </form.Field>
+            </div>
+          </FieldGroup>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Data Paspor</CardTitle>
+          <CardDescription>
+            Informasi paspor jika sudah memiliki
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <FieldGroup>
+            <form.Field name="passport_number">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>Nomor Paspor</FieldLabel>
+                  <Input
+                    id={field.name}
+                    value={field.state.value}
+                    onChange={(e) => field.handleChange(e.target.value.toUpperCase())}
+                    onBlur={field.handleBlur}
+                    placeholder="Contoh: A1234567"
+                  />
+                </Field>
+              )}
+            </form.Field>
+
+            <div className="grid gap-6 sm:grid-cols-3">
+              <form.Field name="passport_issue_date">
+                {(field) => {
+                  const selectedDate = field.state.value
+                    ? new Date(field.state.value)
+                    : null
+                  return (
+                    <Field>
+                      <FieldLabel htmlFor={field.name}>Tanggal Terbit Paspor</FieldLabel>
+                      <DatePicker
+                        date={selectedDate}
+                        onDateChange={(d) =>
+                          field.handleChange(
+                            d ? format(d, "yyyy-MM-dd") : ""
+                          )
+                        }
+                        placeholder="Pilih tanggal terbit"
+                      />
+                    </Field>
+                  )
+                }}
+              </form.Field>
+
+              <form.Field name="passport_expiry_date">
+                {(field) => {
+                  const selectedDate = field.state.value
+                    ? new Date(field.state.value)
+                    : null
+                  return (
+                    <Field>
+                      <FieldLabel htmlFor={field.name}>Tanggal Kadaluarsa Paspor</FieldLabel>
+                      <DatePicker
+                        date={selectedDate}
+                        onDateChange={(d) =>
+                          field.handleChange(
+                            d ? format(d, "yyyy-MM-dd") : ""
+                          )
+                        }
+                        placeholder="Pilih tanggal kadaluarsa"
+                      />
+                    </Field>
+                  )
+                }}
+              </form.Field>
+
+              <form.Field name="passport_issue_place">
+                {(field) => (
+                  <Field>
+                    <FieldLabel htmlFor={field.name}>Tempat Terbit Paspor</FieldLabel>
+                    <Input
+                      id={field.name}
+                      value={field.state.value}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      onBlur={field.handleBlur}
+                      placeholder="Contoh: Jakarta"
+                    />
+                  </Field>
+                )}
+              </form.Field>
+            </div>
+          </FieldGroup>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Informasi Rujukan</CardTitle>
+          <CardDescription>
+            Staff/Admin yang merujuk pelamar (ID user)
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <FieldGroup>
+            <form.Field name="referrer">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>ID Pemberi Rujukan (Staff/Admin)</FieldLabel>
+                  <Input
+                    id={field.name}
+                    type="number"
+                    min={1}
+                    value={field.state.value != null ? String(field.state.value) : ""}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      field.handleChange(v ? Number(v) : null)
+                    }}
+                    onBlur={field.handleBlur}
+                    placeholder="Kosongkan jika Admin"
+                  />
+                </Field>
+              )}
+            </form.Field>
           </FieldGroup>
         </CardContent>
       </Card>
@@ -489,6 +854,21 @@ export function ApplicantBiodataTab({
                 </Field>
               )}
             </form.Field>
+
+            <RegionAddressFields
+              value={{
+                province: form.getFieldValue("family_province") ?? null,
+                district: form.getFieldValue("family_district") ?? null,
+                village: form.getFieldValue("family_village") ?? null,
+              }}
+              onChange={(v) => {
+                form.setFieldValue("family_province", v.province)
+                form.setFieldValue("family_district", v.district)
+                form.setFieldValue("family_village", v.village)
+              }}
+              disabled={isSubmitting}
+              labelPrefix="Alamat Keluarga"
+            />
 
             <form.Field name="family_contact_phone">
               {(field) => (

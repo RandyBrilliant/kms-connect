@@ -20,6 +20,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _referralCodeController = TextEditingController();
   
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
@@ -31,6 +32,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _referralCodeController.dispose();
     super.dispose();
   }
 
@@ -74,6 +76,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
           email: _emailController.text,
           password: _passwordController.text,
           ktpFilePath: _ktpImage!.path,
+          referralCode: _referralCodeController.text.trim().toUpperCase(),
         );
 
     if (success && mounted) {
@@ -198,6 +201,26 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                           validator: (value) {
                             if (value != _passwordController.text) {
                               return 'Password tidak cocok';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _referralCodeController,
+                          textCapitalization: TextCapitalization.characters,
+                          decoration: const InputDecoration(
+                            labelText: 'Kode Rujukan',
+                            hintText: 'Contoh: S-ABC123 atau A-XYZ789',
+                            prefixIcon: Icon(Icons.qr_code_outlined),
+                            helperText: 'Masukkan kode rujukan dari staff atau admin',
+                          ),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Kode rujukan wajib diisi';
+                            }
+                            if (value.trim().length < 5) {
+                              return 'Kode rujukan tidak valid';
                             }
                             return null;
                           },

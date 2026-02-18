@@ -3,6 +3,7 @@ Celery tasks for main app (berita & lowongan kerja).
 """
 
 from celery import shared_task
+from django.db.utils import ProgrammingError
 from django.utils import timezone
 
 from .models import LowonganKerja, JobStatus
@@ -22,11 +23,17 @@ def close_expired_jobs(self):
     - set status → CLOSED
     - tidak mengubah posted_at / created_by.
     """
-    now = timezone.now()
-    qs = LowonganKerja.objects.filter(
-        status=JobStatus.OPEN,
-        deadline__lt=now,
-    )
-    updated = qs.update(status=JobStatus.CLOSED)
-    return updated
+    try:
+        now = timezone.now()
+        qs = LowonganKerja.objects.filter(
+            status=JobStatus.OPEN,
+            deadline__lt=now,
+        )
+        updated = qs.update(status=JobStatus.CLOSED)
+        return updated
+    except ProgrammingError as e:
+        # Table may not exist yet during fresh DB/migrations (e.g. Celery beat runs before migrate)
+        if "does not exist" in str(e):
+            return 0
+        raise
 

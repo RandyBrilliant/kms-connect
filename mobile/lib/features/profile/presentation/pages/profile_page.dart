@@ -7,7 +7,6 @@ import '../../../../config/colors.dart';
 import '../../../../config/strings.dart';
 import '../../../home/presentation/widgets/bottom_nav_bar.dart';
 import '../../data/providers/profile_provider.dart';
-import 'edit_profile_page.dart';
 
 class ProfilePage extends ConsumerWidget {
   const ProfilePage({super.key});

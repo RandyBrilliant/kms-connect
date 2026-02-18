@@ -61,11 +61,13 @@ class AuthRepository {
     required String email,
     required String password,
     required File ktpFile,
+    required String referralCode,
   }) async {
     try {
       final formData = FormData.fromMap({
         'email': email.trim().toLowerCase(),
         'password': password,
+        'referral_code': referralCode.trim().toUpperCase(),
         'ktp': await MultipartFile.fromFile(
           ktpFile.path,
           filename: 'ktp.jpg',

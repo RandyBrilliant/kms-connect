@@ -52,10 +52,12 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django_countries',
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
     'anymail',
+    'regions.apps.RegionsConfig',
     'account.apps.AccountConfig',
     'main.apps.MainConfig',
 ]

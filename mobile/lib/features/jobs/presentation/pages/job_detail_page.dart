@@ -6,7 +6,6 @@ import 'package:intl/intl.dart';
 import '../../../../config/colors.dart';
 import '../../../../config/strings.dart';
 import '../../data/providers/job_provider.dart';
-import '../../data/repositories/job_repository.dart';
 
 class JobDetailPage extends ConsumerWidget {
   final int jobId;

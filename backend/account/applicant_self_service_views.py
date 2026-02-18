@@ -59,10 +59,10 @@ class ApplicantProfileSelfServiceViewSet(ApplicantSelfServiceMixin, viewsets.Mod
         return profile
 
     def get_queryset(self):
-        """Return queryset dengan hanya profile current user."""
+        """Return queryset dengan profile current user + regions prefetched."""
         profile = self.get_applicant_profile()
         if profile:
-            return ApplicantProfile.objects.filter(pk=profile.pk)
+            return ApplicantProfile.objects.filter(pk=profile.pk).with_related()
         return ApplicantProfile.objects.none()
 
     def list(self, request, *args, **kwargs):
@@ -105,7 +105,7 @@ class ApplicantProfileSelfServiceViewSet(ApplicantSelfServiceMixin, viewsets.Mod
         profile = self.get_object()
 
         # Validasi: harus ada data minimal (NIK, nama, alamat, kontak)
-        if not profile.nik or not profile.full_name or not profile.address or not profile.contact_phone:
+        if not profile.nik or not profile.user.full_name or not profile.address or not profile.contact_phone:
             return Response(
                 error_response(
                     detail="Lengkapi data pribadi terlebih dahulu (NIK, Nama, Alamat, No. HP).",

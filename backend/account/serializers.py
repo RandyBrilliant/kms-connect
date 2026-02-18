@@ -1,6 +1,9 @@
 """
 Serializers for account API (admin-side CRUD: Admin, Staff, Company, Applicant).
-Mendukung partial update (PATCH); pesan error/detail dari api_responses untuk frontend.
+- full_name on CustomUser; profile serializers use source="user.full_name".
+- Region fields (province, district, village) are FK to regions app.
+- WorkExperience.country uses CountryField (ISO 3166-1 alpha-2).
+- Supports partial update (PATCH); error messages via api_responses.
 """
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
@@ -95,7 +98,14 @@ class AdminUserSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 class StaffProfileSerializer(serializers.ModelSerializer):
-    """Profil staf (nama, telepon, foto)."""
+    """Profil staf (nama dari user, telepon, foto)."""
+
+    full_name = serializers.CharField(
+        source="user.full_name",
+        required=False,
+        allow_blank=True,
+        max_length=255,
+    )
 
     class Meta:
         model = StaffProfile
@@ -141,11 +151,13 @@ class StaffUserSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({
                 "staff_profile": {"full_name": [ApiMessage.PROFILE_FULL_NAME_REQUIRED]},
             })
+        full_name = profile_data.pop("full_name", "")
         password = validated_data.pop("password", None)
         if not password:
             raise serializers.ValidationError({
                 "password": [ApiMessage.PASSWORD_REQUIRED_ON_CREATE],
             })
+        validated_data["full_name"] = full_name
         user = CustomUser.objects.create_user(role=UserRole.STAFF, **validated_data)
         user.set_password(password)
         user.save(update_fields=["password"])
@@ -162,6 +174,10 @@ class StaffUserSerializer(serializers.ModelSerializer):
         instance.save()
         if profile_data is not None:
             profile = getattr(instance, "staff_profile", None)
+            full_name = profile_data.pop("full_name", None)
+            if full_name is not None:
+                instance.full_name = full_name
+                instance.save(update_fields=["full_name"])
             if profile:
                 for attr, value in profile_data.items():
                     setattr(profile, attr, value)
@@ -259,6 +275,8 @@ class CompanyUserSerializer(serializers.ModelSerializer):
 class ApplicantProfileSerializer(serializers.ModelSerializer):
     """Profil pelamar (biodata, keluarga, verifikasi). referrer/verified_by = ID user Admin/Staff."""
 
+    village_display = serializers.SerializerMethodField(read_only=True)
+    family_village_display = serializers.SerializerMethodField(read_only=True)
     referrer = serializers.PrimaryKeyRelatedField(
         queryset=CustomUser.objects.none(),
         required=False,
@@ -270,15 +288,28 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
         allow_null=True,
     )
 
+    full_name = serializers.CharField(
+        source="user.full_name",
+        required=False,
+        allow_blank=True,
+        max_length=255,
+    )
+
     class Meta:
         model = ApplicantProfile
         fields = [
             "id",
             "referrer",
+            "registration_date",
+            "destination_country",
             "full_name",
             "birth_place",
             "birth_date",
             "address",
+            "district",
+            "province",
+            "village",
+            "village_display",
             "contact_phone",
             "sibling_count",
             "birth_order",
@@ -292,9 +323,33 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
             "spouse_age",
             "spouse_occupation",
             "family_address",
+            "family_district",
+            "family_province",
+            "family_village",
+            "family_village_display",
             "family_contact_phone",
+            "data_declaration_confirmed",
+            "zero_cost_understood",
             "nik",
             "gender",
+            "religion",
+            "education_level",
+            "education_major",
+            "height_cm",
+            "weight_kg",
+            "wears_glasses",
+            "writing_hand",
+            "marital_status",
+            "has_passport",
+            "passport_number",
+            "passport_issue_date",
+            "passport_issue_place",
+            "passport_expiry_date",
+            "family_card_number",
+            "diploma_number",
+            "bpjs_number",
+            "shoe_size",
+            "shirt_size",
             "photo",
             "notes",
             "verification_status",
@@ -314,9 +369,62 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
         self.fields["referrer"].queryset = backoffice_qs
         self.fields["verified_by"].queryset = backoffice_qs
         if self.context.get("is_own_profile"):
-            for f in ("referrer", "verified_by", "verification_status", "submitted_at", "verified_at", "verification_notes"):
+            for f in (
+                "referrer",
+                "verified_by",
+                "verification_status",
+                "submitted_at",
+                "verified_at",
+                "verification_notes",
+            ):
                 if f in self.fields:
                     self.fields[f].read_only = True
+
+    @staticmethod
+    def _build_region_hierarchy(province, district, village):
+        """
+        Build region display dict from province/district/village FKs.
+        Hierarchy: Province <- Regency <- District (Kec) <- Village.
+        """
+        result = {}
+        if province:
+            result["province"] = province.name
+        if district:
+            result["regency"] = district.name
+            if not result.get("province") and getattr(district, "province", None):
+                result["province"] = district.province.name
+        if village:
+            result["village"] = village.name
+            d = getattr(village, "district", None)
+            if d:
+                result["district"] = d.name
+                regency = getattr(d, "regency", None)
+                if regency:
+                    if not result.get("regency"):
+                        result["regency"] = regency.name
+                    if not result.get("province") and getattr(regency, "province", None):
+                        result["province"] = regency.province.name
+        return result or None
+
+    def get_village_display(self, obj):
+        """Full hierarchy for KTP address: Province, Regency, District (Kecamatan), Village."""
+        if not obj:
+            return None
+        return self._build_region_hierarchy(
+            getattr(obj, "province", None) if obj.province_id else None,
+            getattr(obj, "district", None) if obj.district_id else None,
+            getattr(obj, "village", None) if obj.village_id else None,
+        )
+
+    def get_family_village_display(self, obj):
+        """Full hierarchy for family address."""
+        if not obj:
+            return None
+        return self._build_region_hierarchy(
+            getattr(obj, "family_province", None) if obj.family_province_id else None,
+            getattr(obj, "family_district", None) if obj.family_district_id else None,
+            getattr(obj, "family_village", None) if obj.family_village_id else None,
+        )
 
     def validate_nik(self, value):
         """Format 16 digit; uniqueness dicek di parent ApplicantUserSerializer (supaya punya akses profile instance)."""
@@ -420,12 +528,15 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({
                 "applicant_profile": {"full_name": [ApiMessage.APPLICANT_FULL_NAME_REQUIRED]},
             })
-        if not profile_data.get("nik"):
+        full_name = profile_data.pop("full_name", "")
+        nik = profile_data.get("nik")
+        if not nik or (isinstance(nik, str) and not nik.strip()):
             raise serializers.ValidationError({
                 "applicant_profile": {"nik": [ApiMessage.APPLICANT_NIK_REQUIRED]},
             })
-        validate_nik_format(profile_data["nik"])
-        if ApplicantProfile.objects.filter(nik=profile_data["nik"].strip()).exists():
+        validate_nik_format(nik if isinstance(nik, str) else str(nik))
+        nik_val = nik.strip() if isinstance(nik, str) else str(nik)
+        if ApplicantProfile.objects.filter(nik=nik_val).exists():
             raise serializers.ValidationError({
                 "applicant_profile": {"nik": [ApiMessage.NIK_TAKEN]},
             })
@@ -434,6 +545,7 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({
                 "password": [ApiMessage.PASSWORD_REQUIRED_ON_CREATE],
             })
+        validated_data["full_name"] = full_name
         user = CustomUser.objects.create_user(role=UserRole.APPLICANT, **validated_data)
         user.set_password(password)
         user.save(update_fields=["password"])
@@ -453,6 +565,10 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
 
         if profile_data is not None:
             profile = getattr(instance, "applicant_profile", None)
+            full_name = profile_data.pop("full_name", None)
+            if full_name is not None:
+                instance.full_name = full_name
+                instance.save(update_fields=["full_name"])
             if profile:
                 # Capture previous status/timestamps to detect transitions
                 old_status = profile.verification_status
@@ -500,14 +616,21 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 class WorkExperienceSerializer(serializers.ModelSerializer):
-    """Pengalaman kerja per pelamar."""
+    """
+    Pengalaman kerja per pelamar (aligned with FORM PRA SELEKSI).
+    country: ISO 3166-1 alpha-2 (e.g. ID, MY) via CountryField.
+    """
 
     class Meta:
         model = WorkExperience
         fields = [
             "id",
             "company_name",
+            "location",
+            "country",
+            "industry_type",
             "position",
+            "department",
             "start_date",
             "end_date",
             "still_employed",
@@ -517,9 +640,12 @@ class WorkExperienceSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
+        extra_kwargs = {
+            "country": {"allow_blank": True, "required": False},
+        }
 
-    def create(self, validated_data):
-        instance = WorkExperience(**validated_data)
+    def _validate_and_save(self, instance):
+        """Run model validation and save. Raises ValidationError on invalid data."""
         try:
             instance.full_clean()
         except DjangoValidationError as e:
@@ -528,18 +654,15 @@ class WorkExperienceSerializer(serializers.ModelSerializer):
             )
         instance.save()
         return instance
+
+    def create(self, validated_data):
+        instance = WorkExperience(**validated_data)
+        return self._validate_and_save(instance)
 
     def update(self, instance, validated_data):
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
-        try:
-            instance.full_clean()
-        except DjangoValidationError as e:
-            raise serializers.ValidationError(
-                e.message_dict if hasattr(e, "message_dict") else e.messages
-            )
-        instance.save()
-        return instance
+        return self._validate_and_save(instance)
 
 
 # ---------------------------------------------------------------------------

@@ -121,7 +121,7 @@ class _UploadDocumentPageState extends ConsumerState<UploadDocumentPage> {
           children: [
             documentTypesAsync.when(
               data: (types) => DropdownButtonFormField<int>(
-                value: _selectedDocumentTypeId,
+                initialValue: _selectedDocumentTypeId,
                 decoration: const InputDecoration(
                   labelText: 'Tipe Dokumen *',
                   prefixIcon: Icon(Icons.description),

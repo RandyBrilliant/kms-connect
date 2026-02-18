@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../../config/strings.dart';
 
 class VerifyEmailPage extends StatelessWidget {
   final String token;

@@ -12,7 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ApplicantBiodataTab } from "@/components/applicants/applicant-biodata-tab"
 import { ApplicantWorkExperienceTab } from "@/components/applicants/applicant-work-experience-tab"
-import { ApplicantDocumentsTab } from "@/components/applicants/applicant-documents-tab"
+import { DocumentReviewPanel } from "@/components/applicants/document-review-panel"
 import { ApplicantMetadataTab } from "@/components/applicants/applicant-metadata-tab"
 import {
   useApplicantQuery,
@@ -299,7 +299,7 @@ export function AdminPelamarDetailPage() {
         </TabsContent>
 
         <TabsContent value="dokumen">
-          <ApplicantDocumentsTab applicantId={applicant.id} />
+          <DocumentReviewPanel applicantId={applicant.id} />
         </TabsContent>
       </Tabs>
     </div>

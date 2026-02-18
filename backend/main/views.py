@@ -132,7 +132,7 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
     permission_classes = [IsBackofficeAdmin]  # Default: admin only
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ["status", "job", "applicant"]
-    search_fields = ["applicant__full_name", "applicant__user__email", "job__title"]
+    search_fields = ["applicant__user__full_name", "applicant__user__email", "job__title"]
     ordering_fields = ["applied_at", "reviewed_at", "status"]
     ordering = ["-applied_at"]
 

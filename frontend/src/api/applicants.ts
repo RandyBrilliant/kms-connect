@@ -28,6 +28,15 @@ function buildQueryString(params: ApplicantsListParams): string {
   if (params.verification_status)
     search.set("applicant_profile__verification_status", params.verification_status)
   if (params.ordering) search.set("ordering", params.ordering)
+  if (params.province != null) search.set("applicant_profile__province", String(params.province))
+  if (params.district != null) search.set("applicant_profile__district", String(params.district))
+  if (params.religion) search.set("applicant_profile__religion", params.religion)
+  if (params.education_level) search.set("applicant_profile__education_level", params.education_level)
+  if (params.marital_status) search.set("applicant_profile__marital_status", params.marital_status)
+  if (params.work_country) search.set("work_country", params.work_country)
+  if (params.referrer != null) search.set("applicant_profile__referrer", String(params.referrer))
+  if (params.submitted_after) search.set("applicant_profile__submitted_at__gte", params.submitted_after)
+  if (params.submitted_before) search.set("applicant_profile__submitted_at__lte", params.submitted_before)
   const qs = search.toString()
   return qs ? `?${qs}` : ""
 }
@@ -97,6 +106,66 @@ export async function sendPasswordResetEmail(
 ): Promise<{ user_id: number; email: string }> {
   const { data } = await api.post<{ user_id: number; email: string }>(
     `/api/applicants/${userId}/send_password_reset_email/`
+  )
+  return data
+}
+
+/**
+ * POST /api/applicant-profiles/:id/approve/
+ * NOTE: Backend endpoint needs to be implemented
+ */
+export async function approveApplicant(
+  profileId: number,
+  notes: string
+): Promise<{ success: boolean; message: string }> {
+  const { data } = await api.post<{ success: boolean; message: string }>(
+    `/api/applicant-profiles/${profileId}/approve/`,
+    { notes }
+  )
+  return data
+}
+
+/**
+ * POST /api/applicant-profiles/:id/reject/
+ * NOTE: Backend endpoint needs to be implemented
+ */
+export async function rejectApplicant(
+  profileId: number,
+  notes: string
+): Promise<{ success: boolean; message: string }> {
+  const { data } = await api.post<{ success: boolean; message: string }>(
+    `/api/applicant-profiles/${profileId}/reject/`,
+    { notes }
+  )
+  return data
+}
+
+/**
+ * POST /api/applicant-profiles/bulk-approve/
+ * NOTE: Backend endpoint needs to be implemented
+ */
+export async function bulkApproveApplicants(
+  profileIds: number[],
+  notes: string
+): Promise<{ success: boolean; message: string; updated: number }> {
+  const { data } = await api.post<{ success: boolean; message: string; updated: number }>(
+    `/api/applicant-profiles/bulk-approve/`,
+    { profile_ids: profileIds, notes }
+  )
+  return data
+}
+
+/**
+ * POST /api/applicant-profiles/bulk-reject/
+ * NOTE: Backend endpoint needs to be implemented
+ */
+export async function bulkRejectApplicants(
+  profileIds: number[],
+  notes: string
+): Promise<{ success: boolean; message: string; updated: number }> {
+  const { data } = await api.post<{ success: boolean; message: string; updated: number }>(
+    `/api/applicant-profiles/bulk-reject/`,
+    { profile_ids: profileIds, notes }
   )
   return data
 }

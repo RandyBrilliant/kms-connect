@@ -6,7 +6,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'config/theme.dart';
-import 'config/env.dart';
 import 'core/api/api_client.dart';
 import 'features/notifications/data/services/notification_service.dart';
 import 'app.dart';

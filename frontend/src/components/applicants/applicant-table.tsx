@@ -1,6 +1,7 @@
 /**
  * Applicant (Pelamar) table with server-side pagination, search, and filters.
  * Uses TanStack Table for display and TanStack Query for data.
+ * Includes bulk selection and verification workflow.
  */
 
 import { useState, useMemo, useCallback } from "react"
@@ -19,13 +20,14 @@ import {
   IconSearch,
   IconUserCheck,
   IconUserOff,
+  IconChecks,
+  IconX,
 } from "@tabler/icons-react"
-import { format } from "date-fns"
-import { id } from "date-fns/locale"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Select,
   SelectContent,
@@ -46,19 +48,23 @@ import {
   useApplicantsQuery,
   useDeactivateApplicantMutation,
   useActivateApplicantMutation,
+  useBulkApproveApplicantsMutation,
+  useBulkRejectApplicantsMutation,
 } from "@/hooks/use-applicants-query"
 import { toast } from "@/lib/toast"
+import { 
+  VERIFICATION_STATUS_LABELS,
+  VERIFICATION_STATUS_COLORS,
+  getVerificationStatusLabel,
+} from "@/constants/applicant"
+import { formatDate, formatNIK } from "@/lib/formatters"
+import { isSubmittedStatus } from "@/lib/type-guards"
+import { VerificationModal } from "./verification-modal"
+import { ApplicantFilters } from "./applicant-filters"
 import type { ApplicantUser } from "@/types/applicant"
 import type { ApplicantsListParams, ApplicantVerificationStatus } from "@/types/applicant"
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
-
-const VERIFICATION_LABELS: Record<ApplicantVerificationStatus, string> = {
-  DRAFT: "Draf",
-  SUBMITTED: "Dikirim",
-  ACCEPTED: "Diterima",
-  REJECTED: "Ditolak",
-}
 
 interface ApplicantTableProps {
   basePath: string
@@ -73,10 +79,31 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
     ordering: "-applicant_profile__created_at",
   })
   const [searchInput, setSearchInput] = useState("")
+  const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({})
+  const [showVerificationModal, setShowVerificationModal] = useState(false)
+  const [verificationAction, setVerificationAction] = useState<"approve" | "reject" | null>(null)
 
   const { data, isLoading, isError, error } = useApplicantsQuery(params)
   const deactivateMutation = useDeactivateApplicantMutation()
   const activateMutation = useActivateApplicantMutation()
+  const bulkApproveMutation = useBulkApproveApplicantsMutation()
+  const bulkRejectMutation = useBulkRejectApplicantsMutation()
+
+  // Get selected applicants
+  const selectedApplicants = useMemo(() => {
+    const selectedIds = Object.keys(rowSelection).filter((id) => rowSelection[id])
+    return (data?.results || []).filter((applicant) =>
+      selectedIds.includes(String(applicant.id))
+    )
+  }, [rowSelection, data?.results])
+
+  // Check if all selected applicants are eligible for verification actions
+  const canBulkVerify = useMemo(() => {
+    if (selectedApplicants.length === 0) return false
+    return selectedApplicants.every((applicant) =>
+      isSubmittedStatus(applicant.applicant_profile?.verification_status || "")
+    )
+  }, [selectedApplicants])
 
   const handleSearch = () => {
     setParams((p) => ({
@@ -84,6 +111,7 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
       search: searchInput.trim() || undefined,
       page: 1,
     }))
+    setRowSelection({}) // Clear selection on search
   }
 
   const handleFilterChange = <K extends keyof ApplicantsListParams>(
@@ -91,10 +119,12 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
     value: ApplicantsListParams[K]
   ) => {
     setParams((p) => ({ ...p, [key]: value, page: 1 }))
+    setRowSelection({}) // Clear selection on filter change
   }
 
   const handlePageChange = (page: number) => {
     setParams((p) => ({ ...p, page }))
+    setRowSelection({}) // Clear selection on page change
   }
 
   const handleActivate = useCallback(
@@ -121,8 +151,84 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
     [deactivateMutation]
   )
 
+  const handleBulkApprove = useCallback(() => {
+    setVerificationAction("approve")
+    setShowVerificationModal(true)
+  }, [])
+
+  const handleBulkReject = useCallback(() => {
+    setVerificationAction("reject")
+    setShowVerificationModal(true)
+  }, [])
+
+  const handleClearSelection = useCallback(() => {
+    setRowSelection({})
+  }, [])
+
+  const handleVerificationConfirm = useCallback(
+    async (notes: string) => {
+      if (!verificationAction || selectedApplicants.length === 0) return
+
+      try {
+        // Extract profile IDs from selected applicants
+        const profileIds = selectedApplicants
+          .map((a) => a.applicant_profile?.id)
+          .filter((id): id is number => id !== undefined)
+
+        if (profileIds.length === 0) {
+          toast.error("Gagal memproses", "Tidak ada profil yang valid untuk diverifikasi")
+          return
+        }
+
+        if (verificationAction === "approve") {
+          await bulkApproveMutation.mutateAsync({ profileIds, notes })
+          toast.success(
+            `${selectedApplicants.length} pelamar diterima`,
+            "Verifikasi berhasil diproses"
+          )
+        } else {
+          await bulkRejectMutation.mutateAsync({ profileIds, notes })
+          toast.success(
+            `${selectedApplicants.length} pelamar ditolak`,
+            "Verifikasi berhasil diproses"
+          )
+        }
+
+        // Clear selection and close modal
+        setRowSelection({})
+        setShowVerificationModal(false)
+        setVerificationAction(null)
+      } catch (err) {
+        toast.error(
+          "Gagal memproses verifikasi",
+          "Terjadi kesalahan saat memproses verifikasi. Pastikan backend endpoint sudah diimplementasikan."
+        )
+      }
+    },
+    [verificationAction, selectedApplicants, bulkApproveMutation, bulkRejectMutation]
+  )
+
   const columns = useMemo<ColumnDef<ApplicantUser>[]>(
     () => [
+      {
+        id: "select",
+        header: ({ table }) => (
+          <Checkbox
+            checked={table.getIsAllPageRowsSelected()}
+            onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+            aria-label="Pilih semua"
+          />
+        ),
+        cell: ({ row }) => (
+          <Checkbox
+            checked={row.getIsSelected()}
+            onCheckedChange={(value) => row.toggleSelected(!!value)}
+            aria-label="Pilih baris"
+          />
+        ),
+        enableSorting: false,
+        enableHiding: false,
+      },
       {
         accessorKey: "applicant_profile.full_name",
         header: "Nama",
@@ -141,7 +247,7 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
         accessorKey: "applicant_profile.nik",
         header: "NIK",
         cell: ({ row }) => (
-          <span>{row.original.applicant_profile?.nik || "-"}</span>
+          <span>{formatNIK(row.original.applicant_profile?.nik)}</span>
         ),
       },
       {
@@ -149,16 +255,13 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
         header: "Status Verifikasi",
         cell: ({ row }) => {
           const status = row.original.applicant_profile?.verification_status
-          const label = status ? VERIFICATION_LABELS[status] : "-"
-          const variant =
-            status === "ACCEPTED"
-              ? "default"
-              : status === "REJECTED"
-                ? "destructive"
-                : status === "SUBMITTED"
-                  ? "secondary"
-                  : "outline"
-          return <Badge variant={variant}>{label}</Badge>
+          if (!status) return <span className="text-muted-foreground">-</span>
+          const color = VERIFICATION_STATUS_COLORS[status]
+          return (
+            <Badge variant={color}>
+              {getVerificationStatusLabel(status)}
+            </Badge>
+          )
         },
       },
       {
@@ -181,10 +284,8 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
         accessorKey: "applicant_profile.created_at",
         header: "Bergabung",
         cell: ({ row }) =>
-          format(
-            new Date(row.original.applicant_profile?.created_at ?? row.original.date_joined),
-            "dd MMM yyyy HH:mm",
-            { locale: id }
+          formatDate(
+            row.original.applicant_profile?.created_at ?? row.original.date_joined
           ),
       },
       {
@@ -239,8 +340,14 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
     data: data?.results ?? [],
     columns,
     getCoreRowModel: getCoreRowModel(),
+    onRowSelectionChange: setRowSelection,
+    getRowId: (row) => String(row.id),
+    state: {
+      rowSelection,
+    },
     manualPagination: true,
     pageCount: data ? Math.ceil(data.count / (params.page_size ?? 20)) : 0,
+    enableRowSelection: true,
   })
 
   const pageCount = data ? Math.ceil(data.count / (params.page_size ?? 20)) : 0
@@ -296,7 +403,7 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Semua status</SelectItem>
-                {Object.entries(VERIFICATION_LABELS).map(([val, label]) => (
+                {Object.entries(VERIFICATION_STATUS_LABELS).map(([val, label]) => (
                   <SelectItem key={val} value={val}>
                     {label}
                   </SelectItem>
@@ -334,6 +441,73 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
           </Link>
         </Button>
       </div>
+
+      {/* Advanced Filters */}
+      <ApplicantFilters
+        onFiltersChange={(filters) => {
+          setParams((p) => ({ ...p, ...filters, page: 1 }))
+          setRowSelection({})
+        }}
+        onReset={() => {
+          setParams((p) => ({
+            page: 1,
+            page_size: p.page_size,
+            search: p.search,
+            ordering: p.ordering,
+            verification_status: p.verification_status,
+            is_active: p.is_active,
+          }))
+          setRowSelection({})
+        }}
+      />
+
+      {/* Bulk Action Bar */}
+      {selectedApplicants.length > 0 && (
+        <div className="flex items-center justify-between rounded-lg border bg-muted/50 px-4 py-3">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium">
+              {selectedApplicants.length} pelamar dipilih
+            </span>
+            {canBulkVerify && (
+              <span className="text-muted-foreground text-xs">
+                (Semua dapat diverifikasi)
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {canBulkVerify && (
+              <>
+                <Button
+                  onClick={handleBulkApprove}
+                  variant="default"
+                  size="sm"
+                  className="cursor-pointer gap-1.5"
+                >
+                  <IconChecks className="size-4" />
+                  Terima
+                </Button>
+                <Button
+                  onClick={handleBulkReject}
+                  variant="destructive"
+                  size="sm"
+                  className="cursor-pointer gap-1.5"
+                >
+                  <IconX className="size-4" />
+                  Tolak
+                </Button>
+              </>
+            )}
+            <Button
+              onClick={handleClearSelection}
+              variant="ghost"
+              size="sm"
+              className="cursor-pointer"
+            >
+              Batal
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div className="overflow-hidden rounded-lg border">
         {isLoading ? (
@@ -446,6 +620,16 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
           </div>
         </div>
       )}
+
+      {/* Verification Modal */}
+      <VerificationModal
+        open={showVerificationModal}
+        onOpenChange={setShowVerificationModal}
+        action={verificationAction || "approve"}
+        applicants={selectedApplicants}
+        onConfirm={handleVerificationConfirm}
+        isLoading={bulkApproveMutation.isPending || bulkRejectMutation.isPending}
+      />
     </div>
   )
 }

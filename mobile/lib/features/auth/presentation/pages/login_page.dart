@@ -3,7 +3,6 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../config/colors.dart';
-import '../../../../config/strings.dart';
 import '../../data/providers/auth_provider.dart';
 
 class LoginPage extends ConsumerStatefulWidget {

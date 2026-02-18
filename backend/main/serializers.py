@@ -229,7 +229,7 @@ class JobApplicationSerializer(serializers.ModelSerializer):
         ]
 
     def get_applicant_name(self, obj) -> str:
-        return obj.applicant.full_name if obj.applicant else ""
+        return obj.applicant.user.full_name if obj.applicant and obj.applicant.user else ""
 
     def get_applicant_email(self, obj) -> str:
         return obj.applicant.user.email if obj.applicant and obj.applicant.user else ""

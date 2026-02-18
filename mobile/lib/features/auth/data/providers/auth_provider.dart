@@ -79,6 +79,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String email,
     required String password,
     required String ktpFilePath,
+    required String referralCode,
   }) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
@@ -86,6 +87,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         email: email,
         password: password,
         ktpFile: File(ktpFilePath),
+        referralCode: referralCode,
       );
       state = state.copyWith(
         user: authResponse.user,

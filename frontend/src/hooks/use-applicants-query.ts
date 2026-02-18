@@ -10,6 +10,10 @@ import {
   patchApplicant,
   deactivateApplicant,
   activateApplicant,
+  approveApplicant,
+  rejectApplicant,
+  bulkApproveApplicants,
+  bulkRejectApplicants,
   getWorkExperiences,
   createWorkExperience,
   updateWorkExperience,
@@ -118,6 +122,70 @@ export function useSendVerificationEmailMutation() {
 export function useSendPasswordResetMutation() {
   return useMutation({
     mutationFn: (userId: number) => sendPasswordResetEmail(userId),
+  })
+}
+
+/**
+ * Approve single applicant
+ * NOTE: Requires backend endpoint /api/applicant-profiles/:id/approve/
+ */
+export function useApproveApplicantMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ profileId, notes }: { profileId: number; notes: string }) =>
+      approveApplicant(profileId, notes),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: applicantsKeys.lists() })
+      queryClient.invalidateQueries({ queryKey: applicantsKeys.details() })
+    },
+  })
+}
+
+/**
+ * Reject single applicant
+ * NOTE: Requires backend endpoint /api/applicant-profiles/:id/reject/
+ */
+export function useRejectApplicantMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ profileId, notes }: { profileId: number; notes: string }) =>
+      rejectApplicant(profileId, notes),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: applicantsKeys.lists() })
+      queryClient.invalidateQueries({ queryKey: applicantsKeys.details() })
+    },
+  })
+}
+
+/**
+ * Bulk approve applicants
+ * NOTE: Requires backend endpoint /api/applicant-profiles/bulk-approve/
+ */
+export function useBulkApproveApplicantsMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ profileIds, notes }: { profileIds: number[]; notes: string }) =>
+      bulkApproveApplicants(profileIds, notes),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: applicantsKeys.lists() })
+      queryClient.invalidateQueries({ queryKey: applicantsKeys.details() })
+    },
+  })
+}
+
+/**
+ * Bulk reject applicants
+ * NOTE: Requires backend endpoint /api/applicant-profiles/bulk-reject/
+ */
+export function useBulkRejectApplicantsMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ profileIds, notes }: { profileIds: number[]; notes: string }) =>
+      bulkRejectApplicants(profileIds, notes),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: applicantsKeys.lists() })
+      queryClient.invalidateQueries({ queryKey: applicantsKeys.details() })
+    },
   })
 }
 
