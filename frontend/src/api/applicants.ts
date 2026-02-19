@@ -27,6 +27,23 @@ function buildQueryString(params: ApplicantsListParams): string {
     search.set("email_verified", String(params.email_verified))
   if (params.verification_status)
     search.set("applicant_profile__verification_status", params.verification_status)
+  if (params.created_at_after) search.set("created_at_after", params.created_at_after)
+  if (params.created_at_before) search.set("created_at_before", params.created_at_before)
+  if (params.ordering) search.set("ordering", params.ordering)
+  const qs = search.toString()
+  return qs ? `?${qs}` : ""
+}
+
+function buildExportQueryString(params: Omit<ApplicantsListParams, "page" | "page_size">): string {
+  const search = new URLSearchParams()
+  if (params.search) search.set("search", params.search)
+  if (params.is_active != null) search.set("is_active", String(params.is_active))
+  if (params.email_verified != null)
+    search.set("email_verified", String(params.email_verified))
+  if (params.verification_status)
+    search.set("applicant_profile__verification_status", params.verification_status)
+  if (params.created_at_after) search.set("created_at_after", params.created_at_after)
+  if (params.created_at_before) search.set("created_at_before", params.created_at_before)
   if (params.ordering) search.set("ordering", params.ordering)
   const qs = search.toString()
   return qs ? `?${qs}` : ""
@@ -39,6 +56,16 @@ export async function getApplicants(
   const { data } = await api.get<PaginatedResponse<ApplicantUser>>(
     `/api/applicants/${buildQueryString(params)}`
   )
+  return data
+}
+
+/** GET /api/applicants/export/ - Export applicants to Excel */
+export async function exportApplicants(
+  params: Omit<ApplicantsListParams, "page" | "page_size"> = {}
+): Promise<Blob> {
+  const { data } = await api.get<Blob>(`/api/applicants/export/${buildExportQueryString(params)}`, {
+    responseType: "blob",
+  })
   return data
 }
 

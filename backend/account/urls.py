@@ -19,6 +19,8 @@ router.register(r"companies", views.CompanyUserViewSet, basename="company-user")
 router.register(r"applicants", views.ApplicantUserViewSet, basename="applicant-user")
 router.register(r"applicant-profiles", views.ApplicantProfileViewSet, basename="applicant-profile")
 router.register(r"document-types", views.DocumentTypeViewSet, basename="document-type")
+router.register(r"notifications", views.NotificationViewSet, basename="notification")
+router.register(r"broadcasts", views.BroadcastViewSet, basename="broadcast")
 
 # Referrers list for dropdown (before router)
 referrer_paths = [

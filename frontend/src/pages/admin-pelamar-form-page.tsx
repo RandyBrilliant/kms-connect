@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 import { useCreateApplicantMutation } from "@/hooks/use-applicants-query"
 import { toast } from "@/lib/toast"
 import { usePageTitle } from "@/hooks/use-page-title"
+import type { ApplicantUserCreateInput } from "@/types/applicant"
 
 const BASE_PATH = "/pelamar"
 
@@ -27,7 +28,8 @@ export function AdminPelamarFormPage() {
     applicant_profile: Record<string, unknown>
   }) => {
     try {
-      const created = await createMutation.mutateAsync(values)
+      // Type assertion: buildApplicantProfile includes full_name and nik from PROFILE_KEYS
+      const created = await createMutation.mutateAsync(values as ApplicantUserCreateInput)
       toast.success("Pelamar ditambahkan", "Data pelamar berhasil dibuat")
       navigate(`${BASE_PATH}/${created.id}`)
     } catch (err: unknown) {

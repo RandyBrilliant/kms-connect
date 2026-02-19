@@ -25,6 +25,7 @@ class ApiCode:
     DELETE_NOT_ALLOWED = "delete_not_allowed"
     ALREADY_DEACTIVATED = "already_deactivated"
     ALREADY_ACTIVATED = "already_activated"
+    ALREADY_PROCESSED = "already_processed"
     DEACTIVATED = "deactivated"
     ACTIVATED = "activated"
     PROFILE_UPDATED = "profile_updated"

@@ -727,6 +727,15 @@ class ApplicantProfile(models.Model):
         blank=True,
         help_text=_("Catatan internal atau alasan penolakan yang ditampilkan ke pelamar."),
     )
+    score = models.FloatField(
+        _("skor kesiapan"),
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=_(
+            "Skor kesiapan pelamar (0-100) berdasarkan kelengkapan biodata dan dokumen."
+        ),
+    )
     created_at = models.DateTimeField(_("dibuat pada"), auto_now_add=True)
     updated_at = models.DateTimeField(_("diperbarui pada"), auto_now=True)
     
@@ -1047,7 +1056,12 @@ class ApplicantProfile(models.Model):
         cache.delete(f"applicant_{self.id}_complete_docs")
     
     def save(self, *args, **kwargs):
-        """Override save to auto-populate province/district from village."""
+        """
+        Override save to auto-populate province/district from village and
+        keep readiness score in sync with current data.
+        """
+        from .services.scoring import calculate_readiness_score
+
         # Auto-populate province/district from village if not set
         if self.village_id and not self.province_id:
             try:
@@ -1071,6 +1085,13 @@ class ApplicantProfile(models.Model):
                 self.family_district = self.family_village.district.regency
             except Exception:
                 pass
+        
+        # Keep score in sync; never let scoring failure block saving.
+        try:
+            self.score = calculate_readiness_score(self)
+        except Exception:
+            # If anything goes wrong, preserve existing score.
+            pass
         
         super().save(*args, **kwargs)
 
@@ -1433,17 +1454,30 @@ class ApplicantDocument(models.Model):
                 if old.file and old.file != self.file and self.file:
                     old.file.delete(save=False)
                 # Invalidate cache if review status changed
-                if old.review_status != self.review_status:
-                    if self.applicant_profile_id:
-                        self.applicant_profile.clear_document_cache()
+                if old.review_status != self.review_status and self.applicant_profile_id:
+                    self.applicant_profile.clear_document_cache()
             except ApplicantDocument.DoesNotExist:
                 pass
+
         super().save(*args, **kwargs)
+
+        # After saving, recompute applicant profile score based on updated documents.
+        if self.applicant_profile_id:
+            from .services.scoring import recalculate_and_persist_score
+
+            recalculate_and_persist_score(self.applicant_profile)
 
     def delete(self, *args, **kwargs):
         if self.file:
             self.file.delete(save=False)
+        profile = self.applicant_profile if self.applicant_profile_id else None
         super().delete(*args, **kwargs)
+
+        # Recompute score after document removal.
+        if profile is not None:
+            from .services.scoring import recalculate_and_persist_score
+
+            recalculate_and_persist_score(profile)
 
     def get_biodata_prefill(self) -> dict | None:
         """
@@ -1516,3 +1550,225 @@ class CompanyProfile(models.Model):
     
     def __repr__(self) -> str:
         return f"<CompanyProfile: {self.company_name} ({self.user.email})>"
+
+
+# ---------------------------------------------------------------------------
+# Notifications (Broadcast & Individual)
+# ---------------------------------------------------------------------------
+
+class NotificationType(models.TextChoices):
+    """Types of notifications."""
+    INFO = "INFO", _("Informasi")
+    SUCCESS = "SUCCESS", _("Sukses")
+    WARNING = "WARNING", _("Peringatan")
+    ERROR = "ERROR", _("Error")
+    BROADCAST = "BROADCAST", _("Broadcast")
+
+
+class NotificationPriority(models.TextChoices):
+    """Priority levels for notifications."""
+    LOW = "LOW", _("Rendah")
+    NORMAL = "NORMAL", _("Normal")
+    HIGH = "HIGH", _("Tinggi")
+    URGENT = "URGENT", _("Mendesak")
+
+
+class Broadcast(models.Model):
+    """
+    Admin-created broadcast notification.
+    Stores the broadcast configuration and metadata.
+    """
+    title = models.CharField(
+        _("judul"),
+        max_length=255,
+        help_text=_("Judul notifikasi yang akan ditampilkan."),
+    )
+    message = models.TextField(
+        _("pesan"),
+        help_text=_("Isi pesan notifikasi."),
+    )
+    notification_type = models.CharField(
+        _("tipe"),
+        max_length=20,
+        choices=NotificationType.choices,
+        default=NotificationType.INFO,
+        db_index=True,
+    )
+    priority = models.CharField(
+        _("prioritas"),
+        max_length=10,
+        choices=NotificationPriority.choices,
+        default=NotificationPriority.NORMAL,
+        db_index=True,
+    )
+    
+    # Recipient selection configuration (JSON field for flexibility)
+    recipient_config = models.JSONField(
+        _("konfigurasi penerima"),
+        default=dict,
+        help_text=_("Konfigurasi untuk memilih penerima: roles, filters, user_ids, etc."),
+    )
+    
+    # Delivery options
+    send_email = models.BooleanField(
+        _("kirim email"),
+        default=False,
+        help_text=_("Kirim notifikasi via email juga."),
+    )
+    send_in_app = models.BooleanField(
+        _("kirim in-app"),
+        default=True,
+        help_text=_("Tampilkan notifikasi di aplikasi."),
+    )
+    
+    # Metadata
+    created_by = models.ForeignKey(
+        CustomUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="broadcasts_created",
+        limit_choices_to={"role__in": [UserRole.ADMIN, UserRole.STAFF]},
+        verbose_name=_("dibuat oleh"),
+    )
+    scheduled_at = models.DateTimeField(
+        _("dijadwalkan pada"),
+        null=True,
+        blank=True,
+        help_text=_("Jadwalkan pengiriman untuk waktu tertentu (null = kirim sekarang)."),
+    )
+    sent_at = models.DateTimeField(
+        _("dikirim pada"),
+        null=True,
+        blank=True,
+        help_text=_("Waktu ketika broadcast dikirim."),
+    )
+    total_recipients = models.PositiveIntegerField(
+        _("total penerima"),
+        default=0,
+        help_text=_("Jumlah total penerima yang menerima notifikasi ini."),
+    )
+    
+    created_at = models.DateTimeField(_("dibuat pada"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("diperbarui pada"), auto_now=True)
+
+    class Meta:
+        verbose_name = _("broadcast")
+        verbose_name_plural = _("broadcasts")
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["created_by", "created_at"]),
+            models.Index(fields=["scheduled_at", "sent_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.title} ({self.total_recipients} penerima)"
+
+    def clean(self):
+        """Validate that at least one delivery method is selected."""
+        if not self.send_email and not self.send_in_app:
+            raise ValidationError(_("Pilih minimal satu metode pengiriman (email atau in-app)."))
+
+
+class Notification(models.Model):
+    """
+    Individual notification sent to a user.
+    Links to Broadcast if it's part of a broadcast, or standalone.
+    """
+    user = models.ForeignKey(
+        CustomUser,
+        on_delete=models.CASCADE,
+        related_name="notifications",
+        verbose_name=_("pengguna"),
+        db_index=True,
+    )
+    broadcast = models.ForeignKey(
+        Broadcast,
+        on_delete=models.CASCADE,
+        related_name="notifications",
+        null=True,
+        blank=True,
+        verbose_name=_("broadcast"),
+        help_text=_("Broadcast yang menghasilkan notifikasi ini (null jika standalone)."),
+    )
+    
+    title = models.CharField(
+        _("judul"),
+        max_length=255,
+    )
+    message = models.TextField(
+        _("pesan"),
+    )
+    notification_type = models.CharField(
+        _("tipe"),
+        max_length=20,
+        choices=NotificationType.choices,
+        default=NotificationType.INFO,
+        db_index=True,
+    )
+    priority = models.CharField(
+        _("prioritas"),
+        max_length=10,
+        choices=NotificationPriority.choices,
+        default=NotificationPriority.NORMAL,
+        db_index=True,
+    )
+    
+    # Link/action (optional)
+    action_url = models.URLField(
+        _("URL aksi"),
+        blank=True,
+        null=True,
+        help_text=_("URL untuk link/aksi di notifikasi (opsional)."),
+    )
+    action_label = models.CharField(
+        _("label aksi"),
+        max_length=100,
+        blank=True,
+        help_text=_("Label untuk tombol aksi (opsional)."),
+    )
+    
+    # Read status
+    is_read = models.BooleanField(
+        _("sudah dibaca"),
+        default=False,
+        db_index=True,
+    )
+    read_at = models.DateTimeField(
+        _("dibaca pada"),
+        null=True,
+        blank=True,
+    )
+    
+    # Email delivery status
+    email_sent = models.BooleanField(
+        _("email terkirim"),
+        default=False,
+    )
+    email_sent_at = models.DateTimeField(
+        _("email terkirim pada"),
+        null=True,
+        blank=True,
+    )
+    
+    created_at = models.DateTimeField(_("dibuat pada"), auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = _("notifikasi")
+        verbose_name_plural = _("notifikasi")
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "is_read", "created_at"]),
+            models.Index(fields=["user", "created_at"]),
+            models.Index(fields=["broadcast", "created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.title} → {self.user.email}"
+
+    def mark_as_read(self):
+        """Mark notification as read."""
+        if not self.is_read:
+            self.is_read = True
+            self.read_at = timezone.now()
+            self.save(update_fields=["is_read", "read_at"])

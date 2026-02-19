@@ -117,6 +117,7 @@ export interface ApplicantProfile {
   verified_at: string | null
   verified_by: number | null
   verification_notes: string
+  score: number | null
   created_at: string
   updated_at: string
   age?: number
@@ -225,7 +226,9 @@ export interface ApplicantsListParams {
   is_active?: boolean
   email_verified?: boolean
   verification_status?: ApplicantVerificationStatus
-  ordering?: string
+  created_at_after?: string // Date string (YYYY-MM-DD) for filtering applicants who joined on or after this date
+  created_at_before?: string // Date string (YYYY-MM-DD) for filtering applicants who joined on or before this date
+  ordering?: string // e.g., "applicant_profile__score", "-applicant_profile__score", "applicant_profile__created_at", etc.
 }
 
 export interface PaginatedResponse<T> {

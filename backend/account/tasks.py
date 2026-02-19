@@ -201,3 +201,73 @@ def send_password_reset_email_task(self, user_id: int, logo_url: str = ""):
         html_message=html,
         fail_silently=False,
     )
+
+
+@shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=2)
+def send_notification_email_task(self, notification_id: int):
+    """
+    Kirim email untuk notifikasi.
+    Dipanggil saat membuat notifikasi dengan send_email=True.
+    """
+    from django.conf import settings
+    from django.utils import timezone
+    from .models import Notification
+    from .email_utils import render_email, COMPANY_NAME
+
+    notification = Notification.objects.filter(pk=notification_id).select_related("user").first()
+    if not notification or not notification.user:
+        return
+    
+    # Skip if already sent
+    if notification.email_sent:
+        return
+
+    # Build email context
+    context = {
+        "user": notification.user,
+        "title": notification.title,
+        "message": notification.message,
+        "action_url": notification.action_url,
+        "action_label": notification.action_label or "Buka",
+        "logo_url": "",
+        "subject": f"{notification.title} – {COMPANY_NAME}",
+        "body_text": f"{notification.message}\n\n{COMPANY_NAME}",
+    }
+    
+    # Render email template (create a simple notification email template)
+    html, plain = render_email("account/emails/notification_email.html", context)
+    
+    from django.core.mail import send_mail
+    send_mail(
+        subject=context["subject"],
+        message=plain,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[notification.user.email],
+        html_message=html,
+        fail_silently=False,
+    )
+    
+    # Mark as sent
+    notification.email_sent = True
+    notification.email_sent_at = timezone.now()
+    notification.save(update_fields=["email_sent", "email_sent_at"])
+
+
+@shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=2)
+def send_broadcast_task(self, broadcast_id: int):
+    """
+    Kirim broadcast notification ke semua penerima.
+    Dipanggil saat admin membuat broadcast atau saat scheduled_at tiba.
+    """
+    from .models import Broadcast
+    from .services.notification_delivery import send_broadcast
+
+    broadcast = Broadcast.objects.filter(pk=broadcast_id).first()
+    if not broadcast:
+        return
+    
+    # Skip if already sent
+    if broadcast.sent_at:
+        return
+    
+    send_broadcast(broadcast)

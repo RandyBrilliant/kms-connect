@@ -10,12 +10,14 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
+from .filters import ApplicantUserFilterSet
 
 from django.conf import settings as django_settings
 from django.core.cache import cache
 from django.shortcuts import get_object_or_404
+from django.http import HttpResponse
 from urllib.parse import urlencode
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 from django.db.models import Count
 from django.db.models.functions import TruncDate
@@ -29,6 +31,8 @@ from .models import (
     ApplicantDocument,
     DocumentType,
     ApplicantVerificationStatus,
+    Broadcast,
+    Notification,
 )
 from .permissions import IsBackofficeAdmin, IsApplicant
 from .throttles import AuthPublicRateThrottle
@@ -48,6 +52,8 @@ from .serializers import (
     WorkExperienceSerializer,
     ApplicantDocumentSerializer,
     DocumentTypeSerializer,
+    NotificationSerializer,
+    BroadcastSerializer,
 )
 from .api_responses import (
     ApiCode,
@@ -55,6 +61,9 @@ from .api_responses import (
     error_response,
     success_response,
 )
+from .services.export import generate_applicants_excel
+from .services.notification_delivery import send_broadcast
+from .services.notification_recipients import get_recipient_count, validate_recipient_config
 
 
 # ---------------------------------------------------------------------------
@@ -292,7 +301,7 @@ class ApplicantUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
     serializer_class = ApplicantUserSerializer
     permission_classes = [IsBackofficeAdmin]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ["is_active", "email_verified", "applicant_profile__verification_status"]
+    filterset_class = ApplicantUserFilterSet
     search_fields = [
         "email",
         "applicant_profile__user__full_name",
@@ -306,6 +315,7 @@ class ApplicantUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
         "applicant_profile__user__full_name",
         "applicant_profile__verification_status",
         "applicant_profile__created_at",
+        "applicant_profile__score",
     ]
     ordering = ["-applicant_profile__created_at"]
 
@@ -323,6 +333,62 @@ class ApplicantUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         return destroy_disallowed_response()
+
+    @action(detail=False, methods=["get"], url_path="export")
+    def export(self, request):
+        """
+        Export applicants to Excel file.
+        GET /api/applicants/export/?search=...&is_active=...&verification_status=...
+        
+        Supports the same filters as the list endpoint:
+        - search: search in email, full_name, nik, contact_phone
+        - is_active: filter by active status
+        - email_verified: filter by email verification status
+        - applicant_profile__verification_status: filter by verification status
+        - ordering: sort order (default: -applicant_profile__created_at)
+        
+        Returns Excel file (.xlsx) with all matching applicants.
+        """
+        # Get filtered queryset using the same logic as list()
+        queryset = self.filter_queryset(self.get_queryset())
+        
+        # Apply ordering
+        ordering = request.query_params.get("ordering", self.ordering[0] if self.ordering else None)
+        if ordering:
+            queryset = queryset.order_by(*ordering.split(","))
+        
+        # Apply date range filters if provided
+        created_at_after = request.query_params.get("created_at_after")
+        created_at_before = request.query_params.get("created_at_before")
+        if created_at_after:
+            queryset = queryset.filter(applicant_profile__created_at__gte=created_at_after)
+        if created_at_before:
+            queryset = queryset.filter(applicant_profile__created_at__lte=created_at_before)
+        
+        # Generate Excel file
+        try:
+            excel_file = generate_applicants_excel(queryset)
+            
+            # Generate filename with timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"pelamar_export_{timestamp}.xlsx"
+            
+            # Create HTTP response with Excel content
+            response = HttpResponse(
+                excel_file.read(),
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+            response["Content-Disposition"] = f'attachment; filename="{filename}"'
+            
+            return response
+        except Exception as e:
+            return Response(
+                error_response(
+                    detail=f"Gagal mengekspor data: {str(e)}",
+                    code=ApiCode.SERVER_ERROR,
+                ),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -885,3 +951,193 @@ class AdminApplicantDashboardLatestView(APIView):
             for p in profiles
         ]
         return Response(data, status=status.HTTP_200_OK)
+
+
+# ---------------------------------------------------------------------------
+# Notifications
+# ---------------------------------------------------------------------------
+
+class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet untuk notifikasi pengguna saat ini.
+    GET /api/notifications/ - List notifikasi (unread first)
+    GET /api/notifications/{id}/ - Detail notifikasi
+    PATCH /api/notifications/{id}/mark-read/ - Tandai sebagai dibaca
+    """
+    
+    serializer_class = NotificationSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_fields = ["is_read", "notification_type", "priority"]
+    ordering_fields = ["created_at", "priority"]
+    ordering = ["-created_at"]
+
+    def get_queryset(self):
+        """Only return notifications for the current user."""
+        return Notification.objects.filter(user=self.request.user)
+
+    @action(detail=True, methods=["patch"], url_path="mark-read")
+    def mark_read(self, request, pk=None):
+        """Mark notification as read."""
+        notification = self.get_object()
+        if notification.user != request.user:
+            return Response(
+                error_response(
+                    detail="Notifikasi tidak ditemukan.",
+                    code=ApiCode.NOT_FOUND,
+                    status_code=status.HTTP_404_NOT_FOUND,
+                ),
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        
+        notification.mark_as_read()
+        serializer = self.get_serializer(notification)
+        return Response(
+            success_response(
+                data=serializer.data,
+                detail="Notifikasi ditandai sebagai dibaca.",
+            ),
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=False, methods=["post"], url_path="mark-all-read")
+    def mark_all_read(self, request):
+        """Mark all unread notifications as read."""
+        updated = Notification.objects.filter(
+            user=request.user,
+            is_read=False
+        ).update(
+            is_read=True,
+            read_at=timezone.now()
+        )
+        return Response(
+            success_response(
+                data={"updated_count": updated},
+                detail=f"{updated} notifikasi ditandai sebagai dibaca.",
+            ),
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=False, methods=["get"], url_path="unread-count")
+    def unread_count(self, request):
+        """Get count of unread notifications."""
+        count = Notification.objects.filter(
+            user=request.user,
+            is_read=False
+        ).count()
+        return Response(
+            success_response(
+                data={"count": count},
+            ),
+            status=status.HTTP_200_OK,
+        )
+
+
+class BroadcastViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet untuk broadcast notifications (admin only).
+    GET /api/broadcasts/ - List broadcasts
+    POST /api/broadcasts/ - Create broadcast
+    GET /api/broadcasts/{id}/ - Detail broadcast
+    POST /api/broadcasts/{id}/send/ - Send broadcast immediately
+    POST /api/broadcasts/{id}/preview-recipients/ - Preview recipient count
+    """
+    
+    serializer_class = BroadcastSerializer
+    permission_classes = [IsBackofficeAdmin]
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_fields = ["notification_type", "priority", "created_by"]
+    ordering_fields = ["created_at", "sent_at", "total_recipients"]
+    ordering = ["-created_at"]
+
+    def get_queryset(self):
+        return Broadcast.objects.select_related("created_by").all()
+
+    def get_serializer_class(self):
+        if self.action == "create":
+            from .serializers import BroadcastCreateSerializer
+            return BroadcastCreateSerializer
+        return BroadcastSerializer
+
+    def perform_create(self, serializer):
+        """Set created_by to current user."""
+        serializer.save(created_by=self.request.user)
+
+    @action(detail=True, methods=["post"], url_path="send")
+    def send(self, request, pk=None):
+        """Send broadcast immediately (or schedule if scheduled_at is set)."""
+        broadcast = self.get_object()
+        
+        if broadcast.sent_at:
+            return Response(
+                error_response(
+                    detail="Broadcast sudah dikirim sebelumnya.",
+                    code=ApiCode.ALREADY_PROCESSED,
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        # Check if scheduled
+        if broadcast.scheduled_at and broadcast.scheduled_at > timezone.now():
+            # Schedule via Celery
+            from .tasks import send_broadcast_task
+            send_broadcast_task.apply_async(
+                args=[broadcast.id],
+                eta=broadcast.scheduled_at
+            )
+            return Response(
+                success_response(
+                    data={"scheduled_at": broadcast.scheduled_at},
+                    detail="Broadcast dijadwalkan untuk dikirim.",
+                ),
+                status=status.HTTP_200_OK,
+            )
+        
+        # Send immediately
+        try:
+            recipient_count = send_broadcast(broadcast)
+            serializer = self.get_serializer(broadcast)
+            return Response(
+                success_response(
+                    data=serializer.data,
+                    detail=f"Broadcast dikirim ke {recipient_count} penerima.",
+                ),
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            return Response(
+                error_response(
+                    detail=f"Gagal mengirim broadcast: {str(e)}",
+                    code=ApiCode.INTERNAL_ERROR,
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                ),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @action(detail=False, methods=["post"], url_path="preview-recipients")
+    def preview_recipients(self, request):
+        """Preview recipient count based on recipient_config (before creating broadcast)."""
+        recipient_config = request.data.get("recipient_config", {})
+        
+        # Validate config
+        is_valid, error_msg = validate_recipient_config(recipient_config)
+        if not is_valid:
+            return Response(
+                error_response(
+                    detail=error_msg,
+                    code=ApiCode.VALIDATION_ERROR,
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        # Get count
+        count = get_recipient_count(recipient_config)
+        return Response(
+            success_response(
+                data={"recipient_count": count},
+                detail=f"Preview: {count} penerima akan menerima broadcast.",
+            ),
+            status=status.HTTP_200_OK,
+        )

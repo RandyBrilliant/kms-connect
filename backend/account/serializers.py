@@ -21,6 +21,10 @@ from .models import (
     ApplicantDocument,
     ApplicantVerificationStatus,
     DocumentReviewStatus,
+    Broadcast,
+    Notification,
+    NotificationType,
+    NotificationPriority,
 )
 from .api_responses import (
     ApiMessage,
@@ -397,10 +401,11 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
             "verified_at",
             "verified_by",
             "verification_notes",
+            "score",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "created_at", "updated_at"]
+        read_only_fields = ["id", "score", "created_at", "updated_at"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -850,3 +855,109 @@ class DocumentTypeSerializer(serializers.ModelSerializer):
         model = DocumentType
         fields = ["id", "code", "name", "is_required", "sort_order", "description", "created_at"]
         read_only_fields = ["id", "code", "name", "is_required", "sort_order", "description", "created_at"]
+
+
+# ---------------------------------------------------------------------------
+# Notifications
+# ---------------------------------------------------------------------------
+
+class NotificationSerializer(serializers.ModelSerializer):
+    """Serializer untuk notifikasi individual."""
+
+    class Meta:
+        model = Notification
+        fields = [
+            "id",
+            "title",
+            "message",
+            "notification_type",
+            "priority",
+            "action_url",
+            "action_label",
+            "is_read",
+            "read_at",
+            "created_at",
+        ]
+        read_only_fields = ["id", "is_read", "read_at", "created_at"]
+
+
+class BroadcastSerializer(serializers.ModelSerializer):
+    """Serializer untuk broadcast (create & list)."""
+    
+    created_by_name = serializers.CharField(source="created_by.full_name", read_only=True)
+    recipient_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Broadcast
+        fields = [
+            "id",
+            "title",
+            "message",
+            "notification_type",
+            "priority",
+            "recipient_config",
+            "send_email",
+            "send_in_app",
+            "created_by",
+            "created_by_name",
+            "scheduled_at",
+            "sent_at",
+            "total_recipients",
+            "recipient_count",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "created_by",
+            "created_by_name",
+            "sent_at",
+            "total_recipients",
+            "recipient_count",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_recipient_count(self, obj) -> int:
+        """Get recipient count (preview before sending)."""
+        if obj.sent_at:
+            return obj.total_recipients
+        from .services.notification_recipients import get_recipient_count
+        return get_recipient_count(obj.recipient_config)
+
+    def validate(self, attrs):
+        """Validate recipient_config and delivery options."""
+        recipient_config = attrs.get("recipient_config", {})
+        if recipient_config:
+            from .services.notification_recipients import validate_recipient_config
+            is_valid, error_msg = validate_recipient_config(recipient_config)
+            if not is_valid:
+                raise serializers.ValidationError({"recipient_config": error_msg})
+        
+        send_email = attrs.get("send_email", False)
+        send_in_app = attrs.get("send_in_app", True)
+        if not send_email and not send_in_app:
+            raise serializers.ValidationError(
+                "Pilih minimal satu metode pengiriman (send_email atau send_in_app)."
+            )
+        
+        return attrs
+
+
+class BroadcastCreateSerializer(BroadcastSerializer):
+    """Serializer khusus untuk create broadcast (includes preview)."""
+    
+    preview_recipient_count = serializers.SerializerMethodField()
+
+    class Meta(BroadcastSerializer.Meta):
+        fields = BroadcastSerializer.Meta.fields + ["preview_recipient_count"]
+        read_only_fields = BroadcastSerializer.Meta.read_only_fields + ["preview_recipient_count"]
+
+    def get_preview_recipient_count(self, obj) -> int:
+        """Get preview count from recipient_config."""
+        if obj.pk:
+            return self.get_recipient_count(obj)
+        # For new objects, use data from validated_data
+        recipient_config = self.validated_data.get("recipient_config", {})
+        from .services.notification_recipients import get_recipient_count
+        return get_recipient_count(recipient_config)

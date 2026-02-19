@@ -239,6 +239,7 @@ export function AdminPelamarDetailPage() {
 
   const profile = applicant.applicant_profile
   const displayName = profile?.full_name || applicant.email
+  const score = profile?.score
 
   return (
     <div className="w-full px-6 py-6 md:px-8 md:py-8">
@@ -256,6 +257,11 @@ export function AdminPelamarDetailPage() {
             {applicant.email}
             {profile?.nik && ` • NIK: ${profile.nik}`}
           </p>
+          {typeof score === "number" && (
+            <p className="text-sm text-muted-foreground">
+              Skor kesiapan: {Math.round(score)} / 100
+            </p>
+          )}
         </div>
         <Button variant="ghost" size="sm" className="w-fit cursor-pointer" asChild>
           <Link to={BASE_PATH}>
