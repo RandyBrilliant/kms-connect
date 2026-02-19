@@ -20,6 +20,11 @@ router.register(r"applicants", views.ApplicantUserViewSet, basename="applicant-u
 router.register(r"applicant-profiles", views.ApplicantProfileViewSet, basename="applicant-profile")
 router.register(r"document-types", views.DocumentTypeViewSet, basename="document-type")
 
+# Referrers list for dropdown (before router)
+referrer_paths = [
+    path("referrers/", views.ReferrerListView.as_view(), name="referrer-list"),
+]
+
 # Admin: send verification & password reset email (before router)
 admin_email_paths = [
     path(
@@ -112,6 +117,7 @@ urlpatterns = [
     path("me/", views.MeView.as_view(), name="me"),
     path("", include(public_document_types)),
     path("", include(dashboard_paths)),
+    path("", include(referrer_paths)),
     path("", include(admin_email_paths)),
     path("", include(applicant_self_service_router.urls)),  # Self-service endpoints
     path("", include(nested_applicant)),

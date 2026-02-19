@@ -261,9 +261,13 @@ export function ApplicantDocumentsTab({
     }
   }
 
+  const noDocumentTypes = types.length === 0
+  const allTypesUploaded = types.length > 0 && availableTypes.length === 0
+  const uploadDisabled = noDocumentTypes || allTypesUploaded
+
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-muted-foreground text-sm">
           Kelola dokumen pelamar (KTP, Ijasah, dll.).
         </p>
@@ -273,16 +277,41 @@ export function ApplicantDocumentsTab({
               type="button"
               size="sm"
               className="cursor-pointer"
-              disabled={availableTypes.length === 0}
+              disabled={uploadDisabled}
+              title={
+                noDocumentTypes
+                  ? "Belum ada tipe dokumen. Tambah tipe dokumen di pengaturan."
+                  : allTypesUploaded
+                    ? "Semua tipe dokumen sudah diunggah."
+                    : "Unggah dokumen baru"
+              }
             >
               <IconPlus className="mr-2 size-4" />
               Unggah Dokumen
             </Button>
           </DialogTrigger>
+          {uploadDisabled && (
+            <span className="text-muted-foreground text-xs">
+              {noDocumentTypes
+                ? "Tambah tipe dokumen di pengaturan dulu."
+                : "Semua tipe dokumen sudah diunggah."}
+            </span>
+          )}
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Unggah Dokumen</DialogTitle>
             </DialogHeader>
+            {noDocumentTypes ? (
+              <p className="text-muted-foreground py-4 text-sm">
+                Belum ada tipe dokumen. Tambah tipe dokumen di pengaturan sistem
+                terlebih dahulu, lalu kembali ke sini untuk mengunggah.
+              </p>
+            ) : allTypesUploaded ? (
+              <p className="text-muted-foreground py-4 text-sm">
+                Semua tipe dokumen untuk pelamar ini sudah diunggah. Hapus atau
+                ganti dokumen dari daftar jika perlu.
+              </p>
+            ) : (
             <form onSubmit={handleUpload} className="space-y-6">
               <Field>
                 <FieldLabel>
@@ -356,6 +385,7 @@ export function ApplicantDocumentsTab({
                 </Button>
               </div>
             </form>
+            )}
           </DialogContent>
         </Dialog>
       </div>

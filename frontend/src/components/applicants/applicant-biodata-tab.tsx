@@ -33,7 +33,11 @@ import {
   WRITING_HAND_LABELS,
   MARITAL_STATUS_LABELS,
 } from "@/constants/applicant"
+import { BIODATA_SECTIONS, RequiredStar } from "./biodata-form-shared"
 import { RegionAddressFields } from "./region-address-fields"
+import { SearchableSelect } from "@/components/ui/searchable-select"
+import { useRegenciesQuery } from "@/hooks/use-regions-query"
+import { useReferrersQuery } from "@/hooks/use-referrers-query"
 
 interface ApplicantBiodataTabProps {
   profile: ApplicantProfile
@@ -44,7 +48,7 @@ interface ApplicantBiodataTabProps {
 type BiodataFormValues = {
   full_name: string
   nik: string
-  birth_place: string
+  birth_place: number | null
   birth_date: string
   address: string
   contact_phone: string
@@ -86,7 +90,7 @@ function toFormValues(p: ApplicantProfile): BiodataFormValues {
   return {
     full_name: p.full_name || "",
     nik: p.nik || "",
-    birth_place: p.birth_place || "",
+    birth_place: p.birth_place ?? null,
     birth_date: p.birth_date || "",
     address: p.address || "",
     contact_phone: p.contact_phone || "",
@@ -137,6 +141,8 @@ export function ApplicantBiodataTab({
   isSubmitting = false,
 }: ApplicantBiodataTabProps) {
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({})
+  const { data: regencies = [], isPending: regenciesLoading } = useRegenciesQuery(null)
+  const { data: referrers = [], isPending: referrersLoading } = useReferrersQuery()
 
   const form = useForm({
     defaultValues: toFormValues(profile),
@@ -145,7 +151,7 @@ export function ApplicantBiodataTab({
 
       const payload = {
         full_name: value.full_name || undefined,
-        birth_place: value.birth_place || undefined,
+        birth_place: value.birth_place ?? undefined,
         birth_date: value.birth_date || null,
         address: value.address || undefined,
         contact_phone: value.contact_phone || undefined,
@@ -216,21 +222,16 @@ export function ApplicantBiodataTab({
     >
       <Card>
         <CardHeader>
-          <CardTitle>Data CPMI</CardTitle>
-          <CardDescription>
-            Data utama pelamar. Field yang ditandai dengan{" "}
-            <span className="text-destructive">*</span> wajib diisi.
-          </CardDescription>
+          <CardTitle>{BIODATA_SECTIONS.dataCpmi.title}</CardTitle>
+          <CardDescription>{BIODATA_SECTIONS.dataCpmi.description}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <FieldGroup>
-            <form.Field
-              name="full_name"
-            >
+            <form.Field name="full_name">
               {(field) => (
                 <Field>
                   <FieldLabel htmlFor={field.name}>
-                    Nama Lengkap <span className="text-destructive">*</span>
+                    Nama Lengkap <RequiredStar field="full_name" />
                   </FieldLabel>
                   <Input
                     id={field.name}
@@ -250,13 +251,11 @@ export function ApplicantBiodataTab({
               )}
             </form.Field>
 
-            <form.Field
-              name="nik"
-            >
+            <form.Field name="nik">
               {(field) => (
                 <Field>
                   <FieldLabel htmlFor={field.name}>
-                    NIK <span className="text-destructive">*</span>
+                    NIK <RequiredStar field="nik" />
                   </FieldLabel>
                   <Input
                     id={field.name}
@@ -281,11 +280,23 @@ export function ApplicantBiodataTab({
                 {(field) => (
                   <Field>
                     <FieldLabel htmlFor={field.name}>Tempat Lahir</FieldLabel>
-                    <Input
-                      id={field.name}
+                    <SearchableSelect
+                      items={regencies.map((r) => ({ id: r.id, name: r.name }))}
                       value={field.state.value}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                      onBlur={field.handleBlur}
+                      onChange={(id) => field.handleChange(id)}
+                      placeholder="Pilih kabupaten/kota tempat lahir"
+                      clearLabel="Pilih kabupaten/kota"
+                      disabled={false}
+                      loading={regenciesLoading}
+                      emptyMessage="Tidak ada kabupaten/kota"
+                    />
+                    <FieldError
+                      errors={[
+                        ...(field.state.meta.errors as unknown[]).map((err) =>
+                          typeof err === "string" ? { message: err } : { message: (err as { message?: string }).message }
+                        ),
+                        ...(errors.birth_place ? [{ message: errors.birth_place }] : []),
+                      ].filter(Boolean)}
                     />
                   </Field>
                 )}
@@ -294,7 +305,7 @@ export function ApplicantBiodataTab({
                 {(field) => {
                   const selectedDate = field.state.value
                     ? new Date(field.state.value)
-                    : null
+                    : null;
                   return (
                     <Field>
                       <FieldLabel htmlFor={field.name}>Tanggal Lahir</FieldLabel>
@@ -351,19 +362,31 @@ export function ApplicantBiodataTab({
               )}
             </form.Field>
 
-            <RegionAddressFields
-              value={{
-                province: form.getFieldValue("province") ?? null,
-                district: form.getFieldValue("district") ?? null,
-                village: form.getFieldValue("village") ?? null,
-              }}
-              onChange={(v) => {
-                form.setFieldValue("province", v.province)
-                form.setFieldValue("district", v.district)
-                form.setFieldValue("village", v.village)
-              }}
-              disabled={isSubmitting}
-            />
+            <form.Field name="province">
+              {(fp) => (
+                <form.Field name="district">
+                  {(fd) => (
+                    <form.Field name="village">
+                      {(fv) => (
+                        <RegionAddressFields
+                          value={{
+                            province: fp.state.value ?? null,
+                            district: fd.state.value ?? null,
+                            village: fv.state.value ?? null,
+                          }}
+                          onChange={(v) => {
+                            fp.handleChange(v.province)
+                            fd.handleChange(v.district)
+                            fv.handleChange(v.village)
+                          }}
+                          disabled={isSubmitting}
+                        />
+                      )}
+                    </form.Field>
+                  )}
+                </form.Field>
+              )}
+            </form.Field>
 
             <form.Field name="contact_phone">
               {(field) => (
@@ -418,10 +441,8 @@ export function ApplicantBiodataTab({
 
       <Card>
         <CardHeader>
-          <CardTitle>Data Pribadi Tambahan</CardTitle>
-          <CardDescription>
-            Informasi agama, pendidikan, dan status pernikahan
-          </CardDescription>
+          <CardTitle>{BIODATA_SECTIONS.dataPribadi.title}</CardTitle>
+          <CardDescription>{BIODATA_SECTIONS.dataPribadi.description}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <FieldGroup>
@@ -510,10 +531,8 @@ export function ApplicantBiodataTab({
 
       <Card>
         <CardHeader>
-          <CardTitle>Ciri Fisik</CardTitle>
-          <CardDescription>
-            Tinggi, berat badan, dan tangan dominan
-          </CardDescription>
+          <CardTitle>{BIODATA_SECTIONS.ciriFisik.title}</CardTitle>
+          <CardDescription>{BIODATA_SECTIONS.ciriFisik.description}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <FieldGroup>
@@ -584,10 +603,8 @@ export function ApplicantBiodataTab({
 
       <Card>
         <CardHeader>
-          <CardTitle>Data Paspor</CardTitle>
-          <CardDescription>
-            Informasi paspor jika sudah memiliki
-          </CardDescription>
+          <CardTitle>{BIODATA_SECTIONS.dataPaspor.title}</CardTitle>
+          <CardDescription>{BIODATA_SECTIONS.dataPaspor.description}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <FieldGroup>
@@ -672,28 +689,29 @@ export function ApplicantBiodataTab({
 
       <Card>
         <CardHeader>
-          <CardTitle>Informasi Rujukan</CardTitle>
-          <CardDescription>
-            Staff/Admin yang merujuk pelamar (ID user)
-          </CardDescription>
+          <CardTitle>{BIODATA_SECTIONS.referrer.title}</CardTitle>
+          <CardDescription>{BIODATA_SECTIONS.referrer.description}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <FieldGroup>
             <form.Field name="referrer">
               {(field) => (
                 <Field>
-                  <FieldLabel htmlFor={field.name}>ID Pemberi Rujukan (Staff/Admin)</FieldLabel>
-                  <Input
-                    id={field.name}
-                    type="number"
-                    min={1}
-                    value={field.state.value != null ? String(field.state.value) : ""}
-                    onChange={(e) => {
-                      const v = e.target.value
-                      field.handleChange(v ? Number(v) : null)
-                    }}
-                    onBlur={field.handleBlur}
-                    placeholder="Kosongkan jika Admin"
+                  <FieldLabel htmlFor={field.name}>Pemberi Rujukan (Staff/Admin)</FieldLabel>
+                  <SearchableSelect
+                    items={referrers.map((r) => ({
+                      id: r.id,
+                      name: r.referral_code
+                        ? `${r.full_name} (${r.email}) · ${r.referral_code}`
+                        : `${r.full_name} (${r.email})`,
+                    }))}
+                    value={field.state.value}
+                    onChange={(id) => field.handleChange(id)}
+                    placeholder="Pilih atau cari nama / email / kode rujukan"
+                    clearLabel="Tidak ada rujukan (Admin)"
+                    disabled={isSubmitting}
+                    loading={referrersLoading}
+                    emptyMessage="Tidak ada Staff/Admin"
                   />
                 </Field>
               )}
@@ -704,8 +722,8 @@ export function ApplicantBiodataTab({
 
       <Card>
         <CardHeader>
-          <CardTitle>Data Orangtua / Keluarga</CardTitle>
-          <CardDescription>Ayah, Ibu, Suami/Istri</CardDescription>
+          <CardTitle>{BIODATA_SECTIONS.dataKeluarga.title}</CardTitle>
+          <CardDescription>{BIODATA_SECTIONS.dataKeluarga.description}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <FieldGroup>
@@ -855,20 +873,32 @@ export function ApplicantBiodataTab({
               )}
             </form.Field>
 
-            <RegionAddressFields
-              value={{
-                province: form.getFieldValue("family_province") ?? null,
-                district: form.getFieldValue("family_district") ?? null,
-                village: form.getFieldValue("family_village") ?? null,
-              }}
-              onChange={(v) => {
-                form.setFieldValue("family_province", v.province)
-                form.setFieldValue("family_district", v.district)
-                form.setFieldValue("family_village", v.village)
-              }}
-              disabled={isSubmitting}
-              labelPrefix="Alamat Keluarga"
-            />
+            <form.Field name="family_province">
+              {(fp) => (
+                <form.Field name="family_district">
+                  {(fd) => (
+                    <form.Field name="family_village">
+                      {(fv) => (
+                        <RegionAddressFields
+                          value={{
+                            province: fp.state.value ?? null,
+                            district: fd.state.value ?? null,
+                            village: fv.state.value ?? null,
+                          }}
+                          onChange={(v) => {
+                            fp.handleChange(v.province)
+                            fd.handleChange(v.district)
+                            fv.handleChange(v.village)
+                          }}
+                          disabled={isSubmitting}
+                          labelPrefix="Alamat Keluarga"
+                        />
+                      )}
+                    </form.Field>
+                  )}
+                </form.Field>
+              )}
+            </form.Field>
 
             <form.Field name="family_contact_phone">
               {(field) => (

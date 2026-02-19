@@ -60,7 +60,7 @@ export interface ApplicantProfile {
   registration_date: string | null
   destination_country: DestinationCountry
   full_name: string
-  birth_place: string
+  birth_place: number | null
   birth_date: string | null
   address: string
   /** Province FK id (regions.Province) */
@@ -141,10 +141,12 @@ export interface ApplicantUser {
 export interface ApplicantUserCreateInput {
   email: string
   password: string
+  /** Nama lengkap (CustomUser); can be sent at top level and/or in applicant_profile */
+  full_name: string
   applicant_profile: {
     full_name: string
     nik: string
-    birth_place?: string
+    birth_place?: number | null
     birth_date?: string | null
     address?: string
     contact_phone?: string
@@ -224,21 +226,6 @@ export interface ApplicantsListParams {
   email_verified?: boolean
   verification_status?: ApplicantVerificationStatus
   ordering?: string
-  // Location filters (province/district are FK IDs)
-  province?: number
-  district?: number
-  // Demographic filters
-  religion?: string
-  education_level?: string
-  marital_status?: string
-  work_country?: string
-  // Reference filters
-  referrer?: number
-  // Date filters
-  submitted_after?: string
-  submitted_before?: string
-  // Miscellaneous
-  with_related?: boolean
 }
 
 export interface PaginatedResponse<T> {

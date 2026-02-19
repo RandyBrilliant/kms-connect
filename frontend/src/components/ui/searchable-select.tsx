@@ -125,12 +125,16 @@ export function SearchableSelect({
 
   React.useEffect(() => {
     if (open) {
-      inputRef.current?.focus()
       setHighlightedIndex(0)
     } else {
       setQuery("")
     }
   }, [open])
+
+  const handleOpenAutoFocus = (e: Event) => {
+    e.preventDefault()
+    requestAnimationFrame(() => inputRef.current?.focus())
+  }
 
   React.useEffect(() => {
     if (!open) return
@@ -170,7 +174,7 @@ export function SearchableSelect({
       <PopoverContent
         className="min-w-[var(--radix-popover-trigger-width)] p-0"
         align="start"
-        onOpenAutoFocus={(e) => e.preventDefault()}
+        onOpenAutoFocus={handleOpenAutoFocus}
         onCloseAutoFocus={(e) => e.preventDefault()}
       >
         <div className="flex flex-col gap-1 p-1">

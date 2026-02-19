@@ -157,10 +157,7 @@ export function useRejectApplicantMutation() {
   })
 }
 
-/**
- * Bulk approve applicants
- * NOTE: Requires backend endpoint /api/applicant-profiles/bulk-approve/
- */
+/** Bulk approve applicants (POST /api/applicant-profiles/bulk-approve/) */
 export function useBulkApproveApplicantsMutation() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -173,10 +170,7 @@ export function useBulkApproveApplicantsMutation() {
   })
 }
 
-/**
- * Bulk reject applicants
- * NOTE: Requires backend endpoint /api/applicant-profiles/bulk-reject/
- */
+/** Bulk reject applicants (POST /api/applicant-profiles/bulk-reject/) */
 export function useBulkRejectApplicantsMutation() {
   const queryClient = useQueryClient()
   return useMutation({

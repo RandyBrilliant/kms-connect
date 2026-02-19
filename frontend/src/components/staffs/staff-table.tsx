@@ -14,6 +14,7 @@ import {
 import {
     IconCircleCheck,
     IconCircleX,
+    IconCopy,
     IconPencil,
     IconPlus,
     IconSearch,
@@ -110,6 +111,15 @@ export function StaffTable({ basePath }: StaffTableProps) {
         [deactivateMutation]
     )
 
+    const handleCopyReferralCode = useCallback(async (code: string) => {
+        try {
+            await navigator.clipboard.writeText(code)
+            toast.success("Disalin", "Kode rujukan telah disalin ke clipboard")
+        } catch {
+            toast.error("Gagal", "Tidak dapat menyalin kode rujukan")
+        }
+    }, [])
+
     const columns = useMemo<ColumnDef<StaffUser>[]>(
         () => [
             {
@@ -127,6 +137,34 @@ export function StaffTable({ basePath }: StaffTableProps) {
                 cell: ({ row }) => (
                     <span>{row.original.email}</span>
                 ),
+            },
+            {
+                accessorKey: "referral_code",
+                header: "Kode Rujukan",
+                cell: ({ row }) => {
+                    const code = row.original.referral_code
+                    if (!code) {
+                        return <span className="text-muted-foreground">-</span>
+                    }
+                    return (
+                        <div className="flex items-center gap-2">
+                            <span className="font-mono text-sm">{code}</span>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-6 h-6 w-6 cursor-pointer"
+                                onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleCopyReferralCode(code)
+                                }}
+                                title="Salin kode rujukan"
+                            >
+                                <IconCopy className="size-3" />
+                                <span className="sr-only">Salin</span>
+                            </Button>
+                        </div>
+                    )
+                },
             },
             {
                 accessorKey: "staff_profile.contact_phone",
@@ -224,7 +262,7 @@ export function StaffTable({ basePath }: StaffTableProps) {
                 },
             },
         ],
-        [basePath, navigate, handleActivate, handleDeactivate]
+        [basePath, navigate, handleActivate, handleDeactivate, handleCopyReferralCode]
     )
 
     const table = useReactTable({

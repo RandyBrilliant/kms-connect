@@ -393,10 +393,14 @@ class ApplicantProfile(models.Model):
         help_text=_("Negara tujuan penempatan (form: RBA zero cost)."),
     )
     # ---- I. Data CPMI ----
-    birth_place = models.CharField(
-        _("tempat lahir"),
-        max_length=255,
+    birth_place = models.ForeignKey(
+        "regions.Regency",
+        on_delete=models.SET_NULL,
+        null=True,
         blank=True,
+        related_name="applicant_profiles_birth_place",
+        verbose_name=_("tempat lahir"),
+        help_text=_("Kabupaten/Kota tempat lahir."),
     )
     birth_date = models.DateField(
         _("tanggal lahir"),

@@ -19,7 +19,10 @@ export interface StaffUser {
   email_verified: boolean
   email_verified_at: string | null
   date_joined: string
+  last_login: string | null
   updated_at: string
+  referral_code: string | null
+  google_id: string | null
   staff_profile: StaffProfile
 }
 

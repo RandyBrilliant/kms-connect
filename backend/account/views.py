@@ -44,6 +44,7 @@ from .serializers import (
     CompanyUserSerializer,
     ApplicantUserSerializer,
     ApplicantProfileSerializer,
+    ReferrerListSerializer,
     WorkExperienceSerializer,
     ApplicantDocumentSerializer,
     DocumentTypeSerializer,
@@ -664,6 +665,26 @@ class SendPasswordResetEmailView(APIView):
 
 
 # ---------------------------------------------------------------------------
+# Referrers (Staff + Admin for dropdown pemberi rujukan)
+# ---------------------------------------------------------------------------
+
+class ReferrerListView(APIView):
+    """
+    List Staff and Admin users for referrer dropdown.
+    GET /api/referrers/ → [{ id, full_name, email, referral_code }, ...]
+    """
+
+    permission_classes = [IsBackofficeAdmin]
+
+    def get(self, request):
+        qs = (
+            CustomUser.objects.filter(role__in=[UserRole.STAFF, UserRole.ADMIN])
+            .order_by("full_name", "email")
+        )
+        serializer = ReferrerListSerializer(qs, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
 # DocumentType (read-only untuk dropdown / daftar tipe)
 # ---------------------------------------------------------------------------
 

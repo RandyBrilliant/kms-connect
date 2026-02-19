@@ -28,6 +28,9 @@ from .api_responses import (
     validate_nik_format,
     validate_nik_unique,
 )
+def _regency_queryset():
+    from regions.models import Regency
+    return Regency.objects.all()
 
 
 # ---------------------------------------------------------------------------
@@ -101,16 +104,24 @@ class StaffProfileSerializer(serializers.ModelSerializer):
     """Profil staf (nama dari user, telepon, foto)."""
 
     full_name = serializers.CharField(
-        source="user.full_name",
         required=False,
         allow_blank=True,
         max_length=255,
+        write_only=True,  # Only used for writing during create/update, not stored on StaffProfile
+        help_text="Nama lengkap (disimpan pada CustomUser, bukan StaffProfile)",
     )
 
     class Meta:
         model = StaffProfile
         fields = ["id", "full_name", "contact_phone", "photo", "created_at", "updated_at"]
         read_only_fields = ["id", "created_at", "updated_at"]
+    
+    def to_representation(self, instance):
+        """When reading, get full_name from user.full_name."""
+        ret = super().to_representation(instance)
+        if instance and hasattr(instance, "user"):
+            ret["full_name"] = instance.user.full_name
+        return ret
 
 
 class StaffUserSerializer(serializers.ModelSerializer):
@@ -130,10 +141,13 @@ class StaffUserSerializer(serializers.ModelSerializer):
             "email_verified",
             "email_verified_at",
             "date_joined",
+            "last_login",
             "updated_at",
+            "referral_code",
+            "google_id",
             "staff_profile",
         ]
-        read_only_fields = ["id", "role", "email_verified_at", "date_joined", "updated_at"]
+        read_only_fields = ["id", "role", "email_verified_at", "date_joined", "last_login", "updated_at", "referral_code", "google_id"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -141,19 +155,32 @@ class StaffUserSerializer(serializers.ModelSerializer):
             for f in ("is_active", "email_verified"):
                 if f in self.fields:
                     self.fields[f].read_only = True
+        # Make staff_profile required when creating
+        if self.instance is None:  # Creating new instance
+            self.fields["staff_profile"].required = True
+            # Make full_name required in nested serializer when creating
+            if "staff_profile" in self.fields:
+                nested_serializer = self.fields["staff_profile"]
+                if hasattr(nested_serializer, "fields") and "full_name" in nested_serializer.fields:
+                    nested_serializer.fields["full_name"].required = True
+                    nested_serializer.fields["full_name"].allow_blank = False
 
     def validate_email(self, value):
         return validate_email_unique(CustomUser, value, self.instance)
 
     def create(self, validated_data):
         profile_data = validated_data.pop("staff_profile", None)
-        if not profile_data or not profile_data.get("full_name"):
+        if not profile_data:
             raise serializers.ValidationError({
                 "staff_profile": {"full_name": [ApiMessage.PROFILE_FULL_NAME_REQUIRED]},
             })
-        full_name = profile_data.pop("full_name", "")
+        full_name = profile_data.pop("full_name", "").strip()
+        if not full_name:
+            raise serializers.ValidationError({
+                "staff_profile": {"full_name": [ApiMessage.PROFILE_FULL_NAME_REQUIRED]},
+            })
         password = validated_data.pop("password", None)
-        if not password:
+        if not password or not password.strip():
             raise serializers.ValidationError({
                 "password": [ApiMessage.PASSWORD_REQUIRED_ON_CREATE],
             })
@@ -272,6 +299,14 @@ class CompanyUserSerializer(serializers.ModelSerializer):
 # Applicant (CustomUser + ApplicantProfile) – admin review & backdoor create
 # ---------------------------------------------------------------------------
 
+class ReferrerListSerializer(serializers.ModelSerializer):
+    """Minimal serializer for referrer dropdown (Staff + Admin users)."""
+
+    class Meta:
+        model = CustomUser
+        fields = ["id", "full_name", "email", "referral_code"]
+
+
 class ApplicantProfileSerializer(serializers.ModelSerializer):
     """Profil pelamar (biodata, keluarga, verifikasi). referrer/verified_by = ID user Admin/Staff."""
 
@@ -293,6 +328,11 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
         required=False,
         allow_blank=True,
         max_length=255,
+    )
+    birth_place = serializers.PrimaryKeyRelatedField(
+        queryset=_regency_queryset(),
+        required=False,
+        allow_null=True,
     )
 
     class Meta:
@@ -364,7 +404,7 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Lazy queryset for referrer/verified_by (Admin/Staff only) to avoid import-time evaluation
+        # Lazy queryset for referrer/verified_by (Admin/Staff only)
         backoffice_qs = CustomUser.objects.filter(role__in=[UserRole.STAFF, UserRole.ADMIN])
         self.fields["referrer"].queryset = backoffice_qs
         self.fields["verified_by"].queryset = backoffice_qs
@@ -442,6 +482,7 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "email",
+            "full_name",
             "role",
             "password",
             "is_active",
@@ -524,12 +565,15 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         profile_data = validated_data.pop("applicant_profile", None)
-        if not profile_data or not profile_data.get("full_name"):
+        # full_name can be at top level (CustomUser) or nested in applicant_profile
+        full_name = validated_data.pop("full_name", None) or (profile_data.pop("full_name", None) if profile_data else None)
+        if not full_name or (isinstance(full_name, str) and not full_name.strip()):
             raise serializers.ValidationError({
-                "applicant_profile": {"full_name": [ApiMessage.APPLICANT_FULL_NAME_REQUIRED]},
+                "full_name": [ApiMessage.APPLICANT_FULL_NAME_REQUIRED],
             })
-        full_name = profile_data.pop("full_name", "")
-        nik = profile_data.get("nik")
+        full_name = full_name.strip() if isinstance(full_name, str) else str(full_name)
+        validated_data["full_name"] = full_name
+        nik = profile_data.get("nik") if profile_data else None
         if not nik or (isinstance(nik, str) and not nik.strip()):
             raise serializers.ValidationError({
                 "applicant_profile": {"nik": [ApiMessage.APPLICANT_NIK_REQUIRED]},
@@ -545,16 +589,24 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({
                 "password": [ApiMessage.PASSWORD_REQUIRED_ON_CREATE],
             })
-        validated_data["full_name"] = full_name
         user = CustomUser.objects.create_user(role=UserRole.APPLICANT, **validated_data)
         user.set_password(password)
         user.save(update_fields=["password"])
-        ApplicantProfile.objects.create(user=user, **profile_data)
+        if profile_data:
+            profile_data.pop("user", None)  # avoid duplicate with explicit user=user
+            ApplicantProfile.objects.create(user=user, **profile_data)
+        else:
+            ApplicantProfile.objects.create(user=user)
         return user
 
     def update(self, instance, validated_data):
         profile_data = validated_data.pop("applicant_profile", None)
         password = validated_data.pop("password", None)
+        
+        # Handle full_name from top level or nested profile_data
+        full_name = validated_data.pop("full_name", None) or (profile_data.pop("full_name", None) if profile_data else None)
+        if full_name is not None:
+            instance.full_name = full_name.strip() if isinstance(full_name, str) else str(full_name)
 
         # Update user fields
         for attr, value in validated_data.items():
@@ -564,18 +616,21 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
         instance.save()
 
         if profile_data is not None:
-            profile = getattr(instance, "applicant_profile", None)
-            full_name = profile_data.pop("full_name", None)
-            if full_name is not None:
-                instance.full_name = full_name
+            # full_name with source="user.full_name" can appear as nested "user" in validated_data
+            user_data = profile_data.pop("user", None)
+            if isinstance(user_data, dict) and user_data.get("full_name") is not None:
+                fn = user_data.get("full_name")
+                instance.full_name = fn.strip() if isinstance(fn, str) else str(fn)
                 instance.save(update_fields=["full_name"])
+
+            profile = getattr(instance, "applicant_profile", None)
             if profile:
                 # Capture previous status/timestamps to detect transitions
                 old_status = profile.verification_status
                 old_submitted_at = profile.submitted_at
                 old_verified_at = profile.verified_at
 
-                # Apply incoming profile changes
+                # Apply incoming profile changes (user is not on ApplicantProfile; already handled above)
                 for attr, value in profile_data.items():
                     setattr(profile, attr, value)
 

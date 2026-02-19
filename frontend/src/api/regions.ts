@@ -42,17 +42,19 @@ export async function getProvinces(search?: string): Promise<Province[]> {
   return Array.isArray(data) ? data : data.results ?? []
 }
 
-/** GET /api/regencies/?province_id=X */
+/** GET /api/regencies/?province_id=X (optional - if null, returns all regencies) */
 export async function getRegencies(
   provinceId: number | null,
   search?: string
 ): Promise<Regency[]> {
-  if (!provinceId) return []
-  const params = new URLSearchParams({ province_id: String(provinceId) })
+  const params = new URLSearchParams()
+  if (provinceId) {
+    params.set("province_id", String(provinceId))
+  }
   if (search) params.set("search", search)
-  const { data } = await api.get<Regency[] | { results: Regency[] }>(
-    `/api/regencies/?${params}`
-  )
+  const queryString = params.toString()
+  const url = queryString ? `/api/regencies/?${queryString}` : "/api/regencies/"
+  const { data } = await api.get<Regency[] | { results: Regency[] }>(url)
   return Array.isArray(data) ? data : data.results ?? []
 }
 

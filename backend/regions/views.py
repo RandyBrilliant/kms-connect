@@ -24,6 +24,7 @@ class ProvinceViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ProvinceSerializer
     filter_backends = [SearchFilter]
     search_fields = ["name", "code"]
+    pagination_class = None  # Return all for dropdowns
 
 
 class RegencyViewSet(viewsets.ReadOnlyModelViewSet):
@@ -32,6 +33,7 @@ class RegencyViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = RegencySerializer
     filter_backends = [SearchFilter]
     search_fields = ["name", "code"]
+    pagination_class = None  # Return all for dropdowns (birth_place, address cascade)
 
     def get_queryset(self):
         qs = Regency.objects.all().select_related("province").order_by("name")
@@ -47,6 +49,7 @@ class DistrictViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = DistrictSerializer
     filter_backends = [SearchFilter]
     search_fields = ["name", "code"]
+    pagination_class = None  # Return all for dropdown cascade
 
     def get_queryset(self):
         qs = District.objects.all().select_related("regency").order_by("name")
@@ -62,6 +65,7 @@ class VillageViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = VillageSerializer
     filter_backends = [SearchFilter]
     search_fields = ["name", "code"]
+    pagination_class = None  # Return all for dropdown cascade
 
     def get_queryset(self):
         qs = Village.objects.all().select_related("district").order_by("name")

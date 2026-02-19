@@ -60,7 +60,6 @@ import {
 import { formatDate, formatNIK } from "@/lib/formatters"
 import { isSubmittedStatus } from "@/lib/type-guards"
 import { VerificationModal } from "./verification-modal"
-import { ApplicantFilters } from "./applicant-filters"
 import type { ApplicantUser } from "@/types/applicant"
 import type { ApplicantsListParams, ApplicantVerificationStatus } from "@/types/applicant"
 
@@ -198,10 +197,10 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
         setRowSelection({})
         setShowVerificationModal(false)
         setVerificationAction(null)
-      } catch (err) {
+      } catch {
         toast.error(
           "Gagal memproses verifikasi",
-          "Terjadi kesalahan saat memproses verifikasi. Pastikan backend endpoint sudah diimplementasikan."
+          "Terjadi kesalahan. Periksa koneksi dan coba lagi."
         )
       }
     },
@@ -442,61 +441,54 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
         </Button>
       </div>
 
-      {/* Advanced Filters */}
-      <ApplicantFilters
-        onFiltersChange={(filters) => {
-          setParams((p) => ({ ...p, ...filters, page: 1 }))
-          setRowSelection({})
-        }}
-        onReset={() => {
-          setParams((p) => ({
-            page: 1,
-            page_size: p.page_size,
-            search: p.search,
-            ordering: p.ordering,
-            verification_status: p.verification_status,
-            is_active: p.is_active,
-          }))
-          setRowSelection({})
-        }}
-      />
-
       {/* Bulk Action Bar */}
       {selectedApplicants.length > 0 && (
-        <div className="flex items-center justify-between rounded-lg border bg-muted/50 px-4 py-3">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/50 px-4 py-3">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-medium">
               {selectedApplicants.length} pelamar dipilih
             </span>
-            {canBulkVerify && (
+            {canBulkVerify ? (
               <span className="text-muted-foreground text-xs">
-                (Semua dapat diverifikasi)
+                Semua dapat diverifikasi (status Dikirim)
+              </span>
+            ) : (
+              <span className="text-muted-foreground text-xs">
+                Hanya pelamar dengan status Dikirim dapat diverifikasi
               </span>
             )}
           </div>
           <div className="flex items-center gap-2">
-            {canBulkVerify && (
-              <>
-                <Button
-                  onClick={handleBulkApprove}
-                  variant="default"
-                  size="sm"
-                  className="cursor-pointer gap-1.5"
-                >
-                  <IconChecks className="size-4" />
-                  Terima
-                </Button>
-                <Button
-                  onClick={handleBulkReject}
-                  variant="destructive"
-                  size="sm"
-                  className="cursor-pointer gap-1.5"
-                >
-                  <IconX className="size-4" />
-                  Tolak
-                </Button>
-              </>
-            )}
+            <Button
+              onClick={handleBulkApprove}
+              variant="default"
+              size="sm"
+              className="cursor-pointer gap-1.5"
+              disabled={!canBulkVerify}
+              title={
+                canBulkVerify
+                  ? "Terima pelamar yang dipilih"
+                  : "Pilih hanya pelamar dengan status Dikirim"
+              }
+            >
+              <IconChecks className="size-4" />
+              Terima
+            </Button>
+            <Button
+              onClick={handleBulkReject}
+              variant="destructive"
+              size="sm"
+              className="cursor-pointer gap-1.5"
+              disabled={!canBulkVerify}
+              title={
+                canBulkVerify
+                  ? "Tolak pelamar yang dipilih"
+                  : "Pilih hanya pelamar dengan status Dikirim"
+              }
+            >
+              <IconX className="size-4" />
+              Tolak
+            </Button>
             <Button
               onClick={handleClearSelection}
               variant="ghost"

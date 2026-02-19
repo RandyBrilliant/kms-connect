@@ -23,15 +23,8 @@ export function AdminPelamarFormPage() {
   const handleSubmit = async (values: {
     email: string
     password: string
-    applicant_profile: {
-      full_name: string
-      nik: string
-      birth_place?: string
-      birth_date?: string | null
-      address?: string
-      contact_phone?: string
-      gender?: string
-    }
+    full_name: string
+    applicant_profile: Record<string, unknown>
   }) => {
     try {
       const created = await createMutation.mutateAsync(values)
@@ -79,7 +72,7 @@ export function AdminPelamarFormPage() {
           </Button>
         </div>
 
-        <div className="max-w-2xl">
+        <div className="max-w-3xl">
           <ApplicantForm
           onSubmit={handleSubmit}
           isSubmitting={createMutation.isPending}
