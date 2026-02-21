@@ -115,12 +115,29 @@ dashboard_paths = [
     ),
 ]
 
+# Reports (Laporan)
+report_paths = [
+    path(
+        "reports/applicants/",
+        views.AdminReportView.as_view(),
+        name="reports-applicants",
+    ),
+]
+
+# FCM token management
+fcm_paths = [
+    path("fcm/register/", views.register_fcm_token, name="fcm-register"),
+    path("fcm/unregister/", views.unregister_fcm_token, name="fcm-unregister"),
+]
+
 urlpatterns = [
     path("me/", views.MeView.as_view(), name="me"),
     path("", include(public_document_types)),
     path("", include(dashboard_paths)),
+    path("", include(report_paths)),
     path("", include(referrer_paths)),
     path("", include(admin_email_paths)),
+    path("", include(fcm_paths)),
     path("", include(applicant_self_service_router.urls)),  # Self-service endpoints
     path("", include(nested_applicant)),
     path("", include(router.urls)),

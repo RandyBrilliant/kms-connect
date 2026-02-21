@@ -271,3 +271,45 @@ def send_broadcast_task(self, broadcast_id: int):
         return
     
     send_broadcast(broadcast)
+
+
+@shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=2)
+def send_notification_push_task(self, notification_id: int):
+    """
+    Kirim push notification via FCM.
+    Dipanggil saat membuat notifikasi dengan send_push=True.
+    """
+    from .models import Notification
+    from .services.fcm_service import send_fcm_to_user
+
+    notification = Notification.objects.filter(pk=notification_id).select_related("user").first()
+    if not notification or not notification.user:
+        return
+    
+    # Prepare data payload
+    data = {
+        "notification_id": str(notification.id),
+        "action_url": notification.action_url or "",
+        "action_label": notification.action_label or "",
+    }
+    
+    # Determine priority
+    priority = "high" if notification.priority in ["HIGH", "URGENT"] else "normal"
+    
+    # Send push notification
+    sent = send_fcm_to_user(
+        user=notification.user,
+        title=notification.title,
+        body=notification.message,
+        data=data,
+        notification_type=notification.notification_type,
+        priority=priority,
+    )
+    
+    if sent:
+        # Optionally track push sent status (you can add these fields to Notification model)
+        # notification.push_sent = True
+        # notification.push_sent_at = timezone.now()
+        # notification.save(update_fields=["push_sent", "push_sent_at"])
+        pass
+

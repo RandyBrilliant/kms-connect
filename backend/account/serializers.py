@@ -898,6 +898,7 @@ class BroadcastSerializer(serializers.ModelSerializer):
             "recipient_config",
             "send_email",
             "send_in_app",
+            "send_push",
             "created_by",
             "created_by_name",
             "scheduled_at",
@@ -936,9 +937,10 @@ class BroadcastSerializer(serializers.ModelSerializer):
         
         send_email = attrs.get("send_email", False)
         send_in_app = attrs.get("send_in_app", True)
-        if not send_email and not send_in_app:
+        send_push = attrs.get("send_push", False)
+        if not send_email and not send_in_app and not send_push:
             raise serializers.ValidationError(
-                "Pilih minimal satu metode pengiriman (send_email atau send_in_app)."
+                "Pilih minimal satu metode pengiriman (send_email, send_in_app, atau send_push)."
             )
         
         return attrs

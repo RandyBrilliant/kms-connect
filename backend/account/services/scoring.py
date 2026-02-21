@@ -160,7 +160,7 @@ def recalculate_and_persist_score(applicant_profile: Any) -> None:
     This is intended to be called from model methods (e.g. ApplicantDocument.save/delete)
     where we already have a profile instance.
     """
-    from .models import ApplicantProfile  # type: ignore
+    from account.models import ApplicantProfile  # type: ignore
 
     if not isinstance(applicant_profile, ApplicantProfile):
         return

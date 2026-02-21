@@ -48,6 +48,9 @@ staticfiles/
 # Production deployment files
 nginx/ssl/
 nginx/logs/
+
+# Firebase credentials
+firebase-service-account.json
 backups/
 *.tar.gz
 deploy/*.log

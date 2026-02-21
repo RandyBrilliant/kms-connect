@@ -44,6 +44,7 @@ export interface Broadcast {
   recipient_config: RecipientConfig
   send_email: boolean
   send_in_app: boolean
+  send_push: boolean
   created_by?: number | null
   created_by_name?: string
   scheduled_at?: string | null
@@ -62,6 +63,7 @@ export interface BroadcastCreateInput {
   recipient_config: RecipientConfig
   send_email: boolean
   send_in_app: boolean
+  send_push: boolean
   scheduled_at?: string | null
 }
 

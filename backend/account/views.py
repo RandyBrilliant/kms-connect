@@ -4,7 +4,7 @@ Endpoint terpisah per role; partial update didukung; hanya deactivate (no hard d
 Pesan dan response format konsisten via api_responses (frontend-friendly).
 """
 from rest_framework import status, viewsets
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -19,7 +19,7 @@ from django.http import HttpResponse
 from urllib.parse import urlencode
 from datetime import timedelta, datetime
 
-from django.db.models import Count
+from django.db.models import Count, F, Q
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 
@@ -304,15 +304,15 @@ class ApplicantUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
     filterset_class = ApplicantUserFilterSet
     search_fields = [
         "email",
-        "applicant_profile__user__full_name",
+        "full_name",
         "applicant_profile__nik",
         "applicant_profile__contact_phone",
     ]
     ordering_fields = [
         "email",
+        "full_name",
         "date_joined",
         "updated_at",
-        "applicant_profile__user__full_name",
         "applicant_profile__verification_status",
         "applicant_profile__created_at",
         "applicant_profile__score",
@@ -352,22 +352,21 @@ class ApplicantUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
         # Get filtered queryset using the same logic as list()
         queryset = self.filter_queryset(self.get_queryset())
         
+        # Prefetch work experiences and documents for export
+        queryset = queryset.prefetch_related(
+            "applicant_profile__work_experiences",
+            "applicant_profile__documents__document_type",
+            "applicant_profile__documents__reviewed_by",
+        )
+        
         # Apply ordering
         ordering = request.query_params.get("ordering", self.ordering[0] if self.ordering else None)
         if ordering:
             queryset = queryset.order_by(*ordering.split(","))
         
-        # Apply date range filters if provided
-        created_at_after = request.query_params.get("created_at_after")
-        created_at_before = request.query_params.get("created_at_before")
-        if created_at_after:
-            queryset = queryset.filter(applicant_profile__created_at__gte=created_at_after)
-        if created_at_before:
-            queryset = queryset.filter(applicant_profile__created_at__lte=created_at_before)
-        
         # Generate Excel file
         try:
-            excel_file = generate_applicants_excel(queryset)
+            excel_file = generate_applicants_excel(queryset, request)
             
             # Generate filename with timestamp
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -954,17 +953,187 @@ class AdminApplicantDashboardLatestView(APIView):
 
 
 # ---------------------------------------------------------------------------
+# Reports (Laporan)
+# ---------------------------------------------------------------------------
+
+class AdminReportView(APIView):
+    """
+    Laporan statistik pelamar dengan filter rentang tanggal.
+    Default: bulan berjalan jika start_date dan end_date tidak diberikan.
+    
+    Query params:
+    - start_date: YYYY-MM-DD (default: first day of current month)
+    - end_date: YYYY-MM-DD (default: today)
+    
+    Response:
+    - summary: total counts and growth
+    - by_status: breakdown by verification status
+    - by_province: breakdown by province
+    - by_gender: breakdown by gender
+    - by_education: breakdown by education level
+    - by_destination: breakdown by destination country
+    - timeline: daily registrations within date range
+    """
+
+    permission_classes = [IsBackofficeAdmin]
+
+    def get(self, request):
+        # Parse date range from query params
+        start_date_str = request.query_params.get("start_date")
+        end_date_str = request.query_params.get("end_date")
+        
+        # Default to current month if not provided
+        now = timezone.now()
+        if not start_date_str:
+            start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        else:
+            try:
+                start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
+                start_date = timezone.make_aware(start_date.replace(hour=0, minute=0, second=0, microsecond=0))
+            except ValueError:
+                return Response(
+                    error_response(
+                        detail="Format start_date tidak valid. Gunakan YYYY-MM-DD.",
+                        code=ApiCode.VALIDATION_ERROR,
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                    ),
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        
+        if not end_date_str:
+            end_date = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+        else:
+            try:
+                end_date = datetime.strptime(end_date_str, "%Y-%m-%d")
+                end_date = timezone.make_aware(end_date.replace(hour=23, minute=59, second=59, microsecond=999999))
+            except ValueError:
+                return Response(
+                    error_response(
+                        detail="Format end_date tidak valid. Gunakan YYYY-MM-DD.",
+                        code=ApiCode.VALIDATION_ERROR,
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                    ),
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        
+        # Filter applicants by date range
+        queryset = ApplicantProfile.objects.filter(
+            created_at__gte=start_date,
+            created_at__lte=end_date
+        ).select_related("user", "province", "referrer")
+        
+        total_count = queryset.count()
+        
+        # Summary statistics
+        by_status = list(
+            queryset.values("verification_status")
+            .annotate(count=Count("id"))
+            .order_by("-count")
+        )
+        
+        by_province = list(
+            queryset.values(province_name=F("province__name"))
+            .annotate(count=Count("id"))
+            .order_by("-count")[:10]  # Top 10 provinces
+        )
+        
+        by_gender = list(
+            queryset.values("gender")
+            .annotate(count=Count("id"))
+            .order_by("-count")
+        )
+        
+        by_education = list(
+            queryset.values("education_level")
+            .annotate(count=Count("id"))
+            .order_by("-count")
+        )
+        
+        by_destination = list(
+            queryset.values("destination_country")
+            .annotate(count=Count("id"))
+            .order_by("-count")
+        )
+        
+        # Timeline - daily registrations
+        timeline = list(
+            queryset.annotate(day=TruncDate("created_at"))
+            .values("day")
+            .annotate(count=Count("id"))
+            .order_by("day")
+        )
+        
+        # Referral statistics
+        by_referrer = list(
+            queryset.filter(referrer__isnull=False)
+            .values(
+                staff_id=F("referrer__id"),
+                staff_name=F("referrer__full_name")
+            )
+            .annotate(count=Count("id"))
+            .order_by("-count")[:10]  # Top 10 referrers
+        )
+        
+        # Calculate completion rate (applicants with all required documents)
+        required_doc_types = DocumentType.objects.filter(is_required=True).count()
+        
+        # Applicants who have submitted all required documents
+        completed_applicants = queryset.annotate(
+            doc_count=Count(
+                "documents",
+                filter=Q(
+                    documents__document_type__is_required=True
+                )
+            )
+        ).filter(doc_count__gte=required_doc_types).count()
+        
+        completion_rate = (completed_applicants / total_count * 100) if total_count > 0 else 0
+        
+        data = {
+            "date_range": {
+                "start_date": start_date.date().isoformat(),
+                "end_date": end_date.date().isoformat(),
+            },
+            "summary": {
+                "total_applicants": total_count,
+                "total_accepted": queryset.filter(verification_status=ApplicantVerificationStatus.ACCEPTED).count(),
+                "total_rejected": queryset.filter(verification_status=ApplicantVerificationStatus.REJECTED).count(),
+                "total_submitted": queryset.filter(verification_status=ApplicantVerificationStatus.SUBMITTED).count(),
+                "total_draft": queryset.filter(verification_status=ApplicantVerificationStatus.DRAFT).count(),
+                "completion_rate": round(completion_rate, 2),
+            },
+            "by_status": by_status,
+            "by_province": by_province,
+            "by_gender": by_gender,
+            "by_education": by_education,
+            "by_destination": by_destination,
+            "by_referrer": by_referrer,
+            "timeline": [
+                {
+                    "date": row["day"].isoformat(),
+                    "count": row["count"]
+                }
+                for row in timeline
+            ],
+        }
+        
+        return Response(data, status=status.HTTP_200_OK)
+
+
+# ---------------------------------------------------------------------------
 # Notifications
 # ---------------------------------------------------------------------------
 
-class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
+class NotificationViewSet(viewsets.ModelViewSet):
     """
     ViewSet untuk notifikasi pengguna saat ini.
     GET /api/notifications/ - List notifikasi (unread first)
     GET /api/notifications/{id}/ - Detail notifikasi
     PATCH /api/notifications/{id}/mark-read/ - Tandai sebagai dibaca
+    DELETE /api/notifications/{id}/ - Hapus notifikasi
     """
     
+    http_method_names = ["get", "patch", "delete", "head", "options"]
     serializer_class = NotificationSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
@@ -975,6 +1144,27 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         """Only return notifications for the current user."""
         return Notification.objects.filter(user=self.request.user)
+
+    def destroy(self, request, *args, **kwargs):
+        """Delete notification (only if it belongs to current user)."""
+        notification = self.get_object()
+        if notification.user != request.user:
+            return Response(
+                error_response(
+                    detail="Notifikasi tidak ditemukan.",
+                    code=ApiCode.NOT_FOUND,
+                    status_code=status.HTTP_404_NOT_FOUND,
+                ),
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        
+        notification.delete()
+        return Response(
+            success_response(
+                detail="Notifikasi berhasil dihapus.",
+            ),
+            status=status.HTTP_200_OK,
+        )
 
     @action(detail=True, methods=["patch"], url_path="mark-read")
     def mark_read(self, request, pk=None):
@@ -1141,3 +1331,112 @@ class BroadcastViewSet(viewsets.ModelViewSet):
             ),
             status=status.HTTP_200_OK,
         )
+
+
+# ---------------------------------------------------------------------------
+# FCM Token Management
+# ---------------------------------------------------------------------------
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def register_fcm_token(request):
+    """
+    Register FCM token for current user.
+    POST /api/fcm/register/
+    Body: {"token": "...", "device_type": "web|android|ios"}
+    """
+    from .models import DeviceToken
+    
+    token = request.data.get("token")
+    device_type = request.data.get("device_type", "web")
+    
+    if not token:
+        return Response(
+            error_response(
+                detail="Token FCM diperlukan.",
+                code=ApiCode.VALIDATION_ERROR,
+                status_code=status.HTTP_400_BAD_REQUEST,
+            ),
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Validate device_type
+    valid_types = ["web", "android", "ios"]
+    if device_type not in valid_types:
+        return Response(
+            error_response(
+                detail=f"device_type harus salah satu dari: {', '.join(valid_types)}",
+                code=ApiCode.VALIDATION_ERROR,
+                status_code=status.HTTP_400_BAD_REQUEST,
+            ),
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Create or update token
+    device_token, created = DeviceToken.objects.update_or_create(
+        token=token,
+        defaults={
+            "user": request.user,
+            "device_type": device_type,
+            "is_active": True,
+        }
+    )
+    
+    action = "registered" if created else "updated"
+    return Response(
+        success_response(
+            data={
+                "token_id": device_token.id,
+                "device_type": device_token.device_type,
+            },
+            detail=f"FCM token {action} successfully.",
+        ),
+        status=status.HTTP_201_CREATED if created else status.HTTP_200_OK
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def unregister_fcm_token(request):
+    """
+    Unregister FCM token for current user.
+    POST /api/fcm/unregister/
+    Body: {"token": "..."}
+    """
+    from .models import DeviceToken
+    
+    token = request.data.get("token")
+    
+    if not token:
+        return Response(
+            error_response(
+                detail="Token FCM diperlukan.",
+                code=ApiCode.VALIDATION_ERROR,
+                status_code=status.HTTP_400_BAD_REQUEST,
+            ),
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Deactivate token (safer than deleting)
+    updated = DeviceToken.objects.filter(
+        user=request.user,
+        token=token
+    ).update(is_active=False)
+    
+    if updated:
+        return Response(
+            success_response(
+                detail="FCM token unregistered successfully.",
+            ),
+            status=status.HTTP_200_OK
+        )
+    else:
+        return Response(
+            error_response(
+                detail="Token tidak ditemukan.",
+                code=ApiCode.NOT_FOUND,
+                status_code=status.HTTP_404_NOT_FOUND,
+            ),
+            status=status.HTTP_404_NOT_FOUND
+        )
+

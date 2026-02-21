@@ -1620,6 +1620,11 @@ class Broadcast(models.Model):
         default=True,
         help_text=_("Tampilkan notifikasi di aplikasi."),
     )
+    send_push = models.BooleanField(
+        _("kirim push notification"),
+        default=False,
+        help_text=_("Kirim notifikasi push ke perangkat (web/mobile)."),
+    )
     
     # Metadata
     created_by = models.ForeignKey(
@@ -1666,8 +1671,8 @@ class Broadcast(models.Model):
 
     def clean(self):
         """Validate that at least one delivery method is selected."""
-        if not self.send_email and not self.send_in_app:
-            raise ValidationError(_("Pilih minimal satu metode pengiriman (email atau in-app)."))
+        if not self.send_email and not self.send_in_app and not self.send_push:
+            raise ValidationError(_("Pilih minimal satu metode pengiriman (email, in-app, atau push)."))
 
 
 class Notification(models.Model):
@@ -1772,3 +1777,54 @@ class Notification(models.Model):
             self.is_read = True
             self.read_at = timezone.now()
             self.save(update_fields=["is_read", "read_at"])
+
+
+class DeviceToken(models.Model):
+    """
+    FCM device token for push notifications.
+    Stores tokens for web and mobile clients.
+    """
+    user = models.ForeignKey(
+        CustomUser,
+        on_delete=models.CASCADE,
+        related_name="device_tokens",
+        verbose_name=_("pengguna"),
+        db_index=True,
+    )
+    token = models.CharField(
+        _("FCM token"),
+        max_length=255,
+        unique=True,
+        help_text=_("Firebase Cloud Messaging token."),
+    )
+    device_type = models.CharField(
+        _("tipe perangkat"),
+        max_length=20,
+        choices=[
+            ("web", "Web"),
+            ("android", "Android"),
+            ("ios", "iOS"),
+        ],
+        default="web",
+        db_index=True,
+    )
+    is_active = models.BooleanField(
+        _("aktif"),
+        default=True,
+        db_index=True,
+        help_text=_("Token masih valid dan dapat menerima notifikasi."),
+    )
+    created_at = models.DateTimeField(_("dibuat pada"), auto_now_add=True, db_index=True)
+    last_used_at = models.DateTimeField(_("terakhir digunakan"), auto_now=True)
+
+    class Meta:
+        verbose_name = _("device token")
+        verbose_name_plural = _("device tokens")
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "is_active"]),
+            models.Index(fields=["token"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user.email} - {self.device_type} - {self.token[:20]}..."

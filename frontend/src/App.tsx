@@ -31,6 +31,10 @@ const AdminPelamarListPage = lazy(() => import("@/pages/admin-pelamar-list-page"
 const AdminPelamarFormPage = lazy(() => import("@/pages/admin-pelamar-form-page").then(m => ({ default: m.AdminPelamarFormPage })))
 const AdminPelamarDetailPage = lazy(() => import("@/pages/admin-pelamar-detail-page").then(m => ({ default: m.AdminPelamarDetailPage })))
 const ProfilePage = lazy(() => import("@/pages/profile-page").then(m => ({ default: m.ProfilePage })))
+const NotificationsPage = lazy(() => import("@/pages/notifications-page").then(m => ({ default: m.NotificationsPage })))
+const AdminBroadcastListPage = lazy(() => import("@/pages/admin-broadcast-list-page").then(m => ({ default: m.AdminBroadcastListPage })))
+const AdminBroadcastFormPage = lazy(() => import("@/pages/admin-broadcast-form-page").then(m => ({ default: m.AdminBroadcastFormPage })))
+const AdminLaporanPage = lazy(() => import("@/pages/admin-laporan-page").then(m => ({ default: m.AdminLaporanPage })))
 
 // Loading fallback component
 function PageLoader() {
@@ -121,6 +125,11 @@ function AppRoutes() {
         <Route path="perusahaan" element={<CompanyCompanyListPage />} />
         <Route path="perusahaan/new" element={<CompanyCompanyFormPage />} />
         <Route path="perusahaan/:id/edit" element={<CompanyCompanyFormPage />} />
+        <Route path="broadcasts" element={<AdminBroadcastListPage />} />
+        <Route path="broadcasts/new" element={<AdminBroadcastFormPage />} />
+        <Route path="broadcasts/:id/edit" element={<AdminBroadcastFormPage />} />
+        <Route path="laporan" element={<AdminLaporanPage />} />
+        <Route path="notifikasi" element={<NotificationsPage />} />
         <Route path="profil" element={<ProfilePage />} />
       </Route>
       <Route
@@ -142,6 +151,16 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/staff/notifikasi"
+        element={
+          <ProtectedRoute allowedRoles={["STAFF"]}>
+            <StaffDashboardPage>
+              <NotificationsPage />
+            </StaffDashboardPage>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/company"
         element={
           <ProtectedRoute allowedRoles={["COMPANY"]}>
@@ -155,6 +174,16 @@ function AppRoutes() {
           <ProtectedRoute allowedRoles={["COMPANY"]}>
             <CompanyDashboardPage>
               <ProfilePage />
+            </CompanyDashboardPage>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/company/notifikasi"
+        element={
+          <ProtectedRoute allowedRoles={["COMPANY"]}>
+            <CompanyDashboardPage>
+              <NotificationsPage />
             </CompanyDashboardPage>
           </ProtectedRoute>
         }

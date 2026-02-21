@@ -79,6 +79,11 @@ export async function getUnreadNotificationCount(): Promise<{ count: number }> {
   return data
 }
 
+/** DELETE /api/notifications/:id/ - Delete notification */
+export async function deleteNotification(id: number): Promise<void> {
+  await api.delete(`/api/notifications/${id}/`)
+}
+
 // ---------------------------------------------------------------------------
 // Broadcasts (Admin only)
 // ---------------------------------------------------------------------------
@@ -139,3 +144,25 @@ export async function previewRecipients(
   )
   return data
 }
+
+// ---------------------------------------------------------------------------
+// FCM Token Management
+// ---------------------------------------------------------------------------
+
+/** POST /api/fcm/register/ - Register FCM token for push notifications */
+export async function registerFcmToken(
+  token: string,
+  deviceType: "web" | "android" | "ios" = "web"
+): Promise<{ token_id: number; device_type: string }> {
+  const { data } = await api.post<{ token_id: number; device_type: string }>(
+    `/api/fcm/register/`,
+    { token, device_type: deviceType }
+  )
+  return data
+}
+
+/** POST /api/fcm/unregister/ - Unregister FCM token */
+export async function unregisterFcmToken(token: string): Promise<void> {
+  await api.post(`/api/fcm/unregister/`, { token })
+}
+

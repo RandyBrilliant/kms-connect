@@ -8,6 +8,8 @@ import {
   IconShield,
   IconUsers,
   IconUsersGroup,
+  IconSend,
+  IconChartBar,
 } from "@tabler/icons-react"
 
 import { useAuth } from "@/hooks/use-auth"
@@ -37,6 +39,8 @@ function getNavItems(basePath: string) {
       icon: IconBriefcase,
     },
     { title: "Berita", url: `${basePath}/berita`, icon: IconNews },
+    { title: "Kirim Broadcast", url: `${basePath}/broadcasts`, icon: IconSend },
+    { title: "Laporan", url: `${basePath}/laporan`, icon: IconChartBar },
   ]
 }
 

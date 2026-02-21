@@ -15,6 +15,9 @@ from .models import (
     CompanyProfile,
     DocumentType,
     ApplicantDocument,
+    Broadcast,
+    Notification,
+    DeviceToken,
 )
 
 
@@ -247,3 +250,53 @@ class CompanyProfileAdmin(admin.ModelAdmin):
     search_fields = ("company_name", "user__email", "contact_phone")
     raw_id_fields = ("user",)
     readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(Broadcast)
+class BroadcastAdmin(admin.ModelAdmin):
+    list_display = ("title", "notification_type", "priority", "total_recipients", "created_by", "sent_at", "created_at")
+    list_filter = ("notification_type", "priority", "send_email", "send_in_app", "send_push", "created_at")
+    search_fields = ("title", "message")
+    raw_id_fields = ("created_by",)
+    readonly_fields = ("total_recipients", "sent_at", "created_at", "updated_at")
+    
+    fieldsets = (
+        (_("Konten"), {"fields": ("title", "message", "notification_type", "priority")}),
+        (_("Penerima"), {"fields": ("recipient_config", "total_recipients")}),
+        (_("Opsi Pengiriman"), {"fields": ("send_email", "send_in_app", "send_push")}),
+        (_("Penjadwalan"), {"fields": ("scheduled_at", "sent_at")}),
+        (_("Metadata"), {"fields": ("created_by", "created_at", "updated_at")}),
+    )
+
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = ("title", "user", "notification_type", "priority", "is_read", "created_at")
+    list_filter = ("notification_type", "priority", "is_read", "created_at")
+    search_fields = ("title", "message", "user__email", "user__full_name")
+    raw_id_fields = ("user", "broadcast")
+    readonly_fields = ("read_at", "email_sent_at", "created_at")
+    
+    fieldsets = (
+        (_("Pengguna"), {"fields": ("user", "broadcast")}),
+        (_("Konten"), {"fields": ("title", "message", "notification_type", "priority")}),
+        (_("Aksi"), {"fields": ("action_url", "action_label")}),
+        (_("Status"), {"fields": ("is_read", "read_at", "email_sent", "email_sent_at")}),
+        (_("Tanggal"), {"fields": ("created_at",)}),
+    )
+
+
+@admin.register(DeviceToken)
+class DeviceTokenAdmin(admin.ModelAdmin):
+    list_display = ("user", "device_type", "is_active", "created_at", "last_used_at")
+    list_filter = ("device_type", "is_active", "created_at")
+    search_fields = ("user__email", "user__full_name", "token")
+    raw_id_fields = ("user",)
+    readonly_fields = ("created_at", "last_used_at")
+    
+    fieldsets = (
+        (_("Pengguna"), {"fields": ("user",)}),
+        (_("Token"), {"fields": ("token", "device_type", "is_active")}),
+        (_("Tanggal"), {"fields": ("created_at", "last_used_at")}),
+    )
+

@@ -1,8 +1,8 @@
 """
 Notification delivery service.
 
-Handles creating and sending notifications (in-app and email).
-Uses Celery for async email delivery.
+Handles creating and sending notifications (in-app, email, and push).
+Uses Celery for async email and push delivery.
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ def create_notification(
     action_url: str | None = None,
     action_label: str = "",
     send_email: bool = False,
+    send_push: bool = False,
 ) -> Notification:
     """
     Create a single notification for a user.
@@ -38,6 +39,7 @@ def create_notification(
         action_url: Optional URL for action button
         action_label: Optional label for action button
         send_email: Whether to send email (will queue Celery task)
+        send_push: Whether to send push notification (will queue Celery task)
     
     Returns:
         Created Notification instance
@@ -57,6 +59,11 @@ def create_notification(
     if send_email:
         from ..tasks import send_notification_email_task
         send_notification_email_task.delay(notification.id)
+    
+    # Queue push notification if requested
+    if send_push:
+        from ..tasks import send_notification_push_task
+        send_notification_push_task.delay(notification.id)
     
     return notification
 
@@ -85,6 +92,7 @@ def send_broadcast(broadcast: Broadcast) -> int:
             priority=broadcast.priority,
             broadcast=broadcast,
             send_email=broadcast.send_email,
+            send_push=broadcast.send_push,
         )
         notifications_created.append(notification)
     

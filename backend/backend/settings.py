@@ -349,3 +349,10 @@ CELERY_BEAT_SCHEDULE = {
     #     "schedule": crontab(minute="*/15"),
     # },
 }
+
+# -----------------------------------------------------------------------------
+# Firebase Cloud Messaging (push notifications)
+# -----------------------------------------------------------------------------
+FIREBASE_CREDENTIALS_PATH = os.path.join(BASE_DIR, "firebase-service-account.json")
+# For production, you can use environment variable instead:
+# FIREBASE_CREDENTIALS_PATH = _env("FIREBASE_CREDENTIALS_PATH", "")

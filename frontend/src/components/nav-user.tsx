@@ -1,7 +1,6 @@
 import {
   IconDotsVertical,
   IconLogout,
-  IconNotification,
   IconUserCircle,
 } from "@tabler/icons-react"
 import { useNavigate } from "react-router-dom"
@@ -112,15 +111,11 @@ export function NavUser({
                 <IconUserCircle />
                 Profil
               </DropdownMenuItem>
-              <DropdownMenuItem>
-                <IconNotification />
-                Notifikasi
-              </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => logout()}>
               <IconLogout />
-                Keluar  
+              Keluar
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
