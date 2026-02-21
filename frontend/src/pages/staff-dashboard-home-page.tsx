@@ -189,7 +189,7 @@ export function StaffDashboardHomePage() {
             <CardDescription>5 pelamar terbaru yang Anda rujuk</CardDescription>
           </div>
           <Button variant="outline" size="sm" asChild>
-            <Link to="/staff/pelamar">Lihat Semua</Link>
+            <Link to="/staff-portal/pelamar">Lihat Semua</Link>
           </Button>
         </CardHeader>
         <CardContent>
@@ -255,24 +255,24 @@ export function StaffDashboardHomePage() {
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
           <Button variant="outline" asChild>
-            <Link to="/staff/lowongan-kerja">
+            <Link to="/staff-portal/lowongan-kerja">
               Lihat Lowongan Kerja
             </Link>
           </Button>
           <Button variant="outline" asChild>
-            <Link to="/staff/pelamar">
+            <Link to="/staff-portal/pelamar">
               <IconUsers className="size-4" />
               Pelamar Saya
             </Link>
           </Button>
           <Button variant="outline" asChild>
-            <Link to="/staff/laporan">
+            <Link to="/staff-portal/laporan">
               <IconChartBar className="size-4" />
               Laporan
             </Link>
           </Button>
           <Button variant="outline" asChild>
-            <Link to="/staff/profil">
+            <Link to="/staff-portal/profil">
               Pengaturan Profil
             </Link>
           </Button>

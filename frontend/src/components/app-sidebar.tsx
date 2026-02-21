@@ -37,21 +37,12 @@ function getNavItems(basePath: string, role?: string) {
     ]
   }
   
-  // Staff role: same as admin but with /staff prefix
+  // Staff role: only dashboard, job listings, referred applicants, and reports
   if (role === "STAFF") {
     return [
       { title: "Dashboard", url: dashboardUrl, icon: IconDashboard },
+      { title: "Lowongan Kerja", url: `${basePath}/lowongan-kerja`, icon: IconBriefcase },
       { title: "Pelamar", url: `${basePath}/pelamar`, icon: IconUsers },
-      { title: "Perusahaan", url: `${basePath}/perusahaan`, icon: IconBuilding },
-      { title: "Staff", url: `${basePath}/staff`, icon: IconUsersGroup },
-      { title: "Admin", url: `${basePath}/admin`, icon: IconShield },
-      {
-        title: "Lowongan Kerja",
-        url: `${basePath}/lowongan-kerja`,
-        icon: IconBriefcase,
-      },
-      { title: "Berita", url: `${basePath}/berita`, icon: IconNews },
-      { title: "Kirim Broadcast", url: `${basePath}/broadcasts`, icon: IconSend },
       { title: "Laporan", url: `${basePath}/laporan`, icon: IconChartBar },
     ]
   }
@@ -80,7 +71,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     user?.role === "ADMIN"
       ? ""
       : user?.role === "STAFF"
-        ? "/staff"
+        ? "/staff-portal"
         : user?.role === "COMPANY"
           ? "/company"
           : ""

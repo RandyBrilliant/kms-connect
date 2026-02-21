@@ -251,7 +251,7 @@ export function StaffLaporanPage() {
                   Export
                 </Button>
                 <Button variant="outline" size="sm" asChild>
-                  <Link to="/staff/pelamar">Lihat Semua</Link>
+                  <Link to="/staff-portal/pelamar">Lihat Semua</Link>
                 </Button>
               </div>
             </CardHeader>
@@ -280,7 +280,7 @@ export function StaffLaporanPage() {
                             <TableCell>
                               <div className="flex flex-col">
                                 <Link 
-                                  to={`/staff/pelamar/${applicant.id}`}
+                                  to={`/staff-portal/pelamar/${applicant.id}`}
                                   className="font-medium hover:underline"
                                 >
                                   {profile?.full_name || applicant.email}

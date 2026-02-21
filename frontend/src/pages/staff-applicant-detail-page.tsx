@@ -201,12 +201,12 @@ export function StaffApplicantDetailPage() {
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
           <Button variant="outline" asChild>
-            <Link to="/staff/pelamar">
+            <Link to="/staff-portal/pelamar">
               Kembali ke Daftar Pelamar
             </Link>
           </Button>
           <Button variant="outline" asChild>
-            <Link to="/staff/laporan">
+            <Link to="/staff-portal/laporan">
               Lihat Laporan
             </Link>
           </Button>

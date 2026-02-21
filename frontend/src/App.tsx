@@ -142,7 +142,7 @@ function AppRoutes() {
         <Route path="profil" element={<ProfilePage />} />
       </Route>
       <Route
-        path="/staff"
+        path="/staff-portal"
         element={
           <ProtectedRoute allowedRoles={["STAFF"]}>
             <StaffDashboardPage />

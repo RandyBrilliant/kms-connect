@@ -199,7 +199,7 @@ export function StaffReferredApplicantsPage() {
                             </TableCell>
                             <TableCell className="text-right">
                               <Button variant="ghost" size="sm" asChild>
-                                <Link to={`/staff/pelamar/${applicant.id}`}>
+                              <Link to={`/staff-portal/pelamar/${applicant.id}`}>
                                   <IconEye className="size-4" />
                                   Lihat
                                 </Link>
