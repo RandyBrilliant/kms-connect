@@ -2,9 +2,10 @@
 Indonesian administrative divisions (Wilayah Administratif Indonesia).
 
 Hierarchy: Province → Regency (Kabupaten/Kota) → District (Kecamatan) → Village (Kelurahan/Desa).
-Data can be imported from ibnux/data-indonesia JSON via management command:
-  python manage.py load_indonesia_regions --path /path/to/data-indonesia
+Data can be imported from optimized CSV files via management command:
+  python manage.py load_indonesia_regions [--clear]
 
+CSV files in backend/data/: provinsi.csv, kota.csv, kecamatan.csv, kelurahan.csv
 Used for applicant address dropdowns (search by provinsi, kabupaten, kecamatan, kelurahan).
 """
 

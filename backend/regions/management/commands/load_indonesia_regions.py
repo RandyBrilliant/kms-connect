@@ -1,173 +1,248 @@
 """
-Import Indonesian administrative data from ibnux/data-indonesia JSON.
+Import Indonesian administrative data from optimized CSV files.
 
-Data source: https://github.com/ibnux/data-indonesia
+Data source: CSV files in backend/data/ folder
 Structure:
-  - provinsi.json          -> Province
-  - kabupaten/{id}.json   -> Regency (Kabupaten + Kota in one file per province)
-  - kecamatan/{id}.json    -> District (id = regency code)
-  - kelurahan/{id}.json   -> Village (id = district code)
+  - provinsi.csv   -> Province (kode, nama)
+  - kota.csv       -> Regency (kode, kode_kartu, provinsi, nama)
+  - kecamatan.csv  -> District (kode, provinsi, kota, nama)
+  - kelurahan.csv  -> Village (kode, provinsi, kota, kecamatan, nama)
 
 Usage:
-  1. Clone the repo: git clone https://github.com/ibnux/data-indonesia.git
-  2. Run: python manage.py load_indonesia_regions --path /path/to/data-indonesia
+  python manage.py load_indonesia_regions [--clear]
 
-Or set DATA_INDONESIA_PATH in .env and run: python manage.py load_indonesia_regions
+The command automatically finds CSV files in the backend/data/ folder.
+Uses optimized bulk operations for fast import (~84k villages in seconds).
 """
 
-import json
+import csv
 from pathlib import Path
 
+from django.conf import settings
 from django.core.management.base import BaseCommand
+from django.db import transaction
 
 from regions.models import Province, Regency, District, Village
 
 
 class Command(BaseCommand):
-    help = "Import Provinsi, Kabupaten/Kota, Kecamatan, Kelurahan from ibnux/data-indonesia JSON."
+    help = "Import Provinsi, Kabupaten/Kota, Kecamatan, Kelurahan from optimized CSV files."
 
     def add_arguments(self, parser):
-        parser.add_argument(
-            "--path",
-            type=str,
-            default=None,
-            help="Path to cloned data-indonesia repo (or set DATA_INDONESIA_PATH in .env).",
-        )
         parser.add_argument(
             "--clear",
             action="store_true",
             help="Clear existing region data before import.",
         )
+        parser.add_argument(
+            "--path",
+            type=str,
+            default=None,
+            help="Path to data folder (default: backend/data/).",
+        )
 
     def handle(self, *args, **options):
-        path = options.get("path")
-        if not path:
-            import os
-            path = os.environ.get("DATA_INDONESIA_PATH")
-        if not path:
-            self.stderr.write(
-                "Provide --path /path/to/data-indonesia or set DATA_INDONESIA_PATH."
-            )
+        # Determine data folder path
+        if options.get("path"):
+            data_dir = Path(options["path"])
+        else:
+            # Default to backend/data/ folder
+            data_dir = Path(settings.BASE_DIR) / "data"
+
+        if not data_dir.is_dir():
+            self.stderr.write(self.style.ERROR(f"Data directory not found: {data_dir}"))
             return
 
-        base = Path(path)
-        if not base.is_dir():
-            self.stderr.write(f"Path is not a directory: {base}")
-            return
+        # Verify all required CSV files exist
+        required_files = {
+            "provinsi": data_dir / "provinsi.csv",
+            "kota": data_dir / "kota.csv",
+            "kecamatan": data_dir / "kecamatan.csv",
+            "kelurahan": data_dir / "kelurahan.csv",
+        }
 
-        # Optional: provinsi.json or provinsi.json (ibnux uses provinsi.json)
-        provinsi_file = base / "provinsi.json"
-        if not provinsi_file.exists():
-            provinsi_file = base / "propinsi.json"
-        if not provinsi_file.exists():
-            self.stderr.write(f"Not found: provinsi.json or propinsi.json in {base}")
-            return
+        for name, path in required_files.items():
+            if not path.exists():
+                self.stderr.write(self.style.ERROR(f"Missing {name}.csv in {data_dir}"))
+                return
 
-        kabupaten_dir = base / "kabupaten"
-        kecamatan_dir = base / "kecamatan"
-        kelurahan_dir = base / "kelurahan"
-        # ibnux has kabupaten/12.json (both kab and kota in one file for Sumatera Utara)
-        if not kabupaten_dir.is_dir():
-            self.stderr.write(f"Not found: kabupaten/ in {base}")
-            return
+        self.stdout.write(self.style.NOTICE(f"Reading CSV files from: {data_dir}"))
 
+        # Optional: Clear existing data
         if options.get("clear"):
             self.stdout.write("Clearing existing region data...")
-            Village.objects.all().delete()
-            District.objects.all().delete()
-            Regency.objects.all().delete()
-            Province.objects.all().delete()
-
-        # 1. Load provinces
-        with open(provinsi_file, "r", encoding="utf-8") as f:
-            provinces_data = json.load(f)
-        if not isinstance(provinces_data, list):
-            provinces_data = [provinces_data]
-
-        created_provinces = 0
-        for item in provinces_data:
-            code = str(item.get("id", "")).strip()
-            name = (item.get("nama") or item.get("name") or "").strip()
-            if not code or not name:
-                continue
-            _, created = Province.objects.update_or_create(
-                code=code,
-                defaults={"name": name.upper()},
+            with transaction.atomic():
+                counts = {
+                    "Village": Village.objects.count(),
+                    "District": District.objects.count(),
+                    "Regency": Regency.objects.count(),
+                    "Province": Province.objects.count(),
+                }
+                Village.objects.all().delete()
+                District.objects.all().delete()
+                Regency.objects.all().delete()
+                Province.objects.all().delete()
+            self.stdout.write(
+                self.style.WARNING(
+                    f"Deleted: {counts['Province']} provinces, {counts['Regency']} regencies, "
+                    f"{counts['District']} districts, {counts['Village']} villages"
+                )
             )
-            if created:
-                created_provinces += 1
 
-        self.stdout.write(f"Provinces: {Province.objects.count()} ({created_provinces} new)")
+        # Import with transaction for data integrity
+        with transaction.atomic():
+            self._import_provinces(required_files["provinsi"])
+            self._import_regencies(required_files["kota"])
+            self._import_districts(required_files["kecamatan"])
+            self._import_villages(required_files["kelurahan"])
 
-        # 2. Load regencies (kabupaten + kota: ibnux uses kabupaten/{id}.json per province)
-        created_regencies = 0
-        for prov in Province.objects.all():
-            kab_file = kabupaten_dir / f"{prov.code}.json"
-            if not kab_file.exists():
-                continue
-            with open(kab_file, "r", encoding="utf-8") as f:
-                regs_data = json.load(f)
-            if not isinstance(regs_data, list):
-                regs_data = [regs_data]
-            for item in regs_data:
-                code = str(item.get("id", "")).strip()
-                name = (item.get("nama") or item.get("name") or "").strip()
-                if not code or not name:
+        self.stdout.write(self.style.SUCCESS("\n✓ Import completed successfully!"))
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"  Total: {Province.objects.count()} provinces, "
+                f"{Regency.objects.count()} regencies, "
+                f"{District.objects.count()} districts, "
+                f"{Village.objects.count()} villages"
+            )
+        )
+
+    def _import_provinces(self, csv_file):
+        """Import provinces with bulk_create for optimal performance."""
+        self.stdout.write(f"\n[1/4] Importing provinces from {csv_file.name}...")
+
+        provinces_to_create = []
+        existing_codes = set(Province.objects.values_list("code", flat=True))
+
+        with open(csv_file, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                code = row["kode"].strip()
+                name = row["nama"].strip().upper()
+
+                if code not in existing_codes:
+                    provinces_to_create.append(
+                        Province(code=code, name=name)
+                    )
+                    existing_codes.add(code)
+
+        if provinces_to_create:
+            Province.objects.bulk_create(provinces_to_create, batch_size=100)
+
+        count = Province.objects.count()
+        self.stdout.write(self.style.SUCCESS(f"  ✓ {count} provinces ({len(provinces_to_create)} new)"))
+
+    def _import_regencies(self, csv_file):
+        """Import regencies with bulk_create and optimized lookups."""
+        self.stdout.write(f"\n[2/4] Importing regencies from {csv_file.name}...")
+
+        # Build province lookup cache
+        province_cache = {p.code: p for p in Province.objects.all()}
+        existing_codes = set(Regency.objects.values_list("code", flat=True))
+        regencies_to_create = []
+
+        with open(csv_file, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                code = row["kode"].strip()
+                prov_code = row["provinsi"].strip()
+                name = row["nama"].strip().upper()
+
+                province = province_cache.get(prov_code)
+                if not province:
+                    self.stderr.write(
+                        self.style.WARNING(f"  ⚠ Province {prov_code} not found for regency {code}")
+                    )
                     continue
-                _, created = Regency.objects.update_or_create(
-                    code=code,
-                    defaults={"province": prov, "name": name.upper()},
-                )
-                if created:
-                    created_regencies += 1
 
-        self.stdout.write(f"Regencies: {Regency.objects.count()} ({created_regencies} new)")
+                if code not in existing_codes:
+                    regencies_to_create.append(
+                        Regency(code=code, name=name, province=province)
+                    )
+                    existing_codes.add(code)
 
-        # 3. Load districts (kecamatan)
-        created_districts = 0
-        for reg in Regency.objects.all():
-            kec_file = kecamatan_dir / f"{reg.code}.json"
-            if not kec_file.exists():
-                continue
-            with open(kec_file, "r", encoding="utf-8") as f:
-                dist_data = json.load(f)
-            if not isinstance(dist_data, list):
-                dist_data = [dist_data]
-            for item in dist_data:
-                code = str(item.get("id", "")).strip()
-                name = (item.get("nama") or item.get("name") or "").strip()
-                if not code or not name:
+        if regencies_to_create:
+            Regency.objects.bulk_create(regencies_to_create, batch_size=500)
+
+        count = Regency.objects.count()
+        self.stdout.write(self.style.SUCCESS(f"  ✓ {count} regencies ({len(regencies_to_create)} new)"))
+
+    def _import_districts(self, csv_file):
+        """Import districts with bulk_create and optimized lookups."""
+        self.stdout.write(f"\n[3/4] Importing districts from {csv_file.name}...")
+
+        # Build regency lookup cache
+        regency_cache = {r.code: r for r in Regency.objects.all()}
+        existing_codes = set(District.objects.values_list("code", flat=True))
+        districts_to_create = []
+
+        with open(csv_file, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                code = row["kode"].strip()
+                kota_code = row["kota"].strip()
+                name = row["nama"].strip().upper()
+
+                regency = regency_cache.get(kota_code)
+                if not regency:
+                    self.stderr.write(
+                        self.style.WARNING(f"  ⚠ Regency {kota_code} not found for district {code}")
+                    )
                     continue
-                _, created = District.objects.update_or_create(
-                    code=code,
-                    defaults={"regency": reg, "name": name.upper()},
-                )
-                if created:
-                    created_districts += 1
 
-        self.stdout.write(f"Districts: {District.objects.count()} ({created_districts} new)")
+                if code not in existing_codes:
+                    districts_to_create.append(
+                        District(code=code, name=name, regency=regency)
+                    )
+                    existing_codes.add(code)
 
-        # 4. Load villages (kelurahan)
-        created_villages = 0
-        for dist in District.objects.all():
-            kel_file = kelurahan_dir / f"{dist.code}.json"
-            if not kel_file.exists():
-                continue
-            with open(kel_file, "r", encoding="utf-8") as f:
-                vill_data = json.load(f)
-            if not isinstance(vill_data, list):
-                vill_data = [vill_data]
-            for item in vill_data:
-                code = str(item.get("id", "")).strip()
-                name = (item.get("nama") or item.get("name") or "").strip()
-                if not code or not name:
+        if districts_to_create:
+            # Larger batch size for better performance
+            District.objects.bulk_create(districts_to_create, batch_size=1000)
+
+        count = District.objects.count()
+        self.stdout.write(self.style.SUCCESS(f"  ✓ {count} districts ({len(districts_to_create)} new)"))
+
+    def _import_villages(self, csv_file):
+        """Import villages with bulk_create and optimized lookups."""
+        self.stdout.write(f"\n[4/4] Importing villages from {csv_file.name}...")
+
+        # Build district lookup cache
+        district_cache = {d.code: d for d in District.objects.all()}
+        existing_codes = set(Village.objects.values_list("code", flat=True))
+        villages_to_create = []
+
+        with open(csv_file, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            row_count = 0
+            for row in reader:
+                row_count += 1
+                code = row["kode"].strip()
+                kecamatan_code = row["kecamatan"].strip()
+                name = row["nama"].strip().upper()
+
+                district = district_cache.get(kecamatan_code)
+                if not district:
+                    # Only warn for first few missing districts to avoid spam
+                    if row_count <= 10:
+                        self.stderr.write(
+                            self.style.WARNING(f"  ⚠ District {kecamatan_code} not found for village {code}")
+                        )
                     continue
-                _, created = Village.objects.update_or_create(
-                    code=code,
-                    defaults={"district": dist, "name": name.upper()},
-                )
-                if created:
-                    created_villages += 1
 
-        self.stdout.write(f"Villages: {Village.objects.count()} ({created_villages} new)")
-        self.stdout.write(self.style.SUCCESS("Import finished."))
+                if code not in existing_codes:
+                    villages_to_create.append(
+                        Village(code=code, name=name, district=district)
+                    )
+                    existing_codes.add(code)
+
+                # Progress indicator for large dataset
+                if row_count % 10000 == 0:
+                    self.stdout.write(f"  → Processed {row_count:,} rows...")
+
+        if villages_to_create:
+            # Largest batch size for ~84k villages
+            self.stdout.write(f"  → Bulk creating {len(villages_to_create):,} villages...")
+            Village.objects.bulk_create(villages_to_create, batch_size=2000)
+
+        count = Village.objects.count()
+        self.stdout.write(self.style.SUCCESS(f"  ✓ {count:,} villages ({len(villages_to_create):,} new)"))

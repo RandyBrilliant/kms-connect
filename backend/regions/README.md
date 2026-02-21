@@ -6,29 +6,40 @@ Used for applicant address dropdowns so pelamar can search/select by provinsi, k
 
 ## Data source
 
-[ibnux/data-indonesia](https://github.com/ibnux/data-indonesia) – JSON format, ~91k records (provinsi, kabupaten, kota, kecamatan, kelurahan).
+Optimized CSV files in `backend/data/` folder:
+- `provinsi.csv` – 38 provinces
+- `kota.csv` – 514 regencies (kabupaten/kota)
+- `kecamatan.csv` – 7,277 districts
+- `kelurahan.csv` – 83,762 villages
+
+This CSV format is more storage-efficient than the original JSON from [ibnux/data-indonesia](https://github.com/ibnux/data-indonesia).
 
 ## Import data
 
-1. Clone the data repo:
-   ```bash
-   git clone https://github.com/ibnux/data-indonesia.git
-   ```
+The CSV files are already included in the repository. Simply run the management command:
 
-2. Run the management command (with venv active):
-   ```bash
-   cd backend
-   python manage.py load_indonesia_regions --path /path/to/data-indonesia
-   ```
-   Or set `DATA_INDONESIA_PATH` in `.env` and run:
-   ```bash
-   python manage.py load_indonesia_regions
-   ```
+```bash
+cd backend
+python manage.py load_indonesia_regions
+```
 
-3. Optional: clear existing data and re-import:
-   ```bash
-   python manage.py load_indonesia_regions --path /path/to/data-indonesia --clear
-   ```
+**Options:**
+- `--clear` – Clear existing data before import (useful for fresh start)
+- `--path <path>` – Custom path to data folder (default: `backend/data/`)
+
+**Examples:**
+```bash
+# Standard import (incremental, skips existing records)
+python manage.py load_indonesia_regions
+
+# Fresh import (clear all and re-import)
+python manage.py load_indonesia_regions --clear
+
+# Custom data path
+python manage.py load_indonesia_regions --path /custom/path/to/data
+```
+
+**Performance:** Imports ~84k villages in seconds using optimized bulk operations.
 
 ## API (public, no auth)
 
