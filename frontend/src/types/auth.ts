@@ -21,7 +21,7 @@ export const DASHBOARD_ROLES: UserRole[] = ["ADMIN", "STAFF", "COMPANY"]
 /** Route prefix per role (dashboard / home) */
 export const ROLE_ROUTE: Record<UserRole, string> = {
   ADMIN: "/",
-  STAFF: "/staff",
+  STAFF: "/staff-portal",
   COMPANY: "/company",
   APPLICANT: "/login", // Applicants redirect to login with error
 }

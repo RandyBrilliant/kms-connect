@@ -350,7 +350,7 @@ export function ProfilePage() {
   }
 
   const breadcrumbItems = [
-    { label: "Dashboard", href: role === "ADMIN" ? "/" : role === "STAFF" ? "/staff" : "/company" },
+    { label: "Dashboard", href: role === "ADMIN" ? "/" : role === "STAFF" ? "/staff-portal" : "/company" },
     { label: "Profil Saya" },
   ]
 
