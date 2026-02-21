@@ -157,12 +157,12 @@ class Command(BaseCommand):
 
         # Build province lookup cache
         province_cache = {p.code: p for p in Province.objects.all()}
+        existing_codes = set(Regency.objects.values_list("code", flat=True))
+        regencies_to_create = []
         
         encoding = self._detect_encoding(csv_file)
 
-        with open(csv_file, "r", encoding=encoding, errors='replace'
-
-        with open(csv_file, "r", encoding="utf-8") as f:
+        with open(csv_file, "r", encoding=encoding, errors='replace') as f:
             reader = csv.DictReader(f)
             for row in reader:
                 code = row["kode"].strip()
@@ -194,12 +194,12 @@ class Command(BaseCommand):
 
         # Build regency lookup cache
         regency_cache = {r.code: r for r in Regency.objects.all()}
+        existing_codes = set(District.objects.values_list("code", flat=True))
+        districts_to_create = []
         
         encoding = self._detect_encoding(csv_file)
 
-        with open(csv_file, "r", encoding=encoding, errors='replace'
-
-        with open(csv_file, "r", encoding="utf-8") as f:
+        with open(csv_file, "r", encoding=encoding, errors='replace') as f:
             reader = csv.DictReader(f)
             for row in reader:
                 code = row["kode"].strip()
@@ -230,15 +230,15 @@ class Command(BaseCommand):
         """Import villages with bulk_create and optimized lookups."""
         self.stdout.write(f"\n[4/4] Importing villages from {csv_file.name}...")
 
+        # Build district lookup cache
+        district_cache = {d.code: d for d in District.objects.all()}
+        existing_codes = set(Village.objects.values_list("code", flat=True))
+        villages_to_create = []
         
         encoding = self._detect_encoding(csv_file)
         self.stdout.write(f"  → Using encoding: {encoding}")
 
-        with open(csv_file, "r", encoding=encoding, errors='replace'rict.objects.all()}
-        existing_codes = set(Village.objects.values_list("code", flat=True))
-        villages_to_create = []
-
-        with open(csv_file, "r", encoding="utf-8") as f:
+        with open(csv_file, "r", encoding=encoding, errors='replace') as f:
             reader = csv.DictReader(f)
             row_count = 0
             for row in reader:
