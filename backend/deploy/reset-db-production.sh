@@ -113,8 +113,8 @@ else
     echo -e "${GREEN}✓ Database started and ready${NC}"
 fi
 
-# Get database name from .env or use default
-DB_NAME="${SQL_DATABASE:-postgres}"
+# Get database name from .env or use default (must match docker-compose.prod.yml)
+DB_NAME="${SQL_DATABASE:-kmsconnect}"
 DB_USER="${SQL_USER:-postgres}"
 
 # Option 1: Drop and recreate the database (cleanest approach)
