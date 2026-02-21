@@ -3,7 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'features/auth/presentation/pages/login_page.dart';
-import 'features/auth/presentation/pages/register_page.dart';
+import 'features/auth/presentation/pages/registration_page_new.dart';
 import 'features/auth/presentation/pages/verify_email_page.dart';
 import 'features/auth/presentation/pages/reset_password_page.dart';
 import 'features/home/presentation/pages/home_page.dart';
@@ -45,7 +45,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/register',
         name: 'register',
-        builder: (context, state) => const RegisterPage(),
+        builder: (context, state) => const RegistrationPageNew(),
       ),
       GoRoute(
         path: '/verify-email',

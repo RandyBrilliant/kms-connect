@@ -6,6 +6,7 @@ import '../../../../core/api/endpoints.dart';
 import '../../../../core/models/api_response.dart';
 import '../../domain/models/user.dart';
 import '../../domain/models/auth_response.dart';
+import '../../domain/models/ktp_data.dart';
 
 class AuthRepository {
   final ApiClient _apiClient = ApiClient();
@@ -119,7 +120,111 @@ class AuthRepository {
     }
   }
 
-  /// Register/Login with Google Sign-In
+  /// Preview OCR data from KTP image before registration
+  Future<KtpData> ocrPreview(File ktpFile) async {
+    try {
+      final formData = FormData.fromMap({
+        'ktp': await MultipartFile.fromFile(
+          ktpFile.path,
+          filename: 'ktp.jpg',
+        ),
+      });
+
+      final response = await _apiClient.dio.post(
+        ApiEndpoints.ocrPreview,
+        data: formData,
+        options: Options(
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        ),
+      );
+
+      final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
+        response.data,
+        (data) => data as Map<String, dynamic>,
+      );
+
+      if (!apiResponse.isSuccess || apiResponse.data == null) {
+        throw DioException(
+          requestOptions: response.requestOptions,
+          response: response,
+          type: DioExceptionType.badResponse,
+          message: apiResponse.detail ?? 'OCR gagal memproses KTP',
+        );
+      }
+
+      return KtpData.fromJson(apiResponse.data!);
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  /// Register with email, password, NIK, and KTP file
+  Future<AuthResponse> registerComplete({
+    required String email,
+    required String password,
+    required String nik,
+    required File ktpFile,
+    String? referralCode,
+  }) async {
+    try {
+      final formData = FormData.fromMap({
+        'email': email.trim().toLowerCase(),
+        'password': password,
+        'nik': nik.trim(),
+        'ktp': await MultipartFile.fromFile(
+          ktpFile.path,
+          filename: 'ktp.jpg',
+        ),
+        if (referralCode != null && referralCode.isNotEmpty)
+          'referral_code': referralCode.trim().toUpperCase(),
+      });
+
+      final response = await _apiClient.dio.post(
+        ApiEndpoints.register,
+        data: formData,
+        options: Options(
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        ),
+      );
+
+      final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
+        response.data,
+        (data) => data as Map<String, dynamic>,
+      );
+
+      if (!apiResponse.isSuccess) {
+        throw DioException(
+          requestOptions: response.requestOptions,
+          response: response,
+          type: DioExceptionType.badResponse,
+          message: apiResponse.detail ?? 'Registrasi gagal',
+        );
+      }
+
+      final authData = apiResponse.data!;
+      final authResponse = AuthResponse.fromJson(authData);
+
+      // Store tokens
+      await _apiClient.setTokens(
+        authResponse.accessToken,
+        authResponse.refreshToken,
+      );
+
+      // Debug: Verify tokens were stored
+      if (const bool.fromEnvironment('dart.vm.product') == false) {
+        final storedAccess = await _apiClient.getAccessToken();
+        print('TOKEN STORED (registerComplete): ${storedAccess != null && storedAccess.isNotEmpty}');
+      }
+
+      return authResponse;
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
   Future<AuthResponse> googleAuth(String idToken) async {
     try {
       final response = await _apiClient.dio.post(

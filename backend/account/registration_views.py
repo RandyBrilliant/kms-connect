@@ -400,3 +400,101 @@ class GoogleOAuthView(APIView):
             ),
             status=status.HTTP_200_OK if not created else status.HTTP_201_CREATED,
         )
+
+
+class KTPOcrPreviewView(APIView):
+    """
+    Public endpoint untuk OCR preview KTP sebelum registrasi.
+    Menerima file KTP, menjalankan OCR, mengembalikan data parsed.
+    Tidak membuat user/profile, hanya untuk preview data.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [AuthPublicRateThrottle]
+
+    def post(self, request):
+        import tempfile
+        import os
+        from .ocr import extract_text_from_image, parse_ktp_text
+
+        ktp_file = request.FILES.get("ktp")
+
+        if not ktp_file:
+            return Response(
+                error_response(
+                    detail="File KTP wajib diunggah.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validasi format dan ukuran KTP
+        try:
+            validate_document_file(ktp_file, "ktp")
+        except Exception as e:
+            return Response(
+                error_response(
+                    detail=str(e),
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Save file to temporary location
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp_file:
+                for chunk in ktp_file.chunks():
+                    tmp_file.write(chunk)
+                tmp_file_path = tmp_file.name
+
+            # Extract text using Google Cloud Vision
+            ocr_text = extract_text_from_image(tmp_file_path)
+
+            # Clean up temp file
+            os.unlink(tmp_file_path)
+
+            if not ocr_text:
+                return Response(
+                    error_response(
+                        detail="Tidak dapat mengekstrak teks dari KTP. Pastikan foto jelas dan tidak blur.",
+                        code=ApiCode.VALIDATION_ERROR,
+                    ),
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Parse KTP text
+            parsed_data = parse_ktp_text(ocr_text)
+
+            if not parsed_data or not parsed_data.get("nik"):
+                return Response(
+                    error_response(
+                        detail="Tidak dapat mengidentifikasi data KTP. Pastikan foto KTP jelas dan semua informasi terlihat.",
+                        code=ApiCode.VALIDATION_ERROR,
+                    ),
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            return Response(
+                success_response(
+                    data=parsed_data,
+                    detail="Data KTP berhasil diekstrak. Silakan periksa dan lengkapi data yang kosong.",
+                ),
+                status=status.HTTP_200_OK,
+            )
+
+        except Exception as e:
+            # Clean up temp file if it exists
+            if 'tmp_file_path' in locals():
+                try:
+                    os.unlink(tmp_file_path)
+                except:
+                    pass
+
+            return Response(
+                error_response(
+                    detail=f"Gagal memproses OCR: {str(e)}",
+                    code=ApiCode.INTERNAL_ERROR,
+                ),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )

@@ -6,6 +6,7 @@ class ApiEndpoints {
   static const String login = '$baseUrl/auth/token/';
   static const String register = '$baseUrl/auth/register/';
   static const String googleAuth = '$baseUrl/auth/google/';
+  static const String ocrPreview = '$baseUrl/auth/ocr-preview/';
   static const String refreshToken = '$baseUrl/auth/token/refresh/';
   static const String logout = '$baseUrl/auth/logout/';
   static const String verifyEmail = '$baseUrl/auth/verify-email/';

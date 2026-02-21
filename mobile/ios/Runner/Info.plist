@@ -45,5 +45,9 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Aplikasi memerlukan akses kamera untuk mengambil foto KTP Anda</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Aplikasi memerlukan akses galeri untuk memilih foto KTP Anda</string>
 </dict>
 </plist>
