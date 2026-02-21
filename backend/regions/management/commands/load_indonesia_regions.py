@@ -28,6 +28,24 @@ from regions.models import Province, Regency, District, Village
 class Command(BaseCommand):
     help = "Import Provinsi, Kabupaten/Kota, Kecamatan, Kelurahan from optimized CSV files."
 
+    def _detect_encoding(self, file_path):
+        """Detect file encoding by trying common encodings for Indonesian data."""
+        encodings = ['utf-8', 'utf-8-sig', 'cp1252', 'windows-1252', 'iso-8859-1', 'latin-1']
+        
+        for encoding in encodings:
+            try:
+                with open(file_path, 'r', encoding=encoding) as f:
+                    f.read()
+                return encoding
+            except (UnicodeDecodeError, UnicodeError):
+                continue
+        
+        # Fallback to utf-8 with error handling
+        self.stdout.write(
+            self.style.WARNING(f"  ⚠ Could not detect encoding for {file_path.name}, using utf-8 with error replacement")
+        )
+        return 'utf-8'
+
     def add_arguments(self, parser):
         parser.add_argument(
             "--clear",
@@ -112,8 +130,10 @@ class Command(BaseCommand):
 
         provinces_to_create = []
         existing_codes = set(Province.objects.values_list("code", flat=True))
+        
+        encoding = self._detect_encoding(csv_file)
 
-        with open(csv_file, "r", encoding="utf-8") as f:
+        with open(csv_file, "r", encoding=encoding, errors='replace') as f:
             reader = csv.DictReader(f)
             for row in reader:
                 code = row["kode"].strip()
@@ -137,8 +157,10 @@ class Command(BaseCommand):
 
         # Build province lookup cache
         province_cache = {p.code: p for p in Province.objects.all()}
-        existing_codes = set(Regency.objects.values_list("code", flat=True))
-        regencies_to_create = []
+        
+        encoding = self._detect_encoding(csv_file)
+
+        with open(csv_file, "r", encoding=encoding, errors='replace'
 
         with open(csv_file, "r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
@@ -172,8 +194,10 @@ class Command(BaseCommand):
 
         # Build regency lookup cache
         regency_cache = {r.code: r for r in Regency.objects.all()}
-        existing_codes = set(District.objects.values_list("code", flat=True))
-        districts_to_create = []
+        
+        encoding = self._detect_encoding(csv_file)
+
+        with open(csv_file, "r", encoding=encoding, errors='replace'
 
         with open(csv_file, "r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
@@ -206,8 +230,11 @@ class Command(BaseCommand):
         """Import villages with bulk_create and optimized lookups."""
         self.stdout.write(f"\n[4/4] Importing villages from {csv_file.name}...")
 
-        # Build district lookup cache
-        district_cache = {d.code: d for d in District.objects.all()}
+        
+        encoding = self._detect_encoding(csv_file)
+        self.stdout.write(f"  → Using encoding: {encoding}")
+
+        with open(csv_file, "r", encoding=encoding, errors='replace'rict.objects.all()}
         existing_codes = set(Village.objects.values_list("code", flat=True))
         villages_to_create = []
 
