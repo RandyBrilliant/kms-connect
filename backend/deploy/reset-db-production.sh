@@ -116,41 +116,72 @@ fi
 # Get database name from .env or use default (must match docker-compose.prod.yml)
 DB_NAME="${SQL_DATABASE:-kmsconnect}"
 DB_USER="${SQL_USER:-postgres}"
+DB_PASSWORD="${SQL_PASSWORD:-}"
+
+# Set PGPASSWORD if password is provided
+if [ -n "$DB_PASSWORD" ]; then
+    export PGPASSWORD="$DB_PASSWORD"
+fi
 
 # Option 1: Drop and recreate the database (cleanest approach)
 echo ""
 echo -e "${BLUE}[3/8] Dropping existing database...${NC}"
 
-# First, terminate all active connections to the database
-echo "  → Terminating active connections..."
-timeout 20 docker compose -f docker-compose.prod.yml exec -T db psql -U "$DB_USER" -d postgres -c "
-SELECT pg_terminate_backend(pg_stat_activity.pid)
-FROM pg_stat_activity
-WHERE pg_stat_activity.datname = '$DB_NAME'
-  AND pid <> pg_backend_pid();" 2>/dev/null || true
+# First, stop the Django container to close connections
+echo "  → Stopping Django container to close connections..."
+docker compose -f docker-compose.prod.yml stop web 2>&1
 
-# Wait a moment for connections to terminate
-sleep 2
+# Check if database exists first
+echo "  → Checking if database exists..."
+DB_EXISTS=$(docker compose -f docker-compose.prod.yml exec -T db psql -U "$DB_USER" -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$DB_NAME';" 2>/dev/null || echo "")
 
-# Now drop the database
-timeout 20 docker compose -f docker-compose.prod.yml exec -T db psql -U "$DB_USER" -d postgres -c "DROP DATABASE IF EXISTS \"$DB_NAME\";" 2>/dev/null || {
-    echo -e "${YELLOW}⚠ Could not drop database (might not exist), continuing...${NC}"
-}
-echo -e "${GREEN}✓ Database dropped${NC}"
+if [ "$DB_EXISTS" = "1" ]; then
+    echo "  → Database '$DB_NAME' exists, checking for active connections..."
+    
+    # Show active connections for debugging
+    echo "  → Active connections:"
+    docker compose -f docker-compose.prod.yml exec -T db psql -U "$DB_USER" -d postgres -c "SELECT pid, usename, application_name, client_addr FROM pg_stat_activity WHERE datname = '$DB_NAME';" 2>&1 || true
+    
+    # Terminate all connections forcefully
+    echo "  → Terminating connections..."
+    docker compose -f docker-compose.prod.yml exec -T db psql -U "$DB_USER" -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$DB_NAME' AND pid <> pg_backend_pid();" 2>&1 || true
+    
+    # Wait a moment for connections to close
+    sleep 1
+    
+    # Drop the database using FORCE mode directly (PostgreSQL 13+)
+    echo "  → Dropping database '$DB_NAME' with FORCE..."
+    if docker compose -f docker-compose.prod.yml exec -T db psql -U "$DB_USER" -d postgres -c "DROP DATABASE IF EXISTS \"$DB_NAME\" WITH (FORCE);" 2>&1; then
+        echo -e "${GREEN}✓ Database dropped successfully${NC}"
+    else
+        echo -e "${YELLOW}⚠ DROP WITH FORCE failed, trying without FORCE...${NC}"
+        docker compose -f docker-compose.prod.yml exec -T db psql -U "$DB_USER" -d postgres -c "DROP DATABASE IF EXISTS \"$DB_NAME\";" 2>&1 || {
+            echo -e "${RED}Error: Failed to drop database${NC}"
+            exit 1
+        }
+    fi
+else
+    echo "  → Database '$DB_NAME' does not exist, skipping drop."
+fi
+
+echo -e "${GREEN}✓ Database cleanup complete${NC}"
 
 echo ""
 echo -e "${BLUE}[4/8] Creating fresh database...${NC}"
-# Timeout wrapper to prevent hanging
-timeout 30 docker compose -f docker-compose.prod.yml exec -T db psql -U "$DB_USER" -d postgres -c "CREATE DATABASE \"$DB_NAME\" ENCODING 'UTF8' LOCALE 'en_US.UTF-8' TEMPLATE template0;" 2>/dev/null || {
-    # If the database already exists, that's OK
-    if docker compose -f docker-compose.prod.yml exec -T db psql -U "$DB_USER" -d postgres -c "\l" 2>/dev/null | grep -q "^ $DB_NAME "; then
-        echo -e "${YELLOW}⚠ Database already exists, skipping creation...${NC}"
-    else
-        echo -e "${RED}Error: Failed to create database${NC}"
-        exit 1
-    fi
-}
-echo -e "${GREEN}✓ Fresh database created${NC}"
+echo "  → Creating database '$DB_NAME'..."
+
+# Create the database with explicit settings
+if docker compose -f docker-compose.prod.yml exec -T db psql -U "$DB_USER" -d postgres -c "CREATE DATABASE \"$DB_NAME\" WITH ENCODING 'UTF8' LC_COLLATE = 'en_US.UTF-8' LC_CTYPE = 'en_US.UTF-8' TEMPLATE template0;" 2>&1; then
+    echo -e "${GREEN}✓ Fresh database '$DB_NAME' created${NC}"
+else
+    echo -e "${RED}Error: Failed to create database${NC}"
+    exit 1
+fi
+
+# Unset password if it was set
+if [ -n "$DB_PASSWORD" ]; then
+    unset PGPASSWORD
+fi
 
 # Alternative approach: If dropping database doesn't work, we can use fake migrations
 # This approach drops all tables and resets migration state
