@@ -32,9 +32,38 @@ router.register(
     views.ApplicantJobApplicationViewSet,
     basename="applicant-me-applications",
 )
+# Company self-service
+router.register(
+    r"companies/me/jobs",
+    views.CompanyJobListingsViewSet,
+    basename="company-me-jobs",
+)
+router.register(
+    r"companies/me/applicants",
+    views.CompanyApplicantsViewSet,
+    basename="company-me-applicants",
+)
+router.register(
+    r"companies/me/applications",
+    views.CompanyJobApplicationsViewSet,
+    basename="company-me-applications",
+)
+# Staff self-service
+router.register(
+    r"staff/me/jobs",
+    views.StaffJobListingsViewSet,
+    basename="staff-me-jobs",
+)
+router.register(
+    r"staff/me/applicants",
+    views.StaffReferredApplicantsViewSet,
+    basename="staff-me-applicants",
+)
 
 urlpatterns = [
     path("jobs/<int:pk>/apply/", views.ApplyForJobView.as_view(), name="apply-for-job"),
+    path("companies/me/dashboard-stats/", views.CompanyDashboardStatsView.as_view(), name="company-dashboard-stats"),
+    path("staff/me/dashboard-stats/", views.StaffDashboardStatsView.as_view(), name="staff-dashboard-stats"),
     path("", include(router.urls)),
 ]
 

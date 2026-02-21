@@ -24,7 +24,16 @@ const AdminJobFormPage = lazy(() => import("@/pages/admin-job-form-page").then(m
 const StaffStaffListPage = lazy(() => import("@/pages/staff-staff-list-page").then(m => ({ default: m.StaffStaffListPage })))
 const StaffStaffFormPage = lazy(() => import("@/pages/staff-staff-form-page").then(m => ({ default: m.StaffStaffFormPage })))
 const StaffDashboardPage = lazy(() => import("@/pages/staff-dashboard-page").then(m => ({ default: m.StaffDashboardPage })))
+const StaffDashboardHomePage = lazy(() => import("@/pages/staff-dashboard-home-page").then(m => ({ default: m.StaffDashboardHomePage })))
+const StaffJobListingsPage = lazy(() => import("@/pages/staff-job-listings-page").then(m => ({ default: m.StaffJobListingsPage })))
+const StaffReferredApplicantsPage = lazy(() => import("@/pages/staff-referred-applicants-page").then(m => ({ default: m.StaffReferredApplicantsPage })))
+const StaffApplicantDetailPage = lazy(() => import("@/pages/staff-applicant-detail-page").then(m => ({ default: m.StaffApplicantDetailPage })))
+const StaffLaporanPage = lazy(() => import("@/pages/staff-laporan-page").then(m => ({ default: m.StaffLaporanPage })))
 const CompanyDashboardPage = lazy(() => import("@/pages/company-dashboard-page").then(m => ({ default: m.CompanyDashboardPage })))
+const CompanyDashboardHomePage = lazy(() => import("@/pages/company-dashboard-home-page").then(m => ({ default: m.CompanyDashboardHomePage })))
+const CompanyJobListingsPage = lazy(() => import("@/pages/company-job-listings-page").then(m => ({ default: m.CompanyJobListingsPage })))
+const CompanyApplicantsPage = lazy(() => import("@/pages/company-applicants-page").then(m => ({ default: m.CompanyApplicantsPage })))
+const CompanyApplicantDetailPage = lazy(() => import("@/pages/company-applicant-detail-page").then(m => ({ default: m.CompanyApplicantDetailPage })))
 const CompanyCompanyListPage = lazy(() => import("@/pages/company-company-list-page").then(m => ({ default: m.CompanyCompanyListPage })))
 const CompanyCompanyFormPage = lazy(() => import("@/pages/company-company-form-page").then(m => ({ default: m.CompanyCompanyFormPage })))
 const AdminPelamarListPage = lazy(() => import("@/pages/admin-pelamar-list-page").then(m => ({ default: m.AdminPelamarListPage })))
@@ -139,27 +148,15 @@ function AppRoutes() {
             <StaffDashboardPage />
           </ProtectedRoute>
         }
-      />
-      <Route
-        path="/staff/profil"
-        element={
-          <ProtectedRoute allowedRoles={["STAFF"]}>
-            <StaffDashboardPage>
-              <ProfilePage />
-            </StaffDashboardPage>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/staff/notifikasi"
-        element={
-          <ProtectedRoute allowedRoles={["STAFF"]}>
-            <StaffDashboardPage>
-              <NotificationsPage />
-            </StaffDashboardPage>
-          </ProtectedRoute>
-        }
-      />
+      >
+        <Route index element={<StaffDashboardHomePage />} />
+        <Route path="lowongan-kerja" element={<StaffJobListingsPage />} />
+        <Route path="pelamar" element={<StaffReferredApplicantsPage />} />
+        <Route path="pelamar/:id" element={<StaffApplicantDetailPage />} />
+        <Route path="laporan" element={<StaffLaporanPage />} />
+        <Route path="profil" element={<ProfilePage />} />
+        <Route path="notifikasi" element={<NotificationsPage />} />
+      </Route>
       <Route
         path="/company"
         element={
@@ -167,27 +164,14 @@ function AppRoutes() {
             <CompanyDashboardPage />
           </ProtectedRoute>
         }
-      />
-      <Route
-        path="/company/profil"
-        element={
-          <ProtectedRoute allowedRoles={["COMPANY"]}>
-            <CompanyDashboardPage>
-              <ProfilePage />
-            </CompanyDashboardPage>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/company/notifikasi"
-        element={
-          <ProtectedRoute allowedRoles={["COMPANY"]}>
-            <CompanyDashboardPage>
-              <NotificationsPage />
-            </CompanyDashboardPage>
-          </ProtectedRoute>
-        }
-      />
+      >
+        <Route index element={<CompanyDashboardHomePage />} />
+        <Route path="lowongan-kerja" element={<CompanyJobListingsPage />} />
+        <Route path="pelamar" element={<CompanyApplicantsPage />} />
+        <Route path="pelamar/:id" element={<CompanyApplicantDetailPage />} />
+        <Route path="profil" element={<ProfilePage />} />
+        <Route path="notifikasi" element={<NotificationsPage />} />
+      </Route>
       <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </Suspense>

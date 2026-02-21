@@ -1,26 +1,23 @@
+/**
+ * Company dashboard layout with sidebar and header.
+ * Renders children in the main content area.
+ */
+
+import { Outlet } from "react-router-dom"
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
-import { Separator } from "@/components/ui/separator"
 import { SiteHeader } from "@/components/site-header"
-import { usePageTitle } from "@/hooks/use-page-title"
 
-export function CompanyDashboardPage({ children }: { children?: React.ReactNode }) {
-  usePageTitle("Dashboard Perusahaan")
+export function CompanyDashboardPage() {
   return (
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
         <SiteHeader />
-        <Separator />
-        <div className="flex flex-1 flex-col gap-4 p-4">
-          {children ?? (
-            <div>
-              <h1 className="text-2xl font-bold">Dashboard Perusahaan</h1>
-              <p className="text-muted-foreground">
-                Selamat datang di KMS-Connect Company Dashboard
-              </p>
-            </div>
-          )}
+        <div className="flex flex-1 flex-col">
+          <div className="@container/main flex flex-1 flex-col gap-2">
+            <Outlet />
+          </div>
         </div>
       </SidebarInset>
     </SidebarProvider>
