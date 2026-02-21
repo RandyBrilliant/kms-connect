@@ -123,23 +123,32 @@ echo -e "${BLUE}[3/8] Dropping existing database...${NC}"
 
 # First, terminate all active connections to the database
 echo "  → Terminating active connections..."
-docker compose -f docker-compose.prod.yml exec -T db psql -U "$DB_USER" -c "
+timeout 20 docker compose -f docker-compose.prod.yml exec -T db psql -U "$DB_USER" -d postgres -c "
 SELECT pg_terminate_backend(pg_stat_activity.pid)
 FROM pg_stat_activity
 WHERE pg_stat_activity.datname = '$DB_NAME'
-  AND pid <> pg_backend_pid();" postgres 2>/dev/null || true
+  AND pid <> pg_backend_pid();" 2>/dev/null || true
+
+# Wait a moment for connections to terminate
+sleep 2
 
 # Now drop the database
-docker compose -f docker-compose.prod.yml exec -T db psql -U "$DB_USER" -c "DROP DATABASE IF EXISTS \"$DB_NAME\";" postgres 2>/dev/null || {
+timeout 20 docker compose -f docker-compose.prod.yml exec -T db psql -U "$DB_USER" -d postgres -c "DROP DATABASE IF EXISTS \"$DB_NAME\";" 2>/dev/null || {
     echo -e "${YELLOW}⚠ Could not drop database (might not exist), continuing...${NC}"
 }
 echo -e "${GREEN}✓ Database dropped${NC}"
 
 echo ""
 echo -e "${BLUE}[4/8] Creating fresh database...${NC}"
-docker compose -f docker-compose.prod.yml exec -T db psql -U "$DB_USER" -c "CREATE DATABASE \"$DB_NAME\";" postgres 2>/dev/null || {
-    echo -e "${RED}Error: Failed to create database${NC}"
-    exit 1
+# Timeout wrapper to prevent hanging
+timeout 30 docker compose -f docker-compose.prod.yml exec -T db psql -U "$DB_USER" -d postgres -c "CREATE DATABASE \"$DB_NAME\" ENCODING 'UTF8' LOCALE 'en_US.UTF-8' TEMPLATE template0;" 2>/dev/null || {
+    # If the database already exists, that's OK
+    if docker compose -f docker-compose.prod.yml exec -T db psql -U "$DB_USER" -d postgres -c "\l" 2>/dev/null | grep -q "^ $DB_NAME "; then
+        echo -e "${YELLOW}⚠ Database already exists, skipping creation...${NC}"
+    else
+        echo -e "${RED}Error: Failed to create database${NC}"
+        exit 1
+    fi
 }
 echo -e "${GREEN}✓ Fresh database created${NC}"
 
