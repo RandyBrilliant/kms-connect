@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'config/theme.dart';
+import 'core/widgets/custom_toast.dart';
+
 import 'features/auth/presentation/pages/login_page.dart';
 import 'features/auth/presentation/pages/registration_page_new.dart';
 import 'features/auth/presentation/pages/verify_email_page.dart';
@@ -9,6 +12,7 @@ import 'features/auth/presentation/pages/reset_password_page.dart';
 import 'features/home/presentation/pages/home_page.dart';
 import 'features/profile/presentation/pages/profile_page.dart';
 import 'features/profile/presentation/pages/edit_profile_page.dart';
+import 'features/profile/presentation/pages/work_experiences_page.dart';
 import 'features/documents/presentation/pages/documents_page.dart';
 import 'features/documents/presentation/pages/upload_document_page.dart';
 import 'features/jobs/presentation/pages/jobs_list_page.dart';
@@ -16,18 +20,37 @@ import 'features/jobs/presentation/pages/job_detail_page.dart';
 import 'features/jobs/presentation/pages/my_applications_page.dart';
 import 'features/news/presentation/pages/news_list_page.dart';
 import 'features/news/presentation/pages/news_detail_page.dart';
+import 'features/notifications/presentation/pages/notifications_page.dart';
 import 'features/auth/data/providers/auth_provider.dart';
 import 'config/strings.dart';
 
+/// A [ChangeNotifier] that bridges Riverpod [AuthState] changes to GoRouter's
+/// [refreshListenable], so the router is created ONCE and only re-evaluates
+/// its redirect function when auth state changes — without rebuilding the
+/// whole widget tree.
+class _AuthRouterNotifier extends ChangeNotifier {
+  void notify() => notifyListeners();
+}
+
 final routerProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authStateProvider);
-  
+  final authNotifier = _AuthRouterNotifier();
+
+  // Listen to auth state changes and notify the router to re-evaluate redirect.
+  ref.listen<AuthState>(authStateProvider, (_, __) {
+    authNotifier.notify();
+  });
+
+  ref.onDispose(authNotifier.dispose);
+
   return GoRouter(
-    initialLocation: authState.isAuthenticated ? '/home' : '/login',
+    navigatorKey: rootNavigatorKey,
+    initialLocation: '/login',
+    refreshListenable: authNotifier,
     redirect: (context, state) {
-      final isAuthenticated = authState.isAuthenticated;
+      // Read current auth state at redirect-evaluation time (not captured at build time).
+      final isAuthenticated = ref.read(authStateProvider).isAuthenticated;
       final isLoginRoute = state.matchedLocation == '/login' || state.matchedLocation == '/register';
-      
+
       if (!isAuthenticated && !isLoginRoute) {
         return '/login';
       }
@@ -70,6 +93,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const HomePage(),
       ),
       GoRoute(
+        path: '/notifications',
+        name: 'notifications',
+        builder: (context, state) => const NotificationsPage(),
+      ),
+      GoRoute(
         path: '/profile',
         name: 'profile',
         builder: (context, state) => const ProfilePage(),
@@ -78,6 +106,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/profile/edit',
         name: 'edit-profile',
         builder: (context, state) => const EditProfilePage(),
+      ),
+      GoRoute(
+        path: '/profile/work-experiences',
+        name: 'work-experiences',
+        builder: (context, state) => const WorkExperiencesPage(),
       ),
       GoRoute(
         path: '/documents',
@@ -139,6 +172,7 @@ class App extends ConsumerWidget {
     return MaterialApp.router(
       title: AppStrings.appName,
       debugShowCheckedModeBanner: false,
+      theme: AppTheme.lightTheme,
       routerConfig: router,
     );
   }

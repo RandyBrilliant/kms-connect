@@ -6,6 +6,7 @@ No auth required so applicants can load Provinsi → Kabupaten/Kota → Kecamata
 
 from rest_framework import viewsets
 from rest_framework.filters import SearchFilter
+from rest_framework.permissions import AllowAny
 
 from .models import Province, Regency, District, Village
 from .serializers import (
@@ -18,22 +19,26 @@ from .serializers import (
 
 
 class ProvinceViewSet(viewsets.ReadOnlyModelViewSet):
-    """List all provinces. No filter needed."""
+    """List all provinces. No filter needed. Public — no auth required."""
 
     queryset = Province.objects.all().order_by("name")
     serializer_class = ProvinceSerializer
     filter_backends = [SearchFilter]
     search_fields = ["name", "code"]
     pagination_class = None  # Return all for dropdowns
+    permission_classes = [AllowAny]
+    authentication_classes = []
 
 
 class RegencyViewSet(viewsets.ReadOnlyModelViewSet):
-    """List regencies; filter by province_id for cascading dropdown."""
+    """List regencies; filter by province_id for cascading dropdown. Public — no auth required."""
 
     serializer_class = RegencySerializer
     filter_backends = [SearchFilter]
     search_fields = ["name", "code"]
     pagination_class = None  # Return all for dropdowns (birth_place, address cascade)
+    permission_classes = [AllowAny]
+    authentication_classes = []
 
     def get_queryset(self):
         qs = Regency.objects.all().select_related("province").order_by("name")
@@ -44,12 +49,14 @@ class RegencyViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class DistrictViewSet(viewsets.ReadOnlyModelViewSet):
-    """List districts; filter by regency_id for cascading dropdown."""
+    """List districts; filter by regency_id for cascading dropdown. Public — no auth required."""
 
     serializer_class = DistrictSerializer
     filter_backends = [SearchFilter]
     search_fields = ["name", "code"]
     pagination_class = None  # Return all for dropdown cascade
+    permission_classes = [AllowAny]
+    authentication_classes = []
 
     def get_queryset(self):
         qs = District.objects.all().select_related("regency").order_by("name")
@@ -60,12 +67,14 @@ class DistrictViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class VillageViewSet(viewsets.ReadOnlyModelViewSet):
-    """List villages; filter by district_id for cascading dropdown."""
+    """List villages; filter by district_id for cascading dropdown. Public — no auth required."""
 
     serializer_class = VillageSerializer
     filter_backends = [SearchFilter]
     search_fields = ["name", "code"]
     pagination_class = None  # Return all for dropdown cascade
+    permission_classes = [AllowAny]
+    authentication_classes = []
 
     def get_queryset(self):
         qs = Village.objects.all().select_related("district").order_by("name")

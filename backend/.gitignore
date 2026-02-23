@@ -49,8 +49,10 @@ staticfiles/
 nginx/ssl/
 nginx/logs/
 
-# Firebase credentials
+# Service account credentials (Firebase, Google Cloud Vision, etc.)
 firebase-service-account.json
+vision-sa.json
+*.json.key
 backups/
 *.tar.gz
 deploy/*.log

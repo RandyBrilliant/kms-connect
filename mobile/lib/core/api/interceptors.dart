@@ -9,6 +9,10 @@ class AuthInterceptor extends Interceptor {
   bool _isRefreshing = false;
   final List<({RequestOptions options, ErrorInterceptorHandler handler})> _pendingRequests = [];
 
+  /// Set this from outside (e.g. authStateProvider) so that when the
+  /// interceptor invalidates tokens it can force GoRouter to redirect to login.
+  static void Function()? onForceLogout;
+
   AuthInterceptor(this._secureStorage, this._dio);
 
   @override
@@ -28,12 +32,29 @@ class AuthInterceptor extends Interceptor {
       if (const bool.fromEnvironment('dart.vm.product') == false) {
         print('AUTH HEADER ADDED for: ${options.path}');
       }
+      handler.next(options);
     } else {
+      // No token for a protected endpoint — reject immediately and force the
+      // user back to the login screen rather than sending an unauthenticated
+      // request that will just bounce back as a 401 we cannot recover from.
       if (const bool.fromEnvironment('dart.vm.product') == false) {
-        print('NO TOKEN FOUND for: ${options.path}');
+        print('NO TOKEN — forcing logout for: ${options.path}');
       }
+      _dispatchForceLogout();
+      handler.reject(
+        DioException(
+          requestOptions: options,
+          type: DioExceptionType.unknown,
+          error: 'Sesi telah berakhir. Silakan masuk kembali.',
+        ),
+      );
     }
-    handler.next(options);
+  }
+
+  /// Clears tokens from storage and notifies the app to redirect to login.
+  Future<void> _dispatchForceLogout() async {
+    await _secureStorage.deleteAll();
+    onForceLogout?.call();
   }
 
   @override
@@ -44,20 +65,34 @@ class AuthInterceptor extends Interceptor {
       return;
     }
 
+    // If this was already a retry after refresh, reject cleanly without clearing tokens
+    // (avoids infinite loop and incorrectly wiping credentials on transient failures)
+    if (err.requestOptions.extra['auth_retry'] == true) {
+      handler.next(err);
+      return;
+    }
+
     // Handle 401 Unauthorized - try to refresh token
-    if (err.response?.statusCode == 401 && !_isRefreshing) {
+    if (err.response?.statusCode == 401) {
+      if (_isRefreshing) {
+        // Refresh already in-flight — queue this request to retry once it completes
+        _pendingRequests.add((options: err.requestOptions, handler: handler));
+        return;
+      }
+
       _isRefreshing = true;
 
       try {
         final refreshToken = await _secureStorage.read(key: 'refresh_token');
         if (refreshToken == null) {
           _isRefreshing = false;
+          await _dispatchForceLogout();
           _rejectPendingRequests(err);
           handler.reject(err);
           return;
         }
 
-        // Try to refresh token
+        // Try to refresh token (public endpoint — won't re-enter this interceptor)
         final response = await _dio.post(
           ApiEndpoints.refreshToken,
           data: {'refresh': refreshToken},
@@ -68,32 +103,51 @@ class AuthInterceptor extends Interceptor {
           if (newAccessToken != null) {
             await _secureStorage.write(key: 'access_token', value: newAccessToken);
 
-            // Retry original request
+            // Mark as retry so a second 401 on the retry doesn't wipe tokens
             final opts = err.requestOptions;
             opts.headers['Authorization'] = 'Bearer $newAccessToken';
-            final retryResponse = await _dio.fetch(opts);
-            _isRefreshing = false;
-            _resolvePendingRequests(retryResponse);
-            handler.resolve(retryResponse);
+            opts.extra['auth_retry'] = true;
+
+            try {
+              final retryResponse = await _dio.fetch(opts);
+              _isRefreshing = false;
+              _resolvePendingRequests(retryResponse);
+              handler.resolve(retryResponse);
+            } catch (retryErr) {
+              // Retry itself failed — reject but do NOT clear tokens
+              _isRefreshing = false;
+              _rejectPendingRequests(err);
+              handler.next(err);
+            }
             return;
           }
         }
-      } catch (e) {
-        // Refresh failed - clear tokens and reject
-        await _secureStorage.deleteAll();
+
+        // Refresh response was not 200 or contained no access token — credentials invalid
         _isRefreshing = false;
+        await _dispatchForceLogout();
         _rejectPendingRequests(err);
+        handler.next(err);
+      } catch (e) {
+        // Refresh request itself threw (network error, server down) — clear tokens
+        _isRefreshing = false;
+        await _dispatchForceLogout();
+        _rejectPendingRequests(err);
+        handler.next(err);
       }
+      return;
     }
 
-    _isRefreshing = false;
     handler.next(err);
   }
 
   bool _isPublicEndpoint(String path) {
     return path.contains('/auth/') ||
-        path.contains('/public/') ||
-        path.contains('/document-types/public/');
+        path.contains('/document-types/public/') ||
+        path.contains('/provinces/') ||
+        path.contains('/regencies/') ||
+        path.contains('/districts/') ||
+        path.contains('/villages/');
   }
 
   void _resolvePendingRequests(Response response) {

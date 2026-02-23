@@ -32,16 +32,11 @@ class JobRepository {
         queryParameters: queryParams,
       );
 
-      final apiResponse = ApiResponse<List<dynamic>>.fromJson(
-        response.data,
-        (data) => data as List<dynamic>,
-      );
+      // Public endpoints return a raw JSON array (pagination_class = None).
+      final data = response.data;
+      if (data is! List) return [];
 
-      if (!apiResponse.isSuccess || apiResponse.data == null) {
-        return [];
-      }
-
-      return (apiResponse.data as List)
+      return data
           .map((json) => Job.fromJson(json as Map<String, dynamic>))
           .toList();
     } on DioException catch (e) {
@@ -53,21 +48,17 @@ class JobRepository {
   Future<Job> getJobDetail(int id) async {
     try {
       final response = await _apiClient.dio.get(ApiEndpoints.jobDetail(id));
-      final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
-        response.data,
-        (data) => data as Map<String, dynamic>,
-      );
-
-      if (!apiResponse.isSuccess || apiResponse.data == null) {
+      // Detail endpoints return a plain JSON object (no envelope).
+      final data = response.data;
+      if (data is! Map<String, dynamic>) {
         throw DioException(
           requestOptions: response.requestOptions,
           response: response,
           type: DioExceptionType.badResponse,
-          message: apiResponse.detail ?? 'Gagal mengambil detail lowongan',
+          message: 'Gagal mengambil detail lowongan',
         );
       }
-
-      return Job.fromJson(apiResponse.data!);
+      return Job.fromJson(data);
     } on DioException catch (e) {
       throw _handleError(e);
     }
@@ -110,16 +101,11 @@ class JobRepository {
         queryParameters: queryParams,
       );
 
-      final apiResponse = ApiResponse<List<dynamic>>.fromJson(
-        response.data,
-        (data) => data as List<dynamic>,
-      );
+      // Returns a raw JSON array (pagination_class = None on the viewset).
+      final data = response.data;
+      if (data is! List) return [];
 
-      if (!apiResponse.isSuccess || apiResponse.data == null) {
-        return [];
-      }
-
-      return (apiResponse.data as List)
+      return data
           .map((json) => JobApplication.fromJson(json as Map<String, dynamic>))
           .toList();
     } on DioException catch (e) {

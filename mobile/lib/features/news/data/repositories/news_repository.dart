@@ -2,7 +2,6 @@ import 'package:dio/dio.dart';
 
 import '../../../../core/api/api_client.dart';
 import '../../../../core/api/endpoints.dart';
-import '../../../../core/models/api_response.dart';
 import '../../domain/models/news.dart';
 
 class NewsRepository {
@@ -21,16 +20,11 @@ class NewsRepository {
         queryParameters: queryParams,
       );
 
-      final apiResponse = ApiResponse<List<dynamic>>.fromJson(
-        response.data,
-        (data) => data as List<dynamic>,
-      );
+      // Public endpoints return a raw JSON array (pagination_class = None).
+      final data = response.data;
+      if (data is! List) return [];
 
-      if (!apiResponse.isSuccess || apiResponse.data == null) {
-        return [];
-      }
-
-      return (apiResponse.data as List)
+      return data
           .map((json) => News.fromJson(json as Map<String, dynamic>))
           .toList();
     } on DioException catch (e) {
@@ -42,21 +36,17 @@ class NewsRepository {
   Future<News> getNewsDetail(int id) async {
     try {
       final response = await _apiClient.dio.get(ApiEndpoints.newsDetail(id));
-      final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
-        response.data,
-        (data) => data as Map<String, dynamic>,
-      );
-
-      if (!apiResponse.isSuccess || apiResponse.data == null) {
+      // Detail endpoints return a plain JSON object (no envelope).
+      final data = response.data;
+      if (data is! Map<String, dynamic>) {
         throw DioException(
           requestOptions: response.requestOptions,
           response: response,
           type: DioExceptionType.badResponse,
-          message: apiResponse.detail ?? 'Gagal mengambil detail berita',
+          message: 'Gagal mengambil detail berita',
         );
       }
-
-      return News.fromJson(apiResponse.data!);
+      return News.fromJson(data);
     } on DioException catch (e) {
       throw _handleError(e);
     }

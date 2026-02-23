@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../../config/colors.dart';
+import '../../../../../core/widgets/custom_toast.dart';
 import '../../providers/registration_provider.dart';
 
 class RegistrationStep1Credentials extends ConsumerStatefulWidget {
@@ -331,15 +332,7 @@ class _RegistrationStep1CredentialsState
   Widget _buildSocialLogin() {
     return OutlinedButton(
       onPressed: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Google Sign-In akan segera tersedia',
-                style: GoogleFonts.plusJakartaSans()),
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-        );
+        CustomToast.show(context, message: 'Google Sign-In akan segera tersedia', type: ToastType.info);
       },
       style: OutlinedButton.styleFrom(
         backgroundColor: AppColors.white,

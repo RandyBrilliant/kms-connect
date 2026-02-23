@@ -7,7 +7,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'dart:io';
 
 import '../../../../config/colors.dart';
-import '../../../../config/strings.dart';
 import '../../../../core/widgets/custom_toast.dart';
 import '../../data/providers/auth_provider.dart';
 

@@ -8,7 +8,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.filters import SearchFilter, OrderingFilter
 
 from account.permissions import IsBackofficeAdmin, IsApplicant, IsCompany, IsStaff
@@ -73,13 +73,8 @@ class PublicNewsListViewSet(viewsets.ReadOnlyModelViewSet):
     """
 
     serializer_class = NewsSerializer
-    permission_classes = [AllowAny]
-    authentication_classes = ()  # Empty tuple disables authentication
-    
-    def get_authenticators(self):
-        """Override to ensure no authentication is performed."""
-        return []
-    
+    permission_classes = [IsAuthenticated]
+    pagination_class = None  # Return plain list — mobile parses raw array
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ["is_pinned"]
     search_fields = ["title", "summary"]
@@ -97,13 +92,8 @@ class PublicJobsListViewSet(viewsets.ReadOnlyModelViewSet):
     """
 
     serializer_class = LowonganKerjaSerializer
-    permission_classes = [AllowAny]
-    authentication_classes = ()  # Empty tuple disables authentication
-    
-    def get_authenticators(self):
-        """Override to ensure no authentication is performed."""
-        return []
-    
+    permission_classes = [IsAuthenticated]
+    pagination_class = None  # Return plain list — mobile parses raw array
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ["employment_type", "company", "location_country"]
     search_fields = ["title", "description", "requirements", "company__company_name"]
@@ -154,6 +144,7 @@ class ApplicantJobApplicationViewSet(viewsets.ReadOnlyModelViewSet):
 
     serializer_class = JobApplicationSerializer
     permission_classes = [IsApplicant]
+    pagination_class = None  # Return plain list — mobile parses raw array
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = ["status"]
     ordering_fields = ["applied_at", "status"]

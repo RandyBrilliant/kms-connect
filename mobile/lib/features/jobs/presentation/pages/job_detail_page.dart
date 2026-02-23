@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../config/colors.dart';
+import '../../../../core/widgets/custom_toast.dart';
 import '../../../../config/strings.dart';
 import '../../data/providers/job_provider.dart';
 
@@ -164,22 +165,12 @@ class JobDetailPage extends ConsumerWidget {
         final repository = ref.read(jobRepositoryProvider);
         await repository.applyForJob(jobId);
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Lamaran berhasil dikirim'),
-              backgroundColor: AppColors.success,
-            ),
-          );
+          CustomToast.show(context, message: 'Lamaran berhasil dikirim', type: ToastType.success);
           context.pop();
         }
       } catch (e) {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Gagal melamar: $e'),
-              backgroundColor: AppColors.error,
-            ),
-          );
+          CustomToast.show(context, message: 'Gagal melamar: $e', type: ToastType.error);
         }
       }
     }

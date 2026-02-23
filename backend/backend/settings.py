@@ -307,7 +307,10 @@ GOOGLE_CLIENT_ID = _env("GOOGLE_CLIENT_ID", "")
 # Di GCP (Cloud Run, GKE): bisa kosong, pakai default service account.
 GOOGLE_APPLICATION_CREDENTIALS = _env("GOOGLE_APPLICATION_CREDENTIALS", "")
 if GOOGLE_APPLICATION_CREDENTIALS:
-    os.environ.setdefault("GOOGLE_APPLICATION_CREDENTIALS", GOOGLE_APPLICATION_CREDENTIALS)
+    # Convert relative path to absolute if needed
+    if not os.path.isabs(GOOGLE_APPLICATION_CREDENTIALS):
+        GOOGLE_APPLICATION_CREDENTIALS = os.path.join(BASE_DIR, GOOGLE_APPLICATION_CREDENTIALS)
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = GOOGLE_APPLICATION_CREDENTIALS
 
 # -----------------------------------------------------------------------------
 # Email (Mailgun API – bukan SMTP)
@@ -353,6 +356,12 @@ CELERY_BEAT_SCHEDULE = {
 # -----------------------------------------------------------------------------
 # Firebase Cloud Messaging (push notifications)
 # -----------------------------------------------------------------------------
-FIREBASE_CREDENTIALS_PATH = os.path.join(BASE_DIR, "firebase-service-account.json")
-# For production, you can use environment variable instead:
-# FIREBASE_CREDENTIALS_PATH = _env("FIREBASE_CREDENTIALS_PATH", "")
+FIREBASE_CREDENTIALS_PATH = _env("FIREBASE_CREDENTIALS_PATH", "")
+if not FIREBASE_CREDENTIALS_PATH:
+    # Default to firebase-service-account.json in BASE_DIR if env var not set
+    default_path = os.path.join(BASE_DIR, "firebase-service-account.json")
+    if os.path.exists(default_path):
+        FIREBASE_CREDENTIALS_PATH = default_path
+elif not os.path.isabs(FIREBASE_CREDENTIALS_PATH):
+    # Convert relative path to absolute
+    FIREBASE_CREDENTIALS_PATH = os.path.join(BASE_DIR, FIREBASE_CREDENTIALS_PATH)

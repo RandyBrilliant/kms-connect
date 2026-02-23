@@ -29,6 +29,7 @@ class ApplicantProfile {
   
   // Verification
   final String verificationStatus; // DRAFT, SUBMITTED, ACCEPTED, REJECTED
+  final double? score;
   final DateTime? submittedAt;
   final DateTime? verifiedAt;
   final DateTime createdAt;
@@ -59,6 +60,7 @@ class ApplicantProfile {
     this.photo,
     this.notes,
     required this.verificationStatus,
+    this.score,
     this.submittedAt,
     this.verifiedAt,
     required this.createdAt,
@@ -93,6 +95,7 @@ class ApplicantProfile {
       photo: json['photo'] as String?,
       notes: json['notes'] as String?,
       verificationStatus: json['verification_status'] as String,
+      score: json['score'] != null ? (json['score'] as num).toDouble() : null,
       submittedAt: json['submitted_at'] != null 
           ? DateTime.parse(json['submitted_at'] as String) 
           : null,
@@ -130,6 +133,7 @@ class ApplicantProfile {
       'photo': photo,
       'notes': notes,
       'verification_status': verificationStatus,
+      'score': score,
     };
   }
 

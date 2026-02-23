@@ -475,6 +475,28 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
         """Format 16 digit; uniqueness dicek di parent ApplicantUserSerializer (supaya punya akses profile instance)."""
         return validate_nik_format(value) if value else value
 
+    def update(self, instance, validated_data):
+        """
+        Update ApplicantProfile. full_name (source='user.full_name') arrives as
+        validated_data['user']['full_name'] — we extract it and save it to the
+        related CustomUser so the change actually persists.
+        """
+        # Extract full_name from the nested 'user' dict that DRF builds for source="user.full_name"
+        user_data = validated_data.pop("user", None)
+        full_name = user_data.get("full_name") if isinstance(user_data, dict) else None
+
+        if full_name is not None:
+            stripped = full_name.strip()
+            if stripped:
+                instance.user.full_name = stripped
+                instance.user.save(update_fields=["full_name"])
+
+        # Update all remaining profile fields normally
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        return instance
+
 
 class ApplicantUserSerializer(serializers.ModelSerializer):
     """CRUD untuk pelamar: user + profil pelamar (nested). Admin review & backdoor create."""

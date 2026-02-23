@@ -33,7 +33,16 @@ class ApiEndpoints {
 
   // News
   static String newsDetail(int id) => '$baseUrl/news/public/$id/';
+
+  // Notifications
+  static const String notifications = '$baseUrl/notifications/';
+  static String markNotificationRead(int id) => '$baseUrl/notifications/$id/mark-read/';
+  static const String markAllNotificationsRead = '$baseUrl/notifications/mark-all-read/';
   
   // Documents
   static String documentOcrPrefill(int id) => '$baseUrl/applicants/me/documents/$id/ocr_prefill/';
+
+  // Regions (public, no auth required)
+  static const String provinces = '$baseUrl/provinces/';
+  static const String regencies = '$baseUrl/regencies/';
 }

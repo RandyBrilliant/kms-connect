@@ -28,9 +28,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   }
 
   Future<void> _handleLogin() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
 
     final success = await ref
         .read(authStateProvider.notifier)
@@ -41,12 +39,16 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     if (success) {
       context.go('/home');
     } else {
-      final error = ref.read(authStateProvider).error;
-      CustomToast.show(
-        context,
-        message: error ?? 'Login gagal',
-        type: ToastType.error,
-      );
+      // login() never throws — it stores the error in AuthState.
+      // Show the toast directly here so we don't rely on ref.listen timing.
+      final errorMsg = ref.read(authStateProvider).error;
+      if (errorMsg != null) {
+        CustomToast.show(
+          context,
+          message: errorMsg,
+          type: ToastType.error,
+        );
+      }
     }
   }
 

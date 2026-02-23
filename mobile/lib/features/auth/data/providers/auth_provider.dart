@@ -1,14 +1,27 @@
 import 'dart:io';
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/models/user.dart';
 import '../repositories/auth_repository.dart';
+import '../../../../core/api/interceptors.dart';
+import '../../../../core/widgets/custom_toast.dart';
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   return AuthRepository();
 });
 
 final authStateProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
-  return AuthNotifier(ref.read(authRepositoryProvider));
+  final notifier = AuthNotifier(ref.read(authRepositoryProvider));
+  // Wire force-logout so the interceptor can redirect to login when tokens expire.
+  AuthInterceptor.onForceLogout = () {
+    CustomToast.showGlobal(
+      message: 'Sesi telah berakhir. Silakan masuk kembali.',
+      type: ToastType.error,
+    );
+    notifier.forceSignOut();
+  };
+  ref.onDispose(() => AuthInterceptor.onForceLogout = null);
+  return notifier;
 });
 
 class AuthState {
@@ -57,6 +70,22 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
+  /// Extracts a human-readable message from any exception.
+  /// Prefers [DioException.message] (set by the repository's _handleError)
+  /// over the raw toString() which includes noise like "DioException [bad_response]: ".
+  String _extractErrorMessage(Object e, String fallback) {
+    if (e is DioException) {
+      final msg = e.message;
+      if (msg != null && msg.isNotEmpty) return msg;
+      // Fallback: read detail directly from response body
+      final data = e.response?.data;
+      if (data is Map<String, dynamic>) {
+        return (data['detail'] as String?) ?? fallback;
+      }
+    }
+    return fallback;
+  }
+
   Future<bool> login(String email, String password) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
@@ -69,7 +98,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        error: e.toString().replaceAll('DioException: ', ''),
+        error: _extractErrorMessage(e, 'Email atau password salah'),
       );
       return false;
     }
@@ -97,7 +126,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        error: e.toString().replaceAll('DioException: ', ''),
+        error: _extractErrorMessage(e, 'Registrasi gagal'),
       );
       return false;
     }
@@ -115,14 +144,28 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        error: e.toString().replaceAll('DioException: ', ''),
+        error: _extractErrorMessage(e, 'Autentikasi gagal'),
       );
       return false;
     }
   }
 
+  /// Called after successful registration to set the authenticated user
+  /// directly from the registration response (avoids a redundant network call).
+  void setAuthenticatedUser(User user) {
+    state = state.copyWith(user: user, isLoading: false, error: null);
+  }
+
   Future<void> logout() async {
     await _repository.logout();
+    state = AuthState();
+  }
+
+  /// Called by [AuthInterceptor] when tokens are invalidated server-side
+  /// (expired refresh token, revoked, etc.). Tokens are already cleared in
+  /// storage by the interceptor — this just resets the Riverpod state so
+  /// GoRouter redirects immediately to the login screen.
+  void forceSignOut() {
     state = AuthState();
   }
 

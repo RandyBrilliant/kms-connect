@@ -1334,7 +1334,7 @@ def applicant_document_upload_to(instance, filename: str) -> str:
 # Expected keys in ApplicantDocument.ocr_data when document_type.code == "ktp":
 #   nik, name, birth_place, birth_date, address, gender (optional)
 # Mobile app and backend OCR service should use these keys for consistency.
-KTP_OCR_KEYS = ("nik", "name", "birth_place", "birth_date", "address", "gender")
+KTP_OCR_KEYS = ("nik", "name", "birth_place", "birth_date")
 
 
 class ApplicantDocument(models.Model):

@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../domain/models/auth_response.dart';
 import '../../domain/models/ktp_data.dart';
 import '../../data/repositories/auth_repository.dart';
 
@@ -111,27 +112,31 @@ class RegistrationNotifier extends StateNotifier<RegistrationState> {
     }
   }
 
-  /// Complete registration with all data
-  Future<void> completeRegistration() async {
+  /// Complete registration with all data. Returns the [AuthResponse] so the
+  /// caller can immediately set the authenticated user without an extra
+  /// network round-trip.
+  Future<AuthResponse> completeRegistration() async {
     if (state.email == null ||
         state.password == null ||
         state.ktpData?.nik == null ||
         state.ktpImage == null) {
       state = state.copyWith(error: 'Data registrasi tidak lengkap');
-      return;
+      throw Exception('Data registrasi tidak lengkap');
     }
 
     state = state.copyWith(isProcessing: true, error: null);
 
     try {
-      await _authRepository.registerComplete(
+      final authResponse = await _authRepository.registerComplete(
         email: state.email!,
         password: state.password!,
         nik: state.ktpData!.nik!,
         ktpFile: state.ktpImage!,
         referralCode: state.referralCode,
+        fullName: state.ktpData?.name,
       );
       state = state.copyWith(isProcessing: false);
+      return authResponse;
     } catch (e) {
       state = state.copyWith(
         isProcessing: false,

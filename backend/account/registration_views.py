@@ -146,6 +146,9 @@ class ApplicantRegistrationView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Ambil full_name dari form (dikirim dari mobile setelah OCR/input manual)
+        full_name = request.data.get("full_name", "").strip()
+
         # Buat user
         try:
             user = CustomUser.objects.create_user(
@@ -154,6 +157,7 @@ class ApplicantRegistrationView(APIView):
                 role=UserRole.APPLICANT,
                 is_active=True,
                 email_verified=False,  # Perlu verifikasi email
+                full_name=full_name,
             )
         except Exception as e:
             return Response(

@@ -20,12 +20,13 @@ from . import views
 app_name = "main"
 
 router = DefaultRouter()
+# Public endpoints must be registered BEFORE their parent prefixes so that
+# Django's URL resolver doesn't swallow 'public' as a pk for news/{pk}/ or jobs/{pk}/
+router.register(r"news/public", views.PublicNewsListViewSet, basename="news-public")
+router.register(r"jobs/public", views.PublicJobsListViewSet, basename="jobs-public")
 router.register(r"news", views.NewsViewSet, basename="news")
 router.register(r"jobs", views.LowonganKerjaViewSet, basename="job")
 router.register(r"applications", views.JobApplicationViewSet, basename="job-application")
-# Public endpoints untuk mobile app
-router.register(r"news/public", views.PublicNewsListViewSet, basename="news-public")
-router.register(r"jobs/public", views.PublicJobsListViewSet, basename="jobs-public")
 # Applicant self-service
 router.register(
     r"applicants/me/applications",

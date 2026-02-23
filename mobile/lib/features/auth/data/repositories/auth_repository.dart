@@ -167,6 +167,7 @@ class AuthRepository {
     required String nik,
     required File ktpFile,
     String? referralCode,
+    String? fullName,
   }) async {
     try {
       final formData = FormData.fromMap({
@@ -179,6 +180,8 @@ class AuthRepository {
         ),
         if (referralCode != null && referralCode.isNotEmpty)
           'referral_code': referralCode.trim().toUpperCase(),
+        if (fullName != null && fullName.trim().isNotEmpty)
+          'full_name': fullName.trim(),
       });
 
       final response = await _apiClient.dio.post(

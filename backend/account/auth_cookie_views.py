@@ -126,7 +126,13 @@ class CookieTokenObtainPairView(APIView):
 
         response = Response(
             success_response(
-                data={"user": _user_summary(user)},
+                data={
+                    "user": _user_summary(user),
+                    # Include tokens in the response body so mobile clients can
+                    # store them directly (web uses the HTTP-only cookies below).
+                    "access": access,
+                    "refresh": refresh,
+                },
                 detail="Login berhasil.",
                 code=ApiCode.SUCCESS,
             ),
@@ -204,7 +210,12 @@ class CookieTokenRefreshView(APIView):
 
         response = Response(
             success_response(
-                data={"user": user_data} if user_data else {},
+                data={
+                    "user": user_data,
+                    # Return the new access token in the body so mobile
+                    # clients can update their stored token from the response.
+                    "access": access,
+                } if user_data else {"access": access},
                 detail="Token diperbarui.",
                 code=ApiCode.SUCCESS,
             ),

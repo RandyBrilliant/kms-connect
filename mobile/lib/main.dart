@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
-import 'config/theme.dart';
 import 'core/api/api_client.dart';
 import 'features/notifications/data/services/notification_service.dart';
 import 'app.dart';
@@ -56,11 +55,9 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'KMS Connect',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      home: const App(),
-    );
+    // A single MaterialApp.router is created inside App().
+    // Do NOT wrap it in another MaterialApp here — that creates
+    // duplicate Navigators/Overlays and breaks toast visibility.
+    return const App();
   }
 }
