@@ -4,6 +4,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 import 'core/api/api_client.dart';
 import 'features/notifications/data/services/notification_service.dart';
@@ -18,6 +19,9 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize locale data for intl date formatting (e.g. 'id_ID')
+  await initializeDateFormatting('id_ID', null);
 
   // Load environment variables
   await dotenv.load(fileName: '.env');

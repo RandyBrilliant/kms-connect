@@ -1,18 +1,18 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../config/colors.dart';
+import '../../../../core/widgets/auth_wave_header.dart';
 import '../../../../core/widgets/custom_toast.dart';
+import '../../../../core/widgets/m3_text_field.dart';
 import '../../data/providers/profile_provider.dart';
 import '../../domain/models/applicant_profile.dart';
 
-// 
+// ─────────────────────────────────────────────────────────────────────────────
 // Page
-// 
+// ─────────────────────────────────────────────────────────────────────────────
 
 class EditProfilePage extends ConsumerStatefulWidget {
   const EditProfilePage({super.key});
@@ -21,881 +21,518 @@ class EditProfilePage extends ConsumerStatefulWidget {
   ConsumerState<EditProfilePage> createState() => _EditProfilePageState();
 }
 
-class _EditProfilePageState extends ConsumerState<EditProfilePage>
-    with SingleTickerProviderStateMixin {
+class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   final _formKey = GlobalKey<FormState>();
-  late final AnimationController _entranceCtrl;
 
-  // Editable controllers
-  final _addressCtrl = TextEditingController();
-  final _contactPhoneCtrl = TextEditingController();
-  final _siblingCountCtrl = TextEditingController();
-  final _birthOrderCtrl = TextEditingController();
-  final _fatherNameCtrl = TextEditingController();
-  final _fatherAgeCtrl = TextEditingController();
-  final _fatherOccupationCtrl = TextEditingController();
-  final _motherNameCtrl = TextEditingController();
-  final _motherAgeCtrl = TextEditingController();
-  final _motherOccupationCtrl = TextEditingController();
-  final _spouseNameCtrl = TextEditingController();
-  final _spouseAgeCtrl = TextEditingController();
-  final _spouseOccupationCtrl = TextEditingController();
-  final _familyAddressCtrl = TextEditingController();
-  final _familyContactPhoneCtrl = TextEditingController();
+  // ── Controllers ────────────────────────────────────────────────────────────
+  final _fullName = TextEditingController();
+  final _nik = TextEditingController();
+  final _birthPlace = TextEditingController();
+  final _birthDate = TextEditingController();
+  final _address = TextEditingController();
+  final _phone = TextEditingController();
+  final _siblingCount = TextEditingController();
+  final _birthOrder = TextEditingController();
+  final _fatherName = TextEditingController();
+  final _fatherAge = TextEditingController();
+  final _fatherOccupation = TextEditingController();
+  final _motherName = TextEditingController();
+  final _motherAge = TextEditingController();
+  final _motherOccupation = TextEditingController();
+  final _familyAddress = TextEditingController();
+  final _familyPhone = TextEditingController();
+  final _spouseName = TextEditingController();
+  final _spouseAge = TextEditingController();
+  final _spouseOccupation = TextEditingController();
 
+  String? _gender;
+  DateTime? _pickedDate;
   bool _populated = false;
 
   @override
-  void initState() {
-    super.initState();
-    _entranceCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    )..forward();
-  }
-
-  @override
   void dispose() {
-    _entranceCtrl.dispose();
-    _addressCtrl.dispose();
-    _contactPhoneCtrl.dispose();
-    _siblingCountCtrl.dispose();
-    _birthOrderCtrl.dispose();
-    _fatherNameCtrl.dispose();
-    _fatherAgeCtrl.dispose();
-    _fatherOccupationCtrl.dispose();
-    _motherNameCtrl.dispose();
-    _motherAgeCtrl.dispose();
-    _motherOccupationCtrl.dispose();
-    _spouseNameCtrl.dispose();
-    _spouseAgeCtrl.dispose();
-    _spouseOccupationCtrl.dispose();
-    _familyAddressCtrl.dispose();
-    _familyContactPhoneCtrl.dispose();
+    for (final c in [
+      _fullName, _nik, _birthPlace, _birthDate, _address, _phone,
+      _siblingCount, _birthOrder, _fatherName, _fatherAge, _fatherOccupation,
+      _motherName, _motherAge, _motherOccupation, _familyAddress, _familyPhone,
+      _spouseName, _spouseAge, _spouseOccupation,
+    ]) {
+      c.dispose();
+    }
     super.dispose();
   }
 
   void _populate(ApplicantProfile p) {
     if (_populated) return;
     _populated = true;
-    _addressCtrl.text = p.address ?? '';
-    _contactPhoneCtrl.text = p.contactPhone ?? '';
-    _siblingCountCtrl.text = p.siblingCount?.toString() ?? '';
-    _birthOrderCtrl.text = p.birthOrder?.toString() ?? '';
-    _fatherNameCtrl.text = p.fatherName ?? '';
-    _fatherAgeCtrl.text = p.fatherAge?.toString() ?? '';
-    _fatherOccupationCtrl.text = p.fatherOccupation ?? '';
-    _motherNameCtrl.text = p.motherName ?? '';
-    _motherAgeCtrl.text = p.motherAge?.toString() ?? '';
-    _motherOccupationCtrl.text = p.motherOccupation ?? '';
-    _spouseNameCtrl.text = p.spouseName ?? '';
-    _spouseAgeCtrl.text = p.spouseAge?.toString() ?? '';
-    _spouseOccupationCtrl.text = p.spouseOccupation ?? '';
-    _familyAddressCtrl.text = p.familyAddress ?? '';
-    _familyContactPhoneCtrl.text = p.familyContactPhone ?? '';
+    _fullName.text = p.fullName ?? '';
+    _nik.text = p.nik ?? '';
+    _birthPlace.text = p.birthPlace ?? '';
+    if (p.birthDate != null) {
+      _pickedDate = p.birthDate;
+      _birthDate.text = DateFormat('dd MMMM yyyy', 'id').format(p.birthDate!);
+    }
+    _gender = p.gender;
+    _address.text = p.address ?? '';
+    _phone.text = p.contactPhone ?? '';
+    _siblingCount.text = p.siblingCount?.toString() ?? '';
+    _birthOrder.text = p.birthOrder?.toString() ?? '';
+    _fatherName.text = p.fatherName ?? '';
+    _fatherAge.text = p.fatherAge?.toString() ?? '';
+    _fatherOccupation.text = p.fatherOccupation ?? '';
+    _motherName.text = p.motherName ?? '';
+    _motherAge.text = p.motherAge?.toString() ?? '';
+    _motherOccupation.text = p.motherOccupation ?? '';
+    _familyAddress.text = p.familyAddress ?? '';
+    _familyPhone.text = p.familyContactPhone ?? '';
+    _spouseName.text = p.spouseName ?? '';
+    _spouseAge.text = p.spouseAge?.toString() ?? '';
+    _spouseOccupation.text = p.spouseOccupation ?? '';
+    setState(() {});
   }
 
-  //  Save 
-
-  Future<void> _handleSave() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    final data = <String, dynamic>{
-      'address': _addressCtrl.text.trim().isEmpty
-          ? null
-          : _addressCtrl.text.trim(),
-      'contact_phone': _contactPhoneCtrl.text.trim().isEmpty
-          ? null
-          : _contactPhoneCtrl.text.trim(),
-      'sibling_count': _siblingCountCtrl.text.trim().isEmpty
-          ? null
-          : int.tryParse(_siblingCountCtrl.text.trim()),
-      'birth_order': _birthOrderCtrl.text.trim().isEmpty
-          ? null
-          : int.tryParse(_birthOrderCtrl.text.trim()),
-      'father_name': _fatherNameCtrl.text.trim().isEmpty
-          ? null
-          : _fatherNameCtrl.text.trim(),
-      'father_age': _fatherAgeCtrl.text.trim().isEmpty
-          ? null
-          : int.tryParse(_fatherAgeCtrl.text.trim()),
-      'father_occupation': _fatherOccupationCtrl.text.trim().isEmpty
-          ? null
-          : _fatherOccupationCtrl.text.trim(),
-      'mother_name': _motherNameCtrl.text.trim().isEmpty
-          ? null
-          : _motherNameCtrl.text.trim(),
-      'mother_age': _motherAgeCtrl.text.trim().isEmpty
-          ? null
-          : int.tryParse(_motherAgeCtrl.text.trim()),
-      'mother_occupation': _motherOccupationCtrl.text.trim().isEmpty
-          ? null
-          : _motherOccupationCtrl.text.trim(),
-      'spouse_name': _spouseNameCtrl.text.trim().isEmpty
-          ? null
-          : _spouseNameCtrl.text.trim(),
-      'spouse_age': _spouseAgeCtrl.text.trim().isEmpty
-          ? null
-          : int.tryParse(_spouseAgeCtrl.text.trim()),
-      'spouse_occupation': _spouseOccupationCtrl.text.trim().isEmpty
-          ? null
-          : _spouseOccupationCtrl.text.trim(),
-      'family_address': _familyAddressCtrl.text.trim().isEmpty
-          ? null
-          : _familyAddressCtrl.text.trim(),
-      'family_contact_phone': _familyContactPhoneCtrl.text.trim().isEmpty
-          ? null
-          : _familyContactPhoneCtrl.text.trim(),
-    };
-
-    final notifier = ref.read(profileNotifierProvider.notifier);
-    final success = await notifier.updateProfile(data);
-
-    if (!mounted) return;
-
-    if (success) {
-      ref.invalidate(profileProvider);
-      CustomToast.show(
-        context,
-        message: 'Profil berhasil diperbarui',
-        type: ToastType.success,
-      );
-      context.pop();
-    } else {
-      final msg = ref.read(profileNotifierProvider).error ??
-          'Gagal memperbarui profil';
-      CustomToast.show(context, message: msg, type: ToastType.error);
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final initial = _pickedDate ?? DateTime(now.year - 25);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(1950),
+      lastDate: DateTime(now.year - 15),
+    );
+    if (picked != null && mounted) {
+      setState(() {
+        _pickedDate = picked;
+        _birthDate.text =
+            DateFormat('dd MMMM yyyy', 'id').format(picked);
+      });
     }
   }
 
-  //  Animation helper 
+  Future<void> _handleSave() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    final data = <String, dynamic>{
+      if (_fullName.text.trim().isNotEmpty)
+        'full_name': _fullName.text.trim(),
+      if (_nik.text.trim().isNotEmpty) 'nik': _nik.text.trim(),
+      if (_birthPlace.text.trim().isNotEmpty)
+        'birth_place': _birthPlace.text.trim(),
+      if (_pickedDate != null)
+        'birth_date': DateFormat('yyyy-MM-dd').format(_pickedDate!),
+      if (_gender != null) 'gender': _gender,
+      if (_address.text.trim().isNotEmpty)
+        'address': _address.text.trim(),
+      if (_phone.text.trim().isNotEmpty)
+        'contact_phone': _phone.text.trim(),
+      if (_siblingCount.text.trim().isNotEmpty)
+        'sibling_count': int.tryParse(_siblingCount.text.trim()),
+      if (_birthOrder.text.trim().isNotEmpty)
+        'birth_order': int.tryParse(_birthOrder.text.trim()),
+      if (_fatherName.text.trim().isNotEmpty)
+        'father_name': _fatherName.text.trim(),
+      if (_fatherAge.text.trim().isNotEmpty)
+        'father_age': int.tryParse(_fatherAge.text.trim()),
+      if (_fatherOccupation.text.trim().isNotEmpty)
+        'father_occupation': _fatherOccupation.text.trim(),
+      if (_motherName.text.trim().isNotEmpty)
+        'mother_name': _motherName.text.trim(),
+      if (_motherAge.text.trim().isNotEmpty)
+        'mother_age': int.tryParse(_motherAge.text.trim()),
+      if (_motherOccupation.text.trim().isNotEmpty)
+        'mother_occupation': _motherOccupation.text.trim(),
+      if (_familyAddress.text.trim().isNotEmpty)
+        'family_address': _familyAddress.text.trim(),
+      if (_familyPhone.text.trim().isNotEmpty)
+        'family_contact_phone': _familyPhone.text.trim(),
+      if (_spouseName.text.trim().isNotEmpty)
+        'spouse_name': _spouseName.text.trim(),
+      if (_spouseAge.text.trim().isNotEmpty)
+        'spouse_age': int.tryParse(_spouseAge.text.trim()),
+      if (_spouseOccupation.text.trim().isNotEmpty)
+        'spouse_occupation': _spouseOccupation.text.trim(),
+    };
 
-  Widget _animated(Widget child, double begin, double end) {
-    final curve = CurvedAnimation(
-      parent: _entranceCtrl,
-      curve: Interval(begin, end, curve: Curves.easeOut),
-    );
-    return FadeTransition(
-      opacity: curve,
-      child: SlideTransition(
-        position: Tween(
-          begin: const Offset(0, 0.05),
-          end: Offset.zero,
-        ).animate(curve),
-        child: child,
-      ),
-    );
+    final success =
+        await ref.read(profileNotifierProvider.notifier).updateProfile(data);
+    if (!mounted) return;
+    if (success) {
+      ref.invalidate(profileProvider);
+      CustomToast.show(context,
+          message: 'Profil berhasil diperbarui',
+          type: ToastType.success);
+      Navigator.pop(context);
+    } else {
+      final err =
+          ref.read(profileNotifierProvider).error ?? 'Gagal menyimpan';
+      CustomToast.show(context, message: err, type: ToastType.error);
+    }
   }
-
-  //  Build 
 
   @override
   Widget build(BuildContext context) {
-    final profileAsync = ref.watch(profileProvider);
-    final isLoading = ref.watch(profileNotifierProvider).isLoading;
+    final profileState = ref.watch(profileNotifierProvider);
+    final profile = profileState.profile;
+    if (profile != null) _populate(profile);
+
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    const headerH = 140.0;
+    final topPad = MediaQuery.paddingOf(context).top;
 
     return Scaffold(
-      backgroundColor: AppColors.backgroundOffWhite,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _animated(_buildTopBar(), 0.0, 0.35),
-            Expanded(
-              child: profileAsync.when(
-                loading: () => const Center(
-                  child: CircularProgressIndicator(
-                    color: AppColors.primaryDarkGreen,
-                    strokeWidth: 2.5,
-                  ),
-                ),
-                error: (e, _) => _buildError(e.toString()),
-                data: (profile) {
-                  _populate(profile);
-                  return _buildScrollBody(profile);
-                },
-              ),
-            ),
-            if (profileAsync.hasValue)
-              _animated(_buildSaveBar(isLoading), 0.65, 1.0),
-          ],
-        ),
-      ),
-    );
-  }
-
-  //  Top bar 
-
-  Widget _buildTopBar() {
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
-      child: Row(
+      backgroundColor: cs.surfaceContainerLowest,
+      body: Column(
         children: [
-          GestureDetector(
-            onTap: () => context.pop(),
-            child: Container(
-              width: 40,
-              height: 40,
-              margin: const EdgeInsets.only(left: 8),
-              decoration: const BoxDecoration(
-                color: AppColors.backgroundOffWhite,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.arrow_back_rounded,
-                  size: 22, color: Color(0xFF0F172A)),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              'Data Diri',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 17,
-                fontWeight: FontWeight.bold,
-                color: const Color(0xFF0F172A),
-              ),
-            ),
-          ),
-          const SizedBox(width: 48),
-        ],
-      ),
-    );
-  }
-
-  //  Scrollable body 
-
-  Widget _buildScrollBody(ApplicantProfile profile) {
-    return Form(
-      key: _formKey,
-      child: ListView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-        children: [
-          _animated(_buildCompletionBanner(profile), 0.10, 0.45),
-          const SizedBox(height: 12),
-          _animated(_buildIdentitySection(profile), 0.18, 0.52),
-          const SizedBox(height: 12),
-          _animated(_buildContactSection(), 0.28, 0.62),
-          const SizedBox(height: 12),
-          _animated(_buildBirthOrderSection(), 0.35, 0.68),
-          const SizedBox(height: 12),
-          _animated(_buildParentsSection(), 0.42, 0.75),
-          const SizedBox(height: 12),
-          _animated(_buildSpouseSection(), 0.50, 0.82),
-          const SizedBox(height: 12),
-          _animated(_buildFamilyContactSection(), 0.56, 0.88),
-          const SizedBox(height: 8),
-        ],
-      ),
-    );
-  }
-
-  //  Completion banner 
-
-  Widget _buildCompletionBanner(ApplicantProfile profile) {
-    final int filled = _countFilled(profile);
-    const int total = 12;
-    final double pct = filled / total;
-    final color = pct == 1.0
-        ? AppColors.success
-        : pct >= 0.6
-            ? AppColors.warning
-            : AppColors.error;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(
-              color: Color(0x08000000), blurRadius: 8, offset: Offset(0, 2)),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              pct == 1.0
-                  ? Icons.check_circle_rounded
-                  : Icons.info_outline_rounded,
-              color: color,
-              size: 26,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          // ── Header ────────────────────────────────────────────────────────
+          SizedBox(
+            height: headerH + topPad,
+            child: Stack(
               children: [
-                Text(
-                  pct == 1.0
-                      ? 'Profil lengkap!'
-                      : 'Kelengkapan profil ${(pct * 100).round()}%',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF0F172A),
-                  ),
+                Positioned.fill(
+                  child: AuthWaveHeader(height: headerH + topPad),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  pct == 1.0
-                      ? 'Semua data sudah terisi. Siap untuk verifikasi.'
-                      : 'Lengkapi data di bawah untuk meningkatkan peluang Anda.',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 11.5,
-                    color: AppColors.textMedium,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: pct,
-                    backgroundColor: const Color(0xFFF0F0F0),
-                    valueColor: AlwaysStoppedAnimation<Color>(color),
-                    minHeight: 6,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  int _countFilled(ApplicantProfile p) {
-    int n = 0;
-    if (p.fullName?.isNotEmpty == true) n++;
-    if (p.nik?.isNotEmpty == true) n++;
-    if (p.birthPlace?.isNotEmpty == true) n++;
-    if (p.birthDate != null) n++;
-    if (p.gender?.isNotEmpty == true) n++;
-    if (_addressCtrl.text.isNotEmpty) n++;
-    if (_contactPhoneCtrl.text.isNotEmpty) n++;
-    if (_fatherNameCtrl.text.isNotEmpty) n++;
-    if (_motherNameCtrl.text.isNotEmpty) n++;
-    if (_familyAddressCtrl.text.isNotEmpty) n++;
-    if (_familyContactPhoneCtrl.text.isNotEmpty) n++;
-    if (_birthOrderCtrl.text.isNotEmpty) n++;
-    return n;
-  }
-
-  //  Identitas section 
-
-  Widget _buildIdentitySection(ApplicantProfile profile) {
-    final genderLabel = profile.gender == 'M'
-        ? 'Laki-laki'
-        : profile.gender == 'F'
-            ? 'Perempuan'
-            : null;
-
-    final birthDateLabel = profile.birthDate != null
-        ? DateFormat('dd MMMM yyyy', 'id_ID').format(profile.birthDate!)
-        : null;
-
-    return _SectionCard(
-      title: 'Identitas KTP',
-      subtitle: 'Data dari KTP tidak dapat diubah',
-      icon: Icons.badge_outlined,
-      iconColor: const Color(0xFF2563EB),
-      iconBg: const Color(0xFFDBEAFE),
-      children: [
-        _LockedField(
-          label: 'Nama Lengkap',
-          value: profile.fullName,
-          icon: Icons.person_outline_rounded,
-        ),
-        const SizedBox(height: 12),
-        _LockedField(
-          label: 'NIK',
-          value: profile.nik,
-          icon: Icons.fingerprint_rounded,
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _LockedField(
-                label: 'Tempat Lahir',
-                value: profile.birthPlace,
-                icon: Icons.location_city_rounded,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _LockedField(
-                label: 'Tanggal Lahir',
-                value: birthDateLabel,
-                icon: Icons.cake_rounded,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        _LockedField(
-          label: 'Jenis Kelamin',
-          value: genderLabel,
-          icon: Icons.wc_rounded,
-        ),
-      ],
-    );
-  }
-
-  //  Kontak & Alamat 
-
-  Widget _buildContactSection() {
-    return _SectionCard(
-      title: 'Kontak & Alamat',
-      subtitle: 'Informasi kontak dan alamat tinggal',
-      icon: Icons.home_rounded,
-      iconColor: AppColors.primaryDarkGreen,
-      iconBg: AppColors.secondaryLightGreen,
-      children: [
-        _ProfileFormField(
-          controller: _addressCtrl,
-          label: 'Alamat Lengkap',
-          hint: 'Masukkan alamat tempat tinggal',
-          prefixIcon: Icons.home_outlined,
-          maxLines: 3,
-          keyboardType: TextInputType.multiline,
-          validator: (v) {
-            if (v == null || v.trim().isEmpty) return 'Alamat wajib diisi';
-            return null;
-          },
-          onChanged: (_) => setState(() {}),
-        ),
-        const SizedBox(height: 14),
-        _ProfileFormField(
-          controller: _contactPhoneCtrl,
-          label: 'Nomor HP',
-          hint: 'Contoh: 08123456789',
-          prefixIcon: Icons.phone_outlined,
-          keyboardType: TextInputType.phone,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          validator: (v) {
-            if (v == null || v.trim().isEmpty) return 'Nomor HP wajib diisi';
-            if (v.trim().length < 9) return 'Nomor HP tidak valid';
-            return null;
-          },
-          onChanged: (_) => setState(() {}),
-        ),
-      ],
-    );
-  }
-
-  //  Urutan Kelahiran 
-
-  Widget _buildBirthOrderSection() {
-    return _SectionCard(
-      title: 'Urutan Kelahiran',
-      subtitle: 'Data posisi dalam keluarga',
-      icon: Icons.family_restroom_rounded,
-      iconColor: const Color(0xFF7C3AED),
-      iconBg: const Color(0xFFF3E8FF),
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: _ProfileFormField(
-                controller: _birthOrderCtrl,
-                label: 'Anak ke-',
-                hint: 'Misal: 2',
-                prefixIcon: Icons.looks_one_outlined,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                validator: (v) {
-                  if (v != null && v.isNotEmpty) {
-                    final n = int.tryParse(v);
-                    if (n == null || n < 1) return 'Tidak valid';
-                  }
-                  return null;
-                },
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _ProfileFormField(
-                controller: _siblingCountCtrl,
-                label: 'Jumlah Saudara',
-                hint: 'Misal: 3',
-                prefixIcon: Icons.group_outlined,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                validator: (v) {
-                  if (v != null && v.isNotEmpty) {
-                    final n = int.tryParse(v);
-                    if (n == null || n < 0) return 'Tidak valid';
-                  }
-                  return null;
-                },
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  //  Orang Tua 
-
-  Widget _buildParentsSection() {
-    return _SectionCard(
-      title: 'Data Orang Tua',
-      subtitle: 'Opsional  data ayah dan ibu',
-      icon: Icons.people_outline_rounded,
-      iconColor: const Color(0xFFD97706),
-      iconBg: const Color(0xFFFEF3C7),
-      children: [
-        const _SubSectionLabel(label: 'Ayah'),
-        const SizedBox(height: 10),
-        _ProfileFormField(
-          controller: _fatherNameCtrl,
-          label: 'Nama Ayah',
-          hint: 'Masukkan nama ayah',
-          prefixIcon: Icons.person_outline_rounded,
-          onChanged: (_) => setState(() {}),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _ProfileFormField(
-                controller: _fatherAgeCtrl,
-                label: 'Usia',
-                hint: 'Thn',
-                prefixIcon: Icons.cake_outlined,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                validator: (v) {
-                  if (v != null && v.isNotEmpty) {
-                    final n = int.tryParse(v);
-                    if (n == null || n < 1 || n > 120) return 'Tidak valid';
-                  }
-                  return null;
-                },
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 2,
-              child: _ProfileFormField(
-                controller: _fatherOccupationCtrl,
-                label: 'Pekerjaan',
-                hint: 'Misal: Wirausaha',
-                prefixIcon: Icons.work_outline_rounded,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 20),
-        const _SubSectionLabel(label: 'Ibu'),
-        const SizedBox(height: 10),
-        _ProfileFormField(
-          controller: _motherNameCtrl,
-          label: 'Nama Ibu',
-          hint: 'Masukkan nama ibu',
-          prefixIcon: Icons.person_outline_rounded,
-          onChanged: (_) => setState(() {}),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _ProfileFormField(
-                controller: _motherAgeCtrl,
-                label: 'Usia',
-                hint: 'Thn',
-                prefixIcon: Icons.cake_outlined,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                validator: (v) {
-                  if (v != null && v.isNotEmpty) {
-                    final n = int.tryParse(v);
-                    if (n == null || n < 1 || n > 120) return 'Tidak valid';
-                  }
-                  return null;
-                },
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 2,
-              child: _ProfileFormField(
-                controller: _motherOccupationCtrl,
-                label: 'Pekerjaan',
-                hint: 'Misal: Ibu Rumah Tangga',
-                prefixIcon: Icons.work_outline_rounded,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  //  Pasangan 
-
-  Widget _buildSpouseSection() {
-    return _SectionCard(
-      title: 'Data Pasangan',
-      subtitle: 'Opsional  isi bila sudah menikah',
-      icon: Icons.favorite_border_rounded,
-      iconColor: const Color(0xFFE11D48),
-      iconBg: const Color(0xFFFFE4E6),
-      children: [
-        _ProfileFormField(
-          controller: _spouseNameCtrl,
-          label: 'Nama Suami / Istri',
-          hint: 'Masukkan nama pasangan',
-          prefixIcon: Icons.person_outline_rounded,
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _ProfileFormField(
-                controller: _spouseAgeCtrl,
-                label: 'Usia',
-                hint: 'Thn',
-                prefixIcon: Icons.cake_outlined,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                validator: (v) {
-                  if (v != null && v.isNotEmpty) {
-                    final n = int.tryParse(v);
-                    if (n == null || n < 1 || n > 120) return 'Tidak valid';
-                  }
-                  return null;
-                },
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 2,
-              child: _ProfileFormField(
-                controller: _spouseOccupationCtrl,
-                label: 'Pekerjaan',
-                hint: 'Misal: Karyawan Swasta',
-                prefixIcon: Icons.work_outline_rounded,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  //  Kontak Keluarga 
-
-  Widget _buildFamilyContactSection() {
-    return _SectionCard(
-      title: 'Kontak Keluarga',
-      subtitle: 'Alamat dan nomor darurat keluarga',
-      icon: Icons.contact_phone_outlined,
-      iconColor: const Color(0xFF0284C7),
-      iconBg: const Color(0xFFE0F2FE),
-      children: [
-        _ProfileFormField(
-          controller: _familyAddressCtrl,
-          label: 'Alamat Keluarga',
-          hint: 'Alamat orang tua / keluarga',
-          prefixIcon: Icons.home_outlined,
-          maxLines: 3,
-          keyboardType: TextInputType.multiline,
-          onChanged: (_) => setState(() {}),
-        ),
-        const SizedBox(height: 14),
-        _ProfileFormField(
-          controller: _familyContactPhoneCtrl,
-          label: 'Nomor HP Keluarga',
-          hint: 'Nomor darurat yang bisa dihubungi',
-          prefixIcon: Icons.phone_outlined,
-          keyboardType: TextInputType.phone,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          onChanged: (_) => setState(() {}),
-        ),
-      ],
-    );
-  }
-
-  //  Save bar 
-
-  Widget _buildSaveBar(bool isLoading) {
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: 52,
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: isLoading ? null : _handleSave,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryDarkGreen,
-              disabledBackgroundColor:
-                  AppColors.primaryDarkGreen.withValues(alpha: 0.6),
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
-            child: isLoading
-                ? const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(
-                        color: Colors.white, strokeWidth: 2.5),
-                  )
-                : Text(
-                    'Simpan Perubahan',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    ),
-                  ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  //  Error state 
-
-  Widget _buildError(String message) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.wifi_off_outlined,
-                size: 48, color: AppColors.textLight),
-            const SizedBox(height: 16),
-            Text(
-              'Gagal memuat data profil',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textDark,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Periksa koneksi internet, lalu coba lagi.',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.plusJakartaSans(
-                  fontSize: 13, color: AppColors.textMedium),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () => ref.invalidate(profileProvider),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primaryDarkGreen,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
-              ),
-              child: const Text('Coba Lagi',
-                  style: TextStyle(color: Colors.white)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// 
-// _SectionCard
-// 
-
-class _SectionCard extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final Color iconColor;
-  final Color iconBg;
-  final List<Widget> children;
-
-  const _SectionCard({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.iconColor,
-    required this.iconBg,
-    required this.children,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(
-              color: Color(0x08000000),
-              blurRadius: 8,
-              offset: Offset(0, 2)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-            child: Row(
-              children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: iconBg,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(icon, color: iconColor, size: 20),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                Padding(
+                  padding:
+                      EdgeInsets.fromLTRB(16, topPad + 10, 16, 0),
+                  child: Row(
                     children: [
-                      Text(title,
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF0F172A),
-                          )),
-                      Text(subtitle,
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 11.5,
-                            color: AppColors.textMedium,
-                          )),
+                      GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color:
+                                Colors.white.withValues(alpha: 0.18),
+                            border: Border.all(
+                              color: Colors.white
+                                  .withValues(alpha: 0.35),
+                              width: 1.2,
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.arrow_back_rounded,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Data Diri',
+                        style: tt.titleMedium?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ],
             ),
           ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: Divider(height: 1, color: Color(0xFFF1F5F9)),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: children,
+
+          // ── Form ──────────────────────────────────────────────────────────
+          Expanded(
+            child: Form(
+              key: _formKey,
+              child: SingleChildScrollView(
+                padding:
+                    const EdgeInsets.fromLTRB(20, 20, 20, 32),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _SectionHeader(
+                        icon: Icons.person_outline_rounded,
+                        label: 'Data Pribadi'),
+                    const SizedBox(height: 12),
+                    M3TextField(
+                      controller: _fullName,
+                      label: 'Nama Lengkap',
+                      hint: 'Masukkan nama lengkap',
+                      prefixIcon: Icons.badge_outlined,
+                      textCapitalization: TextCapitalization.words,
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Nama lengkap wajib diisi'
+                          : null,
+                    ),
+                    const SizedBox(height: 10),
+                    M3TextField(
+                      controller: _nik,
+                      label: 'NIK',
+                      hint: '16 digit NIK',
+                      prefixIcon: Icons.credit_card_outlined,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(16),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: M3TextField(
+                            controller: _birthPlace,
+                            label: 'Tempat Lahir',
+                            hint: 'Kota',
+                            prefixIcon: Icons.location_city_outlined,
+                            textCapitalization:
+                                TextCapitalization.words,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: M3TextField(
+                            controller: _birthDate,
+                            label: 'Tanggal Lahir',
+                            hint: 'Pilih tanggal',
+                            prefixIcon: Icons.calendar_today_outlined,
+                            readOnly: true,
+                            onTap: _pickDate,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    _GenderSelector(
+                      selected: _gender,
+                      onChanged: (g) => setState(() => _gender = g),
+                    ),
+                    const SizedBox(height: 10),
+                    M3TextField(
+                      controller: _address,
+                      label: 'Alamat',
+                      hint: 'Alamat lengkap sesuai KTP',
+                      prefixIcon: Icons.home_outlined,
+                      maxLines: 3,
+                    ),
+                    const SizedBox(height: 10),
+                    M3TextField(
+                      controller: _phone,
+                      label: 'Nomor Telepon',
+                      hint: 'Contoh: 0812xxxxxxxx',
+                      prefixIcon: Icons.phone_outlined,
+                      keyboardType: TextInputType.phone,
+                    ),
+
+                    const SizedBox(height: 24),
+                    _SectionHeader(
+                      icon: Icons.family_restroom_outlined,
+                      label: 'Data Keluarga',
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: M3TextField(
+                            controller: _siblingCount,
+                            label: 'Jumlah Saudara',
+                            hint: '0',
+                            prefixIcon: Icons.people_outline,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: M3TextField(
+                            controller: _birthOrder,
+                            label: 'Anak ke-',
+                            hint: '1',
+                            prefixIcon: Icons.format_list_numbered,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    _SubSectionLabel(label: 'Ayah'),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: M3TextField(
+                            controller: _fatherName,
+                            label: 'Nama Ayah',
+                            hint: 'Nama lengkap',
+                            prefixIcon: Icons.person_outline_rounded,
+                            textCapitalization:
+                                TextCapitalization.words,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: M3TextField(
+                            controller: _fatherAge,
+                            label: 'Usia',
+                            hint: '45',
+                            prefixIcon: Icons.cake_outlined,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    M3TextField(
+                      controller: _fatherOccupation,
+                      label: 'Pekerjaan Ayah',
+                      hint: 'Contoh: Wiraswasta',
+                      prefixIcon: Icons.work_outline_rounded,
+                      textCapitalization: TextCapitalization.words,
+                    ),
+                    const SizedBox(height: 10),
+                    _SubSectionLabel(label: 'Ibu'),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: M3TextField(
+                            controller: _motherName,
+                            label: 'Nama Ibu',
+                            hint: 'Nama lengkap',
+                            prefixIcon: Icons.person_outline_rounded,
+                            textCapitalization:
+                                TextCapitalization.words,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: M3TextField(
+                            controller: _motherAge,
+                            label: 'Usia',
+                            hint: '45',
+                            prefixIcon: Icons.cake_outlined,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    M3TextField(
+                      controller: _motherOccupation,
+                      label: 'Pekerjaan Ibu',
+                      hint: 'Contoh: Ibu Rumah Tangga',
+                      prefixIcon: Icons.work_outline_rounded,
+                      textCapitalization: TextCapitalization.words,
+                    ),
+                    const SizedBox(height: 10),
+                    M3TextField(
+                      controller: _familyAddress,
+                      label: 'Alamat Keluarga',
+                      hint: 'Jika berbeda dengan alamat di atas',
+                      prefixIcon: Icons.home_outlined,
+                      maxLines: 2,
+                    ),
+                    const SizedBox(height: 10),
+                    M3TextField(
+                      controller: _familyPhone,
+                      label: 'No. Telepon Keluarga',
+                      hint: 'Contoh: 0812xxxxxxxx',
+                      prefixIcon: Icons.phone_outlined,
+                      keyboardType: TextInputType.phone,
+                    ),
+
+                    const SizedBox(height: 24),
+                    _SectionHeader(
+                      icon: Icons.favorite_outline_rounded,
+                      label: 'Data Pasangan',
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Isi jika sudah menikah',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: M3TextField(
+                            controller: _spouseName,
+                            label: 'Nama Pasangan',
+                            hint: 'Nama lengkap',
+                            prefixIcon: Icons.person_outline_rounded,
+                            textCapitalization:
+                                TextCapitalization.words,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: M3TextField(
+                            controller: _spouseAge,
+                            label: 'Usia',
+                            hint: '30',
+                            prefixIcon: Icons.cake_outlined,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    M3TextField(
+                      controller: _spouseOccupation,
+                      label: 'Pekerjaan Pasangan',
+                      hint: 'Contoh: Karyawan Swasta',
+                      prefixIcon: Icons.work_outline_rounded,
+                      textCapitalization: TextCapitalization.words,
+                    ),
+
+                    const SizedBox(height: 28),
+                    // ── Save button ────────────────────────────────────────
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: profileState.isLoading
+                            ? null
+                            : _handleSave,
+                        style: FilledButton.styleFrom(
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: profileState.isLoading
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white),
+                              )
+                            : Text(
+                                'Simpan Perubahan',
+                                style:
+                                    tt.labelLarge?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ],
@@ -904,205 +541,128 @@ class _SectionCard extends StatelessWidget {
   }
 }
 
-// 
-// _ProfileFormField
-// 
+// ─────────────────────────────────────────────────────────────────────────────
+// Private widgets
+// ─────────────────────────────────────────────────────────────────────────────
 
-class _ProfileFormField extends StatelessWidget {
-  final TextEditingController controller;
-  final String label;
-  final String? hint;
-  final IconData prefixIcon;
-  final int maxLines;
-  final TextInputType keyboardType;
-  final List<TextInputFormatter>? inputFormatters;
-  final String? Function(String?)? validator;
-  final void Function(String)? onChanged;
-
-  const _ProfileFormField({
-    required this.controller,
-    required this.label,
-    this.hint,
-    required this.prefixIcon,
-    this.maxLines = 1,
-    this.keyboardType = TextInputType.text,
-    this.inputFormatters,
-    this.validator,
-    this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textMedium,
-            letterSpacing: 0.3,
-          ),
-        ),
-        const SizedBox(height: 6),
-        TextFormField(
-          controller: controller,
-          keyboardType:
-              maxLines > 1 ? TextInputType.multiline : keyboardType,
-          maxLines: maxLines,
-          inputFormatters: inputFormatters,
-          validator: validator,
-          onChanged: onChanged,
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: const Color(0xFF0F172A),
-          ),
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: GoogleFonts.plusJakartaSans(
-                fontSize: 13, color: AppColors.textLight),
-            prefixIcon:
-                Icon(prefixIcon, size: 18, color: AppColors.textMedium),
-            contentPadding: const EdgeInsets.symmetric(
-                horizontal: 14, vertical: 12),
-            filled: true,
-            fillColor: AppColors.backgroundOffWhite,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.divider),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.divider),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                  color: AppColors.primaryDarkGreen, width: 1.5),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.error),
-            ),
-            focusedErrorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide:
-                  const BorderSide(color: AppColors.error, width: 1.5),
-            ),
-            errorStyle: GoogleFonts.plusJakartaSans(fontSize: 11),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// 
-// _LockedField
-// 
-
-class _LockedField extends StatelessWidget {
-  final String label;
-  final String? value;
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.icon, required this.label});
   final IconData icon;
-
-  const _LockedField({
-    required this.label,
-    required this.value,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isEmpty = value == null || value!.isEmpty;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(
-              label,
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textMedium,
-                letterSpacing: 0.3,
-              ),
-            ),
-            const SizedBox(width: 4),
-            const Icon(Icons.lock_outline_rounded,
-                size: 11, color: AppColors.textLight),
-          ],
-        ),
-        const SizedBox(height: 6),
-        Container(
-          width: double.infinity,
-          padding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF8FAFC),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, size: 18, color: AppColors.textLight),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  isEmpty ? 'Belum terisi' : value!,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 14,
-                    fontWeight:
-                        isEmpty ? FontWeight.w400 : FontWeight.w500,
-                    color: isEmpty
-                        ? AppColors.textLight
-                        : const Color(0xFF334155),
-                    fontStyle:
-                        isEmpty ? FontStyle.italic : FontStyle.normal,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// 
-// _SubSectionLabel
-// 
-
-class _SubSectionLabel extends StatelessWidget {
   final String label;
 
-  const _SubSectionLabel({required this.label});
-
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
     return Row(
       children: [
         Container(
-          width: 3,
-          height: 14,
+          padding: const EdgeInsets.all(6),
           decoration: BoxDecoration(
-            color: AppColors.primaryDarkGreen,
-            borderRadius: BorderRadius.circular(2),
+            color: AppColors.secondaryLightGreen,
+            borderRadius: BorderRadius.circular(8),
           ),
+          child: Icon(icon, size: 16, color: AppColors.primaryDarkGreen),
         ),
         const SizedBox(width: 8),
         Text(
           label,
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 13,
+          style: tt.titleSmall?.copyWith(
             fontWeight: FontWeight.w700,
-            color: const Color(0xFF334155),
+            color: cs.onSurface,
           ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SubSectionLabel extends StatelessWidget {
+  const _SubSectionLabel({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w600,
+          ),
+    );
+  }
+}
+
+class _GenderSelector extends StatelessWidget {
+  const _GenderSelector({required this.selected, required this.onChanged});
+  final String? selected;
+  final ValueChanged<String?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    const options = [('Laki-laki', Icons.male_rounded), ('Perempuan', Icons.female_rounded)];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 12, bottom: 6),
+          child: Text(
+            'Jenis Kelamin',
+            style: tt.labelMedium?.copyWith(color: cs.onSurfaceVariant),
+          ),
+        ),
+        Row(
+          children: [
+            for (final (label, icon) in options) ...[
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => onChanged(label),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 12, horizontal: 8),
+                    decoration: BoxDecoration(
+                      color: selected == label
+                          ? AppColors.secondaryLightGreen
+                          : cs.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: selected == label
+                            ? AppColors.primaryDarkGreen
+                            : cs.outlineVariant,
+                        width: selected == label ? 1.5 : 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          icon,
+                          size: 18,
+                          color: selected == label
+                              ? AppColors.primaryDarkGreen
+                              : cs.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          label,
+                          style: tt.bodySmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: selected == label
+                                ? AppColors.primaryDarkGreen
+                                : cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              if (label != options.last.$1) const SizedBox(width: 10),
+            ],
+          ],
         ),
       ],
     );

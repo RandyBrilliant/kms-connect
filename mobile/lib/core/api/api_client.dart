@@ -53,9 +53,12 @@ class ApiClient {
 
       final cacheOptions = CacheOptions(
         store: cacheStore,
-        policy: CachePolicy.request,
+        // Always fetch from network; only serve cached data on network errors
+        // (offline fallback). CachePolicy.request would serve a stale empty
+        // response from a previous run, making endpoints appear "not hit".
+        policy: CachePolicy.refresh,
         hitCacheOnErrorExcept: [401, 403],
-        maxStale: const Duration(minutes: 5),
+        maxStale: const Duration(hours: 1),
         priority: CachePriority.normal,
         cipher: null,
         keyBuilder: CacheOptions.defaultCacheKeyBuilder,
@@ -65,7 +68,10 @@ class ApiClient {
       _dio.interceptors.add(DioCacheInterceptor(options: cacheOptions));
     } catch (e) {
       // Cache setup failed, continue without cache
-      print('Cache setup failed: $e');
+      if (const bool.fromEnvironment('dart.vm.product') == false) {
+        // ignore: avoid_print
+        print('Cache setup failed: $e');
+      }
     }
   }
 

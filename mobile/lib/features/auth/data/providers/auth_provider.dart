@@ -27,22 +27,26 @@ final authStateProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
 class AuthState {
   final User? user;
   final bool isLoading;
+  final bool initialized;
   final String? error;
 
-  AuthState({
+  const AuthState({
     this.user,
     this.isLoading = false,
+    this.initialized = false,
     this.error,
   });
 
   AuthState copyWith({
     User? user,
     bool? isLoading,
+    bool? initialized,
     String? error,
   }) {
     return AuthState(
       user: user ?? this.user,
       isLoading: isLoading ?? this.isLoading,
+      initialized: initialized ?? this.initialized,
       error: error,
     );
   }
@@ -62,11 +66,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final isAuth = await _repository.isAuthenticated();
       if (isAuth) {
         final user = await _repository.getCurrentUser();
-        state = state.copyWith(user: user);
+        state = state.copyWith(user: user, initialized: true);
+      } else {
+        state = state.copyWith(initialized: true);
       }
     } catch (e) {
       // Not authenticated or error
-      state = state.copyWith(user: null);
+      state = state.copyWith(user: null, initialized: true);
     }
   }
 
@@ -158,7 +164,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> logout() async {
     await _repository.logout();
-    state = AuthState();
+    state = const AuthState(initialized: true);
   }
 
   /// Called by [AuthInterceptor] when tokens are invalidated server-side
@@ -166,7 +172,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   /// storage by the interceptor — this just resets the Riverpod state so
   /// GoRouter redirects immediately to the login screen.
   void forceSignOut() {
-    state = AuthState();
+    state = const AuthState(initialized: true);
   }
 
   Future<void> refreshUser() async {

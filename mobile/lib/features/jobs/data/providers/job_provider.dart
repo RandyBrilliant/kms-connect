@@ -43,7 +43,7 @@ class JobFilters {
       locationCountry.hashCode;
 }
 
-final jobsProvider = FutureProvider.family<List<Job>, JobFilters>((ref, filters) async {
+final jobsProvider = FutureProvider.autoDispose.family<List<Job>, JobFilters>((ref, filters) async {
   final repository = ref.read(jobRepositoryProvider);
   return await repository.getJobs(
     search: filters.search,
@@ -52,12 +52,12 @@ final jobsProvider = FutureProvider.family<List<Job>, JobFilters>((ref, filters)
   );
 });
 
-final jobDetailProvider = FutureProvider.family<Job, int>((ref, jobId) async {
+final jobDetailProvider = FutureProvider.autoDispose.family<Job, int>((ref, jobId) async {
   final repository = ref.read(jobRepositoryProvider);
   return await repository.getJobDetail(jobId);
 });
 
-final myApplicationsProvider = FutureProvider.family<List<JobApplication>, String?>((ref, status) async {
+final myApplicationsProvider = FutureProvider.autoDispose.family<List<JobApplication>, String?>((ref, status) async {
   final repository = ref.read(jobRepositoryProvider);
   return await repository.getMyApplications(status: status);
 });

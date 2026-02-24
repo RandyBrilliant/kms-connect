@@ -197,7 +197,12 @@ class CookieTokenRefreshView(APIView):
 
         data = serializer.validated_data
         access = data["access"]
-        # Get user from refresh token payload for summary
+        # When ROTATE_REFRESH_TOKENS=True, SimpleJWT puts the new refresh token
+        # in validated_data["refresh"].  Include it in the response body so mobile
+        # clients can persist the rotated token and extend their session.
+        new_refresh = data.get("refresh")
+
+        # Get user from the (original) refresh token payload for user summary.
         from rest_framework_simplejwt.tokens import RefreshToken
         from django.contrib.auth import get_user_model
         try:
@@ -208,14 +213,16 @@ class CookieTokenRefreshView(APIView):
         except Exception:
             user_data = None
 
+        response_data: dict = {"access": access}
+        if new_refresh:
+            # Include rotated refresh token so mobile clients can update storage.
+            response_data["refresh"] = new_refresh
+        if user_data:
+            response_data["user"] = user_data
+
         response = Response(
             success_response(
-                data={
-                    "user": user_data,
-                    # Return the new access token in the body so mobile
-                    # clients can update their stored token from the response.
-                    "access": access,
-                } if user_data else {"access": access},
+                data=response_data,
                 detail="Token diperbarui.",
                 code=ApiCode.SUCCESS,
             ),
@@ -228,6 +235,15 @@ class CookieTokenRefreshView(APIView):
             _access_max_age_seconds(),
             cookie_settings,
         )
+        # Also update the refresh cookie when token rotation is active.
+        if new_refresh:
+            _set_cookie(
+                response,
+                cookie_settings["refresh_key"],
+                new_refresh,
+                _refresh_max_age_seconds(),
+                cookie_settings,
+            )
         return response
 
 

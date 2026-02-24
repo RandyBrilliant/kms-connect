@@ -70,9 +70,7 @@ class _MyApplicationsPageState extends ConsumerState<MyApplicationsPage> {
                   );
                 }
                 return RefreshIndicator(
-                  onRefresh: () async {
-                    ref.refresh(myApplicationsProvider(_selectedStatus));
-                  },
+                  onRefresh: () => ref.refresh(myApplicationsProvider(_selectedStatus).future),
                   child: ListView.builder(
                     padding: const EdgeInsets.all(16),
                     itemCount: applications.length,
@@ -137,7 +135,7 @@ class _MyApplicationsPageState extends ConsumerState<MyApplicationsPage> {
                     Text('Error: $error'),
                     const SizedBox(height: 16),
                     ElevatedButton(
-                      onPressed: () => ref.refresh(myApplicationsProvider(_selectedStatus)),
+                      onPressed: () => ref.invalidate(myApplicationsProvider(_selectedStatus)),
                       child: const Text(AppStrings.retry),
                     ),
                   ],

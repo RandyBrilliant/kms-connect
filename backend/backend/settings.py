@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 from pathlib import Path
 from celery.schedules import crontab
 
@@ -288,7 +289,14 @@ REST_FRAMEWORK = {
 SIMPLE_JWT = {
     "AUTH_HEADER_TYPES": ("Bearer",),
     "UPDATE_LAST_LOGIN": True,
-    # Cookie names untuk web (HTTP-only). Kosongkan untuk non-cookie (mobile).
+    # Token lifetimes — short-lived access, long-lived refresh for mobile UX.
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=int(_env("JWT_ACCESS_MINUTES", "15"))),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=int(_env("JWT_REFRESH_DAYS", "90"))),
+    # Rotate refresh tokens so each refresh call issues a fresh refresh token.
+    # Mobile clients MUST persist the new refresh token returned in the response body.
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": False,  # Set True only after adding token_blacklist app + migration
+    # Cookie names for web (HTTP-only). Mobile uses response body tokens.
     "AUTH_COOKIE_ACCESS_KEY": _env("JWT_ACCESS_COOKIE_NAME", "kms_access"),
     "AUTH_COOKIE_REFRESH_KEY": _env("JWT_REFRESH_COOKIE_NAME", "kms_refresh"),
     "AUTH_COOKIE_SECURE": not DEBUG,

@@ -99,9 +99,19 @@ class AuthInterceptor extends Interceptor {
         );
 
         if (response.statusCode == 200) {
-          final newAccessToken = response.data['access'] as String?;
+          // Backend wraps response in {code, detail, data: {access, refresh?, user}}
+          final payload = response.data is Map ? response.data as Map : null;
+          final inner = payload?['data'] as Map?;
+
+          final newAccessToken = inner?['access'] as String?;
+          final newRefreshToken = inner?['refresh'] as String?;
+
           if (newAccessToken != null) {
             await _secureStorage.write(key: 'access_token', value: newAccessToken);
+            // Persist the rotated refresh token so the next refresh works.
+            if (newRefreshToken != null) {
+              await _secureStorage.write(key: 'refresh_token', value: newRefreshToken);
+            }
 
             // Mark as retry so a second 401 on the retry doesn't wipe tokens
             final opts = err.requestOptions;
@@ -123,17 +133,29 @@ class AuthInterceptor extends Interceptor {
           }
         }
 
-        // Refresh response was not 200 or contained no access token — credentials invalid
+        // Refresh response was 200 but contained no access token — unexpected server issue,
+        // reject without logging out so the user can retry later.
         _isRefreshing = false;
-        await _dispatchForceLogout();
         _rejectPendingRequests(err);
         handler.next(err);
       } catch (e) {
-        // Refresh request itself threw (network error, server down) — clear tokens
         _isRefreshing = false;
-        await _dispatchForceLogout();
-        _rejectPendingRequests(err);
-        handler.next(err);
+        // Only force-logout when the server explicitly rejects the refresh token
+        // (400 or 401).  Network errors, timeouts, or server outages should NOT
+        // log the user out — their tokens are still valid.
+        final isServerRejection = e is DioException &&
+            e.response != null &&
+            (e.response!.statusCode == 401 || e.response!.statusCode == 400);
+
+        if (isServerRejection) {
+          await _dispatchForceLogout();
+          _rejectPendingRequests(err);
+          handler.reject(err);
+        } else {
+          // Transient failure (no internet, timeout, 5xx) — keep tokens, fail gracefully.
+          _rejectPendingRequests(err);
+          handler.next(err);
+        }
       }
       return;
     }

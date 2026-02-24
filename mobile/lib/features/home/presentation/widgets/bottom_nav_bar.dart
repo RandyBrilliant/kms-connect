@@ -3,123 +3,92 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../config/colors.dart';
 
+// Ordered list of destinations — index maps directly to the M3 NavigationBar.
+const _kDestinations = [
+  _NavDestination(
+    route: '/home',
+    icon: Icons.home_outlined,
+    activeIcon: Icons.home_rounded,
+    label: 'Beranda',
+  ),
+  _NavDestination(
+    route: '/jobs',
+    icon: Icons.work_outline_rounded,
+    activeIcon: Icons.work_rounded,
+    label: 'Lowongan',
+  ),
+  _NavDestination(
+    route: '/news',
+    icon: Icons.newspaper_outlined,
+    activeIcon: Icons.newspaper_rounded,
+    label: 'Berita',
+  ),
+  _NavDestination(
+    route: '/profile',
+    icon: Icons.person_outline_rounded,
+    activeIcon: Icons.person_rounded,
+    label: 'Profil',
+  ),
+];
+
+/// M3 bottom navigation bar shared across all main screens.
+///
+/// Pass [currentRoute] from the active page so the correct destination is
+/// highlighted. Uses Flutter's [NavigationBar] widget which provides the M3
+/// indicator pill, label animation, and ink ripple out of the box.
 class BottomNavBar extends StatelessWidget {
+  const BottomNavBar({super.key, required this.currentRoute});
+
   final String currentRoute;
 
-  const BottomNavBar({super.key, required this.currentRoute});
+  int get _selectedIndex {
+    final idx = _kDestinations.indexWhere((d) => d.route == currentRoute);
+    return idx < 0 ? 0 : idx;
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          top: BorderSide(color: Color(0xFFF1F5F9), width: 1),
-        ),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
-          child: Row(
-            children: [
-              _NavItem(
-                icon: Icons.home_outlined,
-                activeIcon: Icons.home,
-                label: 'Beranda',
-                isActive: currentRoute == '/home',
-                onTap: () => context.go('/home'),
-              ),
-              _NavItem(
-                icon: Icons.work_outline,
-                activeIcon: Icons.work,
-                label: 'Lowongan',
-                isActive: currentRoute == '/jobs',
-                onTap: () => context.go('/jobs'),
-              ),
-              _NavItem(
-                icon: Icons.newspaper_outlined,
-                activeIcon: Icons.newspaper,
-                label: 'Berita',
-                isActive: currentRoute == '/news',
-                onTap: () => context.go('/news'),
-              ),
-              _NavItem(
-                icon: Icons.person_outline,
-                activeIcon: Icons.person,
-                label: 'Profil',
-                isActive: currentRoute == '/profile',
-                onTap: () => context.go('/profile'),
-              ),
-            ],
+    final cs = Theme.of(context).colorScheme;
+
+    return NavigationBar(
+      selectedIndex: _selectedIndex,
+      onDestinationSelected: (i) => context.go(_kDestinations[i].route),
+      backgroundColor: cs.surface,
+      indicatorColor: AppColors.primaryDarkGreen.withValues(alpha: 0.12),
+      surfaceTintColor: Colors.transparent,
+      shadowColor: Colors.transparent,
+      elevation: 0,
+      height: 64,
+      labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+      destinations: [
+        for (final d in _kDestinations)
+          NavigationDestination(
+            icon: Icon(d.icon),
+            selectedIcon: Icon(d.activeIcon,
+                color: AppColors.primaryDarkGreen),
+            label: d.label,
           ),
-        ),
-      ),
+      ],
     );
   }
 }
 
-class _NavItem extends StatelessWidget {
-  final IconData icon;
-  final IconData activeIcon;
-  final String label;
-  final bool isActive;
-  final VoidCallback onTap;
+// ─────────────────────────────────────────────────────────────────────────────
+// Internal data holder
+// ─────────────────────────────────────────────────────────────────────────────
 
-  const _NavItem({
+class _NavDestination {
+  const _NavDestination({
+    required this.route,
     required this.icon,
     required this.activeIcon,
     required this.label,
-    required this.isActive,
-    required this.onTap,
   });
 
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Pill background only on active tab
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeInOut,
-              height: 36,
-              width: isActive ? 64 : 36,
-              decoration: BoxDecoration(
-                color: isActive
-                    ? AppColors.primaryDarkGreen.withOpacity(0.12)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Center(
-                child: Icon(
-                  isActive ? activeIcon : icon,
-                  size: 24,
-                  color: isActive
-                      ? AppColors.primaryDarkGreen
-                      : const Color(0xFF94A3B8),
-                ),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight:
-                    isActive ? FontWeight.w700 : FontWeight.w500,
-                color: isActive
-                    ? AppColors.primaryDarkGreen
-                    : const Color(0xFF94A3B8),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  final String route;
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
 }
+
+

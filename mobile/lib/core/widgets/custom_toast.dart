@@ -1,99 +1,92 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+/// The semantic type of a toast notification.
 enum ToastType { success, error, warning, info }
 
-/// Global navigator key.
+/// Global navigator key  must be registered as [GoRouter]'s navigatorKey.
 ///
-/// Assign this to [MaterialApp.router]'s `key` or pass it as
-/// [GoRouter]'s `navigatorKey` so that [CustomToast] can always find
-/// the **root** [Overlay] — one that lives above every route and is
-/// never destroyed by page transitions.
-///
-/// Usage in `app.dart`:
 /// ```dart
 /// GoRouter(navigatorKey: rootNavigatorKey, ...)
 /// ```
 final GlobalKey<NavigatorState> rootNavigatorKey =
     GlobalKey<NavigatorState>(debugLabel: 'rootNav');
 
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
 class CustomToast {
-  /// Show an animated toast that persists across route transitions.
+  /// Show a toast anchored to the **top-center** of the screen.
   ///
-  /// The toast is inserted into the **root** overlay so it stays visible
-  /// even when the current route is replaced (e.g. login → home).
-  ///
-  /// [context] is only used as a fallback when [rootNavigatorKey] has no
-  /// attached navigator (e.g. in tests or before the first frame).
+  /// Prefers the root overlay so the toast survives route transitions.
   static void show(
     BuildContext context, {
     required String message,
+    String? title,
     ToastType type = ToastType.info,
     Duration duration = const Duration(seconds: 3),
   }) {
-    // Prefer the root overlay so the toast survives route changes.
-    final OverlayState overlay;
-    final rootOverlay = rootNavigatorKey.currentState?.overlay;
-    if (rootOverlay != null) {
-      overlay = rootOverlay;
-    } else {
-      // Fallback: use whatever overlay the caller's context can see.
-      overlay = Overlay.of(context);
-    }
-
-    _insert(overlay, message: message, type: type, duration: duration);
+    final overlay =
+        rootNavigatorKey.currentState?.overlay ?? Overlay.of(context);
+    _insert(overlay, message: message, title: title, type: type, duration: duration);
   }
 
-  /// Show a toast **without** a [BuildContext].
-  ///
-  /// Uses [rootNavigatorKey] exclusively, so it works from Riverpod
-  /// providers, interceptors, or any non-widget code. If the root
-  /// navigator is not yet attached the call is silently ignored.
+  /// Show a toast without a [BuildContext]  safe to call from providers,
+  /// interceptors, or any non-widget code.
   static void showGlobal({
     required String message,
+    String? title,
     ToastType type = ToastType.info,
     Duration duration = const Duration(seconds: 3),
   }) {
     final overlay = rootNavigatorKey.currentState?.overlay;
     if (overlay == null) return;
-    _insert(overlay, message: message, type: type, duration: duration);
+    _insert(overlay, message: message, title: title, type: type, duration: duration);
   }
 
   static void _insert(
     OverlayState overlay, {
     required String message,
+    String? title,
     required ToastType type,
     required Duration duration,
   }) {
-    late OverlayEntry overlayEntry;
-
-    overlayEntry = OverlayEntry(
+    late OverlayEntry entry;
+    entry = OverlayEntry(
       builder: (_) => _ToastWidget(
         message: message,
+        title: title,
         type: type,
         duration: duration,
         onDismiss: () {
-          if (overlayEntry.mounted) overlayEntry.remove();
+          if (entry.mounted) entry.remove();
         },
       ),
     );
 
-    overlay.insert(overlayEntry);
-    // Auto-remove after duration + slide-out animation
-    Future.delayed(duration + const Duration(milliseconds: 450), () {
-      if (overlayEntry.mounted) overlayEntry.remove();
+    overlay.insert(entry);
+    // Safety net: force-remove after animation window closes.
+    Future.delayed(duration + const Duration(milliseconds: 500), () {
+      if (entry.mounted) entry.remove();
     });
   }
 }
 
+// ---------------------------------------------------------------------------
+// Internal widget
+// ---------------------------------------------------------------------------
+
 class _ToastWidget extends StatefulWidget {
   final String message;
+  final String? title;
   final ToastType type;
   final Duration duration;
   final VoidCallback onDismiss;
 
   const _ToastWidget({
     required this.message,
+    this.title,
     required this.type,
     required this.duration,
     required this.onDismiss,
@@ -105,64 +98,95 @@ class _ToastWidget extends StatefulWidget {
 
 class _ToastWidgetState extends State<_ToastWidget>
     with TickerProviderStateMixin {
-  late final AnimationController _slideController;
-  late final AnimationController _progressController;
-  late final Animation<Offset> _slideAnimation;
+  late final AnimationController _slideCtrl;
+  late final AnimationController _progressCtrl;
+  late final Animation<Offset> _slideAnim;
+  late final Animation<double> _fadeAnim;
+
+  double _dragOffset = 0;
+  bool _dismissing = false;
 
   @override
   void initState() {
     super.initState();
-    _slideController = AnimationController(
-      duration: const Duration(milliseconds: 400),
+
+    _slideCtrl = AnimationController(
       vsync: this,
+      duration: const Duration(milliseconds: 380),
     );
-    _progressController = AnimationController(
-      duration: widget.duration,
+    _progressCtrl = AnimationController(
       vsync: this,
+      duration: widget.duration,
     );
 
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 2.0),
+    // Slide in from the top
+    _slideAnim = Tween<Offset>(
+      begin: const Offset(0.0, -1.6),
       end: Offset.zero,
     ).animate(CurvedAnimation(
-      parent: _slideController,
+      parent: _slideCtrl,
       curve: Curves.easeOutCubic,
     ));
 
-    _slideController.forward();
-    _progressController.forward().then((_) => _dismiss());
+    _fadeAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _slideCtrl,
+        curve: const Interval(0.0, 0.5, curve: Curves.easeOut),
+      ),
+    );
+
+    _slideCtrl.forward();
+    _progressCtrl.forward().then((_) => _dismiss());
   }
 
   @override
   void dispose() {
-    _slideController.dispose();
-    _progressController.dispose();
+    _slideCtrl.dispose();
+    _progressCtrl.dispose();
     super.dispose();
   }
 
-  Color get _typeColor {
+  //  Type tokens 
+
+  /// Container color  a tonal surface matching each type.
+  Color get _containerColor {
     switch (widget.type) {
       case ToastType.success:
-        return const Color(0xFF00C853);
+        return const Color(0xFF1B5E20);
       case ToastType.error:
-        return const Color(0xFFFF3D00);
+        return const Color(0xFFB3261E);
       case ToastType.warning:
-        return const Color(0xFFFF9100);
+        return const Color(0xFF7A4F00);
       case ToastType.info:
-        return const Color(0xFF2979FF);
+        return const Color(0xFF004E8C);
     }
   }
 
-  Color get _typeLightColor {
+  /// Icon badge background  a lighter tonal version using surface.
+  Color get _badgeColor {
     switch (widget.type) {
       case ToastType.success:
-        return const Color(0xFFE8F5E9);
+        return const Color(0xFF2E7D32).withValues(alpha: 0.28);
       case ToastType.error:
-        return const Color(0xFFFFEBEE);
+        return Colors.white.withValues(alpha: 0.15);
       case ToastType.warning:
-        return const Color(0xFFFFF8E1);
+        return Colors.white.withValues(alpha: 0.15);
       case ToastType.info:
-        return const Color(0xFFE3F2FD);
+        return Colors.white.withValues(alpha: 0.15);
+    }
+  }
+
+  /// Progress bar color  slightly lighter than the container.
+  Color get _progressColor {
+    switch (widget.type) {
+      case ToastType.success:
+        return const Color(0xFF66BB6A);
+      case ToastType.error:
+        return const Color(0xFFEF9A9A);
+      case ToastType.warning:
+        return const Color(0xFFFFCC80);
+      case ToastType.info:
+        return const Color(0xFF90CAF9);
     }
   }
 
@@ -179,103 +203,227 @@ class _ToastWidgetState extends State<_ToastWidget>
     }
   }
 
+  String get _label {
+    switch (widget.type) {
+      case ToastType.success:
+        return 'Berhasil';
+      case ToastType.error:
+        return 'Kesalahan';
+      case ToastType.warning:
+        return 'Perhatian';
+      case ToastType.info:
+        return 'Informasi';
+    }
+  }
+
+  //  Dismiss logic 
+
   Future<void> _dismiss() async {
-    if (!mounted) return;
-    await _slideController.reverse();
+    if (_dismissing || !mounted) return;
+    _dismissing = true;
+    _progressCtrl.stop();
+    await _slideCtrl.reverse();
     widget.onDismiss();
   }
 
+  void _onDragUpdate(DragUpdateDetails d) {
+    if (_dismissing) return;
+    setState(() {
+      // Only allow dragging upward
+      _dragOffset = (_dragOffset + d.delta.dy).clamp(-120.0, 12.0);
+    });
+    // If dragged far enough up, dismiss
+    if (_dragOffset <= -80) _dismiss();
+  }
+
+  void _onDragEnd(DragEndDetails d) {
+    if (_dismissing) return;
+    if (_dragOffset <= -40 || d.primaryVelocity != null && d.primaryVelocity! < -400) {
+      _dismiss();
+    } else {
+      // Spring back
+      setState(() => _dragOffset = 0);
+    }
+  }
+
+  //  Build 
+
   @override
   Widget build(BuildContext context) {
+    final topPadding = MediaQuery.of(context).padding.top;
+
     return Positioned(
-      bottom: MediaQuery.of(context).padding.bottom + 24,
-      left: 20,
-      right: 20,
+      top: topPadding + 12,
+      left: 16,
+      right: 16,
       child: SlideTransition(
-        position: _slideAnimation,
-        child: Material(
-          color: Colors.transparent,
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.10),
-                  blurRadius: 24,
-                  spreadRadius: 0,
-                  offset: const Offset(0, 8),
+        position: _slideAnim,
+        child: FadeTransition(
+          opacity: _fadeAnim,
+          child: Transform.translate(
+            offset: Offset(0, _dragOffset),
+            child: GestureDetector(
+              onVerticalDragUpdate: _onDragUpdate,
+              onVerticalDragEnd: _onDragEnd,
+              child: Material(
+                color: Colors.transparent,
+                child: _ToastCard(
+                  type: widget.type,
+                  message: widget.message,
+                  containerColor: _containerColor,
+                  badgeColor: _badgeColor,
+                  progressColor: _progressColor,
+                  icon: _icon,
+                  label: widget.title ?? _label,
+                  progressAnimation: _progressCtrl,
+                  onClose: _dismiss,
                 ),
-                BoxShadow(
-                  color: _typeColor.withValues(alpha: 0.18),
-                  blurRadius: 16,
-                  spreadRadius: 0,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+              ),
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Toast card  pure visual component, no state
+// ---------------------------------------------------------------------------
+
+class _ToastCard extends StatelessWidget {
+  final ToastType type;
+  final String message;
+  final Color containerColor;
+  final Color badgeColor;
+  final Color progressColor;
+  final IconData icon;
+  final String label;
+  final Animation<double> progressAnimation;
+  final VoidCallback onClose;
+
+  const _ToastCard({
+    required this.type,
+    required this.message,
+    required this.containerColor,
+    required this.badgeColor,
+    required this.progressColor,
+    required this.icon,
+    required this.label,
+    required this.progressAnimation,
+    required this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const onColor = Colors.white;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: containerColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: containerColor.withValues(alpha: 0.35),
+            blurRadius: 20,
+            offset: const Offset(0, 6),
+            spreadRadius: -2,
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            //  Progress bar at TOP 
+            AnimatedBuilder(
+              animation: progressAnimation,
+              builder: (_, _) => LinearProgressIndicator(
+                value: 1.0 - progressAnimation.value,
+                backgroundColor: Colors.white.withValues(alpha: 0.15),
+                valueColor: AlwaysStoppedAnimation<Color>(progressColor),
+                minHeight: 2.5,
+              ),
+            ),
+
+            //  Content row 
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 10, 14),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
-                    child: Row(
+                  // Icon badge
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: badgeColor,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(icon, color: onColor, size: 22),
+                  ),
+                  const SizedBox(width: 12),
+
+                  // Text block
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.all(9),
-                          decoration: BoxDecoration(
-                            color: _typeLightColor,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Icon(_icon, color: _typeColor, size: 20),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            widget.message,
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w600,
-                              color: const Color(0xFF1A1A2E),
-                              height: 1.4,
-                            ),
+                        Text(
+                          label,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            color: onColor.withValues(alpha: 0.65),
+                            letterSpacing: 0.6,
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        GestureDetector(
-                          onTap: _dismiss,
-                          child: Container(
-                            padding: const EdgeInsets.all(5),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF2F2F2),
-                              borderRadius: BorderRadius.circular(7),
-                            ),
-                            child: const Icon(
-                              Icons.close_rounded,
-                              size: 15,
-                              color: Color(0xFF888888),
-                            ),
+                        const SizedBox(height: 2),
+                        Text(
+                          message,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w600,
+                            color: onColor,
+                            height: 1.35,
                           ),
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
                   ),
-                  // Animated depletion progress bar
-                  AnimatedBuilder(
-                    animation: _progressController,
-                    builder: (_, child) => LinearProgressIndicator(
-                      value: 1.0 - _progressController.value,
-                      backgroundColor: const Color(0xFFF0F0F0),
-                      valueColor: AlwaysStoppedAnimation<Color>(_typeColor),
-                      minHeight: 3,
+                  const SizedBox(width: 6),
+
+                  // Close button
+                  GestureDetector(
+                    onTap: onClose,
+                    behavior: HitTestBehavior.opaque,
+                    child: Container(
+                      width: 30,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        Icons.close_rounded,
+                        size: 16,
+                        color: onColor.withValues(alpha: 0.75),
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-          ),
+          ],
         ),
       ),
     );

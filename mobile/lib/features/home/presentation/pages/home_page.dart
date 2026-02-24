@@ -1,14 +1,21 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../config/colors.dart';
+import '../../../../core/widgets/auth_wave_header.dart';
 import '../../../auth/data/providers/auth_provider.dart';
-import '../../../profile/data/providers/profile_provider.dart';
+import '../../../notifications/data/providers/notification_provider.dart';
 import '../../../news/data/providers/news_provider.dart';
 import '../../../news/domain/models/news.dart';
-import '../../../notifications/data/providers/notification_provider.dart';
+import '../../../profile/data/providers/profile_provider.dart';
 import '../widgets/bottom_nav_bar.dart';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Page
+// ─────────────────────────────────────────────────────────────────────────────
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -19,24 +26,24 @@ class HomePage extends ConsumerStatefulWidget {
 
 class _HomePageState extends ConsumerState<HomePage>
     with SingleTickerProviderStateMixin {
-  AnimationController? _ctrl;
+  late final AnimationController _ctrl;
 
-  // Accent colors for news card icons, cycling by index
-  static const List<Color> _newsIconBg = [
+  // Accent palette for news icon badges – cycles by card index.
+  static const _iconBg = [
     Color(0xFFDBEAFE), // blue-100
     Color(0xFFEDE9FE), // purple-100
     Color(0xFFD1FAE5), // green-100
     Color(0xFFFEF3C7), // amber-100
     Color(0xFFFFE4E6), // rose-100
   ];
-  static const List<Color> _newsIconFg = [
-    Color(0xFF2563EB), // blue-600
-    Color(0xFF7C3AED), // purple-600
-    Color(0xFF16A34A), // green-600
-    Color(0xFFD97706), // amber-600
-    Color(0xFFE11D48), // rose-600
+  static const _iconFg = [
+    Color(0xFF2563EB),
+    Color(0xFF7C3AED),
+    Color(0xFF16A34A),
+    Color(0xFFD97706),
+    Color(0xFFE11D48),
   ];
-  static const List<IconData> _newsIcons = [
+  static const _icons = [
     Icons.smart_toy_outlined,
     Icons.lightbulb_outline,
     Icons.campaign_outlined,
@@ -51,6 +58,7 @@ class _HomePageState extends ConsumerState<HomePage>
       vsync: this,
       duration: const Duration(milliseconds: 850),
     )..forward();
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(profileNotifierProvider.notifier).loadProfile();
     });
@@ -58,23 +66,21 @@ class _HomePageState extends ConsumerState<HomePage>
 
   @override
   void dispose() {
-    _ctrl?.dispose();
+    _ctrl.dispose();
     super.dispose();
   }
 
-  /// Wraps [child] in a staggered fade + slide-up entrance animation.
+  /// Wraps [child] in a staggered fade + slide-up entrance driven by [_ctrl].
   Widget _animated(Widget child, double begin, double end) {
-    final controller = _ctrl;
-    if (controller == null) return child;
     final curve = CurvedAnimation(
-      parent: controller,
+      parent: _ctrl,
       curve: Interval(begin, end, curve: Curves.easeOut),
     );
     return FadeTransition(
       opacity: curve,
       child: SlideTransition(
         position: Tween(
-          begin: const Offset(0, 0.05),
+          begin: const Offset(0, 0.06),
           end: Offset.zero,
         ).animate(curve),
         child: child,
@@ -82,8 +88,7 @@ class _HomePageState extends ConsumerState<HomePage>
     );
   }
 
-  /// Returns "Xj lalu", "Xh lalu", "Xm lalu" relative to now.
-  String _relativeTime(DateTime date) {
+  static String _relativeTime(DateTime date) {
     final diff = DateTime.now().difference(date);
     if (diff.inDays >= 1) return '${diff.inDays}h lalu';
     if (diff.inHours >= 1) return '${diff.inHours}j lalu';
@@ -91,8 +96,7 @@ class _HomePageState extends ConsumerState<HomePage>
     return 'Baru saja';
   }
 
-  /// Extracts just the first name from fullName or the part before '@' in email.
-  String _firstName(String? fullName, String? email) {
+  static String _firstName(String? fullName, String? email) {
     if (fullName != null && fullName.trim().isNotEmpty) {
       return fullName.trim().split(' ').first;
     }
@@ -100,15 +104,29 @@ class _HomePageState extends ConsumerState<HomePage>
     return 'Kamu';
   }
 
+  static Color _statusColor(String? status) {
+    switch (status) {
+      case 'ACCEPTED':
+        return AppColors.success;
+      case 'REJECTED':
+        return AppColors.error;
+      case 'SUBMITTED':
+        return AppColors.warning;
+      default:
+        return AppColors.textMedium;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
-    final user = authState.user;
     final profileState = ref.watch(profileNotifierProvider);
     final newsAsync = ref.watch(newsProvider(null));
     final notifState = ref.watch(notificationProvider);
+    final cs = Theme.of(context).colorScheme;
+    final size = MediaQuery.sizeOf(context);
 
-    // full_name priority: user.fullName → profile.fullName → email prefix → fallback
+    final user = authState.user;
     final displayName = user?.fullName?.isNotEmpty == true
         ? user!.fullName!
         : profileState.profile?.fullName?.isNotEmpty == true
@@ -119,128 +137,55 @@ class _HomePageState extends ConsumerState<HomePage>
     final score = profileState.profile?.score?.toInt() ?? 0;
     final statusLabel =
         profileState.profile?.verificationStatusDisplay ?? 'Draf';
-    final statusColor = _statusColor(profileState.profile?.verificationStatus);
+    final statusColor =
+        _statusColor(profileState.profile?.verificationStatus);
+
+    // Header height: 26 % of screen height, floor at 210 px.
+    final headerH = math.max(size.height * 0.26, 210.0);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F7F8),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // ── Top bar ────────────────────────────────────────────
-                    _animated(
+      backgroundColor: cs.surfaceContainerLowest,
+      body: Column(
+        children: [
+          // ── Scrollable body ────────────────────────────────────────────
+          Expanded(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Hero wave header ─────────────────────────────────
+                  _animated(
+                    _HeroHeader(
+                      headerHeight: headerH,
+                      displayName: displayName,
+                      firstName: firstName,
+                      unreadCount: notifState.unreadCount,
+                      onNotificationTap: () =>
+                          context.push('/notifications'),
+                    ),
+                    0.0, 0.40,
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // ── Stat cards ───────────────────────────────────────
+                  _animated(
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 20),
                       child: Row(
                         children: [
-                          // Avatar
-                          Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: const Color(0xFFE8D5C4),
-                              border: Border.all(
-                                  color: Colors.white, width: 2),
-                              boxShadow: const [
-                                BoxShadow(
-                                  color: Color(0x14000000),
-                                  blurRadius: 6,
-                                  offset: Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: const Icon(
-                              Icons.person,
-                              color: Color(0xFF8B6550),
-                              size: 26,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          // Greeting text
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Selamat datang,',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                    color: Color(0xFF64748B),
-                                  ),
-                                ),
-                                Text(
-                                  displayName,
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF0F172A),
-                                    height: 1.2,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            ),
-                          ),
-                          // Bell button
-                          _NotificationBell(
-                            onTap: () => context.push('/notifications'),
-                            unreadCount: notifState.unreadCount,
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    0.0, 0.40),
-                    // ── Big greeting ───────────────────────────────────────
-                    _animated(
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-                      child: RichText(
-                        text: TextSpan(
-                          style: const TextStyle(
-                            fontSize: 26,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF0F172A),
-                            height: 1.3,
-                          ),
-                          children: [
-                            const TextSpan(text: 'Halo,\n'),
-                            TextSpan(
-                              text: firstName,
-                              style: const TextStyle(
-                                  color: AppColors.primaryDarkGreen),
-                            ),
-                            const TextSpan(text: ' 👋'),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    0.1, 0.50),
-                    // ── Stat cards ─────────────────────────────────────────
-                    _animated(
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
-                      child: Row(
-                        children: [
-                          // Left – Profile score (green)
                           Expanded(
                             child: GestureDetector(
                               onTap: () => context.push('/profile'),
                               child: _ProfileScoreCard(
-                                score: profileState.isLoading ? null : score,
+                                score:
+                                    profileState.isLoading ? null : score,
                               ),
                             ),
                           ),
                           const SizedBox(width: 14),
-                          // Right – Verification status (white)
                           Expanded(
                             child: GestureDetector(
                               onTap: () => context.push('/profile'),
@@ -254,175 +199,201 @@ class _HomePageState extends ConsumerState<HomePage>
                         ],
                       ),
                     ),
+                    0.20, 0.60,
+                  ),
 
-                    0.25, 0.65),
-                    // ── Pengumuman Terbaru ─────────────────────────────────
-                    _animated(
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Pengumuman Terbaru',
-                            style: TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF0F172A),
-                            ),
-                          ),
-                          TextButton(
-                            onPressed: () => context.go('/news'),
-                            style: TextButton.styleFrom(
-                              padding: EdgeInsets.zero,
-                              minimumSize: Size.zero,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            child: const Text(
-                              'Lihat semua',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.primaryDarkGreen,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                  const SizedBox(height: 28),
+
+                  // ── Section header ───────────────────────────────────
+                  _animated(
+                    _SectionHeader(
+                      title: 'Pengumuman Terbaru',
+                      actionLabel: 'Lihat semua',
+                      onAction: () => context.go('/news'),
                     ),
-                    0.40, 0.75),
+                    0.35, 0.72,
+                  ),
 
-                    // ── News list ──────────────────────────────────────
-                    _animated(newsAsync.when(
-                      loading: () => const Padding(
-                        padding: EdgeInsets.all(32),
-                        child: Center(
-                          child: CircularProgressIndicator(
-                            color: AppColors.primaryDarkGreen,
-                            strokeWidth: 2,
-                          ),
-                        ),
-                      ),
-                      error: (e, _) => Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Center(
-                          child: Text(
-                            'Gagal memuat berita.',
-                            style: TextStyle(
-                              color: AppColors.textMedium,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                      ),
-                      data: (newsList) {
-                        if (newsList.isEmpty) {
-                          return const Padding(
-                            padding: EdgeInsets.all(24),
-                            child: Center(
-                              child: Text(
-                                'Belum ada pengumuman.',
-                                style: TextStyle(
-                                  color: AppColors.textMedium,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ),
-                          );
-                        }
-                        final items = newsList.length > 5
-                            ? newsList.sublist(0, 5)
-                            : newsList;
-                        return Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-                          child: Column(
-                            children: items.asMap().entries.map((e) {
-                              return _NewsCard(
-                                news: e.value,
-                                iconBg: _newsIconBg[
-                                    e.key % _newsIconBg.length],
-                                iconFg: _newsIconFg[
-                                    e.key % _newsIconFg.length],
-                                icon: _newsIcons[
-                                    e.key % _newsIcons.length],
-                                relativeTime: _relativeTime(
-                                    e.value.publishedAt ??
-                                        e.value.createdAt),
-                                onTap: () =>
-                                    context.push('/news/${e.value.id}'),
-                              );
-                            }).toList(),
-                          ),
-                        );
-                      },
-                    ), 0.55, 0.88),
-                  ],
-                ),
+                  const SizedBox(height: 4),
+
+                  // ── News list ────────────────────────────────────────
+                  _animated(
+                    _NewsList(
+                      newsAsync: newsAsync,
+                      iconBg: _iconBg,
+                      iconFg: _iconFg,
+                      icons: _icons,
+                      relativeTime: _relativeTime,
+                      onTap: (id) => context.push('/news/$id'),
+                    ),
+                    0.50, 0.90,
+                  ),
+                ],
               ),
             ),
+          ),
 
-            // ── Bottom nav ──────────────────────────────────────────────
-            const BottomNavBar(currentRoute: '/home'),
-          ],
-        ),
+          // ── Bottom navigation ──────────────────────────────────────────
+          const BottomNavBar(currentRoute: '/home'),
+        ],
       ),
     );
-  }
-
-  Color _statusColor(String? status) {
-    switch (status) {
-      case 'ACCEPTED':
-        return AppColors.success;
-      case 'REJECTED':
-        return AppColors.error;
-      case 'SUBMITTED':
-        return AppColors.warning;
-      default:
-        return AppColors.textMedium;
-    }
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Notification Bell with red dot badge
+// Hero Header  — wave background + greeting + notification bell
 // ─────────────────────────────────────────────────────────────────────────────
+
+class _HeroHeader extends StatelessWidget {
+  const _HeroHeader({
+    required this.headerHeight,
+    required this.displayName,
+    required this.firstName,
+    required this.unreadCount,
+    required this.onNotificationTap,
+  });
+
+  final double headerHeight;
+  final String displayName;
+  final String firstName;
+  final int unreadCount;
+  final VoidCallback onNotificationTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final topPad = MediaQuery.paddingOf(context).top;
+
+    return SizedBox(
+      height: headerHeight + topPad,
+      child: Stack(
+        children: [
+          // Full-bleed wave background
+          Positioned.fill(
+            child: AuthWaveHeader(height: headerHeight + topPad),
+          ),
+
+          // Content below the status bar
+          Padding(
+            padding: EdgeInsets.fromLTRB(20, topPad + 14, 20, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Top row: avatar + name + bell
+                Row(
+                  children: [
+                    Container(
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white.withValues(alpha: 0.18),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.38),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: const Icon(Icons.person_rounded,
+                          color: Colors.white, size: 26),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Selamat datang,',
+                            style: tt.labelSmall?.copyWith(
+                              color: Colors.white.withValues(alpha: 0.75),
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                          Text(
+                            displayName,
+                            style: tt.titleMedium
+                                ?.copyWith(color: Colors.white, height: 1.2),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    _NotificationBell(
+                      unreadCount: unreadCount,
+                      onTap: onNotificationTap,
+                    ),
+                  ],
+                ),
+
+                const Spacer(),
+
+                // Large greeting
+                RichText(
+                  text: TextSpan(
+                    style: tt.headlineMedium
+                        ?.copyWith(color: Colors.white, height: 1.25),
+                    children: [
+                      const TextSpan(text: 'Halo, '),
+                      TextSpan(
+                        text: firstName,
+                        style: tt.headlineMedium?.copyWith(
+                          color: Colors.white.withValues(alpha: 0.92),
+                          fontWeight: FontWeight.w800,
+                          height: 1.25,
+                        ),
+                      ),
+                      const TextSpan(text: ' 👋'),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 28),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notification Bell
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _NotificationBell extends StatelessWidget {
+  const _NotificationBell({required this.onTap, this.unreadCount = 0});
+
   final VoidCallback onTap;
   final int unreadCount;
-  const _NotificationBell({required this.onTap, this.unreadCount = 0});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
+      child: SizedBox(
         width: 40,
         height: 40,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: const Color(0xFFF1F5F9),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x0D000000),
-              blurRadius: 4,
-              offset: Offset(0, 1),
-            ),
-          ],
-        ),
         child: Stack(
           children: [
-            const Center(
-              child: Icon(
-                Icons.notifications_outlined,
-                size: 22,
-                color: Color(0xFF0F172A),
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.18),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.30),
+                    width: 1.2,
+                  ),
+                ),
+                child: const Icon(Icons.notifications_outlined,
+                    size: 22, color: Colors.white),
               ),
             ),
-            Positioned(
-              top: 8,
-              right: 8,
-              child: Visibility(
-                visible: unreadCount > 0,
+            if (unreadCount > 0)
+              Positioned(
+                top: 7,
+                right: 7,
                 child: Container(
                   width: 9,
                   height: 9,
@@ -433,7 +404,6 @@ class _NotificationBell extends StatelessWidget {
                   ),
                 ),
               ),
-            ),
           ],
         ),
       ),
@@ -442,14 +412,19 @@ class _NotificationBell extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Profile Score Card (green, left)
+// Profile Score Card  (green filled)
 // ─────────────────────────────────────────────────────────────────────────────
+
 class _ProfileScoreCard extends StatelessWidget {
-  final int? score; // null = loading
   const _ProfileScoreCard({required this.score});
+
+  /// `null` means data is still loading.
+  final int? score;
 
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+
     return Container(
       height: 150,
       decoration: BoxDecoration(
@@ -457,7 +432,7 @@ class _ProfileScoreCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primaryDarkGreen.withOpacity(0.35),
+            color: AppColors.primaryDarkGreen.withValues(alpha: 0.32),
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),
@@ -465,16 +440,16 @@ class _ProfileScoreCard extends StatelessWidget {
       ),
       child: Stack(
         children: [
-          // Decorative glow circle
+          // Decorative glow orb
           Positioned(
-            top: -10,
-            right: -10,
+            top: -12,
+            right: -12,
             child: Container(
-              width: 80,
-              height: 80,
+              width: 84,
+              height: 84,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white.withOpacity(0.10),
+                color: Colors.white.withValues(alpha: 0.08),
               ),
             ),
           ),
@@ -492,28 +467,24 @@ class _ProfileScoreCard extends StatelessWidget {
                       height: 38,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.20),
+                        color: Colors.white.withValues(alpha: 0.18),
                       ),
-                      child: const Icon(
-                        Icons.person_outline,
-                        color: Colors.white,
-                        size: 20,
-                      ),
+                      child: const Icon(Icons.person_outline,
+                          color: Colors.white, size: 20),
                     ),
-                    // "Lengkapi" badge
+                    // Label chip
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.15),
+                        color: Colors.white.withValues(alpha: 0.14),
                         borderRadius: BorderRadius.circular(20),
                       ),
-                      child: const Text(
+                      child: Text(
                         'Profil',
-                        style: TextStyle(
+                        style: tt.labelSmall?.copyWith(
                           color: Colors.white70,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.3,
                         ),
                       ),
                     ),
@@ -522,30 +493,23 @@ class _ProfileScoreCard extends StatelessWidget {
                 const Spacer(),
                 score == null
                     ? const SizedBox(
-                        width: 24,
-                        height: 24,
+                        width: 26,
+                        height: 26,
                         child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
+                            color: Colors.white, strokeWidth: 2.5),
                       )
                     : Text(
                         '$score%',
-                        style: const TextStyle(
-                          fontSize: 34,
-                          fontWeight: FontWeight.bold,
+                        style: tt.displaySmall?.copyWith(
                           color: Colors.white,
-                          height: 1,
+                          fontWeight: FontWeight.w800,
+                          height: 1.0,
                         ),
                       ),
                 const SizedBox(height: 4),
-                const Text(
+                Text(
                   'Kelengkapan',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.white70,
-                  ),
+                  style: tt.labelMedium?.copyWith(color: Colors.white70),
                 ),
               ],
             ),
@@ -557,28 +521,36 @@ class _ProfileScoreCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Status Card (white, right)
+// Status Card  (surface / bordered)
 // ─────────────────────────────────────────────────────────────────────────────
+
 class _StatusCard extends StatelessWidget {
+  const _StatusCard({
+    required this.label,
+    required this.color,
+    required this.isLoading,
+  });
+
   final String label;
   final Color color;
   final bool isLoading;
-  const _StatusCard(
-      {required this.label, required this.color, required this.isLoading});
 
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+
     return Container(
       height: 150,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-        boxShadow: const [
+        border: Border.all(color: cs.outlineVariant, width: 1),
+        boxShadow: [
           BoxShadow(
-            color: Color(0x08000000),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 8,
-            offset: Offset(0, 2),
+            offset: const Offset(0, 2),
           ),
         ],
       ),
@@ -587,49 +559,40 @@ class _StatusCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Icon in colored circle
             Container(
               width: 38,
               height: 38,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: color.withOpacity(0.12),
+                color: color.withValues(alpha: 0.12),
               ),
-              child: Icon(
-                Icons.verified_user_outlined,
-                color: color,
-                size: 20,
-              ),
+              child: Icon(Icons.verified_user_outlined,
+                  color: color, size: 20),
             ),
             const Spacer(),
             isLoading
                 ? SizedBox(
-                    width: 18,
-                    height: 18,
+                    width: 20,
+                    height: 20,
                     child: CircularProgressIndicator(
-                      color: color,
-                      strokeWidth: 2,
-                    ),
+                        color: color, strokeWidth: 2),
                   )
                 : Text(
                     label,
-                    style: TextStyle(
-                      fontSize: label.length > 9 ? 16 : 22,
-                      fontWeight: FontWeight.bold,
-                      color: const Color(0xFF0F172A),
+                    style: (label.length > 9
+                            ? tt.titleLarge
+                            : tt.headlineSmall)
+                        ?.copyWith(
+                      color: cs.onSurface,
                       height: 1.1,
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
             const SizedBox(height: 4),
-            const Text(
+            Text(
               'Status Lamaran',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF94A3B8),
-              ),
+              style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
             ),
           ],
         ),
@@ -639,16 +602,138 @@ class _StatusCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// News Card (compact, icon + title + time + summary)
+// Section header row
 // ─────────────────────────────────────────────────────────────────────────────
-class _NewsCard extends StatelessWidget {
-  final News news;
-  final Color iconBg;
-  final Color iconFg;
-  final IconData icon;
-  final String relativeTime;
-  final VoidCallback onTap;
 
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({
+    required this.title,
+    required this.actionLabel,
+    required this.onAction,
+  });
+
+  final String title;
+  final String actionLabel;
+  final VoidCallback onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            title,
+            style: tt.titleMedium?.copyWith(color: cs.onSurface),
+          ),
+          TextButton(
+            onPressed: onAction,
+            style: TextButton.styleFrom(
+              padding: EdgeInsets.zero,
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              foregroundColor: cs.primary,
+            ),
+            child: Text(
+              actionLabel,
+              style: tt.labelMedium?.copyWith(color: cs.primary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// News List  — handles loading / error / empty / data
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _NewsList extends StatelessWidget {
+  const _NewsList({
+    required this.newsAsync,
+    required this.iconBg,
+    required this.iconFg,
+    required this.icons,
+    required this.relativeTime,
+    required this.onTap,
+  });
+
+  final AsyncValue<List<News>> newsAsync;
+  final List<Color> iconBg;
+  final List<Color> iconFg;
+  final List<IconData> icons;
+  final String Function(DateTime) relativeTime;
+  final void Function(int id) onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return newsAsync.when(
+      loading: () => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 40),
+        child: Center(
+          child: CircularProgressIndicator(color: cs.primary, strokeWidth: 2),
+        ),
+      ),
+      error: (err, stack) => Padding(
+        padding:
+            const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
+        child: Center(
+          child: Text(
+            'Gagal memuat berita.',
+            style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+          ),
+        ),
+      ),
+      data: (list) {
+        if (list.isEmpty) {
+          return Padding(
+            padding:
+                const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
+            child: Center(
+              child: Text(
+                'Belum ada pengumuman.',
+                style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+              ),
+            ),
+          );
+        }
+
+        final items = list.length > 5 ? list.sublist(0, 5) : list;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
+          child: Column(
+            children: [
+              for (var i = 0; i < items.length; i++)
+                _NewsCard(
+                  news: items[i],
+                  iconBg: iconBg[i % iconBg.length],
+                  iconFg: iconFg[i % iconFg.length],
+                  icon: icons[i % icons.length],
+                  relativeTime:
+                      relativeTime(items[i].publishedAt ?? items[i].createdAt),
+                  onTap: () => onTap(items[i].id),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// News Card
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _NewsCard extends StatelessWidget {
   const _NewsCard({
     required this.news,
     required this.iconBg,
@@ -658,86 +743,83 @@ class _NewsCard extends StatelessWidget {
     required this.onTap,
   });
 
+  final News news;
+  final Color iconBg;
+  final Color iconFg;
+  final IconData icon;
+  final String relativeTime;
+  final VoidCallback onTap;
+
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x06000000),
-              blurRadius: 6,
-              offset: Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Icon circle
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: iconBg,
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Icon badge
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: iconBg,
+                ),
+                child: Icon(icon, color: iconFg, size: 21),
               ),
-              child: Icon(icon, color: iconFg, size: 20),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          news.title,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF0F172A),
-                            height: 1.3,
+              const SizedBox(width: 12),
+
+              // Text
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            news.title,
+                            style: tt.labelLarge
+                                ?.copyWith(color: cs.onSurface, height: 1.3),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                      const SizedBox(width: 8),
+                        const SizedBox(width: 8),
+                        Text(
+                          relativeTime,
+                          style: tt.bodySmall
+                              ?.copyWith(color: cs.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
+                    if (news.summary != null &&
+                        news.summary!.isNotEmpty) ...[
+                      const SizedBox(height: 4),
                       Text(
-                        relativeTime,
-                        style: const TextStyle(
-                          fontSize: 10,
-                          color: Color(0xFF94A3B8),
+                        news.summary!,
+                        style: tt.bodySmall?.copyWith(
+                          color: cs.onSurfaceVariant,
+                          height: 1.4,
                         ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
-                  ),
-                  if (news.summary != null && news.summary!.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      news.summary!,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF64748B),
-                        height: 1.4,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
                   ],
-                ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

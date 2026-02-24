@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'config/theme.dart';
 import 'core/widgets/custom_toast.dart';
 
+import 'features/auth/presentation/pages/splash_page.dart';
 import 'features/auth/presentation/pages/login_page.dart';
 import 'features/auth/presentation/pages/registration_page_new.dart';
 import 'features/auth/presentation/pages/verify_email_page.dart';
@@ -36,7 +37,7 @@ final routerProvider = Provider<GoRouter>((ref) {
   final authNotifier = _AuthRouterNotifier();
 
   // Listen to auth state changes and notify the router to re-evaluate redirect.
-  ref.listen<AuthState>(authStateProvider, (_, __) {
+  ref.listen<AuthState>(authStateProvider, (_, _) {
     authNotifier.notify();
   });
 
@@ -44,26 +45,53 @@ final routerProvider = Provider<GoRouter>((ref) {
 
   return GoRouter(
     navigatorKey: rootNavigatorKey,
-    initialLocation: '/login',
+    initialLocation: '/splash',
     refreshListenable: authNotifier,
     redirect: (context, state) {
-      // Read current auth state at redirect-evaluation time (not captured at build time).
-      final isAuthenticated = ref.read(authStateProvider).isAuthenticated;
-      final isLoginRoute = state.matchedLocation == '/login' || state.matchedLocation == '/register';
+      final loc = state.matchedLocation;
 
-      if (!isAuthenticated && !isLoginRoute) {
+      // Splash handles its own auth-aware navigation — never redirect away.
+      if (loc == '/splash') return null;
+
+      // Read current auth state at redirect-evaluation time.
+      final isAuthenticated = ref.read(authStateProvider).isAuthenticated;
+      final isAuthRoute = loc == '/login' || loc == '/register';
+
+      if (!isAuthenticated && !isAuthRoute) {
         return '/login';
       }
-      if (isAuthenticated && isLoginRoute) {
+      if (isAuthenticated && isAuthRoute) {
         return '/home';
       }
       return null;
     },
     routes: [
       GoRoute(
+        path: '/splash',
+        name: 'splash',
+        pageBuilder: (context, state) => CustomTransitionPage<void>(
+          key: state.pageKey,
+          child: const SplashPage(),
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
+          transitionsBuilder: (_, _, _, child) => child,
+        ),
+      ),
+      GoRoute(
         path: '/login',
         name: 'login',
-        builder: (context, state) => const LoginPage(),
+        pageBuilder: (context, state) => CustomTransitionPage<void>(
+          key: state.pageKey,
+          child: const LoginPage(),
+          transitionDuration: const Duration(milliseconds: 450),
+          transitionsBuilder: (_, animation, _, child) => FadeTransition(
+            opacity: CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeIn,
+            ),
+            child: child,
+          ),
+        ),
       ),
       GoRoute(
         path: '/register',
