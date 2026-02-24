@@ -63,6 +63,61 @@ class _M3TextFieldState extends State<M3TextField> {
   // Cached once per theme change — zero allocation on every build() call.
   late TextStyle _style;
   late Color _iconColor;
+  late FocusNode _effectiveFocusNode;
+  bool _ownsNode = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.focusNode != null) {
+      _effectiveFocusNode = widget.focusNode!;
+    } else {
+      _effectiveFocusNode = FocusNode();
+      _ownsNode = true;
+    }
+    _effectiveFocusNode.addListener(_onFocusChange);
+  }
+
+  void _onFocusChange() {
+    if (!_effectiveFocusNode.hasFocus) return;
+    // Defer until the keyboard has finished animating so ensureVisible has the
+    // correct final layout to scroll to.
+    Future.delayed(const Duration(milliseconds: 350), () {
+      if (!mounted) return;
+      Scrollable.ensureVisible(
+        context,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+        alignment: 0.5,
+      );
+    });
+  }
+
+  @override
+  void didUpdateWidget(M3TextField old) {
+    super.didUpdateWidget(old);
+    if (old.focusNode != widget.focusNode) {
+      _effectiveFocusNode.removeListener(_onFocusChange);
+      if (_ownsNode) {
+        _effectiveFocusNode.dispose();
+        _ownsNode = false;
+      }
+      if (widget.focusNode != null) {
+        _effectiveFocusNode = widget.focusNode!;
+      } else {
+        _effectiveFocusNode = FocusNode();
+        _ownsNode = true;
+      }
+      _effectiveFocusNode.addListener(_onFocusChange);
+    }
+  }
+
+  @override
+  void dispose() {
+    _effectiveFocusNode.removeListener(_onFocusChange);
+    if (_ownsNode) _effectiveFocusNode.dispose();
+    super.dispose();
+  }
 
   @override
   void didChangeDependencies() {
@@ -79,7 +134,7 @@ class _M3TextFieldState extends State<M3TextField> {
   Widget build(BuildContext context) {
     return TextFormField(
       controller: widget.controller,
-      focusNode: widget.focusNode,
+      focusNode: _effectiveFocusNode,
       obscureText: widget.obscureText,
       keyboardType: widget.keyboardType,
       textInputAction: widget.textInputAction,

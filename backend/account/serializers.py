@@ -701,7 +701,12 @@ class WorkExperienceSerializer(serializers.ModelSerializer):
     """
     Pengalaman kerja per pelamar (aligned with FORM PRA SELEKSI).
     country: ISO 3166-1 alpha-2 (e.g. ID, MY) via CountryField.
+    We override country as a plain CharField so DRF doesn't try to JSON-serialize
+    the Country object returned by django-countries.
     """
+
+    # Override CountryField → plain CharField so serialisation returns a string code.
+    country = serializers.CharField(max_length=2, allow_blank=True, required=False, default="")
 
     class Meta:
         model = WorkExperience
@@ -722,9 +727,17 @@ class WorkExperienceSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
-        extra_kwargs = {
-            "country": {"allow_blank": True, "required": False},
-        }
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # django-countries stores an alpha-2 code but the attribute returns a Country
+        # object whose str() gives the *display name* — we always want the code.
+        raw = getattr(instance, "country", None)
+        if raw:
+            data["country"] = raw.code if hasattr(raw, "code") else str(raw)
+        else:
+            data["country"] = ""
+        return data
 
     def _validate_and_save(self, instance):
         """Run model validation and save. Raises ValidationError on invalid data."""

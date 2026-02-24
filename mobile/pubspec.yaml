@@ -83,11 +83,17 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.1
 
   # Code Generation (dev only)
   freezed: ^2.5.7
   json_serializable: ^6.8.0
   build_runner: ^2.4.13
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/images/logo.png"  # your 1024x1024 PNG
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

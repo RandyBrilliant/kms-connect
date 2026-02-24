@@ -181,9 +181,21 @@ class AppTheme {
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(color: colorScheme.error, width: 2),
         ),
+        floatingLabelBehavior: FloatingLabelBehavior.always,
         labelStyle: GoogleFonts.plusJakartaSans(
           color: AppColors.textMedium,
           fontWeight: FontWeight.w500,
+          fontSize: 14,
+        ),
+        floatingLabelStyle: GoogleFonts.plusJakartaSans(
+          color: AppColors.textMedium,
+          fontWeight: FontWeight.w500,
+          fontSize: 12,
+        ),
+        hintStyle: GoogleFonts.plusJakartaSans(
+          color: AppColors.textMedium,
+          fontWeight: FontWeight.w400,
+          fontSize: 14,
         ),
       ),
 

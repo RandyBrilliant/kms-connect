@@ -26,6 +26,7 @@ class ApiEndpoints {
   static const String publicJobs = '$baseUrl/jobs/public/';
   static const String publicNews = '$baseUrl/news/public/';
   static const String publicDocumentTypes = '$baseUrl/document-types/public/';
+  static const String publicStaffReferrers = '$baseUrl/staff-referrers/';
 
   // Jobs
   static String jobDetail(int id) => '$baseUrl/jobs/public/$id/';

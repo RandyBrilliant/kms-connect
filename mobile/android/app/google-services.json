@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "268800410479",
+    "project_id": "kms-connect-1541d",
+    "storage_bucket": "kms-connect-1541d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:268800410479:android:644245b00a6b3f22d95e9a",
+        "android_client_info": {
+          "package_name": "com.example.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCzljkImZNbmkZE7O6GNETp9ewuaYcb9lQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:268800410479:android:45bdfc7a6ff82c16d95e9a",
+        "android_client_info": {
+          "package_name": "id.kmsconnect.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCzljkImZNbmkZE7O6GNETp9ewuaYcb9lQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

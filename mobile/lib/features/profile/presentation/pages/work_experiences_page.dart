@@ -204,6 +204,25 @@ class _WorkExpCard extends StatelessWidget {
     return DateFormat('MMM yyyy', 'id').format(dt);
   }
 
+  /// Build a readable "City, 🇮🇩 Indonesia" style label.
+  String _buildLocationLabel(WorkExperience exp) {
+    final parts = <String>[];
+    if (exp.location != null && exp.location!.isNotEmpty) {
+      parts.add(exp.location!);
+    }
+    if (exp.country != null && exp.country!.isNotEmpty) {
+      final item = _kCountries
+          .where((c) => c.code == exp.country)
+          .firstOrNull;
+      if (item != null) {
+        parts.add('${item.flag} ${item.name}');
+      } else {
+        parts.add(exp.country!);
+      }
+    }
+    return parts.join(', ');
+  }
+
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
@@ -254,8 +273,8 @@ class _WorkExpCard extends StatelessWidget {
                             color: AppColors.primaryDarkGreen,
                             fontWeight: FontWeight.w600),
                       ),
-                      if (exp.country != null &&
-                          exp.country!.isNotEmpty) ...[
+                      if ((exp.location ?? exp.country) != null &&
+                          (exp.location ?? exp.country)!.isNotEmpty) ...[
                         const SizedBox(height: 2),
                         Row(
                           children: [
@@ -264,7 +283,7 @@ class _WorkExpCard extends StatelessWidget {
                                 color: cs.onSurfaceVariant),
                             const SizedBox(width: 3),
                             Text(
-                              exp.country!,
+                              _buildLocationLabel(exp),
                               style: tt.labelSmall?.copyWith(
                                   color: cs.onSurfaceVariant),
                             ),
@@ -421,11 +440,13 @@ class _WorkExperienceFormSheetState
   final _formKey = GlobalKey<FormState>();
   final _company = TextEditingController();
   final _position = TextEditingController();
-  final _country = TextEditingController();
+  final _location = TextEditingController(); // free-text city
   final _description = TextEditingController();
   final _startDate = TextEditingController();
   final _endDate = TextEditingController();
 
+  String? _selectedCountryCode; // ISO 3166-1 alpha-2
+  String? _selectedCountryName;
   DateTime? _startPicked;
   DateTime? _endPicked;
   bool _stillEmployed = false;
@@ -438,9 +459,15 @@ class _WorkExperienceFormSheetState
     if (e != null) {
       _company.text = e.companyName;
       _position.text = e.position;
-      _country.text = e.country ?? '';
+      _location.text = e.location ?? '';
       _description.text = e.description ?? '';
       _stillEmployed = e.stillEmployed;
+      // Pre-select country from existing data
+      if (e.country != null && e.country!.isNotEmpty) {
+        final match = _kCountries.where((c) => c.code == e.country).firstOrNull;
+        _selectedCountryCode = e.country;
+        _selectedCountryName = match?.name ?? e.country;
+      }
       if (e.startDate != null) {
         _startPicked = e.startDate;
         _startDate.text =
@@ -457,7 +484,7 @@ class _WorkExperienceFormSheetState
   @override
   void dispose() {
     for (final c in [
-      _company, _position, _country, _description, _startDate, _endDate
+      _company, _position, _location, _description, _startDate, _endDate
     ]) {
       c.dispose();
     }
@@ -504,8 +531,10 @@ class _WorkExperienceFormSheetState
     final data = <String, dynamic>{
       'company_name': _company.text.trim(),
       'position': _position.text.trim(),
-      if (_country.text.trim().isNotEmpty)
-        'country': _country.text.trim(),
+      if (_location.text.trim().isNotEmpty)
+        'location': _location.text.trim(),
+      if (_selectedCountryCode != null && _selectedCountryCode!.isNotEmpty)
+        'country': _selectedCountryCode,
       if (_description.text.trim().isNotEmpty)
         'description': _description.text.trim(),
       'still_employed': _stillEmployed,
@@ -536,6 +565,105 @@ class _WorkExperienceFormSheetState
           ?? 'Gagal menyimpan';
       CustomToast.show(context, message: err, type: ToastType.error);
     }
+  }
+
+  Future<_CountryItem?> _showCountryPicker(BuildContext ctx) async {
+    final cs = Theme.of(ctx).colorScheme;
+    final tt = Theme.of(ctx).textTheme;
+    final searchCtrl = TextEditingController();
+    List<_CountryItem> filtered = List.of(_kCountries);
+
+    return showModalBottomSheet<_CountryItem>(
+      context: ctx,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: cs.surfaceContainerLow,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (sheetCtx) => StatefulBuilder(
+        builder: (sheetCtx, setModal) => DraggableScrollableSheet(
+          initialChildSize: 0.75,
+          minChildSize: 0.4,
+          maxChildSize: 0.92,
+          expand: false,
+          builder: (_, scrollCtrl) => Column(
+            children: [
+              const SizedBox(height: 8),
+              Container(
+                width: 32, height: 4,
+                decoration: BoxDecoration(
+                  color: cs.onSurfaceVariant.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                child: Text('Pilih Negara',
+                    style: tt.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700)),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: SearchBar(
+                  controller: searchCtrl,
+                  hintText: 'Cari negara...',
+                  leading: const Icon(Icons.search_rounded, size: 20),
+                  onChanged: (q) {
+                    final lower = q.toLowerCase();
+                    setModal(() {
+                      filtered = _kCountries
+                          .where((c) =>
+                              c.name.toLowerCase().contains(lower) ||
+                              c.code.toLowerCase().contains(lower))
+                          .toList();
+                    });
+                  },
+                ),
+              ),
+              const SizedBox(height: 8),
+              Divider(height: 1, color: cs.outlineVariant),
+              Expanded(
+                child: filtered.isEmpty
+                    ? Center(
+                        child: Text('Tidak ditemukan',
+                            style: tt.bodyMedium
+                                ?.copyWith(color: cs.onSurfaceVariant)))
+                    : ListView.builder(
+                        controller: scrollCtrl,
+                        itemCount: filtered.length,
+                        itemBuilder: (_, i) {
+                          final c = filtered[i];
+                          final isSelected =
+                              _selectedCountryCode == c.code;
+                          return ListTile(
+                            leading: Text(c.flag,
+                                style: const TextStyle(fontSize: 22)),
+                            title: Text(c.name,
+                                style: tt.bodyMedium?.copyWith(
+                                    fontWeight: isSelected
+                                        ? FontWeight.w700
+                                        : FontWeight.w500,
+                                    color: isSelected
+                                        ? cs.primary
+                                        : null)),
+                            trailing: isSelected
+                                ? Icon(Icons.check_rounded,
+                                    color: cs.primary, size: 18)
+                                : null,
+                            onTap: () =>
+                                Navigator.pop(sheetCtx, c),
+                          );
+                        },
+                      ),
+              ),
+              SizedBox(
+                  height: MediaQuery.paddingOf(sheetCtx).bottom + 8),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -629,12 +757,31 @@ class _WorkExperienceFormSheetState
                     ),
                     const SizedBox(height: 10),
                     M3TextField(
-                      controller: _country,
-                      label: 'Negara / Kota',
-                      hint: 'Indonesia',
-                      prefixIcon: Icons.location_on_outlined,
+                      controller: _location,
+                      label: 'Kota / Lokasi',
+                      hint: 'Jakarta, Kuala Lumpur, dll.',
+                      prefixIcon: Icons.location_city_outlined,
                       textCapitalization:
                           TextCapitalization.words,
+                    ),
+                    const SizedBox(height: 10),
+                    _CountryPickerField(
+                      selectedCode: _selectedCountryCode,
+                      selectedName: _selectedCountryName,
+                      onTap: () async {
+                        final picked =
+                            await _showCountryPicker(context);
+                        if (picked != null) {
+                          setState(() {
+                            _selectedCountryCode = picked.code;
+                            _selectedCountryName = picked.name;
+                          });
+                        }
+                      },
+                      onClear: () => setState(() {
+                        _selectedCountryCode = null;
+                        _selectedCountryName = null;
+                      }),
                     ),
                     const SizedBox(height: 10),
                     Row(
@@ -738,3 +885,134 @@ class _WorkExperienceFormSheetState
     );
   }
 }
+// =============================================================================
+// Country picker support
+// =============================================================================
+
+class _CountryItem {
+  const _CountryItem(this.code, this.name, this.flag);
+  final String code;
+  final String name;
+  final String flag;
+}
+
+/// Tappable field that looks like a filled text field.
+class _CountryPickerField extends StatelessWidget {
+  const _CountryPickerField({
+    required this.onTap,
+    required this.onClear,
+    this.selectedCode,
+    this.selectedName,
+  });
+
+  final String? selectedCode;
+  final String? selectedName;
+  final VoidCallback onTap;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final hasValue = selectedCode != null && selectedCode!.isNotEmpty;
+    final flag = hasValue
+        ? (_kCountries
+                .where((c) => c.code == selectedCode)
+                .firstOrNull
+                ?.flag ??
+            '🌐')
+        : null;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: 'Negara',
+          floatingLabelBehavior: FloatingLabelBehavior.always,
+          prefixIcon: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: flag != null
+                ? Text(flag, style: const TextStyle(fontSize: 20))
+                : Icon(Icons.flag_outlined,
+                    size: 20, color: cs.onSurfaceVariant),
+          ),
+          prefixIconConstraints:
+              const BoxConstraints(minWidth: 44, minHeight: 44),
+          suffixIcon: hasValue
+              ? IconButton(
+                  icon:
+                      Icon(Icons.close_rounded, size: 18, color: cs.onSurfaceVariant),
+                  onPressed: onClear,
+                )
+              : Icon(Icons.arrow_drop_down_rounded,
+                  color: cs.onSurfaceVariant),
+          filled: true,
+          fillColor: cs.surfaceContainerHighest,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        ),
+        isEmpty: !hasValue,
+        child: hasValue
+            ? Text(
+                selectedName ?? selectedCode!,
+                style: tt.bodyLarge?.copyWith(
+                    color: cs.onSurface, fontWeight: FontWeight.w500),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              )
+            : Text('Pilih negara',
+                style: tt.bodyLarge?.copyWith(
+                    color: cs.onSurface.withValues(alpha: 0.38))),
+      ),
+    );
+  }
+}
+
+// Country list — ISO 3166-1 alpha-2 codes + flag emoji
+const List<_CountryItem> _kCountries = [
+  _CountryItem('ID', 'Indonesia', '🇮🇩'),
+  _CountryItem('MY', 'Malaysia', '🇲🇾'),
+  _CountryItem('SG', 'Singapura', '🇸🇬'),
+  _CountryItem('SA', 'Arab Saudi', '🇸🇦'),
+  _CountryItem('AE', 'Uni Emirat Arab', '🇦🇪'),
+  _CountryItem('QA', 'Qatar', '🇶🇦'),
+  _CountryItem('KW', 'Kuwait', '🇰🇼'),
+  _CountryItem('BH', 'Bahrain', '🇧🇭'),
+  _CountryItem('OM', 'Oman', '🇴🇲'),
+  _CountryItem('JP', 'Jepang', '🇯🇵'),
+  _CountryItem('KR', 'Korea Selatan', '🇰🇷'),
+  _CountryItem('TW', 'Taiwan', '🇹🇼'),
+  _CountryItem('HK', 'Hong Kong', '🇭🇰'),
+  _CountryItem('CN', 'China', '🇨🇳'),
+  _CountryItem('US', 'Amerika Serikat', '🇺🇸'),
+  _CountryItem('AU', 'Australia', '🇦🇺'),
+  _CountryItem('NZ', 'Selandia Baru', '🇳🇿'),
+  _CountryItem('GB', 'Inggris', '🇬🇧'),
+  _CountryItem('DE', 'Jerman', '🇩🇪'),
+  _CountryItem('NL', 'Belanda', '🇳🇱'),
+  _CountryItem('FR', 'Prancis', '🇫🇷'),
+  _CountryItem('IT', 'Italia', '🇮🇹'),
+  _CountryItem('ES', 'Spanyol', '🇪🇸'),
+  _CountryItem('CA', 'Kanada', '🇨🇦'),
+  _CountryItem('BR', 'Brasil', '🇧🇷'),
+  _CountryItem('ZA', 'Afrika Selatan', '🇿🇦'),
+  _CountryItem('PH', 'Filipina', '🇵🇭'),
+  _CountryItem('TH', 'Thailand', '🇹🇭'),
+  _CountryItem('VN', 'Vietnam', '🇻🇳'),
+  _CountryItem('IN', 'India', '🇮🇳'),
+  _CountryItem('PK', 'Pakistan', '🇵🇰'),
+  _CountryItem('BD', 'Bangladesh', '🇧🇩'),
+  _CountryItem('NP', 'Nepal', '🇳🇵'),
+  _CountryItem('LB', 'Lebanon', '🇱🇧'),
+  _CountryItem('JO', 'Yordania', '🇯🇴'),
+  _CountryItem('KZ', 'Kazakhstan', '🇰🇿'),
+  _CountryItem('TR', 'Turki', '🇹🇷'),
+];

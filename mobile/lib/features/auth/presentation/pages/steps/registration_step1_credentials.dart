@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../../../core/widgets/custom_toast.dart';
 import '../../../../../core/widgets/google_logo_icon.dart';
 import '../../../../../core/widgets/m3_text_field.dart';
+import '../../../data/providers/staff_referrers_provider.dart';
 import '../../providers/registration_provider.dart';
 
 /// Step 1 of 2  email, password, confirm password, optional referral code.
@@ -31,26 +32,27 @@ class _RegistrationStep1CredentialsState
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
-  final _referralCtrl = TextEditingController();
 
   final _emailFocus = FocusNode();
   final _passwordFocus = FocusNode();
   final _confirmFocus = FocusNode();
-  final _referralFocus = FocusNode();
 
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
 
+  /// The currently selected staff referrer.
+  StaffReferrer? _selectedStaff;
+
   @override
   void initState() {
     super.initState();
-    // Restore email & referral when returning from step 2 (passwords are
-    // intentionally left blank for security).
+    // Restore email when returning from step 2.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final s = ref.read(registrationProvider);
       if (s.email?.isNotEmpty == true) _emailCtrl.text = s.email!;
-      if (s.referralCode?.isNotEmpty == true) _referralCtrl.text = s.referralCode!;
+      // Warm-up: pre-fetch staff list so the picker opens instantly.
+      ref.read(staffReferrersProvider);
     });
   }
 
@@ -59,22 +61,51 @@ class _RegistrationStep1CredentialsState
     _emailCtrl.dispose();
     _passwordCtrl.dispose();
     _confirmCtrl.dispose();
-    _referralCtrl.dispose();
     _emailFocus.dispose();
     _passwordFocus.dispose();
     _confirmFocus.dispose();
-    _referralFocus.dispose();
     super.dispose();
   }
 
   void _handleNext() {
     if (!_formKey.currentState!.validate()) return;
+    if (_selectedStaff == null) {
+      CustomToast.show(
+        context,
+        message: 'Pilih staff penerima rujukan terlebih dahulu',
+        type: ToastType.warning,
+      );
+      return;
+    }
     ref.read(registrationProvider.notifier).setCredentials(
           email: _emailCtrl.text.trim(),
           password: _passwordCtrl.text,
-          referralCode: _referralCtrl.text.trim(),
+          referralCode: _selectedStaff!.referralCode,
         );
     ref.read(registrationProvider.notifier).nextStep();
+  }
+
+  /// Opens a searchable bottom-sheet to pick a staff referrer.
+  Future<void> _showStaffPicker() async {
+    final cs = Theme.of(context).colorScheme;
+    final staffAsync = ref.read(staffReferrersProvider);
+
+    final selected = await showModalBottomSheet<StaffReferrer>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: cs.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) => _StaffPickerSheet(
+        staffAsync: staffAsync,
+        initialSelected: _selectedStaff,
+      ),
+    );
+
+    if (selected != null && mounted) {
+      setState(() => _selectedStaff = selected);
+    }
   }
 
   @override
@@ -151,12 +182,12 @@ class _RegistrationStep1CredentialsState
           M3TextField(
             controller: _confirmCtrl,
             focusNode: _confirmFocus,
-            nextFocusNode: _referralFocus,
             label: 'Konfirmasi Kata Sandi',
             hint: 'Ulangi kata sandi',
             prefixIcon: Icons.lock_outline_rounded,
             obscureText: _obscureConfirm,
-            textInputAction: TextInputAction.next,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _handleNext(),
             suffixWidget: _VisibilityToggle(
               obscure: _obscureConfirm,
               onTap: () => setState(() => _obscureConfirm = !_obscureConfirm),
@@ -168,22 +199,10 @@ class _RegistrationStep1CredentialsState
           ),
           const SizedBox(height: 16),
 
-          //  Referral code (optional) 
-          M3TextField(
-            controller: _referralCtrl,
-            focusNode: _referralFocus,
-            label: 'Kode Rujukan (Opsional)',
-            hint: 'Contoh: S-ABC123',
-            prefixIcon: Icons.qr_code_outlined,
-            textCapitalization: TextCapitalization.characters,
-            textInputAction: TextInputAction.done,
-            onSubmitted: (_) => _handleNext(),
-            validator: (v) {
-              if (v != null && v.isNotEmpty && v.trim().length < 5) {
-                return 'Kode rujukan tidak valid';
-              }
-              return null;
-            },
+          //  Staff referrer picker 
+          _StaffReferrerField(
+            selectedStaff: _selectedStaff,
+            onTap: _showStaffPicker,
           ),
           const SizedBox(height: 28),
 
@@ -303,3 +322,263 @@ class _VisibilityToggle extends StatelessWidget {
   }
 }
 
+// ── Staff referrer picker field ──────────────────────────────────────────────
+
+/// Read-only tap-to-pick field that shows the selected staff name.
+class _StaffReferrerField extends StatelessWidget {
+  final StaffReferrer? selectedStaff;
+  final VoidCallback onTap;
+
+  const _StaffReferrerField({
+    required this.selectedStaff,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final hasSelection = selectedStaff != null;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: 'Staff Penerima Rujukan',
+          floatingLabelBehavior: FloatingLabelBehavior.always,
+          hintText: 'Pilih staff...',
+          prefixIcon: Icon(Icons.person_outline_rounded,
+              size: 20, color: cs.onSurfaceVariant),
+          suffixIcon: Icon(Icons.arrow_drop_down_rounded,
+              color: cs.onSurfaceVariant),
+          errorText: null,
+        ),
+        isEmpty: !hasSelection,
+        child: Text(
+          hasSelection ? selectedStaff!.fullName : '',
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                color: hasSelection ? cs.onSurface : cs.onSurfaceVariant,
+                fontWeight: FontWeight.w500,
+              ),
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+    );
+  }
+}
+
+// ── Staff picker bottom sheet ─────────────────────────────────────────────────
+
+/// Bottom sheet with a live-search list of staff referrers.
+/// Wraps in [DraggableScrollableSheet] so it expands to full screen on
+/// phones with many staff entries.
+class _StaffPickerSheet extends ConsumerStatefulWidget {
+  final AsyncValue<List<StaffReferrer>> staffAsync;
+  final StaffReferrer? initialSelected;
+
+  const _StaffPickerSheet({
+    required this.staffAsync,
+    this.initialSelected,
+  });
+
+  @override
+  ConsumerState<_StaffPickerSheet> createState() => _StaffPickerSheetState();
+}
+
+class _StaffPickerSheetState extends ConsumerState<_StaffPickerSheet> {
+  final _searchCtrl = TextEditingController();
+  List<StaffReferrer> _filtered = [];
+  List<StaffReferrer> _all = [];
+
+  @override
+  void initState() {
+    super.initState();
+    widget.staffAsync.whenData((list) {
+      _all = list;
+      _filtered = list;
+    });
+    _searchCtrl.addListener(_onSearch);
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.removeListener(_onSearch);
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onSearch() {
+    final q = _searchCtrl.text.toLowerCase();
+    setState(() {
+      _filtered = q.isEmpty
+          ? _all
+          : _all
+              .where((s) =>
+                  s.fullName.toLowerCase().contains(q) ||
+                  s.referralCode.toLowerCase().contains(q))
+              .toList();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final staffAsync = ref.watch(staffReferrersProvider);
+
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.6,
+      minChildSize: 0.4,
+      maxChildSize: 0.92,
+      builder: (ctx, scrollController) {
+        return Column(
+          children: [
+            // Handle
+            Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              decoration: BoxDecoration(
+                color: cs.onSurfaceVariant.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            // Title
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+              child: Text(
+                'Pilih Staff Penerima Rujukan',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: cs.onSurface,
+                ),
+              ),
+            ),
+            // Search box
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: TextField(
+                controller: _searchCtrl,
+                autofocus: true,
+                decoration: InputDecoration(
+                  hintText: 'Cari nama staff...',
+                  prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                  suffixIcon: _searchCtrl.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear_rounded, size: 18),
+                          onPressed: () {
+                            _searchCtrl.clear();
+                            FocusScope.of(context).unfocus();
+                          },
+                        )
+                      : null,
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 12),
+                ),
+              ),
+            ),
+            const Divider(height: 1),
+            // Staff list
+            Expanded(
+              child: staffAsync.when(
+                loading: () => const Center(
+                  child: CircularProgressIndicator.adaptive(),
+                ),
+                error: (e, _) => Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.wifi_off_rounded,
+                            size: 40, color: cs.onSurfaceVariant),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Gagal memuat daftar staff.\nPastikan koneksi internet aktif.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: cs.onSurfaceVariant),
+                        ),
+                        const SizedBox(height: 16),
+                        FilledButton.tonal(
+                          onPressed: () =>
+                              ref.invalidate(staffReferrersProvider),
+                          child: const Text('Coba lagi'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                data: (list) {
+                  // Sync full list once data arrives (covers the case where
+                  // the sheet opened before the future resolved).
+                  if (_all.isEmpty && list.isNotEmpty) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (!mounted) return;
+                      setState(() {
+                        _all = list;
+                        _filtered = list;
+                      });
+                    });
+                  }
+                  if (_filtered.isEmpty) {
+                    return Center(
+                      child: Text(
+                        'Tidak ada staff ditemukan',
+                        style: TextStyle(color: cs.onSurfaceVariant),
+                      ),
+                    );
+                  }
+                  return ListView.builder(
+                    controller: scrollController,
+                    itemCount: _filtered.length,
+                    itemBuilder: (_, i) {
+                      final staff = _filtered[i];
+                      final isSelected =
+                          widget.initialSelected?.id == staff.id;
+                      return ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: isSelected
+                              ? cs.primary
+                              : cs.primaryContainer,
+                          child: Text(
+                            staff.fullName.isNotEmpty
+                                ? staff.fullName[0].toUpperCase()
+                                : '?',
+                            style: TextStyle(
+                              color: isSelected
+                                  ? cs.onPrimary
+                                  : cs.onPrimaryContainer,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        title: Text(
+                          staff.fullName,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                        subtitle: Text(
+                          'Kode: ${staff.referralCode}',
+                          style: TextStyle(
+                              fontSize: 12, color: cs.onSurfaceVariant),
+                        ),
+                        trailing: isSelected
+                            ? Icon(Icons.check_circle_rounded,
+                                color: cs.primary)
+                            : null,
+                        onTap: () => Navigator.of(context).pop(staff),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}

@@ -750,6 +750,43 @@ class ReferrerListView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
+class PublicStaffReferrersView(APIView):
+    """
+    Public list of active staff/admin users for the referral staff picker
+    shown during applicant registration (no auth required).
+
+    GET /api/staff-referrers/
+    Response: [{ id, full_name, referral_code }, ...]
+
+    Cached for 5 minutes to minimise DB load — staff list rarely changes.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []  # skip auth entirely for speed
+
+    _CACHE_KEY = "public_staff_referrers_v1"
+    _CACHE_TTL = 300  # 5 minutes
+
+    def get_authenticators(self):
+        return []
+
+    def get(self, request):
+        data = cache.get(self._CACHE_KEY)
+        if data is None:
+            data = list(
+                CustomUser.objects.filter(
+                    role__in=[UserRole.STAFF, UserRole.ADMIN],
+                    is_active=True,
+                    referral_code__isnull=False,
+                )
+                .exclude(referral_code="")
+                .order_by("full_name")
+                .values("id", "full_name", "referral_code")
+            )
+            cache.set(self._CACHE_KEY, data, self._CACHE_TTL)
+        return Response(data, status=status.HTTP_200_OK)
+
+
 # DocumentType (read-only untuk dropdown / daftar tipe)
 # ---------------------------------------------------------------------------
 

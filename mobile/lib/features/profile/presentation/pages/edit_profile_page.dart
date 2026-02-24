@@ -44,6 +44,11 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   final _spouseAge = TextEditingController();
   final _spouseOccupation = TextEditingController();
 
+  // Date-of-birth pickers for family members
+  final _fatherBirthDateCtrl = TextEditingController();
+  final _motherBirthDateCtrl = TextEditingController();
+  final _spouseBirthDateCtrl = TextEditingController();
+
   // ── Region state – KTP address (cascading) ────────────────────────────────
   Region? _province;
   Region? _kabupaten;   // Kabupaten/Kota (regency)
@@ -55,6 +60,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
 
   String? _gender;
   DateTime? _pickedDate;
+  DateTime? _pickedFatherBirthDate;
+  DateTime? _pickedMotherBirthDate;
+  DateTime? _pickedSpouseBirthDate;
   bool _populated = false;
 
   @override
@@ -75,6 +83,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
       _siblingCount, _birthOrder, _fatherName, _fatherAge, _fatherOccupation,
       _motherName, _motherAge, _motherOccupation, _familyAddress, _familyPhone,
       _spouseName, _spouseAge, _spouseOccupation,
+      _fatherBirthDateCtrl, _motherBirthDateCtrl, _spouseBirthDateCtrl,
     ]) {
       c.dispose();
     }
@@ -100,14 +109,29 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     _birthOrder.text = p.birthOrder?.toString() ?? '';
     _fatherName.text = p.fatherName ?? '';
     _fatherAge.text = p.fatherAge?.toString() ?? '';
+    if (p.fatherAge != null) {
+      _pickedFatherBirthDate = DateTime(DateTime.now().year - p.fatherAge!);
+      _fatherBirthDateCtrl.text =
+          DateFormat('dd MMMM yyyy', 'id').format(_pickedFatherBirthDate!);
+    }
     _fatherOccupation.text = p.fatherOccupation ?? '';
     _motherName.text = p.motherName ?? '';
     _motherAge.text = p.motherAge?.toString() ?? '';
+    if (p.motherAge != null) {
+      _pickedMotherBirthDate = DateTime(DateTime.now().year - p.motherAge!);
+      _motherBirthDateCtrl.text =
+          DateFormat('dd MMMM yyyy', 'id').format(_pickedMotherBirthDate!);
+    }
     _motherOccupation.text = p.motherOccupation ?? '';
     _familyAddress.text = p.familyAddress ?? '';
     _familyPhone.text = p.familyContactPhone ?? '';
     _spouseName.text = p.spouseName ?? '';
     _spouseAge.text = p.spouseAge?.toString() ?? '';
+    if (p.spouseAge != null) {
+      _pickedSpouseBirthDate = DateTime(DateTime.now().year - p.spouseAge!);
+      _spouseBirthDateCtrl.text =
+          DateFormat('dd MMMM yyyy', 'id').format(_pickedSpouseBirthDate!);
+    }
     _spouseOccupation.text = p.spouseOccupation ?? '';
 
     // Pre-seed region objects from names stored in profile
@@ -125,6 +149,38 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     }
     // Trigger a single rebuild for the non-controller state (_gender, regions).
     if (mounted) setState(() {});
+  }
+
+  int _computeAge(DateTime birthDate) {
+    final now = DateTime.now();
+    int age = now.year - birthDate.year;
+    if (now.month < birthDate.month ||
+        (now.month == birthDate.month && now.day < birthDate.day)) {
+      age--;
+    }
+    return age.clamp(0, 120);
+  }
+
+  Future<void> _pickFamilyMemberDate({
+    required TextEditingController controller,
+    required DateTime? current,
+    required ValueChanged<DateTime> onPicked,
+  }) async {
+    final now = DateTime.now();
+    final initial = current ?? DateTime(now.year - 40);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(1930),
+      lastDate: DateTime(now.year - 1),
+    );
+    if (picked != null && mounted) {
+      setState(() {
+        controller.text =
+            DateFormat('dd MMMM yyyy', 'id').format(picked);
+        onPicked(picked);
+      });
+    }
   }
 
   Future<void> _pickDate() async {
@@ -169,14 +225,14 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
         'birth_order': int.tryParse(_birthOrder.text.trim()),
       if (_fatherName.text.trim().isNotEmpty)
         'father_name': _fatherName.text.trim(),
-      if (_fatherAge.text.trim().isNotEmpty)
-        'father_age': int.tryParse(_fatherAge.text.trim()),
+      if (_pickedFatherBirthDate != null)
+        'father_age': _computeAge(_pickedFatherBirthDate!),
       if (_fatherOccupation.text.trim().isNotEmpty)
         'father_occupation': _fatherOccupation.text.trim(),
       if (_motherName.text.trim().isNotEmpty)
         'mother_name': _motherName.text.trim(),
-      if (_motherAge.text.trim().isNotEmpty)
-        'mother_age': int.tryParse(_motherAge.text.trim()),
+      if (_pickedMotherBirthDate != null)
+        'mother_age': _computeAge(_pickedMotherBirthDate!),
       if (_motherOccupation.text.trim().isNotEmpty)
         'mother_occupation': _motherOccupation.text.trim(),
       if (_familyAddress.text.trim().isNotEmpty)
@@ -185,8 +241,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
         'family_contact_phone': _familyPhone.text.trim(),
       if (_spouseName.text.trim().isNotEmpty)
         'spouse_name': _spouseName.text.trim(),
-      if (_spouseAge.text.trim().isNotEmpty)
-        'spouse_age': int.tryParse(_spouseAge.text.trim()),
+      if (_pickedSpouseBirthDate != null)
+        'spouse_age': _computeAge(_pickedSpouseBirthDate!),
       if (_spouseOccupation.text.trim().isNotEmpty)
         'spouse_occupation': _spouseOccupation.text.trim(),
     };
@@ -397,6 +453,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           label: 'Nama Lengkap',
                           hint: 'Sesuai KTP',
                           prefixIcon: Icons.badge_outlined,
+                          readOnly: true,
                           textCapitalization:
                               TextCapitalization.words,
                           validator: (v) =>
@@ -410,6 +467,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           label: 'NIK',
                           hint: '16 digit NIK',
                           prefixIcon: Icons.credit_card_outlined,
+                          readOnly: true,
                           keyboardType: TextInputType.number,
                           inputFormatters: [
                             FilteringTextInputFormatter.digitsOnly,
@@ -633,36 +691,26 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                         const SizedBox(height: 18),
                         _SubLabel('Ayah'),
                         const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(
-                              flex: 3,
-                              child: M3TextField(
-                                controller: _fatherName,
-                                label: 'Nama Ayah',
-                                hint: 'Nama lengkap',
-                                prefixIcon:
-                                    Icons.person_outline_rounded,
-                                textCapitalization:
-                                    TextCapitalization.words,
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: M3TextField(
-                                controller: _fatherAge,
-                                label: 'Usia',
-                                hint: '45',
-                                prefixIcon: Icons.cake_outlined,
-                                keyboardType:
-                                    TextInputType.number,
-                                inputFormatters: [
-                                  FilteringTextInputFormatter
-                                      .digitsOnly
-                                ],
-                              ),
-                            ),
-                          ],
+                        M3TextField(
+                          controller: _fatherName,
+                          label: 'Nama Ayah',
+                          hint: 'Nama lengkap',
+                          prefixIcon: Icons.person_outline_rounded,
+                          textCapitalization: TextCapitalization.words,
+                        ),
+                        const SizedBox(height: 14),
+                        M3TextField(
+                          controller: _fatherBirthDateCtrl,
+                          label: 'Tanggal Lahir Ayah',
+                          hint: 'Pilih tanggal',
+                          prefixIcon: Icons.calendar_today_outlined,
+                          readOnly: true,
+                          onTap: () => _pickFamilyMemberDate(
+                            controller: _fatherBirthDateCtrl,
+                            current: _pickedFatherBirthDate,
+                            onPicked: (d) =>
+                                setState(() => _pickedFatherBirthDate = d),
+                          ),
                         ),
                         const SizedBox(height: 14),
                         M3TextField(
@@ -676,36 +724,26 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                         const SizedBox(height: 18),
                         _SubLabel('Ibu'),
                         const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(
-                              flex: 3,
-                              child: M3TextField(
-                                controller: _motherName,
-                                label: 'Nama Ibu',
-                                hint: 'Nama lengkap',
-                                prefixIcon:
-                                    Icons.person_outline_rounded,
-                                textCapitalization:
-                                    TextCapitalization.words,
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: M3TextField(
-                                controller: _motherAge,
-                                label: 'Usia',
-                                hint: '45',
-                                prefixIcon: Icons.cake_outlined,
-                                keyboardType:
-                                    TextInputType.number,
-                                inputFormatters: [
-                                  FilteringTextInputFormatter
-                                      .digitsOnly
-                                ],
-                              ),
-                            ),
-                          ],
+                        M3TextField(
+                          controller: _motherName,
+                          label: 'Nama Ibu',
+                          hint: 'Nama lengkap',
+                          prefixIcon: Icons.person_outline_rounded,
+                          textCapitalization: TextCapitalization.words,
+                        ),
+                        const SizedBox(height: 14),
+                        M3TextField(
+                          controller: _motherBirthDateCtrl,
+                          label: 'Tanggal Lahir Ibu',
+                          hint: 'Pilih tanggal',
+                          prefixIcon: Icons.calendar_today_outlined,
+                          readOnly: true,
+                          onTap: () => _pickFamilyMemberDate(
+                            controller: _motherBirthDateCtrl,
+                            current: _pickedMotherBirthDate,
+                            onPicked: (d) =>
+                                setState(() => _pickedMotherBirthDate = d),
+                          ),
                         ),
                         const SizedBox(height: 14),
                         M3TextField(
@@ -743,36 +781,26 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                       label: 'Data Pasangan',
                       subtitle: 'Isi jika sudah menikah',
                       children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              flex: 3,
-                              child: M3TextField(
-                                controller: _spouseName,
-                                label: 'Nama Pasangan',
-                                hint: 'Nama lengkap',
-                                prefixIcon:
-                                    Icons.person_outline_rounded,
-                                textCapitalization:
-                                    TextCapitalization.words,
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: M3TextField(
-                                controller: _spouseAge,
-                                label: 'Usia',
-                                hint: '30',
-                                prefixIcon: Icons.cake_outlined,
-                                keyboardType:
-                                    TextInputType.number,
-                                inputFormatters: [
-                                  FilteringTextInputFormatter
-                                      .digitsOnly
-                                ],
-                              ),
-                            ),
-                          ],
+                        M3TextField(
+                          controller: _spouseName,
+                          label: 'Nama Pasangan',
+                          hint: 'Nama lengkap',
+                          prefixIcon: Icons.person_outline_rounded,
+                          textCapitalization: TextCapitalization.words,
+                        ),
+                        const SizedBox(height: 14),
+                        M3TextField(
+                          controller: _spouseBirthDateCtrl,
+                          label: 'Tanggal Lahir Pasangan',
+                          hint: 'Pilih tanggal',
+                          prefixIcon: Icons.calendar_today_outlined,
+                          readOnly: true,
+                          onTap: () => _pickFamilyMemberDate(
+                            controller: _spouseBirthDateCtrl,
+                            current: _pickedSpouseBirthDate,
+                            onPicked: (d) =>
+                                setState(() => _pickedSpouseBirthDate = d),
+                          ),
                         ),
                         const SizedBox(height: 14),
                         M3TextField(
@@ -962,7 +990,7 @@ class _RegionPickerField extends StatelessWidget {
       child: InputDecorator(
         decoration: InputDecoration(
           labelText: label,
-          hintText: hint,
+          floatingLabelBehavior: FloatingLabelBehavior.always,
           prefixIcon: Icon(prefixIcon, size: 20, color: activeColor),
           suffixIcon:
               Icon(Icons.arrow_drop_down_rounded, color: activeColor),

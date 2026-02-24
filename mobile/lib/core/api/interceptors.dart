@@ -170,7 +170,8 @@ class AuthInterceptor extends Interceptor {
         path.contains('/provinces/') ||
         path.contains('/regencies/') ||
         path.contains('/districts/') ||
-        path.contains('/villages/');
+        path.contains('/villages/') ||
+        path.contains('/staff-referrers/');
   }
 
   /// Retry each pending request with the fresh token instead of resolving all

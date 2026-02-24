@@ -2,6 +2,9 @@ class WorkExperience {
   final int id;
   final String companyName;
   final String position;
+  /// Free-text city/location (backend: `location` field).
+  final String? location;
+  /// ISO 3166-1 alpha-2 country code (backend: `country` CountryField). Read-only from server.
   final String? country;
   final DateTime? startDate;
   final DateTime? endDate;
@@ -15,6 +18,7 @@ class WorkExperience {
     required this.id,
     required this.companyName,
     required this.position,
+    this.location,
     this.country,
     this.startDate,
     this.endDate,
@@ -30,6 +34,7 @@ class WorkExperience {
       id: json['id'] as int,
       companyName: json['company_name'] as String,
       position: json['position'] as String,
+      location: json['location'] as String?,
       country: json['country'] as String?,
       startDate: json['start_date'] != null 
           ? DateTime.parse(json['start_date'] as String) 
@@ -49,7 +54,7 @@ class WorkExperience {
     return {
       'company_name': companyName,
       'position': position,
-      'country': country,
+      if (location != null) 'location': location,
       'start_date': startDate?.toIso8601String(),
       'end_date': endDate?.toIso8601String(),
       'still_employed': stillEmployed,

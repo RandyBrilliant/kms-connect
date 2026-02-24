@@ -25,6 +25,7 @@ router.register(r"broadcasts", views.BroadcastViewSet, basename="broadcast")
 # Referrers list for dropdown (before router)
 referrer_paths = [
     path("referrers/", views.ReferrerListView.as_view(), name="referrer-list"),
+    path("staff-referrers/", views.PublicStaffReferrersView.as_view(), name="public-staff-referrers"),
 ]
 
 # Admin: send verification & password reset email (before router)
