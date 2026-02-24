@@ -1,10 +1,12 @@
 import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/models/user.dart';
 import '../repositories/auth_repository.dart';
 import '../../../../core/api/interceptors.dart';
 import '../../../../core/widgets/custom_toast.dart';
+import '../../../notifications/data/services/notification_service.dart';
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   return AuthRepository();
@@ -163,6 +165,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> logout() async {
+    // Unregister FCM token before clearing auth tokens
+    try {
+      await NotificationService().unregisterToken();
+    } catch (_) {}
     await _repository.logout();
     state = const AuthState(initialized: true);
   }

@@ -38,6 +38,10 @@ class ApiEndpoints {
   static const String notifications = '$baseUrl/notifications/';
   static String markNotificationRead(int id) => '$baseUrl/notifications/$id/mark-read/';
   static const String markAllNotificationsRead = '$baseUrl/notifications/mark-all-read/';
+
+  // FCM Device Token
+  static const String fcmRegister = '$baseUrl/fcm/register/';
+  static const String fcmUnregister = '$baseUrl/fcm/unregister/';
   
   // Documents
   static String documentOcrPrefill(int id) => '$baseUrl/applicants/me/documents/$id/ocr_prefill/';
@@ -45,4 +49,14 @@ class ApiEndpoints {
   // Regions (public, no auth required)
   static const String provinces = '$baseUrl/provinces/';
   static const String regencies = '$baseUrl/regencies/';
+  static const String districts = '$baseUrl/districts/';
+  static const String villages = '$baseUrl/villages/';
+
+  // Region helpers with filter params
+  static String regenciesByProvince(int provinceId) =>
+      '$baseUrl/regencies/?province_id=$provinceId';
+  static String districtsByRegency(int regencyId) =>
+      '$baseUrl/districts/?regency_id=$regencyId';
+  static String villagesByDistrict(int districtId) =>
+      '$baseUrl/villages/?district_id=$districtId';
 }

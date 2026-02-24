@@ -51,9 +51,10 @@ class AuthInterceptor extends Interceptor {
     }
   }
 
-  /// Clears tokens from storage and notifies the app to redirect to login.
+  /// Clears auth tokens from storage and notifies the app to redirect to login.
   Future<void> _dispatchForceLogout() async {
-    await _secureStorage.deleteAll();
+    await _secureStorage.delete(key: 'access_token');
+    await _secureStorage.delete(key: 'refresh_token');
     onForceLogout?.call();
   }
 
@@ -121,7 +122,7 @@ class AuthInterceptor extends Interceptor {
             try {
               final retryResponse = await _dio.fetch(opts);
               _isRefreshing = false;
-              _resolvePendingRequests(retryResponse);
+              _retryPendingRequests(newAccessToken);
               handler.resolve(retryResponse);
             } catch (retryErr) {
               // Retry itself failed — reject but do NOT clear tokens
@@ -165,25 +166,39 @@ class AuthInterceptor extends Interceptor {
 
   bool _isPublicEndpoint(String path) {
     return path.contains('/auth/') ||
-        path.contains('/document-types/public/') ||
+        path.contains('/public/') ||
         path.contains('/provinces/') ||
         path.contains('/regencies/') ||
         path.contains('/districts/') ||
         path.contains('/villages/');
   }
 
-  void _resolvePendingRequests(Response response) {
-    for (final pending in _pendingRequests) {
-      pending.handler.resolve(response);
-    }
+  /// Retry each pending request with the fresh token instead of resolving all
+  /// with the same response (which would return wrong data for different URLs).
+  void _retryPendingRequests(String newToken) {
+    final queued = List.of(_pendingRequests);
     _pendingRequests.clear();
+    for (final pending in queued) {
+      final opts = pending.options;
+      opts.headers['Authorization'] = 'Bearer $newToken';
+      opts.extra['auth_retry'] = true;
+      _dio.fetch(opts).then(
+        (res) => pending.handler.resolve(res),
+        onError: (e) => pending.handler.reject(
+          e is DioException
+              ? e
+              : DioException(requestOptions: opts, error: e),
+        ),
+      );
+    }
   }
 
   void _rejectPendingRequests(DioException error) {
-    for (final pending in _pendingRequests) {
+    final queued = List.of(_pendingRequests);
+    _pendingRequests.clear();
+    for (final pending in queued) {
       pending.handler.reject(error);
     }
-    _pendingRequests.clear();
   }
 }
 

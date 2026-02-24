@@ -77,16 +77,17 @@ dependencies:
   path_provider: ^2.1.4
   path: ^1.9.0
   
-  # Code Generation (dev only, but needed for freezed/json_serializable)
-  freezed: ^2.5.7
-  json_serializable: ^6.8.0
-  build_runner: ^2.4.13
   google_fonts: ^8.0.2
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+
+  # Code Generation (dev only)
+  freezed: ^2.5.7
+  json_serializable: ^6.8.0
+  build_runner: ^2.4.13
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

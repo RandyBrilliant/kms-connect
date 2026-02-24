@@ -1,17 +1,50 @@
+import 'dart:io';
+
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+
+import '../../../../core/api/api_client.dart';
+import '../../../../core/api/endpoints.dart';
+import '../../../../core/widgets/custom_toast.dart';
+import 'notification_settings_service.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
   NotificationService._internal();
 
-  final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
-  final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
+  /// Lazily resolves FirebaseMessaging only after Firebase.initializeApp().
+  FirebaseMessaging? get _firebaseMessaging {
+    try {
+      Firebase.app();
+      return FirebaseMessaging.instance;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  final FlutterLocalNotificationsPlugin _localNotifications =
+      FlutterLocalNotificationsPlugin();
 
   Future<void> initialize() async {
-    // Request permission
-    NotificationSettings settings = await _firebaseMessaging.requestPermission(
+    // Respect user's in-app notification preference.
+    final prefs = NotificationSettingsService();
+    final userEnabled = await prefs.isEnabled();
+    if (!userEnabled) {
+      if (kDebugMode) debugPrint('Push notifications disabled by user — skipping init.');
+      return;
+    }
+
+    // Request / check OS permission.
+    final fcm = _firebaseMessaging;
+    if (fcm == null) {
+      if (kDebugMode) debugPrint('Firebase not initialized — skipping notification init.');
+      return;
+    }
+
+    NotificationSettings settings = await fcm.requestPermission(
       alert: true,
       badge: true,
       sound: true,
@@ -39,18 +72,51 @@ class NotificationService {
       // Handle notification taps when app is in background
       FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationOpened);
 
-      // Get FCM token
-      final token = await _firebaseMessaging.getToken();
+      // Get FCM token and register with backend
+      final token = await fcm.getToken();
       if (token != null) {
-        // TODO: Send token to backend
-        print('FCM Token: $token');
+        if (kDebugMode) debugPrint('FCM Token: $token');
+        await _registerTokenWithBackend(token);
       }
 
       // Listen for token refresh
-      _firebaseMessaging.onTokenRefresh.listen((newToken) {
-        // TODO: Update token in backend
-        print('New FCM Token: $newToken');
+      fcm.onTokenRefresh.listen((newToken) {
+        if (kDebugMode) debugPrint('New FCM Token: $newToken');
+        _registerTokenWithBackend(newToken);
       });
+    }
+  }
+
+  /// Register/update the FCM device token with the backend.
+  Future<void> _registerTokenWithBackend(String token) async {
+    try {
+      final deviceType = Platform.isIOS ? 'ios' : 'android';
+      await ApiClient().dio.post(
+        ApiEndpoints.fcmRegister,
+        data: {
+          'token': token,
+          'device_type': deviceType,
+        },
+      );
+      if (kDebugMode) debugPrint('FCM token registered with backend');
+    } catch (e) {
+      // Non-critical — user might not be logged in yet.
+      if (kDebugMode) debugPrint('FCM token registration failed: $e');
+    }
+  }
+
+  /// Unregister the current device token from the backend (call on logout).
+  Future<void> unregisterToken() async {
+    try {
+      final token = await _firebaseMessaging?.getToken();
+      if (token != null) {
+        await ApiClient().dio.post(
+          ApiEndpoints.fcmUnregister,
+          data: {'token': token},
+        );
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('FCM token unregister failed: $e');
     }
   }
 
@@ -75,26 +141,54 @@ class NotificationService {
   }
 
   void _handleNotificationOpened(RemoteMessage message) {
-    // Handle notification opened from background
-    print('Notification opened: ${message.data}');
-    // TODO: Navigate to relevant screen based on notification data
+    if (kDebugMode) debugPrint('Notification opened: ${message.data}');
+    _navigateFromNotificationData(message.data);
   }
 
   void _onNotificationTapped(NotificationResponse response) {
-    // Handle notification tap
-    print('Notification tapped: ${response.payload}');
-    // TODO: Navigate to relevant screen
+    if (kDebugMode) debugPrint('Notification tapped: ${response.payload}');
+    // Navigate to notifications page — payload parsing would require
+    // reconstructing the map from toString(), so go to the list page.
+    _navigateToNotifications();
+  }
+
+  /// Navigate based on notification payload data.
+  void _navigateFromNotificationData(Map<String, dynamic> data) {
+    final navigatorKey = rootNavigatorKey;
+    final context = navigatorKey.currentContext;
+    if (context == null) return;
+
+    final type = data['type'] as String?;
+    switch (type) {
+      case 'job':
+        final jobId = data['job_id'];
+        if (jobId != null) {
+          navigatorKey.currentState?.pushNamed('/jobs/$jobId');
+        } else {
+          _navigateToNotifications();
+        }
+      case 'document':
+        navigatorKey.currentState?.pushNamed('/documents');
+      case 'application':
+        navigatorKey.currentState?.pushNamed('/jobs/my-applications');
+      default:
+        _navigateToNotifications();
+    }
+  }
+
+  void _navigateToNotifications() {
+    rootNavigatorKey.currentState?.pushNamed('/notifications');
   }
 
   Future<String?> getToken() async {
-    return await _firebaseMessaging.getToken();
+    return await _firebaseMessaging?.getToken();
   }
 
   Future<void> subscribeToTopic(String topic) async {
-    await _firebaseMessaging.subscribeToTopic(topic);
+    await _firebaseMessaging?.subscribeToTopic(topic);
   }
 
   Future<void> unsubscribeFromTopic(String topic) async {
-    await _firebaseMessaging.unsubscribeFromTopic(topic);
+    await _firebaseMessaging?.unsubscribeFromTopic(topic);
   }
 }

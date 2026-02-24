@@ -10,6 +10,7 @@ import '../../../auth/data/providers/auth_provider.dart';
 import '../../../documents/data/providers/document_provider.dart';
 import '../../../home/presentation/widgets/bottom_nav_bar.dart';
 import '../../../notifications/data/providers/notification_provider.dart';
+import '../../../notifications/data/providers/notification_settings_provider.dart';
 import '../../data/providers/profile_provider.dart';
 import '../../domain/models/applicant_profile.dart';
 
@@ -219,6 +220,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                               : null,
                           onTap: () => context.push('/notifications'),
                         ),
+                        _NotificationToggleItem(),
                       ],
                     ),
                     0.45,
@@ -500,7 +502,7 @@ class _MenuSection extends StatelessWidget {
   const _MenuSection({required this.label, required this.items});
 
   final String label;
-  final List<_MenuItem> items;
+  final List<Widget> items;
 
   @override
   Widget build(BuildContext context) {
@@ -629,6 +631,89 @@ class _MenuItem extends StatelessWidget {
               ),
               const SizedBox(width: 4),
             ],
+            Icon(Icons.chevron_right_rounded,
+                size: 20, color: cs.onSurfaceVariant),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// 
+// Notification toggle — inline switch inside the menu card
+// 
+
+class _NotificationToggleItem extends ConsumerWidget {
+  const _NotificationToggleItem();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(notificationSettingsProvider);
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+
+    String subtitle;
+    if (state.isLoading) {
+      subtitle = 'Memproses…';
+    } else if (state.isEnabled) {
+      subtitle = state.osPermissionGranted
+          ? 'Push notification aktif'
+          : 'Aktif (izin sistem diperlukan)';
+    } else {
+      subtitle = 'Push notification nonaktif';
+    }
+
+    return InkWell(
+      onTap: () => context.push('/settings/notifications'),
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: state.isEnabled && state.osPermissionGranted
+                    ? AppColors.secondaryLightGreen
+                    : cs.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: Icon(
+                state.isEnabled
+                    ? Icons.notifications_active_outlined
+                    : Icons.notifications_off_outlined,
+                color: state.isEnabled && state.osPermissionGranted
+                    ? AppColors.primaryDarkGreen
+                    : cs.onSurfaceVariant,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Pengaturan Push',
+                    style: tt.bodyMedium
+                        ?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  Text(
+                    subtitle,
+                    style: tt.bodySmall
+                        ?.copyWith(color: cs.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+            if (!state.osPermissionGranted && state.isEnabled)
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: Icon(Icons.warning_amber_rounded,
+                    color: AppColors.warning, size: 16),
+              ),
             Icon(Icons.chevron_right_rounded,
                 size: 20, color: cs.onSurfaceVariant),
           ],

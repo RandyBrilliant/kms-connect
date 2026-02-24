@@ -8,9 +8,9 @@ class ApplicantDocument {
   final Map<String, dynamic>? ocrData;
   final DateTime? ocrProcessedAt;
   final String reviewStatus;
-  final DateTime createdAt;
-  final DateTime updatedAt;
-
+  final String reviewNotes;
+  final String? reviewedByName;
+  final DateTime? reviewedAt;
   ApplicantDocument({
     required this.id,
     required this.documentType,
@@ -21,9 +21,17 @@ class ApplicantDocument {
     this.ocrData,
     this.ocrProcessedAt,
     required this.reviewStatus,
-    required this.createdAt,
-    required this.updatedAt,
+    this.reviewNotes = '',
+    this.reviewedByName,
+    this.reviewedAt,
   });
+
+  static int _safeInt(dynamic v, [int fallback = 0]) {
+    if (v is int) return v;
+    if (v is String) return int.tryParse(v) ?? fallback;
+    if (v is double) return v.toInt();
+    return fallback;
+  }
 
   factory ApplicantDocument.fromJson(Map<String, dynamic> json) {
     // Handle document_type - can be ID (int) or nested object
@@ -32,15 +40,15 @@ class ApplicantDocument {
     String? docTypeName;
     
     if (docType is Map) {
-      docTypeId = docType['id'] as int;
-      docTypeName = docType['name'] as String?;
+      docTypeId = _safeInt(docType['id']);
+      docTypeName = docType['name']?.toString();
     } else {
-      docTypeId = docType as int;
+      docTypeId = _safeInt(docType);
       docTypeName = null; // Will be resolved from document types list
     }
 
     return ApplicantDocument(
-      id: json['id'] as int,
+      id: _safeInt(json['id']),
       documentType: docTypeId,
       documentTypeName: docTypeName,
       file: json['file'] as String?,
@@ -51,8 +59,11 @@ class ApplicantDocument {
           ? DateTime.parse(json['ocr_processed_at'] as String)
           : null,
       reviewStatus: json['review_status'] as String? ?? 'PENDING',
-      createdAt: DateTime.parse(json['created_at'] as String),
-      updatedAt: DateTime.parse(json['updated_at'] as String),
+      reviewNotes: (json['review_notes'] ?? '') as String,
+      reviewedByName: json['reviewed_by_name']?.toString(),
+      reviewedAt: json['reviewed_at'] != null
+          ? DateTime.tryParse(json['reviewed_at'] as String)
+          : null,
     );
   }
 

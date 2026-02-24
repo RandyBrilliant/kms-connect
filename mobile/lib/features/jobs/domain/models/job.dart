@@ -39,22 +39,37 @@ class Job {
     required this.updatedAt,
   });
 
+  static int _safeInt(dynamic v, [int fallback = 0]) {
+    if (v is int) return v;
+    if (v is String) return int.tryParse(v) ?? fallback;
+    if (v is double) return v.toInt();
+    return fallback;
+  }
+
+  static int? _safeIntOrNull(dynamic v) {
+    if (v == null) return null;
+    if (v is int) return v;
+    if (v is String) return int.tryParse(v);
+    if (v is double) return v.toInt();
+    return null;
+  }
+
   factory Job.fromJson(Map<String, dynamic> json) {
     return Job(
-      id: json['id'] as int,
-      title: json['title'] as String,
-      slug: json['slug'] as String,
-      company: json['company'] as int,
-      companyName: json['company_name'] as String? ?? '',
-      locationCountry: json['location_country'] as String?,
-      locationCity: json['location_city'] as String?,
-      description: json['description'] as String,
-      requirements: json['requirements'] as String?,
-      employmentType: json['employment_type'] as String,
-      salaryMin: json['salary_min'] as int?,
-      salaryMax: json['salary_max'] as int?,
-      currency: json['currency'] as String,
-      status: json['status'] as String,
+      id: _safeInt(json['id']),
+      title: (json['title'] ?? '') as String,
+      slug: (json['slug'] ?? '') as String,
+      company: _safeInt(json['company']),
+      companyName: json['company_name']?.toString() ?? '',
+      locationCountry: json['location_country']?.toString(),
+      locationCity: json['location_city']?.toString(),
+      description: (json['description'] ?? '') as String,
+      requirements: json['requirements']?.toString(),
+      employmentType: (json['employment_type'] ?? '') as String,
+      salaryMin: _safeIntOrNull(json['salary_min']),
+      salaryMax: _safeIntOrNull(json['salary_max']),
+      currency: (json['currency'] ?? 'IDR') as String,
+      status: (json['status'] ?? '') as String,
       postedAt: json['posted_at'] != null
           ? DateTime.parse(json['posted_at'] as String)
           : null,

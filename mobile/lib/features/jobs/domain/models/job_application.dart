@@ -29,16 +29,23 @@ class JobApplication {
     required this.updatedAt,
   });
 
+  static int _safeInt(dynamic v, [int fallback = 0]) {
+    if (v is int) return v;
+    if (v is String) return int.tryParse(v) ?? fallback;
+    if (v is double) return v.toInt();
+    return fallback;
+  }
+
   factory JobApplication.fromJson(Map<String, dynamic> json) {
     return JobApplication(
-      id: json['id'] as int,
-      applicant: json['applicant'] as int,
-      applicantName: json['applicant_name'] as String?,
-      applicantEmail: json['applicant_email'] as String?,
-      job: json['job'] as int,
-      jobTitle: json['job_title'] as String?,
-      companyName: json['company_name'] as String?,
-      status: json['status'] as String,
+      id: _safeInt(json['id']),
+      applicant: _safeInt(json['applicant']),
+      applicantName: json['applicant_name']?.toString(),
+      applicantEmail: json['applicant_email']?.toString(),
+      job: _safeInt(json['job']),
+      jobTitle: json['job_title']?.toString(),
+      companyName: json['company_name']?.toString(),
+      status: (json['status'] ?? '') as String,
       appliedAt: DateTime.parse(json['applied_at'] as String),
       reviewedAt: json['reviewed_at'] != null
           ? DateTime.parse(json['reviewed_at'] as String)

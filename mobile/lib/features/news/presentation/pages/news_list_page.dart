@@ -79,7 +79,10 @@ class _NewsListPageState extends ConsumerState<NewsListPage>
   }
 
   void _onSearch(String value) {
-    setState(() => _searchQuery = value.trim());
+    setState(() {
+      _searchQuery = value.trim();
+      _currentPage = 0;
+    });
   }
 
   // ── Build ────────────────────────────────────────────────────────────────
@@ -123,7 +126,8 @@ class _NewsListPageState extends ConsumerState<NewsListPage>
 
     return RefreshIndicator(
       color: AppColors.primaryDarkGreen,
-      onRefresh: () async => ref.invalidate(newsProvider(null)),
+      onRefresh: () async => ref.invalidate(
+          newsProvider(_searchQuery.isEmpty ? null : _searchQuery)),
       child: CustomScrollView(
         slivers: [
           // ── Wave hero header ───────────────────────────────────────────

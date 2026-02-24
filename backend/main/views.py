@@ -73,7 +73,8 @@ class PublicNewsListViewSet(viewsets.ReadOnlyModelViewSet):
     """
 
     serializer_class = NewsSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
+    authentication_classes = []  # No auth required for public endpoint
     pagination_class = None  # Return plain list — mobile parses raw array
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ["is_pinned"]
@@ -92,7 +93,8 @@ class PublicJobsListViewSet(viewsets.ReadOnlyModelViewSet):
     """
 
     serializer_class = LowonganKerjaSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
+    authentication_classes = []  # No auth required for public endpoint
     pagination_class = None  # Return plain list — mobile parses raw array
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ["employment_type", "company", "location_country"]

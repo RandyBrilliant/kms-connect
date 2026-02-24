@@ -23,14 +23,21 @@ class News {
     required this.updatedAt,
   });
 
+  static int _safeInt(dynamic v, [int fallback = 0]) {
+    if (v is int) return v;
+    if (v is String) return int.tryParse(v) ?? fallback;
+    if (v is double) return v.toInt();
+    return fallback;
+  }
+
   factory News.fromJson(Map<String, dynamic> json) {
     return News(
-      id: json['id'] as int,
-      title: json['title'] as String,
-      slug: json['slug'] as String,
-      summary: json['summary'] as String?,
-      content: json['content'] as String,
-      heroImage: json['hero_image'] as String?,
+      id: _safeInt(json['id']),
+      title: (json['title'] ?? '') as String,
+      slug: (json['slug'] ?? '') as String,
+      summary: json['summary']?.toString(),
+      content: (json['content'] ?? '') as String,
+      heroImage: json['hero_image']?.toString(),
       isPinned: json['is_pinned'] as bool? ?? false,
       publishedAt: json['published_at'] != null
           ? DateTime.parse(json['published_at'] as String)

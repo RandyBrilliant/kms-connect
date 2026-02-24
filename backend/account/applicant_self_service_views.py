@@ -14,6 +14,7 @@ from .models import (
     ApplicantDocument,
     DocumentType,
     ApplicantVerificationStatus,
+    DocumentReviewStatus,
 )
 from .serializers import (
     ApplicantProfileSerializer,
@@ -196,54 +197,76 @@ class ApplicantDocumentSelfServiceViewSet(ApplicantSelfServiceMixin, viewsets.Mo
             )
         return ApplicantDocument.objects.none()
 
-    def perform_create(self, serializer):
-        """Upload document untuk current user."""
+    def create(self, request, *args, **kwargs):
+        """
+        Upload atau ganti dokumen. Jika dokumen dengan tipe yang sama sudah ada,
+        file akan diganti dan status review di-reset ke PENDING (upsert).
+        Mengembalikan 201 untuk dokumen baru, 200 untuk penggantian.
+        """
+        from rest_framework.exceptions import ValidationError, NotFound
+        from .document_specs import is_image_type
+
         profile = self.get_applicant_profile()
         if not profile:
-            from rest_framework.exceptions import NotFound
             raise NotFound("Profil pelamar tidak ditemukan.")
 
-        # Validasi file dari request
-        file = self.request.FILES.get("file")
-        document_type_id = self.request.data.get("document_type")
+        file = request.FILES.get("file")
+        document_type_id = request.data.get("document_type")
 
         if not file:
-            from rest_framework.exceptions import ValidationError
             raise ValidationError({"file": "File wajib diunggah."})
 
         if not document_type_id:
-            from rest_framework.exceptions import ValidationError
             raise ValidationError({"document_type": "Tipe dokumen wajib dipilih."})
 
         try:
             document_type = DocumentType.objects.get(pk=document_type_id)
         except DocumentType.DoesNotExist:
-            from rest_framework.exceptions import ValidationError
             raise ValidationError({"document_type": "Tipe dokumen tidak ditemukan."})
 
         # Validasi format dan ukuran file
         try:
             validate_document_file(file, document_type.code)
         except Exception as e:
-            from rest_framework.exceptions import ValidationError
             raise ValidationError({"file": str(e)})
 
-        # Simpan document
-        document = serializer.save(
+        existing = ApplicantDocument.objects.filter(
             applicant_profile=profile,
             document_type=document_type,
-            file=file,
-        )
+        ).first()
 
-        # Trigger OCR processing untuk KTP (async)
+        if existing:
+            # Ganti file lama dan reset status review / OCR
+            existing.file = file
+            existing.review_status = DocumentReviewStatus.PENDING
+            existing.reviewed_by = None
+            existing.reviewed_at = None
+            existing.review_notes = ""
+            existing.ocr_text = ""
+            existing.ocr_data = {}
+            existing.ocr_processed_at = None
+            existing.save()
+            document = existing
+            created = False
+        else:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            document = serializer.save(
+                applicant_profile=profile,
+                document_type=document_type,
+                file=file,
+            )
+            created = True
+
+        # Trigger async tasks
         if document_type.code == "ktp":
             process_document_ocr.delay(document.id)
-
-        # Trigger image optimization untuk image types (async)
-        from .document_specs import is_image_type
-
         if is_image_type(document_type.code):
             optimize_document_image.delay(document.id)
+
+        response_serializer = self.get_serializer(document)
+        response_status = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+        return Response(response_serializer.data, status=response_status)
 
     @action(detail=True, methods=["get"])
     def ocr_prefill(self, request, pk=None):

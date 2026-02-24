@@ -32,19 +32,31 @@ class DocumentRepository {
   }
 
   /// Get my documents
+  /// Handles DRF paginated response {count, results} or plain list.
   Future<List<ApplicantDocument>> getMyDocuments() async {
     try {
       final response = await _apiClient.dio.get(ApiEndpoints.myDocuments);
-      final apiResponse = ApiResponse<List<dynamic>>.fromJson(
-        response.data,
-        (data) => data as List<dynamic>,
-      );
+      final body = response.data;
 
-      if (!apiResponse.isSuccess || apiResponse.data == null) {
-        return [];
+      List<dynamic> items;
+      if (body is List) {
+        items = body;
+      } else if (body is Map<String, dynamic>) {
+        if (body.containsKey('results')) {
+          // Paginated DRF: {count, next, previous, results}
+          items = body['results'] as List<dynamic>? ?? [];
+        } else if (body.containsKey('data')) {
+          // Wrapped ApiResponse: {code, data}
+          if (body['code'] != 'success') return [];
+          items = body['data'] as List<dynamic>? ?? [];
+        } else {
+          items = [];
+        }
+      } else {
+        items = [];
       }
 
-      return (apiResponse.data as List)
+      return items
           .map((json) => ApplicantDocument.fromJson(json as Map<String, dynamic>))
           .toList();
     } on DioException catch (e) {
@@ -76,21 +88,34 @@ class DocumentRepository {
         ),
       );
 
-      final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
-        response.data,
-        (data) => data as Map<String, dynamic>,
-      );
+      final body = response.data;
+      Map<String, dynamic> docJson;
 
-      if (!apiResponse.isSuccess || apiResponse.data == null) {
+      if (body is Map<String, dynamic>) {
+        if (body.containsKey('data') && body['code'] == 'success') {
+          // Wrapped ApiResponse
+          docJson = body['data'] as Map<String, dynamic>;
+        } else if (body.containsKey('id')) {
+          // Raw DRF serializer response (ModelViewSet default)
+          docJson = body;
+        } else {
+          throw DioException(
+            requestOptions: response.requestOptions,
+            response: response,
+            type: DioExceptionType.badResponse,
+            message: body['detail']?.toString() ?? 'Gagal mengunggah dokumen',
+          );
+        }
+      } else {
         throw DioException(
           requestOptions: response.requestOptions,
           response: response,
           type: DioExceptionType.badResponse,
-          message: apiResponse.detail ?? 'Gagal mengunggah dokumen',
+          message: 'Gagal mengunggah dokumen',
         );
       }
 
-      return ApplicantDocument.fromJson(apiResponse.data!);
+      return ApplicantDocument.fromJson(docJson);
     } on DioException catch (e) {
       throw _handleError(e);
     }
@@ -135,6 +160,26 @@ class DocumentRepository {
     if (error.response != null) {
       final data = error.response!.data;
       if (data is Map<String, dynamic>) {
+        // Prefer the first field-level validation error (most specific).
+        final errors = data['errors'];
+        if (errors is Map<String, dynamic> && errors.isNotEmpty) {
+          final firstField = errors.values.first;
+          String? fieldMsg;
+          if (firstField is List && firstField.isNotEmpty) {
+            fieldMsg = firstField.first?.toString();
+          } else if (firstField is String) {
+            fieldMsg = firstField;
+          }
+          if (fieldMsg != null && fieldMsg.isNotEmpty) {
+            return DioException(
+              requestOptions: error.requestOptions,
+              response: error.response,
+              type: error.type,
+              message: fieldMsg,
+            );
+          }
+        }
+        // Fallback to generic detail message.
         final detail = data['detail'] as String?;
         if (detail != null) {
           return DioException(

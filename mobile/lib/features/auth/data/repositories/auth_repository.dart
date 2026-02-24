@@ -266,8 +266,19 @@ class AuthRepository {
     }
   }
 
-  /// Logout - clear tokens
+  /// Logout - invalidate refresh token on backend, unregister FCM, then clear local tokens
   Future<void> logout() async {
+    try {
+      final refreshToken = await _apiClient.getRefreshToken();
+      if (refreshToken != null) {
+        await _apiClient.dio.post(
+          ApiEndpoints.logout,
+          data: {'refresh': refreshToken},
+        );
+      }
+    } catch (_) {
+      // Server logout failed — still clear local tokens
+    }
     await _apiClient.clearTokens();
   }
 

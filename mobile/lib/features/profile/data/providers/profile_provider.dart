@@ -159,11 +159,14 @@ class ProfileState {
 class ProfileNotifier extends StateNotifier<ProfileState> {
   final ProfileRepository _repository;
 
-  ProfileNotifier(this._repository) : super(ProfileState()) {
-    loadProfile();
-  }
+  ProfileNotifier(this._repository) : super(ProfileState());
 
+  /// Call explicitly from pages that need profile data.
+  /// NOT called in constructor to avoid duplicate network requests
+  /// (HomePage, ProfilePage, EditProfilePage each call this).
   Future<void> loadProfile() async {
+    // Skip if already loading to avoid duplicate in-flight requests.
+    if (state.isLoading) return;
     state = state.copyWith(isLoading: true, error: null);
     try {
       final profile = await _repository.getProfile();
@@ -178,8 +181,13 @@ class ProfileNotifier extends StateNotifier<ProfileState> {
 
   Future<bool> updateProfile(Map<String, dynamic> data) async {
     state = state.copyWith(isLoading: true, error: null);
+    final profileId = state.profile?.id;
+    if (profileId == null) {
+      state = state.copyWith(isLoading: false, error: 'Profil belum dimuat');
+      return false;
+    }
     try {
-      final profile = await _repository.updateProfile(data);
+      final profile = await _repository.updateProfile(profileId, data);
       state = state.copyWith(profile: profile, isLoading: false);
       return true;
     } catch (e) {

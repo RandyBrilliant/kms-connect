@@ -8,7 +8,11 @@ class AppTheme {
   // surface-container tones, etc.) automatically.
   static const _seed = AppColors.primaryDarkGreen;
 
-  static ThemeData get lightTheme {
+  // Cached once — avoids rebuilding ColorScheme, GoogleFonts, and all
+  // button/input themes on every widget rebuild.
+  static final ThemeData lightTheme = _buildLightTheme();
+
+  static ThemeData _buildLightTheme() {
     final base = ColorScheme.fromSeed(
       seedColor: _seed,
       brightness: Brightness.light,

@@ -33,11 +33,11 @@ class ProfileRepository {
     }
   }
 
-  /// Update profile
-  Future<ApplicantProfile> updateProfile(Map<String, dynamic> data) async {
+  /// Update profile — PATCH to detail URL (router requires /{pk}/ for partial_update)
+  Future<ApplicantProfile> updateProfile(int profileId, Map<String, dynamic> data) async {
     try {
       final response = await _apiClient.dio.patch(
-        ApiEndpoints.myProfile,
+        '${ApiEndpoints.myProfile}$profileId/',
         data: data,
       );
       final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(

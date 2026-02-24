@@ -493,6 +493,13 @@ class _WorkExperienceFormSheetState
 
   Future<void> _handleSave() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
+    // Validate end date when not still employed
+    if (!_stillEmployed && _endPicked == null) {
+      CustomToast.show(context,
+          message: 'Tanggal selesai wajib diisi jika sudah tidak bekerja',
+          type: ToastType.warning);
+      return;
+    }
     setState(() => _isLoading = true);
     final data = <String, dynamic>{
       'company_name': _company.text.trim(),

@@ -22,6 +22,7 @@ import 'features/jobs/presentation/pages/my_applications_page.dart';
 import 'features/news/presentation/pages/news_list_page.dart';
 import 'features/news/presentation/pages/news_detail_page.dart';
 import 'features/notifications/presentation/pages/notifications_page.dart';
+import 'features/notifications/presentation/pages/notification_settings_page.dart';
 import 'features/auth/data/providers/auth_provider.dart';
 import 'config/strings.dart';
 
@@ -126,6 +127,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const NotificationsPage(),
       ),
       GoRoute(
+        path: '/settings/notifications',
+        name: 'notification-settings',
+        builder: (context, state) => const NotificationSettingsPage(),
+      ),
+      GoRoute(
         path: '/profile',
         name: 'profile',
         builder: (context, state) => const ProfilePage(),
@@ -160,18 +166,19 @@ final routerProvider = Provider<GoRouter>((ref) {
         name: 'jobs',
         builder: (context, state) => const JobsListPage(),
       ),
-      GoRoute(
-        path: '/jobs/:id',
-        name: 'job-detail',
-        builder: (context, state) {
-          final id = int.parse(state.pathParameters['id']!);
-          return JobDetailPage(jobId: id);
-        },
-      ),
+      // Must come before /jobs/:id so GoRouter doesn't match "my-applications" as an :id
       GoRoute(
         path: '/jobs/my-applications',
         name: 'my-applications',
         builder: (context, state) => const MyApplicationsPage(),
+      ),
+      GoRoute(
+        path: '/jobs/:id',
+        name: 'job-detail',
+        builder: (context, state) {
+          final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
+          return JobDetailPage(jobId: id);
+        },
       ),
       GoRoute(
         path: '/news',
@@ -182,7 +189,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/news/:id',
         name: 'news-detail',
         builder: (context, state) {
-          final id = int.parse(state.pathParameters['id']!);
+          final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
           return NewsDetailPage(newsId: id);
         },
       ),
