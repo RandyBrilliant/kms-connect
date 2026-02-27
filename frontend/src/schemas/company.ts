@@ -8,6 +8,8 @@ export const companyCreateSchema = z
     company_name: z.string().min(1, "Nama perusahaan wajib diisi"),
     contact_phone: z.string().optional(),
     address: z.string().optional(),
+    contact_person_name: z.string().optional(),
+    contact_person_position: z.string().optional(),
     is_active: z.boolean().default(true),
     email_verified: z.boolean().default(false),
   })
@@ -22,6 +24,8 @@ export const companyUpdateSchema = z.object({
   company_name: z.string().min(1, "Nama perusahaan wajib diisi"),
   contact_phone: z.string().optional(),
   address: z.string().optional(),
+  contact_person_name: z.string().optional(),
+  contact_person_position: z.string().optional(),
 })
 
 export type CompanyCreateSchema = z.infer<typeof companyCreateSchema>

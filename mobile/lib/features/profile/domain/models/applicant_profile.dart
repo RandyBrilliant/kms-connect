@@ -80,6 +80,11 @@ class ApplicantProfile {
   final String? familyVillageName;
   final String? familyContactPhone;
 
+  // Ahli Waris (Next of Kin)
+  final String? heirName;
+  final String? heirRelationship;
+  final String? heirContactPhone;
+
   // Photo & notes
   final String? photo;
   final String? notes;
@@ -145,6 +150,9 @@ class ApplicantProfile {
     this.familyVillageId,
     this.familyVillageName,
     this.familyContactPhone,
+    this.heirName,
+    this.heirRelationship,
+    this.heirContactPhone,
     this.photo,
     this.notes,
     required this.verificationStatus,
@@ -235,6 +243,9 @@ class ApplicantProfile {
       familyVillageId: _idFromField(json['family_village']),
       familyVillageName: _nameFromField(json['family_village']),
       familyContactPhone: _str(json['family_contact_phone']),
+      heirName: _str(json['heir_name']),
+      heirRelationship: _str(json['heir_relationship']),
+      heirContactPhone: _str(json['heir_contact_phone']),
       photo: _str(json['photo']),
       notes: _str(json['notes']),
       verificationStatus: _str(json['verification_status']) ?? 'DRAFT',
@@ -278,6 +289,9 @@ class ApplicantProfile {
         'family_district': familyDistrictId,
         'family_village': familyVillageId,
         'family_contact_phone': familyContactPhone,
+        'heir_name': heirName,
+        'heir_relationship': heirRelationship,
+        'heir_contact_phone': heirContactPhone,
         'verification_status': verificationStatus,
         'score': score,
       };

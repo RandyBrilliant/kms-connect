@@ -68,6 +68,8 @@ nested_applicant = [
         ),
         name="applicant-document-detail",
     ),
+    # Next of kin (ahli waris) fields are now part of ApplicantProfile;
+    # update via PATCH /api/applicants/<pk>/ (heir_name, heir_relationship, heir_contact_phone).
 ]
 
 # Public document types (cached; for mobile/applicant upload checklist). Must be before router.
@@ -91,6 +93,7 @@ applicant_self_service_router.register(
     applicant_self_service_views.ApplicantWorkExperienceSelfServiceViewSet,
     basename="applicant-me-work-experiences",
 )
+# next_of_kin routes removed – heir fields are part of applicant profile.
 applicant_self_service_router.register(
     r"applicants/me/documents",
     applicant_self_service_views.ApplicantDocumentSelfServiceViewSet,

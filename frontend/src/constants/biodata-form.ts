@@ -51,6 +51,10 @@ export const BIODATA_SECTIONS = {
     title: "Catatan",
     description: "Keterangan tambahan.",
   },
+  ahliWaris: {
+    title: "Ahli Waris",
+    description: "Data ahli waris / kontak darurat terdekat.",
+  },
 } as const
 
 /** Check if a field key is required on create. */

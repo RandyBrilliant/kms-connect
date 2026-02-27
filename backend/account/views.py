@@ -856,7 +856,13 @@ class WorkExperienceViewSet(viewsets.ModelViewSet):
         return get_object_or_404(ApplicantProfile, user_id=applicant_pk)
 
     def perform_create(self, serializer):
-        serializer.save(applicant_profile=self.get_applicant_profile())
+        profile = self.get_applicant_profile()
+        if WorkExperience.objects.filter(applicant_profile=profile).count() >= 2:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError(
+                {"non_field_errors": [ApiMessage.WORK_EXPERIENCE_LIMIT]}
+            )
+        serializer.save(applicant_profile=profile)
 
 
 # ---------------------------------------------------------------------------

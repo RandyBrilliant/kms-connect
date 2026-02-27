@@ -11,6 +11,7 @@ import type {
   EducationLevel,
   WritingHand,
   MaritalStatus,
+  NextOfKinRelationship,
   IndustryType,
   DestinationCountry,
 } from "@/types/applicant"
@@ -128,6 +129,27 @@ export const MARITAL_STATUS_LABELS: Record<MaritalStatus, string> = {
 } as const
 
 // ============================================================================
+// Next of Kin / Ahli Waris Relationship
+// ============================================================================
+
+export const NEXT_OF_KIN_RELATIONSHIP_LABELS: Record<NextOfKinRelationship, string> = {
+  SUAMI: "Suami",
+  ISTRI: "Istri",
+  AYAH: "Ayah",
+  IBU: "Ibu",
+  KAKAK: "Kakak",
+  ADIK: "Adik",
+  ANAK: "Anak",
+  PAMAN: "Paman",
+  BIBI: "Bibi",
+  LAINNYA: "Lainnya",
+} as const
+
+export const NEXT_OF_KIN_RELATIONSHIP_OPTIONS = Object.entries(
+  NEXT_OF_KIN_RELATIONSHIP_LABELS,
+) as [NextOfKinRelationship, string][]
+
+// ============================================================================
 // Passport (has_passport is boolean | null)
 // ============================================================================
 
@@ -241,4 +263,10 @@ export function getCountryLabel(countryCode: string | null | undefined): string 
 
 export function getIndustryTypeLabel(type: IndustryType): string {
   return INDUSTRY_TYPE_LABELS[type] || type
+}
+
+export function getNextOfKinRelationshipLabel(
+  rel: NextOfKinRelationship | string,
+): string {
+  return NEXT_OF_KIN_RELATIONSHIP_LABELS[rel as NextOfKinRelationship] || rel
 }

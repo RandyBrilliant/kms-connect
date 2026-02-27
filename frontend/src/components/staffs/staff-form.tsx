@@ -27,6 +27,8 @@ interface StaffFormProps {
     onSubmit: (values: {
         email: string
         full_name?: string
+        nik?: string
+        address?: string
         contact_phone?: string
         password?: string
         is_active?: boolean
@@ -38,6 +40,8 @@ interface StaffFormProps {
 type StaffFormValues = {
     email: string
     full_name: string
+    nik: string
+    address: string
     contact_phone: string
     password: string
     confirmPassword: string
@@ -110,6 +114,8 @@ export function StaffForm({
         defaultValues: {
             email: staff?.email ?? "",
             full_name: staff?.staff_profile?.full_name ?? "",
+            nik: staff?.staff_profile?.nik ?? "",
+            address: staff?.staff_profile?.address ?? "",
             contact_phone: staff?.staff_profile?.contact_phone ?? "",
             password: "",
             confirmPassword: "",
@@ -121,6 +127,8 @@ export function StaffForm({
                 const result = staffUpdateSchema.safeParse({
                     email: value.email,
                     full_name: value.full_name || undefined,
+                    nik: value.nik || undefined,
+                    address: value.address || undefined,
                     contact_phone: value.contact_phone || undefined,
                 })
                 if (!result.success) {
@@ -135,6 +143,8 @@ export function StaffForm({
                 await onSubmit({
                     email: result.data.email,
                     full_name: result.data.full_name,
+                    nik: result.data.nik,
+                    address: result.data.address,
                     contact_phone: result.data.contact_phone,
                 })
                 return
@@ -155,6 +165,8 @@ export function StaffForm({
             const submitData = {
                 email: payload.email,
                 full_name: payload.full_name,
+                nik: payload.nik || undefined,
+                address: payload.address || undefined,
                 contact_phone: payload.contact_phone || undefined,
                 password: payload.password,
                 is_active: true,
@@ -209,6 +221,67 @@ export function StaffForm({
                                             }),
                                                 ...(errors.full_name
                                                     ? [{ message: errors.full_name! }]
+                                                    : []),
+                                            ]}
+                                        />
+                                    </Field>
+                                )}
+                            </form.Field>
+
+                            <form.Field
+                                name="nik"
+                            >
+                                {(field) => (
+                                    <Field>
+                                        <FieldLabel htmlFor={field.name}>NIK</FieldLabel>
+                                        <Input
+                                            id={field.name}
+                                            type="text"
+                                            placeholder="16 digit NIK"
+                                            maxLength={16}
+                                            value={field.state.value}
+                                            onChange={(e) => field.handleChange(e.target.value.replace(/\D/g, ""))}
+                                            onBlur={field.handleBlur}
+                                        />
+                                        <FieldError
+                                            errors={[
+                                            ...(field.state.meta.errors as unknown[]).map((err) => {
+                                                const e = err as { message?: string } | string
+                                                if (typeof e === "string") return { message: e }
+                                                return { message: e?.message ?? String(e) }
+                                            }),
+                                                ...(errors.nik
+                                                    ? [{ message: errors.nik! }]
+                                                    : []),
+                                            ]}
+                                        />
+                                    </Field>
+                                )}
+                            </form.Field>
+
+                            <form.Field
+                                name="address"
+                            >
+                                {(field) => (
+                                    <Field>
+                                        <FieldLabel htmlFor={field.name}>Alamat</FieldLabel>
+                                        <Input
+                                            id={field.name}
+                                            type="text"
+                                            placeholder="Alamat lengkap"
+                                            value={field.state.value}
+                                            onChange={(e) => field.handleChange(e.target.value)}
+                                            onBlur={field.handleBlur}
+                                        />
+                                        <FieldError
+                                            errors={[
+                                            ...(field.state.meta.errors as unknown[]).map((err) => {
+                                                const e = err as { message?: string } | string
+                                                if (typeof e === "string") return { message: e }
+                                                return { message: e?.message ?? String(e) }
+                                            }),
+                                                ...(errors.address
+                                                    ? [{ message: errors.address! }]
                                                     : []),
                                             ]}
                                         />

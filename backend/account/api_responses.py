@@ -75,6 +75,7 @@ class ApiMessage:
     APPLICANT_NIK_REQUIRED = "NIK wajib diisi."
     NIK_TAKEN = "NIK ini sudah terdaftar untuk pelamar lain."
     NIK_INVALID = "NIK harus 16 digit angka."
+    WORK_EXPERIENCE_LIMIT = "Pelamar hanya dapat memiliki maksimal 2 pengalaman kerja."
 
 
 # ---------------------------------------------------------------------------

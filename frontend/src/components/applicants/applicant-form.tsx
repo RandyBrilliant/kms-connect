@@ -37,6 +37,7 @@ import {
   EDUCATION_LEVEL_LABELS,
   WRITING_HAND_LABELS,
   MARITAL_STATUS_LABELS,
+  NEXT_OF_KIN_RELATIONSHIP_OPTIONS,
 } from "@/constants/applicant"
 import { useRegenciesQuery } from "@/hooks/use-regions-query"
 import { useReferrersQuery } from "@/hooks/use-referrers-query"
@@ -63,7 +64,8 @@ const PROFILE_KEYS = [
   "contact_phone", "gender", "sibling_count", "birth_order", "father_name", "father_age", "father_occupation",
   "mother_name", "mother_age", "mother_occupation", "spouse_name", "spouse_age", "spouse_occupation",
   "family_address", "family_province", "family_district", "family_village", "family_contact_phone",
-  "religion", "education_level", "marital_status", "height_cm", "weight_kg", "writing_hand",
+  "heir_name", "heir_relationship", "heir_contact_phone",
+  "religion", "education_level", "education_major", "marital_status", "height_cm", "weight_kg", "wears_glasses", "writing_hand",
   "passport_number", "passport_issue_date", "passport_issue_place", "passport_expiry_date",
   "referrer", "notes",
 ] as const
@@ -140,14 +142,19 @@ const defaultBiodata = {
   spouse_occupation: "",
   family_address: "",
   family_contact_phone: "",
+  heir_name: "",
+  heir_relationship: "",
+  heir_contact_phone: "",
   family_province: null as number | null,
   family_district: null as number | null,
   family_village: null as number | null,
   religion: "",
   education_level: "",
+  education_major: "",
   marital_status: "",
   height_cm: "",
   weight_kg: "",
+  wears_glasses: "",
   writing_hand: "",
   passport_number: "",
   passport_issue_date: "",
@@ -197,8 +204,15 @@ export function ApplicantForm({
         spouse_age: toNum(value.spouse_age),
         height_cm: toNum(value.height_cm),
         weight_kg: toNum(value.weight_kg),
+        wears_glasses:
+          value.wears_glasses === "true"
+            ? true
+            : value.wears_glasses === "false"
+              ? false
+              : null,
         religion: value.religion || undefined,
         education_level: value.education_level || undefined,
+        education_major: value.education_major || undefined,
         marital_status: value.marital_status || undefined,
         writing_hand: value.writing_hand || undefined,
         passport_issue_date: value.passport_issue_date || null,
@@ -714,6 +728,14 @@ export function ApplicantForm({
                   </Field>
                 )}
               </form.Field>
+              <form.Field name="education_major">
+                {(field) => (
+                  <Field>
+                    <FieldLabel htmlFor={field.name}>Jurusan / Bidang Studi</FieldLabel>
+                    <Input id={field.name} value={field.state.value} onChange={(e) => field.handleChange(e.target.value)} onBlur={field.handleBlur} placeholder="Contoh: Teknik Informatika" />
+                  </Field>
+                )}
+              </form.Field>
               <form.Field name="marital_status">
                 {(field) => (
                   <Field>
@@ -740,7 +762,7 @@ export function ApplicantForm({
         </CardHeader>
         <CardContent className="space-y-6">
           <FieldGroup>
-            <div className="grid gap-6 sm:grid-cols-3">
+            <div className="grid gap-6 sm:grid-cols-4">
               <form.Field name="height_cm">
                 {(field) => (
                   <Field>
@@ -766,6 +788,21 @@ export function ApplicantForm({
                       <SelectContent>
                         <SelectItem value="none">Pilih tangan</SelectItem>
                         {Object.entries(WRITING_HAND_LABELS).map(([key, label]) => (<SelectItem key={key} value={key}>{label}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                )}
+              </form.Field>
+              <form.Field name="wears_glasses">
+                {(field) => (
+                  <Field>
+                    <FieldLabel htmlFor={field.name}>Memakai Kacamata</FieldLabel>
+                    <Select value={field.state.value || "none"} onValueChange={(v) => field.handleChange(v === "none" ? "" : v)}>
+                      <SelectTrigger className="cursor-pointer"><SelectValue placeholder="Pilih" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Pilih</SelectItem>
+                        <SelectItem value="false">Tidak</SelectItem>
+                        <SelectItem value="true">Ya</SelectItem>
                       </SelectContent>
                     </Select>
                   </Field>
@@ -847,6 +884,47 @@ export function ApplicantForm({
                     loading={referrersLoading}
                     emptyMessage="Tidak ada Staff/Admin"
                   />
+                </Field>
+              )}
+            </form.Field>
+          </FieldGroup>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{BIODATA_SECTIONS.ahliWaris.title}</CardTitle>
+          <CardDescription>{BIODATA_SECTIONS.ahliWaris.description}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <FieldGroup>
+            <form.Field name="heir_name">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>Nama Ahli Waris</FieldLabel>
+                  <Input id={field.name} value={field.state.value} onChange={(e) => field.handleChange(e.target.value)} onBlur={field.handleBlur} placeholder="Nama lengkap ahli waris" />
+                </Field>
+              )}
+            </form.Field>
+            <form.Field name="heir_relationship">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>Hubungan</FieldLabel>
+                  <Select value={field.state.value || "none"} onValueChange={(v) => field.handleChange(v === "none" ? "" : v)}>
+                    <SelectTrigger className="cursor-pointer"><SelectValue placeholder="Pilih hubungan" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Pilih hubungan</SelectItem>
+                      {NEXT_OF_KIN_RELATIONSHIP_OPTIONS.map(([key, label]) => (<SelectItem key={key} value={key}>{label}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              )}
+            </form.Field>
+            <form.Field name="heir_contact_phone">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>No. HP Ahli Waris</FieldLabel>
+                  <PhoneInput id={field.name} value={field.state.value} onChange={(val) => field.handleChange(val)} disabled={isSubmitting} placeholder="No. HP ahli waris" />
                 </Field>
               )}
             </form.Field>

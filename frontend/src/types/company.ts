@@ -7,6 +7,8 @@ export interface CompanyProfile {
   company_name: string
   contact_phone: string
   address: string
+  contact_person_name: string
+  contact_person_position: string
   created_at: string
   updated_at: string
 }
@@ -30,6 +32,8 @@ export interface CompanyUserCreateInput {
     company_name: string
     contact_phone?: string
     address?: string
+    contact_person_name?: string
+    contact_person_position?: string
   }
   is_active?: boolean
   email_verified?: boolean
@@ -42,6 +46,8 @@ export interface CompanyUserUpdateInput {
     company_name?: string
     contact_phone?: string
     address?: string
+    contact_person_name?: string
+    contact_person_position?: string
   }
   is_active?: boolean
   email_verified?: boolean

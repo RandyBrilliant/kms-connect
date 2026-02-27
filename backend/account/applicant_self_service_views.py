@@ -22,7 +22,7 @@ from .serializers import (
     ApplicantDocumentSerializer,
 )
 from .permissions import IsApplicant
-from .api_responses import success_response, error_response, ApiCode
+from .api_responses import success_response, error_response, ApiCode, ApiMessage
 from .document_specs import validate_document_file
 from .tasks import process_document_ocr, optimize_document_image
 
@@ -165,11 +165,16 @@ class ApplicantWorkExperienceSelfServiceViewSet(ApplicantSelfServiceMixin, views
         return WorkExperience.objects.none()
 
     def perform_create(self, serializer):
-        """Create work experience untuk current user."""
+        """Create work experience for current user, enforcing max 2 per applicant."""
         profile = self.get_applicant_profile()
         if not profile:
             from rest_framework.exceptions import NotFound
             raise NotFound("Profil pelamar tidak ditemukan.")
+        if WorkExperience.objects.filter(applicant_profile=profile).count() >= 2:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError(
+                {"non_field_errors": [ApiMessage.WORK_EXPERIENCE_LIMIT]}
+            )
         serializer.save(applicant_profile=profile)
 
     # ── Response wrappers ────────────────────────────────────────────────────
@@ -344,3 +349,7 @@ class ApplicantDocumentSelfServiceViewSet(ApplicantSelfServiceMixin, viewsets.Mo
             ),
             status=status.HTTP_200_OK,
         )
+
+# Ahli waris (next of kin) is now stored as flat fields on ApplicantProfile:
+#   heir_name, heir_relationship, heir_contact_phone
+# Update them via PATCH /api/applicants/me/profile/

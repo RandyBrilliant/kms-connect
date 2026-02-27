@@ -5,6 +5,8 @@
 export interface StaffProfile {
   id: number
   full_name: string
+  nik: string
+  address: string
   contact_phone: string
   photo: string | null
   created_at: string
@@ -31,6 +33,8 @@ export interface StaffUserCreateInput {
   password: string
   staff_profile: {
     full_name: string
+    nik?: string
+    address?: string
     contact_phone?: string
     photo?: string | null
   }
@@ -43,6 +47,8 @@ export interface StaffUserUpdateInput {
   password?: string
   staff_profile?: {
     full_name?: string
+    nik?: string
+    address?: string
     contact_phone?: string
     photo?: string | null
   }

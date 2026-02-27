@@ -323,6 +323,8 @@ export function StaffStaffFormPage() {
     const handleSubmit = async (values: {
         email: string
         full_name?: string
+        nik?: string
+        address?: string
         contact_phone?: string
         password?: string
         is_active?: boolean
@@ -334,6 +336,8 @@ export function StaffStaffFormPage() {
                     email: values.email,
                     staff_profile: {
                         full_name: values.full_name,
+                        nik: values.nik || undefined,
+                        address: values.address || undefined,
                         contact_phone: values.contact_phone || undefined,
                     },
                 })
@@ -345,6 +349,8 @@ export function StaffStaffFormPage() {
                     password: values.password!,
                     staff_profile: {
                         full_name: values.full_name!,
+                        nik: values.nik || undefined,
+                        address: values.address || undefined,
                         contact_phone: values.contact_phone || undefined,
                     },
                     is_active: true,

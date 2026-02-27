@@ -44,6 +44,10 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   final _spouseAge = TextEditingController();
   final _spouseOccupation = TextEditingController();
 
+  // Ahli Waris (Next of Kin)
+  final _heirName = TextEditingController();
+  final _heirContactPhone = TextEditingController();
+
   // Date-of-birth pickers for family members
   final _fatherBirthDateCtrl = TextEditingController();
   final _motherBirthDateCtrl = TextEditingController();
@@ -59,6 +63,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   Region? _birthPlace;  // Regency
 
   String? _gender;
+  String? _heirRelationship;
   DateTime? _pickedDate;
   DateTime? _pickedFatherBirthDate;
   DateTime? _pickedMotherBirthDate;
@@ -83,6 +88,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
       _siblingCount, _birthOrder, _fatherName, _fatherAge, _fatherOccupation,
       _motherName, _motherAge, _motherOccupation, _familyAddress, _familyPhone,
       _spouseName, _spouseAge, _spouseOccupation,
+      _heirName, _heirContactPhone,
       _fatherBirthDateCtrl, _motherBirthDateCtrl, _spouseBirthDateCtrl,
     ]) {
       c.dispose();
@@ -133,6 +139,11 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
           DateFormat('dd MMMM yyyy', 'id').format(_pickedSpouseBirthDate!);
     }
     _spouseOccupation.text = p.spouseOccupation ?? '';
+
+    // Ahli Waris
+    _heirName.text = p.heirName ?? '';
+    _heirRelationship = (p.heirRelationship?.isNotEmpty == true) ? p.heirRelationship : null;
+    _heirContactPhone.text = p.heirContactPhone ?? '';
 
     // Pre-seed region objects from names stored in profile
     if (p.birthPlaceId != null && p.birthPlaceName != null) {
@@ -245,6 +256,12 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
         'spouse_age': _computeAge(_pickedSpouseBirthDate!),
       if (_spouseOccupation.text.trim().isNotEmpty)
         'spouse_occupation': _spouseOccupation.text.trim(),
+      if (_heirName.text.trim().isNotEmpty)
+        'heir_name': _heirName.text.trim(),
+      if (_heirRelationship != null)
+        'heir_relationship': _heirRelationship,
+      if (_heirContactPhone.text.trim().isNotEmpty)
+        'heir_contact_phone': _heirContactPhone.text.trim(),
     };
 
     final success =
@@ -814,6 +831,38 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                       ],
                     ),
 
+                    const SizedBox(height: 20),
+
+                    // ─── Ahli Waris ────────────────────────────────────
+                    _SectionCard(
+                      icon: Icons.people_alt_outlined,
+                      label: 'Ahli Waris',
+                      subtitle: 'Kontak darurat terdekat',
+                      children: [
+                        M3TextField(
+                          controller: _heirName,
+                          label: 'Nama Ahli Waris',
+                          hint: 'Nama lengkap',
+                          prefixIcon: Icons.person_outline_rounded,
+                          textCapitalization: TextCapitalization.words,
+                        ),
+                        const SizedBox(height: 14),
+                        _HeirRelationshipSelector(
+                          selected: _heirRelationship,
+                          onChanged: (v) =>
+                              setState(() => _heirRelationship = v),
+                        ),
+                        const SizedBox(height: 14),
+                        M3TextField(
+                          controller: _heirContactPhone,
+                          label: 'No. Telepon Ahli Waris',
+                          hint: 'Contoh: 0812xxxxxxxx',
+                          prefixIcon: Icons.phone_outlined,
+                          keyboardType: TextInputType.phone,
+                        ),
+                      ],
+                    ),
+
                     const SizedBox(height: 28),
 
                     // ─── Save button ───────────────────────────────────
@@ -1096,6 +1145,76 @@ class _GenderSelector extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
             ),
           ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Dropdown selector for heir (ahli waris) relationship type.
+class _HeirRelationshipSelector extends StatelessWidget {
+  const _HeirRelationshipSelector({
+      required this.selected, required this.onChanged});
+  final String? selected;
+  final ValueChanged<String?> onChanged;
+
+  static const _options = <(String, String)>[
+    ('SUAMI', 'Suami'),
+    ('ISTRI', 'Istri'),
+    ('AYAH', 'Ayah'),
+    ('IBU', 'Ibu'),
+    ('KAKAK', 'Kakak'),
+    ('ADIK', 'Adik'),
+    ('ANAK', 'Anak'),
+    ('PAMAN', 'Paman'),
+    ('BIBI', 'Bibi'),
+    ('LAINNYA', 'Lainnya'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          child: Text('Hubungan',
+              style: tt.labelMedium
+                  ?.copyWith(color: cs.onSurfaceVariant)),
+        ),
+        DropdownButtonFormField<String>(
+          value: selected,
+          decoration: InputDecoration(
+            prefixIcon: const Icon(Icons.family_restroom_outlined, size: 20),
+            filled: true,
+            fillColor: cs.surfaceContainerHighest,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16, vertical: 14),
+            hintText: 'Pilih hubungan',
+          ),
+          items: [
+            const DropdownMenuItem<String>(
+              value: null,
+              child: Text('Pilih hubungan'),
+            ),
+            ..._options.map(
+              (o) => DropdownMenuItem<String>(
+                value: o.$1,
+                child: Text(o.$2),
+              ),
+            ),
+          ],
+          onChanged: onChanged,
         ),
       ],
     );

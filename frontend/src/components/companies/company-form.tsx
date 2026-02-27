@@ -29,6 +29,8 @@ interface CompanyFormProps {
     company_name?: string
     contact_phone?: string
     address?: string
+    contact_person_name?: string
+    contact_person_position?: string
     password?: string
     is_active?: boolean
     email_verified?: boolean
@@ -41,6 +43,8 @@ type CompanyFormValues = {
   company_name: string
   contact_phone: string
   address: string
+  contact_person_name: string
+  contact_person_position: string
   password: string
   confirmPassword: string
 }
@@ -113,8 +117,8 @@ export function CompanyForm({
       email: company?.email ?? "",
       company_name: company?.company_profile?.company_name ?? "",
       contact_phone: company?.company_profile?.contact_phone ?? "",
-      address: company?.company_profile?.address ?? "",
-      password: "",
+      address: company?.company_profile?.address ?? "",      contact_person_name: company?.company_profile?.contact_person_name ?? "",
+      contact_person_position: company?.company_profile?.contact_person_position ?? "",      password: "",
       confirmPassword: "",
     },
     onSubmit: async ({ value }) => {
@@ -126,6 +130,8 @@ export function CompanyForm({
           company_name: value.company_name || undefined,
           contact_phone: value.contact_phone || undefined,
           address: value.address || undefined,
+          contact_person_name: value.contact_person_name || undefined,
+          contact_person_position: value.contact_person_position || undefined,
         })
         if (!result.success) {
           const errs: Partial<Record<keyof CompanyFormValues, string>> = {}
@@ -141,6 +147,8 @@ export function CompanyForm({
           company_name: result.data.company_name,
           contact_phone: result.data.contact_phone,
           address: result.data.address,
+          contact_person_name: result.data.contact_person_name,
+          contact_person_position: result.data.contact_person_position,
         })
         return
       }
@@ -162,6 +170,8 @@ export function CompanyForm({
         company_name: payload.company_name,
         contact_phone: payload.contact_phone || undefined,
         address: payload.address || undefined,
+        contact_person_name: payload.contact_person_name || undefined,
+        contact_person_position: payload.contact_person_position || undefined,
         password: payload.password,
         is_active: true,
         email_verified: false,
@@ -259,6 +269,54 @@ export function CompanyForm({
                       if (!err) return errors.address
                       if (typeof err === "string") return err
                       return (err as { message?: string }).message ?? errors.address
+                    })()}
+                  </FieldError>
+                </Field>
+              )}
+            </form.Field>
+
+            <form.Field name="contact_person_name">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>Nama Kontak Person</FieldLabel>
+                  <Input
+                    id={field.name}
+                    type="text"
+                    placeholder="Contoh: Budi Santoso"
+                    value={field.state.value}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    onBlur={field.handleBlur}
+                  />
+                  <FieldError>
+                    {(() => {
+                      const [err] = field.state.meta.errors as unknown[]
+                      if (!err) return errors.contact_person_name
+                      if (typeof err === "string") return err
+                      return (err as { message?: string }).message ?? errors.contact_person_name
+                    })()}
+                  </FieldError>
+                </Field>
+              )}
+            </form.Field>
+
+            <form.Field name="contact_person_position">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>Jabatan Kontak Person</FieldLabel>
+                  <Input
+                    id={field.name}
+                    type="text"
+                    placeholder="Contoh: HRD Manager"
+                    value={field.state.value}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    onBlur={field.handleBlur}
+                  />
+                  <FieldError>
+                    {(() => {
+                      const [err] = field.state.meta.errors as unknown[]
+                      if (!err) return errors.contact_person_position
+                      if (typeof err === "string") return err
+                      return (err as { message?: string }).message ?? errors.contact_person_position
                     })()}
                   </FieldError>
                 </Field>

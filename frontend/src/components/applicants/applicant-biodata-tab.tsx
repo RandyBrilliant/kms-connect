@@ -32,6 +32,7 @@ import {
   EDUCATION_LEVEL_LABELS,
   WRITING_HAND_LABELS,
   MARITAL_STATUS_LABELS,
+  NEXT_OF_KIN_RELATIONSHIP_OPTIONS,
 } from "@/constants/applicant"
 import { BIODATA_SECTIONS, RequiredStar } from "./biodata-form-shared"
 import { RegionAddressFields } from "./region-address-fields"
@@ -66,6 +67,9 @@ type BiodataFormValues = {
   spouse_occupation: string
   family_address: string
   family_contact_phone: string
+  heir_name: string
+  heir_relationship: string
+  heir_contact_phone: string
   notes: string
   province: number | null
   district: number | null
@@ -75,9 +79,11 @@ type BiodataFormValues = {
   family_village: number | null
   religion: string
   education_level: string
+  education_major: string
   marital_status: string
   height_cm: string
   weight_kg: string
+  wears_glasses: string
   writing_hand: string
   passport_number: string
   passport_issue_date: string
@@ -108,6 +114,9 @@ function toFormValues(p: ApplicantProfile): BiodataFormValues {
     spouse_occupation: p.spouse_occupation || "",
     family_address: p.family_address || "",
     family_contact_phone: p.family_contact_phone || "",
+    heir_name: p.heir_name || "",
+    heir_relationship: p.heir_relationship || "",
+    heir_contact_phone: p.heir_contact_phone || "",
     notes: p.notes || "",
     province: p.province ?? null,
     district: p.district ?? null,
@@ -117,9 +126,11 @@ function toFormValues(p: ApplicantProfile): BiodataFormValues {
     family_village: p.family_village ?? null,
     religion: p.religion || "",
     education_level: p.education_level || "",
+    education_major: p.education_major || "",
     marital_status: p.marital_status || "",
     height_cm: p.height_cm != null ? String(p.height_cm) : "",
     weight_kg: p.weight_kg != null ? String(p.weight_kg) : "",
+    wears_glasses: p.wears_glasses != null ? String(p.wears_glasses) : "",
     writing_hand: p.writing_hand || "",
     passport_number: p.passport_number || "",
     passport_issue_date: p.passport_issue_date || "",
@@ -169,6 +180,9 @@ export function ApplicantBiodataTab({
         spouse_occupation: value.spouse_occupation || undefined,
         family_address: value.family_address || undefined,
         family_contact_phone: value.family_contact_phone || undefined,
+        heir_name: value.heir_name || undefined,
+        heir_relationship: value.heir_relationship || undefined,
+        heir_contact_phone: value.heir_contact_phone || undefined,
         notes: value.notes || undefined,
         province: value.province ?? undefined,
         district: value.district ?? undefined,
@@ -178,9 +192,16 @@ export function ApplicantBiodataTab({
         family_village: value.family_village ?? undefined,
         religion: value.religion || undefined,
         education_level: value.education_level || undefined,
+        education_major: value.education_major || undefined,
         marital_status: value.marital_status || undefined,
         height_cm: toNum(value.height_cm),
         weight_kg: toNum(value.weight_kg),
+        wears_glasses:
+          value.wears_glasses === "true"
+            ? true
+            : value.wears_glasses === "false"
+              ? false
+              : null,
         writing_hand: value.writing_hand || undefined,
         passport_number: value.passport_number || undefined,
         passport_issue_date: value.passport_issue_date || null,
@@ -207,6 +228,7 @@ export function ApplicantBiodataTab({
       if (raw.education_level === "") data.education_level = undefined
       if (raw.marital_status === "") data.marital_status = undefined
       if (raw.writing_hand === "") data.writing_hand = undefined
+      if (raw.heir_relationship === "") data.heir_relationship = undefined
       await onSubmit(data)
     },
   })
@@ -499,6 +521,21 @@ export function ApplicantBiodataTab({
                 )}
               </form.Field>
 
+              <form.Field name="education_major">
+                {(field) => (
+                  <Field>
+                    <FieldLabel htmlFor={field.name}>Jurusan / Bidang Studi</FieldLabel>
+                    <Input
+                      id={field.name}
+                      value={field.state.value}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      onBlur={field.handleBlur}
+                      placeholder="Contoh: Teknik Informatika"
+                    />
+                  </Field>
+                )}
+              </form.Field>
+
               <form.Field name="marital_status">
                 {(field) => (
                   <Field>
@@ -536,7 +573,7 @@ export function ApplicantBiodataTab({
         </CardHeader>
         <CardContent className="space-y-6">
           <FieldGroup>
-            <div className="grid gap-6 sm:grid-cols-3">
+            <div className="grid gap-6 sm:grid-cols-4">
               <form.Field name="height_cm">
                 {(field) => (
                   <Field>
@@ -591,6 +628,29 @@ export function ApplicantBiodataTab({
                             {label}
                           </SelectItem>
                         ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                )}
+              </form.Field>
+
+              <form.Field name="wears_glasses">
+                {(field) => (
+                  <Field>
+                    <FieldLabel htmlFor={field.name}>Memakai Kacamata</FieldLabel>
+                    <Select
+                      value={field.state.value || "none"}
+                      onValueChange={(v) =>
+                        field.handleChange(v === "none" ? "" : v)
+                      }
+                    >
+                      <SelectTrigger className="cursor-pointer">
+                        <SelectValue placeholder="Pilih" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Pilih</SelectItem>
+                        <SelectItem value="false">Tidak</SelectItem>
+                        <SelectItem value="true">Ya</SelectItem>
                       </SelectContent>
                     </Select>
                   </Field>
@@ -924,6 +984,72 @@ export function ApplicantBiodataTab({
                     value={field.state.value}
                     onChange={(e) => field.handleChange(e.target.value)}
                     onBlur={field.handleBlur}
+                  />
+                </Field>
+              )}
+            </form.Field>
+          </FieldGroup>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{BIODATA_SECTIONS.ahliWaris.title}</CardTitle>
+          <CardDescription>{BIODATA_SECTIONS.ahliWaris.description}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <FieldGroup>
+            <form.Field name="heir_name">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>Nama Ahli Waris</FieldLabel>
+                  <Input
+                    id={field.name}
+                    value={field.state.value}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    onBlur={field.handleBlur}
+                    placeholder="Nama lengkap ahli waris"
+                  />
+                </Field>
+              )}
+            </form.Field>
+
+            <form.Field name="heir_relationship">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>Hubungan</FieldLabel>
+                  <Select
+                    value={field.state.value || "none"}
+                    onValueChange={(v) =>
+                      field.handleChange(v === "none" ? "" : v)
+                    }
+                  >
+                    <SelectTrigger className="cursor-pointer">
+                      <SelectValue placeholder="Pilih hubungan" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Pilih hubungan</SelectItem>
+                      {NEXT_OF_KIN_RELATIONSHIP_OPTIONS.map(([key, label]) => (
+                        <SelectItem key={key} value={key}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              )}
+            </form.Field>
+
+            <form.Field name="heir_contact_phone">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>No. HP Ahli Waris</FieldLabel>
+                  <PhoneInput
+                    id={field.name}
+                    value={field.state.value}
+                    onChange={(val) => field.handleChange(val)}
+                    disabled={isSubmitting}
+                    placeholder="No. HP ahli waris"
                   />
                 </Field>
               )}

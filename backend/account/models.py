@@ -151,6 +151,24 @@ class IndustryType(models.TextChoices):
 INDUSTRY_TYPE_MAX_LENGTH = 21  # BELUM PERNAH BEKERJA
 
 
+class NextOfKinRelationship(models.TextChoices):
+    """Hubungan ahli waris dengan pelamar."""
+
+    SUAMI = "SUAMI", _("Suami")
+    ISTRI = "ISTRI", _("Istri")
+    AYAH = "AYAH", _("Ayah")
+    IBU = "IBU", _("Ibu")
+    KAKAK = "KAKAK", _("Kakak")
+    ADIK = "ADIK", _("Adik")
+    ANAK = "ANAK", _("Anak")
+    PAMAN = "PAMAN", _("Paman")
+    BIBI = "BIBI", _("Bibi")
+    LAINNYA = "LAINNYA", _("Lainnya")
+
+
+NEXT_OF_KIN_RELATIONSHIP_MAX_LENGTH = 7  # LAINNYA
+
+
 # ---------------------------------------------------------------------------
 # User
 # ---------------------------------------------------------------------------
@@ -329,6 +347,17 @@ class StaffProfile(models.Model):
         max_length=50,
         blank=True,
         help_text=_("Nomor telepon kontak."),
+    )
+    nik = models.CharField(
+        _("NIK staf"),
+        max_length=16,
+        blank=True,
+        help_text=_("Nomor Induk Kependudukan staf (16 digit)."),
+    )
+    address = models.TextField(
+        _("alamat"),
+        blank=True,
+        help_text=_("Alamat lengkap staf sesuai KTP."),
     )
     photo = models.ImageField(
         _("foto profil"),
@@ -545,6 +574,26 @@ class ApplicantProfile(models.Model):
         blank=True,
         help_text=_("Nomor HP/WA keluarga yang aktif."),
     )
+    # ---- Ahli waris (next of kin) ----
+    heir_name = models.CharField(
+        _("nama ahli waris"),
+        max_length=255,
+        blank=True,
+        help_text=_("Nama lengkap ahli waris."),
+    )
+    heir_relationship = models.CharField(
+        _("hubungan ahli waris"),
+        max_length=NEXT_OF_KIN_RELATIONSHIP_MAX_LENGTH,
+        choices=NextOfKinRelationship.choices,
+        blank=True,
+        help_text=_("Hubungan ahli waris dengan pelamar (mis. Suami, Istri, Ayah, Ibu)."),
+    )
+    heir_contact_phone = models.CharField(
+        _("no. HP / WA ahli waris"),
+        max_length=50,
+        blank=True,
+        help_text=_("Nomor HP atau WhatsApp ahli waris yang aktif."),
+    )
     # ---- Pernyataan CPMI (form: pernyataan calon PMI) ----
     data_declaration_confirmed = models.BooleanField(
         _("pernyataan data benar"),
@@ -665,6 +714,18 @@ class ApplicantProfile(models.Model):
         _("nomor BPJS kesehatan / KIS"),
         max_length=50,
         blank=True,
+    )
+    register_number = models.CharField(
+        _("nomor register pelamar"),
+        max_length=20,
+        unique=True,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=_(
+            "Nomor register unik pelamar (contoh: AP2026000001). "
+            "Di-generate otomatis saat pertama kali disimpan."
+        ),
     )
     shoe_size = models.CharField(
         _("ukuran sepatu"),
@@ -1092,8 +1153,16 @@ class ApplicantProfile(models.Model):
         except Exception:
             # If anything goes wrong, preserve existing score.
             pass
-        
+
         super().save(*args, **kwargs)
+
+        # Auto-generate register_number after first save (requires pk).
+        # Uses a direct queryset update to avoid re-triggering save() recursion.
+        if not self.register_number and self.pk:
+            year = timezone.now().year
+            generated = f"AP{year}{self.pk:06d}"
+            ApplicantProfile.objects.filter(pk=self.pk).update(register_number=generated)
+            self.register_number = generated
 
 # ---------------------------------------------------------------------------
 # Pengalaman kerja (per pelamar, terstruktur)
@@ -1525,10 +1594,23 @@ class CompanyProfile(models.Model):
         max_length=255,
         help_text=_("Nama perusahaan terdaftar."),
     )
+    contact_person_name = models.CharField(
+        _("nama contact person"),
+        max_length=255,
+        blank=True,
+        help_text=_("Nama lengkap orang yang dapat dihubungi di perusahaan."),
+    )
+    contact_person_position = models.CharField(
+        _("jabatan contact person"),
+        max_length=255,
+        blank=True,
+        help_text=_("Jabatan atau posisi contact person di perusahaan."),
+    )
     contact_phone = models.CharField(
-        _("telepon kontak"),
+        _("no. HP / WA contact person"),
         max_length=50,
         blank=True,
+        help_text=_("Nomor HP atau WhatsApp contact person yang aktif."),
     )
     address = models.TextField(
         _("alamat"),

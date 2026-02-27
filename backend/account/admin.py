@@ -52,11 +52,17 @@ class CustomUserAdmin(BaseUserAdmin):
 
 @admin.register(StaffProfile)
 class StaffProfileAdmin(admin.ModelAdmin):
-    list_display = ("user", "contact_phone", "created_at")
+    list_display = ("user", "contact_phone", "nik", "created_at")
     list_filter = ("created_at",)
-    search_fields = ("user__full_name", "user__email", "contact_phone")
+    search_fields = ("user__full_name", "user__email", "contact_phone", "nik")
     raw_id_fields = ("user",)
     readonly_fields = ("created_at", "updated_at")
+    fieldsets = (
+        (_("Data Pengguna"), {"fields": ("user",)}),
+        (_("Kontak & Identitas"), {"fields": ("contact_phone", "nik", "address")}),
+        (_("Foto"), {"fields": ("photo",)}),
+        (_("Tanggal"), {"fields": ("created_at", "updated_at")}),
+    )
 
 
 class WorkExperienceInline(admin.TabularInline):
@@ -77,6 +83,7 @@ class ApplicantDocumentInline(admin.TabularInline):
 class ApplicantProfileAdmin(admin.ModelAdmin):
     list_display = (
         "user",
+        "register_number",
         "nik",
         "verification_status",
         "get_referrer_display",
@@ -89,7 +96,7 @@ class ApplicantProfileAdmin(admin.ModelAdmin):
     search_fields = ("user__full_name", "user__email", "nik", "contact_phone")
     raw_id_fields = ("user", "referrer", "verified_by")
     autocomplete_fields = ("province", "district", "village", "family_province", "family_district", "family_village")
-    readonly_fields = ("created_at", "updated_at")
+    readonly_fields = ("register_number", "created_at", "updated_at")
     inlines = [WorkExperienceInline, ApplicantDocumentInline]
 
     fieldsets = (
@@ -140,6 +147,13 @@ class ApplicantProfileAdmin(admin.ModelAdmin):
             },
         ),
         (
+            _("Ahli Waris"),
+            {
+                "fields": ("heir_name", "heir_relationship", "heir_contact_phone"),
+                "description": _("Data ahli waris (nama, hubungan, no. HP/WA)."),
+            },
+        ),
+        (
             _("Pernyataan CPMI"),
             {
                 "fields": ("data_declaration_confirmed", "zero_cost_understood"),
@@ -166,6 +180,7 @@ class ApplicantProfileAdmin(admin.ModelAdmin):
                     "family_card_number",
                     "diploma_number",
                     "bpjs_number",
+                    "register_number",
                     "shoe_size",
                     "shirt_size",
                     "photo",
@@ -245,11 +260,20 @@ class ApplicantDocumentAdmin(admin.ModelAdmin):
 
 @admin.register(CompanyProfile)
 class CompanyProfileAdmin(admin.ModelAdmin):
-    list_display = ("company_name", "user", "contact_phone", "created_at")
+    list_display = ("company_name", "user", "contact_person_name", "contact_phone", "created_at")
     list_filter = ("created_at",)
-    search_fields = ("company_name", "user__email", "contact_phone")
+    search_fields = ("company_name", "user__email", "contact_phone", "contact_person_name")
     raw_id_fields = ("user",)
     readonly_fields = ("created_at", "updated_at")
+    fieldsets = (
+        (_("Pengguna"), {"fields": ("user",)}),
+        (_("Perusahaan"), {"fields": ("company_name", "address")}),
+        (
+            _("Contact Person"),
+            {"fields": ("contact_person_name", "contact_person_position", "contact_phone")},
+        ),
+        (_("Tanggal"), {"fields": ("created_at", "updated_at")}),
+    )
 
 
 @admin.register(Broadcast)

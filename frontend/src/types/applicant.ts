@@ -38,6 +38,18 @@ export type MaritalStatus =
   | "CERAI HIDUP"
   | "CERAI MATI"
 
+export type NextOfKinRelationship =
+  | "SUAMI"
+  | "ISTRI"
+  | "AYAH"
+  | "IBU"
+  | "KAKAK"
+  | "ADIK"
+  | "ANAK"
+  | "PAMAN"
+  | "BIBI"
+  | "LAINNYA"
+
 export type IndustryType =
   | "SEMICONDUCTOR"
   | "ELEKTRONIK"
@@ -56,6 +68,7 @@ export interface RegionDisplay {
 
 export interface ApplicantProfile {
   id: number
+  register_number: string | null
   referrer: number | null
   registration_date: string | null
   destination_country: DestinationCountry
@@ -88,6 +101,10 @@ export interface ApplicantProfile {
   family_village: number | null
   family_village_display?: RegionDisplay | null
   family_contact_phone: string
+  heir_name: string
+  heir_relationship: NextOfKinRelationship | ""
+  heir_relationship_display?: string
+  heir_contact_phone: string
   data_declaration_confirmed: boolean
   zero_cost_understood: boolean
   nik: string

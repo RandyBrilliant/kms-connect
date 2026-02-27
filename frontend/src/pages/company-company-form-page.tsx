@@ -220,6 +220,8 @@ export function CompanyCompanyFormPage() {
     company_name?: string
     contact_phone?: string
     address?: string
+    contact_person_name?: string
+    contact_person_position?: string
     password?: string
     is_active?: boolean
     email_verified?: boolean
@@ -232,6 +234,8 @@ export function CompanyCompanyFormPage() {
             company_name: values.company_name,
             contact_phone: values.contact_phone,
             address: values.address,
+            contact_person_name: values.contact_person_name,
+            contact_person_position: values.contact_person_position,
           },
         })
         toast.success("Perusahaan diperbarui", "Perubahan berhasil disimpan")
@@ -244,6 +248,8 @@ export function CompanyCompanyFormPage() {
             company_name: values.company_name!,
             contact_phone: values.contact_phone,
             address: values.address,
+            contact_person_name: values.contact_person_name,
+            contact_person_position: values.contact_person_position,
           },
           is_active: true,
           email_verified: false,

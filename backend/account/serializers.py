@@ -17,6 +17,7 @@ from .models import (
     CompanyProfile,
     ApplicantProfile,
     WorkExperience,
+    NextOfKinRelationship,
     DocumentType,
     ApplicantDocument,
     ApplicantVerificationStatus,
@@ -105,7 +106,7 @@ class AdminUserSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 class StaffProfileSerializer(serializers.ModelSerializer):
-    """Profil staf (nama dari user, telepon, foto)."""
+    """Profil staf (nama dari user, telepon, NIK, foto, alamat)."""
 
     full_name = serializers.CharField(
         required=False,
@@ -117,7 +118,7 @@ class StaffProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = StaffProfile
-        fields = ["id", "full_name", "contact_phone", "photo", "created_at", "updated_at"]
+        fields = ["id", "full_name", "contact_phone", "nik", "address", "photo", "created_at", "updated_at"]
         read_only_fields = ["id", "created_at", "updated_at"]
     
     def to_representation(self, instance):
@@ -223,11 +224,20 @@ class StaffUserSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 class CompanyProfileSerializer(serializers.ModelSerializer):
-    """Profil perusahaan (nama perusahaan, telepon, alamat)."""
+    """Profil perusahaan (nama perusahaan, contact person, telepon, alamat)."""
 
     class Meta:
         model = CompanyProfile
-        fields = ["id", "company_name", "contact_phone", "address", "created_at", "updated_at"]
+        fields = [
+            "id",
+            "company_name",
+            "contact_person_name",
+            "contact_person_position",
+            "contact_phone",
+            "address",
+            "created_at",
+            "updated_at",
+        ]
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
@@ -316,6 +326,7 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
 
     village_display = serializers.SerializerMethodField(read_only=True)
     family_village_display = serializers.SerializerMethodField(read_only=True)
+    heir_relationship_display = serializers.SerializerMethodField(read_only=True)
     referrer = serializers.PrimaryKeyRelatedField(
         queryset=CustomUser.objects.none(),
         required=False,
@@ -372,6 +383,10 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
             "family_village",
             "family_village_display",
             "family_contact_phone",
+            "heir_name",
+            "heir_relationship",
+            "heir_relationship_display",
+            "heir_contact_phone",
             "data_declaration_confirmed",
             "zero_cost_understood",
             "nik",
@@ -392,6 +407,7 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
             "family_card_number",
             "diploma_number",
             "bpjs_number",
+            "register_number",
             "shoe_size",
             "shirt_size",
             "photo",
@@ -405,7 +421,12 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "score", "created_at", "updated_at"]
+        read_only_fields = ["id", "score", "register_number", "created_at", "updated_at"]
+
+    def get_heir_relationship_display(self, obj):
+        if not obj.heir_relationship:
+            return ""
+        return NextOfKinRelationship(obj.heir_relationship).label if obj.heir_relationship in NextOfKinRelationship.values else obj.heir_relationship
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -703,6 +724,7 @@ class WorkExperienceSerializer(serializers.ModelSerializer):
     country: ISO 3166-1 alpha-2 (e.g. ID, MY) via CountryField.
     We override country as a plain CharField so DRF doesn't try to JSON-serialize
     the Country object returned by django-countries.
+    Max 2 entries per applicant (enforced at create time).
     """
 
     # Override CountryField → plain CharField so serialisation returns a string code.
@@ -749,6 +771,26 @@ class WorkExperienceSerializer(serializers.ModelSerializer):
             )
         instance.save()
         return instance
+
+    def validate(self, attrs):
+        """Enforce max 2 work experiences per applicant (only on create)."""
+        # self.instance is None during create, set during update
+        if self.instance is None:
+            # applicant_profile is injected via perform_create(serializer.save(applicant_profile=...))
+            # It will be available in the view context; we check via the request context if possible.
+            # The actual limit check happens in perform_create of the viewset.
+            # We also expose it here for direct serializer usage.
+            request = self.context.get("request")
+            applicant_profile = self.context.get("applicant_profile")
+            if applicant_profile is not None:
+                existing_count = WorkExperience.objects.filter(
+                    applicant_profile=applicant_profile
+                ).count()
+                if existing_count >= 2:
+                    raise serializers.ValidationError(
+                        {"non_field_errors": [ApiMessage.WORK_EXPERIENCE_LIMIT]}
+                    )
+        return attrs
 
     def create(self, validated_data):
         instance = WorkExperience(**validated_data)
