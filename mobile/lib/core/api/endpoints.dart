@@ -32,6 +32,17 @@ class ApiEndpoints {
   static String jobDetail(int id) => '$baseUrl/jobs/public/$id/';
   static String applyForJob(int id) => '$baseUrl/jobs/$id/apply/';
 
+  // Applicant Applications
+  static String applicationDetail(int id) => '$baseUrl/applicants/me/applications/$id/';
+
+  // Chat (applicant side)
+  static String chatMessages(int applicationId) =>
+      '$baseUrl/chat/applicant/thread/$applicationId/messages/';
+  static String chatSend(int applicationId) =>
+      '$baseUrl/chat/applicant/thread/$applicationId/send/';
+  static String chatMarkRead(int applicationId) =>
+      '$baseUrl/chat/applicant/thread/$applicationId/mark-read/';
+
   // News
   static String newsDetail(int id) => '$baseUrl/news/public/$id/';
 

@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     'regions.apps.RegionsConfig',
     'account.apps.AccountConfig',
     'main.apps.MainConfig',
+    'chat.apps.ChatConfig',
 ]
 
 AUTH_USER_MODEL = 'account.CustomUser'

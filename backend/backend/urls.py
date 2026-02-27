@@ -51,6 +51,7 @@ urlpatterns = [
     path("api/", include("regions.urls")),
     path("api/", include("account.urls")),
     path("api/", include("main.urls")),
+    path("api/chat/", include("chat.urls")),
 ]
 
 if settings.DEBUG and settings.MEDIA_ROOT:

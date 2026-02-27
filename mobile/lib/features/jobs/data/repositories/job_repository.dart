@@ -101,13 +101,47 @@ class JobRepository {
         queryParameters: queryParams,
       );
 
-      // Returns a raw JSON array (pagination_class = None on the viewset).
+      // Returns a raw JSON array or paginated envelope
       final data = response.data;
-      if (data is! List) return [];
+      if (data is List) {
+        return data
+            .map((json) => JobApplication.fromJson(json as Map<String, dynamic>))
+            .toList();
+      }
+      // Handle paginated response
+      if (data is Map<String, dynamic> && data['results'] is List) {
+        return (data['results'] as List)
+            .map((json) => JobApplication.fromJson(json as Map<String, dynamic>))
+            .toList();
+      }
+      return [];
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
 
-      return data
-          .map((json) => JobApplication.fromJson(json as Map<String, dynamic>))
-          .toList();
+  /// Get single application detail (includes status_history)
+  Future<JobApplication> getApplicationDetail(int id) async {
+    try {
+      final response = await _apiClient.dio.get(
+        ApiEndpoints.applicationDetail(id),
+      );
+      final data = response.data;
+      if (data is Map<String, dynamic>) {
+        return JobApplication.fromJson(data);
+      }
+      // Unwrap ApiResponse envelope if present
+      final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
+        response.data,
+        (d) => d as Map<String, dynamic>,
+      );
+      if (apiResponse.data != null) {
+        return JobApplication.fromJson(apiResponse.data!);
+      }
+      throw DioException(
+        requestOptions: response.requestOptions,
+        message: 'Gagal mengambil detail lamaran',
+      );
     } on DioException catch (e) {
       throw _handleError(e);
     }

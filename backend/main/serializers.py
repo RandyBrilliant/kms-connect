@@ -7,7 +7,16 @@ Serializers untuk konten main app:
 from rest_framework import serializers
 from django.utils import timezone
 
-from .models import News, LowonganKerja, NewsStatus, JobStatus, JobApplication, ApplicationStatus
+from .models import (
+    ApplicationSource,
+    ApplicationStatus,
+    ApplicationStatusHistory,
+    JobApplication,
+    JobStatus,
+    LowonganKerja,
+    News,
+    NewsStatus,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -187,14 +196,45 @@ class LowonganKerjaSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 
+class ApplicationStatusHistorySerializer(serializers.ModelSerializer):
+    """Read-only audit trail entry for a single status change."""
+
+    changed_by_name = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = ApplicationStatusHistory
+        fields = [
+            "id",
+            "from_status",
+            "to_status",
+            "changed_by",
+            "changed_by_name",
+            "changed_at",
+            "note",
+        ]
+        read_only_fields = fields
+
+    def get_changed_by_name(self, obj) -> str | None:
+        if not obj.changed_by:
+            return None
+        return obj.changed_by.full_name or obj.changed_by.email
+
+
 class JobApplicationSerializer(serializers.ModelSerializer):
-    """Serializer untuk lamaran kerja."""
+    """
+    Full read serializer for JobApplication.
+    Used for all GET responses — includes status_history inline so the
+    frontend gets the complete audit trail in a single call.
+    """
 
     applicant_name = serializers.SerializerMethodField(read_only=True)
     applicant_email = serializers.SerializerMethodField(read_only=True)
     job_title = serializers.SerializerMethodField(read_only=True)
     company_name = serializers.SerializerMethodField(read_only=True)
     reviewed_by_name = serializers.SerializerMethodField(read_only=True)
+    assigned_by_name = serializers.SerializerMethodField(read_only=True)
+    cooldown_eligible_date = serializers.SerializerMethodField(read_only=True)
+    status_history = ApplicationStatusHistorySerializer(many=True, read_only=True)
 
     class Meta:
         model = JobApplication
@@ -207,11 +247,17 @@ class JobApplicationSerializer(serializers.ModelSerializer):
             "job_title",
             "company_name",
             "status",
+            "source",
             "applied_at",
             "reviewed_at",
+            "placement_end_date",
+            "cooldown_eligible_date",
             "reviewed_by",
             "reviewed_by_name",
+            "assigned_by",
+            "assigned_by_name",
             "notes",
+            "status_history",
             "created_at",
             "updated_at",
         ]
@@ -222,6 +268,9 @@ class JobApplicationSerializer(serializers.ModelSerializer):
             "job_title",
             "company_name",
             "reviewed_by_name",
+            "assigned_by_name",
+            "cooldown_eligible_date",
+            "status_history",
             "applied_at",
             "reviewed_at",
             "created_at",
@@ -244,4 +293,63 @@ class JobApplicationSerializer(serializers.ModelSerializer):
         if not obj.reviewed_by:
             return None
         return obj.reviewed_by.full_name or obj.reviewed_by.email
+
+    def get_assigned_by_name(self, obj) -> str | None:
+        if not obj.assigned_by:
+            return None
+        return obj.assigned_by.full_name or obj.assigned_by.email
+
+    def get_cooldown_eligible_date(self, obj):
+        """Serializable version of the model property."""
+        return obj.cooldown_eligible_date
+
+
+class ApplicationAssignSerializer(serializers.Serializer):
+    """
+    Input serializer for POST /api/applications/assign/.
+    Admin provides the job and applicant to directly assign.
+    """
+
+    job = serializers.PrimaryKeyRelatedField(
+        queryset=LowonganKerja.objects.filter(status="OPEN"),
+        help_text="ID lowongan kerja yang dituju (harus berstatus OPEN).",
+    )
+    applicant = serializers.PrimaryKeyRelatedField(
+        queryset=None,  # set lazily in __init__ to avoid circular import
+        help_text="ID ApplicantProfile pelamar yang ditugaskan.",
+    )
+    note = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=500,
+        help_text="Catatan penugasan opsional.",
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from account.models import ApplicantProfile
+        self.fields["applicant"].queryset = ApplicantProfile.objects.all()
+
+
+class ApplicationTransitionSerializer(serializers.Serializer):
+    """
+    Input serializer for PATCH /api/applications/{id}/transition/.
+    Actor provides the desired next status and an optional note.
+    """
+
+    status = serializers.ChoiceField(
+        choices=ApplicationStatus.choices,
+        help_text="Status tujuan transisi.",
+    )
+    note = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=500,
+        help_text="Catatan opsional untuk perubahan status ini.",
+    )
+    placement_end_date = serializers.DateField(
+        required=False,
+        allow_null=True,
+        help_text="Wajib diisi saat transisi ke COMPLETED. Default: hari ini.",
+    )
 

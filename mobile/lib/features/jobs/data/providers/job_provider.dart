@@ -61,3 +61,8 @@ final myApplicationsProvider = FutureProvider.autoDispose.family<List<JobApplica
   final repository = ref.read(jobRepositoryProvider);
   return await repository.getMyApplications(status: status);
 });
+
+final applicationDetailProvider = FutureProvider.autoDispose.family<JobApplication, int>((ref, applicationId) async {
+  final repository = ref.read(jobRepositoryProvider);
+  return await repository.getApplicationDetail(applicationId);
+});

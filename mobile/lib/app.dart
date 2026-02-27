@@ -19,6 +19,8 @@ import 'features/documents/presentation/pages/upload_document_page.dart';
 import 'features/jobs/presentation/pages/jobs_list_page.dart';
 import 'features/jobs/presentation/pages/job_detail_page.dart';
 import 'features/jobs/presentation/pages/my_applications_page.dart';
+import 'features/jobs/presentation/pages/application_detail_page.dart';
+import 'features/chat/presentation/pages/chat_thread_page.dart';
 import 'features/news/presentation/pages/news_list_page.dart';
 import 'features/news/presentation/pages/news_detail_page.dart';
 import 'features/notifications/presentation/pages/notifications_page.dart';
@@ -171,6 +173,23 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/jobs/my-applications',
         name: 'my-applications',
         builder: (context, state) => const MyApplicationsPage(),
+      ),
+      // Must come before /jobs/:id so GoRouter doesn't match "applications" as an :id
+      GoRoute(
+        path: '/jobs/applications/:id',
+        name: 'application-detail',
+        builder: (context, state) {
+          final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
+          return ApplicationDetailPage(applicationId: id);
+        },
+      ),
+      GoRoute(
+        path: '/jobs/applications/:id/chat',
+        name: 'application-chat',
+        builder: (context, state) {
+          final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
+          return ChatThreadPage(applicationId: id);
+        },
       ),
       GoRoute(
         path: '/jobs/:id',

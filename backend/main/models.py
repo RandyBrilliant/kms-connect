@@ -283,20 +283,78 @@ class LowonganKerja(models.Model):
 
 
 class ApplicationStatus(models.TextChoices):
-    """Status lamaran kerja."""
+    """
+    Status lamaran kerja — Finite State Machine (FSM).
 
-    APPLIED = "APPLIED", _("Dilamar")
-    UNDER_REVIEW = "UNDER_REVIEW", _("Dalam Review")
-    ACCEPTED = "ACCEPTED", _("Diterima")
-    REJECTED = "REJECTED", _("Ditolak")
+    Self-applied flow:
+      APPLIED → UNDER_REVIEW → SHORTLISTED → OFFERED → OFFER_ACCEPTED → PLACED → COMPLETED
+      Any non-terminal → REJECTED (admin) | APPLIED/OFFERED → WITHDRAWN (applicant)
+
+    Admin-assign flow (entry point = OFFERED, skips queue):
+      [admin creates row] → OFFERED → OFFER_ACCEPTED → PLACED → COMPLETED
+
+    Transitions are enforced in main.services.ApplicationService — not here.
+    """
+
+    # Applicant-initiated entry
+    APPLIED        = "APPLIED",        _("Dilamar")
+    UNDER_REVIEW   = "UNDER_REVIEW",   _("Dalam Review")
+    SHORTLISTED    = "SHORTLISTED",    _("Shortlist")
+
+    # Admin offers the position
+    OFFERED        = "OFFERED",        _("Ditawarkan")
+
+    # Applicant responds to the offer
+    OFFER_ACCEPTED = "OFFER_ACCEPTED", _("Tawaran Diterima")
+    OFFER_DECLINED = "OFFER_DECLINED", _("Tawaran Ditolak")
+
+    # Terminal: positive
+    PLACED         = "PLACED",         _("Ditempatkan")
+    COMPLETED      = "COMPLETED",      _("Selesai Bekerja")  # 2-yr cooldown starts here
+
+    # Terminal: negative
+    REJECTED       = "REJECTED",       _("Ditolak")
+    WITHDRAWN      = "WITHDRAWN",      _("Dicabut")
+
+
+class ApplicationSource(models.TextChoices):
+    """Asal / inisiasi lamaran."""
+
+    SELF_APPLIED = "SELF_APPLIED", _("Lamar Sendiri")
+    ADMIN_ASSIGN = "ADMIN_ASSIGN", _("Ditugaskan Admin")
 
 
 class JobApplication(models.Model):
     """
     Lamaran kerja pelamar untuk lowongan tertentu.
-    Menghubungkan ApplicantProfile dengan LowonganKerja.
+
+    Dua jalur inisiasi:
+    - SELF_APPLIED : pelamar melamar sendiri, mulai di status APPLIED.
+    - ADMIN_ASSIGN : admin langsung menempatkan pelamar, mulai di status OFFERED.
+
+    Cooldown rule: setelah status = COMPLETED dan placement_end_date diisi,
+    pelamar harus menunggu 2 tahun sebelum dapat melamar kembali.
+    Aturan ini ditegakkan di main.services.ApplicationService.
+
+    UniqueConstraint dihapus agar re-application setelah cooldown diizinkan.
+    Duplikat lamaran aktif dicegah oleh ACTIVE_STATUSES check di service layer.
     """
 
+    # Statuses where an application is still "ongoing".
+    # Used by service layer to detect duplicate active applications per (applicant, job).
+    ACTIVE_STATUSES = [
+        ApplicationStatus.APPLIED,
+        ApplicationStatus.UNDER_REVIEW,
+        ApplicationStatus.SHORTLISTED,
+        ApplicationStatus.OFFERED,
+        ApplicationStatus.OFFER_ACCEPTED,
+        ApplicationStatus.OFFER_DECLINED,
+        ApplicationStatus.PLACED,
+    ]
+
+    REAPPLY_COOLDOWN_YEARS = 2
+
+    # --- Core relations ---
     applicant = models.ForeignKey(
         "account.ApplicantProfile",
         on_delete=models.CASCADE,
@@ -311,26 +369,51 @@ class JobApplication(models.Model):
         verbose_name=_("lowongan"),
         help_text=_("Lowongan kerja yang dilamar."),
     )
+
+    # --- Status & source ---
     status = models.CharField(
         _("status"),
         max_length=20,
         choices=ApplicationStatus.choices,
         default=ApplicationStatus.APPLIED,
         db_index=True,
-        help_text=_("Status lamaran kerja."),
+        help_text=_("Status lamaran kerja saat ini."),
     )
+    source = models.CharField(
+        _("sumber lamaran"),
+        max_length=20,
+        choices=ApplicationSource.choices,
+        default=ApplicationSource.SELF_APPLIED,
+        db_index=True,
+        help_text=_("Apakah pelamar melamar sendiri atau ditugaskan oleh admin."),
+    )
+
+    # --- Timestamps ---
     applied_at = models.DateTimeField(
         _("dilamar pada"),
         auto_now_add=True,
         db_index=True,
-        help_text=_("Waktu pelamar mengajukan lamaran."),
+        help_text=_("Waktu pelamar mengajukan lamaran (atau admin membuat penugasan)."),
     )
     reviewed_at = models.DateTimeField(
         _("direview pada"),
         null=True,
         blank=True,
-        help_text=_("Waktu lamaran direview oleh admin/staff."),
+        help_text=_("Waktu terakhir status diubah oleh admin/staff."),
     )
+    placement_end_date = models.DateField(
+        _("tanggal selesai kerja"),
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=_(
+            "Tanggal pelamar selesai bekerja (kontrak berakhir). "
+            "Diisi saat status berubah ke COMPLETED. "
+            "Cooldown 2 tahun dihitung dari tanggal ini."
+        ),
+    )
+
+    # --- Actors ---
     reviewed_by = models.ForeignKey(
         CustomUser,
         on_delete=models.SET_NULL,
@@ -339,8 +422,22 @@ class JobApplication(models.Model):
         related_name="reviewed_applications",
         limit_choices_to={"role__in": [UserRole.ADMIN, UserRole.STAFF]},
         verbose_name=_("direview oleh"),
-        help_text=_("Admin atau Staff yang mereview lamaran ini."),
+        help_text=_("Admin atau Staff yang terakhir mengubah status lamaran ini."),
     )
+    assigned_by = models.ForeignKey(
+        CustomUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assigned_applications",
+        limit_choices_to={"role__in": [UserRole.ADMIN, UserRole.STAFF]},
+        verbose_name=_("ditugaskan oleh"),
+        help_text=_(
+            "Admin atau Staff yang membuat penugasan ini. "
+            "Hanya terisi untuk source=ADMIN_ASSIGN."
+        ),
+    )
+
     notes = models.TextField(
         _("catatan"),
         blank=True,
@@ -353,18 +450,77 @@ class JobApplication(models.Model):
         verbose_name = _("lamaran kerja")
         verbose_name_plural = _("daftar lamaran kerja")
         ordering = ["-applied_at"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["applicant", "job"],
-                name="main_jobapplication_unique_applicant_job",
-            ),
-        ]
         indexes = [
             models.Index(fields=["applicant", "status"]),
             models.Index(fields=["job", "status"]),
             models.Index(fields=["status", "applied_at"]),
+            models.Index(fields=["source", "status"]),
+            # Cooldown query: applicant + COMPLETED + placement_end_date
+            models.Index(fields=["applicant", "status", "placement_end_date"]),
         ]
 
     def __str__(self) -> str:
         return f"{self.applicant.user.full_name} – {self.job.title} ({self.get_status_display()})"
+
+    @property
+    def cooldown_eligible_date(self):
+        """Date from which this applicant may re-apply (placement_end_date + 2yr).
+        Returns None if the application has not yet reached COMPLETED."""
+        if not self.placement_end_date:
+            return None
+        from dateutil.relativedelta import relativedelta
+        return self.placement_end_date + relativedelta(years=self.REAPPLY_COOLDOWN_YEARS)
+
+
+# ---------------------------------------------------------------------------
+# Application Status History (append-only audit log)
+# ---------------------------------------------------------------------------
+
+
+class ApplicationStatusHistory(models.Model):
+    """
+    Immutable audit trail for every status change on a JobApplication.
+    Rows are never updated or deleted — append only.
+    Written atomically alongside every status change in ApplicationService.
+    """
+
+    application = models.ForeignKey(
+        JobApplication,
+        on_delete=models.CASCADE,
+        related_name="status_history",
+        verbose_name=_("lamaran"),
+    )
+    from_status = models.CharField(
+        _("dari status"),
+        max_length=20,
+        blank=True,
+        help_text=_("Status sebelum perubahan. Kosong jika ini entri awal pembuatan."),
+    )
+    to_status = models.CharField(
+        _("ke status"),
+        max_length=20,
+        choices=ApplicationStatus.choices,
+        help_text=_("Status setelah perubahan."),
+    )
+    changed_by = models.ForeignKey(
+        CustomUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="application_status_changes",
+        verbose_name=_("diubah oleh"),
+    )
+    changed_at = models.DateTimeField(_("diubah pada"), auto_now_add=True, db_index=True)
+    note = models.TextField(_("catatan"), blank=True)
+
+    class Meta:
+        verbose_name = _("riwayat status lamaran")
+        verbose_name_plural = _("riwayat status lamaran")
+        ordering = ["changed_at"]
+        indexes = [
+            models.Index(fields=["application", "changed_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.application} | {self.from_status or '(baru)'} → {self.to_status}"
 

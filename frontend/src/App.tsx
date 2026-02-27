@@ -44,6 +44,9 @@ const NotificationsPage = lazy(() => import("@/pages/notifications-page").then(m
 const AdminBroadcastListPage = lazy(() => import("@/pages/admin-broadcast-list-page").then(m => ({ default: m.AdminBroadcastListPage })))
 const AdminBroadcastFormPage = lazy(() => import("@/pages/admin-broadcast-form-page").then(m => ({ default: m.AdminBroadcastFormPage })))
 const AdminLaporanPage = lazy(() => import("@/pages/admin-laporan-page").then(m => ({ default: m.AdminLaporanPage })))
+const AdminApplicationsPage = lazy(() => import("@/pages/admin-applications-page").then(m => ({ default: m.AdminApplicationsPage })))
+const AdminApplicationDetailPage = lazy(() => import("@/pages/admin-application-detail-page").then(m => ({ default: m.AdminApplicationDetailPage })))
+const AdminChatPage = lazy(() => import("@/pages/admin-chat-page").then(m => ({ default: m.AdminChatPage })))
 
 // Loading fallback component
 function PageLoader() {
@@ -138,6 +141,9 @@ function AppRoutes() {
         <Route path="broadcasts/new" element={<AdminBroadcastFormPage />} />
         <Route path="broadcasts/:id/edit" element={<AdminBroadcastFormPage />} />
         <Route path="laporan" element={<AdminLaporanPage />} />
+        <Route path="lamaran" element={<AdminApplicationsPage />} />
+        <Route path="lamaran/:id" element={<AdminApplicationDetailPage />} />
+        <Route path="chat" element={<AdminChatPage />} />
         <Route path="notifikasi" element={<NotificationsPage />} />
         <Route path="profil" element={<ProfilePage />} />
       </Route>
