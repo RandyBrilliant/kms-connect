@@ -1704,7 +1704,7 @@ class Broadcast(models.Model):
     )
     send_push = models.BooleanField(
         _("kirim push notification"),
-        default=False,
+        default=True,
         help_text=_("Kirim notifikasi push ke perangkat (web/mobile)."),
     )
     

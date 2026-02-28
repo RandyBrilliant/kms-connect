@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../config/colors.dart';
+import '../../../chat/data/providers/chat_provider.dart';
 
 // Ordered list of destinations — index maps directly to the M3 NavigationBar.
 const _kDestinations = [
@@ -16,6 +18,12 @@ const _kDestinations = [
     icon: Icons.work_outline_rounded,
     activeIcon: Icons.work_rounded,
     label: 'Lowongan',
+  ),
+  _NavDestination(
+    route: '/chat',
+    icon: Icons.chat_bubble_outline_rounded,
+    activeIcon: Icons.chat_bubble_rounded,
+    label: 'Pesan',
   ),
   _NavDestination(
     route: '/news',
@@ -36,7 +44,9 @@ const _kDestinations = [
 /// Pass [currentRoute] from the active page so the correct destination is
 /// highlighted. Uses Flutter's [NavigationBar] widget which provides the M3
 /// indicator pill, label animation, and ink ripple out of the box.
-class BottomNavBar extends StatelessWidget {
+///
+/// The Chat tab shows an unread-count badge when there are unseen messages.
+class BottomNavBar extends ConsumerWidget {
   const BottomNavBar({super.key, required this.currentRoute});
 
   final String currentRoute;
@@ -47,8 +57,11 @@ class BottomNavBar extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
+    final chatUnread = ref.watch(
+      chatInboxProvider.select((s) => s.totalUnread),
+    );
 
     return NavigationBar(
       selectedIndex: _selectedIndex,
@@ -63,9 +76,23 @@ class BottomNavBar extends StatelessWidget {
       destinations: [
         for (final d in _kDestinations)
           NavigationDestination(
-            icon: Icon(d.icon),
-            selectedIcon: Icon(d.activeIcon,
-                color: AppColors.primaryDarkGreen),
+            icon: d.route == '/chat' && chatUnread > 0
+                ? Badge(
+                    label: Text(chatUnread > 99 ? '99+' : '$chatUnread'),
+                    backgroundColor: AppColors.primaryDarkGreen,
+                    textColor: Colors.white,
+                    child: Icon(d.icon),
+                  )
+                : Icon(d.icon),
+            selectedIcon: d.route == '/chat' && chatUnread > 0
+                ? Badge(
+                    label: Text(chatUnread > 99 ? '99+' : '$chatUnread'),
+                    backgroundColor: AppColors.primaryDarkGreen,
+                    textColor: Colors.white,
+                    child: Icon(d.activeIcon,
+                        color: AppColors.primaryDarkGreen),
+                  )
+                : Icon(d.activeIcon, color: AppColors.primaryDarkGreen),
             label: d.label,
           ),
       ],
@@ -90,5 +117,3 @@ class _NavDestination {
   final IconData activeIcon;
   final String label;
 }
-
-

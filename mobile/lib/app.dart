@@ -20,6 +20,7 @@ import 'features/jobs/presentation/pages/jobs_list_page.dart';
 import 'features/jobs/presentation/pages/job_detail_page.dart';
 import 'features/jobs/presentation/pages/my_applications_page.dart';
 import 'features/jobs/presentation/pages/application_detail_page.dart';
+import 'features/chat/presentation/pages/chat_inbox_page.dart';
 import 'features/chat/presentation/pages/chat_thread_page.dart';
 import 'features/news/presentation/pages/news_list_page.dart';
 import 'features/news/presentation/pages/news_detail_page.dart';
@@ -203,6 +204,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/news',
         name: 'news',
         builder: (context, state) => const NewsListPage(),
+      ),
+      GoRoute(
+        path: '/chat',
+        name: 'chat',
+        builder: (context, state) => const ChatInboxPage(),
       ),
       GoRoute(
         path: '/news/:id',

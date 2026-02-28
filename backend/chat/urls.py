@@ -18,6 +18,13 @@ urlpatterns = [
     # Admin: list/detail/send/close/reopen — via router + custom @action URLs
     path("", include(router.urls)),
 
+    # Applicant: list all their threads (chat inbox)
+    path(
+        "applicant/threads/",
+        views.ApplicantThreadListView.as_view(),
+        name="applicant-thread-list",
+    ),
+
     # Applicant: scoped to their own application's thread
     path(
         "applicant/thread/<int:thread_id>/messages/",

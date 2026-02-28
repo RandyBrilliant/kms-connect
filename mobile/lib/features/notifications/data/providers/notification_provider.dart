@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/models/app_notification.dart';
@@ -43,9 +46,28 @@ class NotificationState {
 
 class NotificationNotifier extends StateNotifier<NotificationState> {
   final NotificationRepository _repository;
+  StreamSubscription<RemoteMessage>? _foregroundSub;
+  StreamSubscription<RemoteMessage>? _openedAppSub;
 
   NotificationNotifier(this._repository) : super(const NotificationState()) {
     load();
+    _subscribeToFcm();
+  }
+
+  /// Listen for incoming FCM messages so the notification list stays up-to-date
+  /// in real-time without the user having to manually refresh.
+  void _subscribeToFcm() {
+    // Foreground: app is open — new notification arrives → reload list
+    _foregroundSub = FirebaseMessaging.onMessage.listen((_) => load());
+    // Background/terminated: user taps notification to open app → reload list
+    _openedAppSub = FirebaseMessaging.onMessageOpenedApp.listen((_) => load());
+  }
+
+  @override
+  void dispose() {
+    _foregroundSub?.cancel();
+    _openedAppSub?.cancel();
+    super.dispose();
   }
 
   Future<void> load() async {

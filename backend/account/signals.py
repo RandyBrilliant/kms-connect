@@ -3,12 +3,13 @@ Signals for account app.
 Queue OCR when an ApplicantDocument is created or when its file is replaced.
 Queue image optimization when an image doc is uploaded and size > 500 KB.
 Auto-generate referral codes for new staff/admin users.
+Send FCM push notification whenever a new Notification record is created.
 """
 from django.db.models.signals import pre_save, post_save, post_delete
 from django.dispatch import receiver
 
 from .document_specs import MAX_IMAGE_BYTES, is_image_type
-from .models import ApplicantDocument, ApplicantProfile, CustomUser, UserRole
+from .models import ApplicantDocument, ApplicantProfile, CustomUser, UserRole, Notification
 from .tasks import process_document_ocr, optimize_document_image
 from django.core.cache import cache
 
@@ -87,3 +88,19 @@ def auto_generate_referral_code(sender, instance: CustomUser, created, **kwargs)
     
     if not instance.referral_code:
         instance.ensure_referral_code()
+
+
+@receiver(post_save, sender=Notification)
+def send_push_on_notification_created(sender, instance: Notification, created: bool, **kwargs):
+    """
+    Immediately queue an FCM push notification whenever a new Notification
+    record is created — regardless of how it was created (Django admin,
+    broadcast delivery, API, signals, etc.).
+
+    This ensures users see the notification on their device in real-time
+    without having to open or refresh the app.
+    """
+    if not created:
+        return
+    from .tasks import send_notification_push_task
+    send_notification_push_task.delay(instance.pk)

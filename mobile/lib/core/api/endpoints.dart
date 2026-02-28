@@ -36,6 +36,7 @@ class ApiEndpoints {
   static String applicationDetail(int id) => '$baseUrl/applicants/me/applications/$id/';
 
   // Chat (applicant side)
+  static const String chatThreads = '$baseUrl/chat/applicant/threads/';
   static String chatMessages(int applicationId) =>
       '$baseUrl/chat/applicant/thread/$applicationId/messages/';
   static String chatSend(int applicationId) =>

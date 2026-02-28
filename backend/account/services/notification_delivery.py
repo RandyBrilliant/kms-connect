@@ -28,6 +28,10 @@ def create_notification(
 ) -> Notification:
     """
     Create a single notification for a user.
+
+    Push delivery is handled automatically by the post_save signal on
+    Notification, so the ``send_push`` argument is accepted for backwards
+    compatibility but is no longer acted upon here.
     
     Args:
         user: The recipient user
@@ -39,7 +43,7 @@ def create_notification(
         action_url: Optional URL for action button
         action_label: Optional label for action button
         send_email: Whether to send email (will queue Celery task)
-        send_push: Whether to send push notification (will queue Celery task)
+        send_push: Accepted for compatibility; push is auto-sent via signal.
     
     Returns:
         Created Notification instance
@@ -60,10 +64,7 @@ def create_notification(
         from ..tasks import send_notification_email_task
         send_notification_email_task.delay(notification.id)
     
-    # Queue push notification if requested
-    if send_push:
-        from ..tasks import send_notification_push_task
-        send_notification_push_task.delay(notification.id)
+    # Push is sent automatically by the post_save signal in signals.py.
     
     return notification
 

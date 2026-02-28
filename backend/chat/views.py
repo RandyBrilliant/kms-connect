@@ -27,7 +27,12 @@ from account.api_responses import ApiCode, error_response, success_response
 from account.permissions import IsApplicant, IsBackofficeAdmin
 
 from .models import ChatMessage, ChatThread
-from .serializers import ChatMessageSerializer, ChatThreadSerializer, SendMessageSerializer
+from .serializers import (
+    ApplicantChatThreadSerializer,
+    ChatMessageSerializer,
+    ChatThreadSerializer,
+    SendMessageSerializer,
+)
 from .tasks import send_chat_push_notification
 
 
@@ -208,6 +213,46 @@ class _ApplicantThreadMixin:
                 status=status.HTTP_404_NOT_FOUND,
             )
         return thread, None
+
+
+class ApplicantThreadListView(_ApplicantThreadMixin, APIView):
+    """
+    GET /api/chat/applicant/threads/
+
+    Returns all chat threads belonging to the current applicant, ordered by most
+    recently updated. Each item includes the job title, last message preview, and
+    the count of unread messages from admin/staff.
+
+    Used by the mobile Chat inbox screen.
+    """
+
+    def get(self, request):
+        try:
+            applicant_profile = request.user.applicant_profile
+        except Exception:
+            return Response(
+                error_response(
+                    detail="Profil pelamar tidak ditemukan.",
+                    code=ApiCode.NOT_FOUND,
+                ),
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        threads = (
+            ChatThread.objects
+            .filter(application__applicant=applicant_profile)
+            .select_related(
+                "application__job",
+                "application__applicant__user",
+            )
+            .prefetch_related("messages__sender")
+            .order_by("-updated_at")
+        )
+
+        serializer = ApplicantChatThreadSerializer(
+            threads, many=True, context={"request": request}
+        )
+        return Response(success_response(data=serializer.data))
 
 
 class ApplicantChatMessagesView(_ApplicantThreadMixin, APIView):

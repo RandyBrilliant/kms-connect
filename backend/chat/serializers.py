@@ -46,6 +46,68 @@ class SendMessageSerializer(serializers.Serializer):
     )
 
 
+class ApplicantChatThreadSerializer(serializers.ModelSerializer):
+    """
+    Thread summary for the applicant's chat inbox.
+    Returned by GET /api/chat/applicant/threads/.
+    """
+
+    application_id = serializers.IntegerField(source="application.id", read_only=True)
+    job_title = serializers.SerializerMethodField()
+    last_message = serializers.SerializerMethodField()
+    unread_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ChatThread
+        fields = [
+            "id",
+            "application_id",
+            "job_title",
+            "is_closed",
+            "unread_count",
+            "last_message",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+    def get_job_title(self, obj) -> str:
+        try:
+            return obj.application.job.title
+        except Exception:
+            return ""
+
+    def get_last_message(self, obj):
+        """Returns a summary of the most recent message, or None if no messages."""
+        try:
+            last = obj.messages.order_by("-sent_at").first()
+            if not last:
+                return None
+            return {
+                "id": last.id,
+                "body": last.body[:120],
+                "sender_name": last.sender.full_name or last.sender.email if last.sender else "",
+                "sender_role": last.sender.role if last.sender else "",
+                "sent_at": last.sent_at.isoformat(),
+                "is_read": last.is_read,
+            }
+        except Exception:
+            return None
+
+    def get_unread_count(self, obj) -> int:
+        """Count messages from admin/staff that the applicant hasn't read yet."""
+        try:
+            applicant_user = obj.application.applicant.user
+            return (
+                obj.messages
+                .filter(is_read=False)
+                .exclude(sender=applicant_user)
+                .count()
+            )
+        except Exception:
+            return 0
+
+
 class ChatThreadSerializer(serializers.ModelSerializer):
     """
     Thread summary used for listing threads (admin view).
