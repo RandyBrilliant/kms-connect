@@ -27,10 +27,11 @@ export const applicationsKeys = {
   detail: (id: number) => [...applicationsKeys.details(), id] as const,
 }
 
-export function useApplicationsQuery(params: ApplicationsListParams = {}) {
+export function useApplicationsQuery(params: ApplicationsListParams = {}, enabled = true) {
   return useQuery({
     queryKey: applicationsKeys.list(params),
     queryFn: () => getApplications(params),
+    enabled,
   })
 }
 

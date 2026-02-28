@@ -26,7 +26,7 @@ import { useApplicationQuery } from "@/hooks/use-applications-query"
 import { useChatThreadsQuery } from "@/hooks/use-chat-query"
 import { useAuth } from "@/hooks/use-auth"
 
-const BASE_PATH = "/admin/lamaran"
+const BASE_PATH = "/lamaran"
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (

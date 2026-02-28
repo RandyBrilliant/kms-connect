@@ -4,8 +4,7 @@
  */
 
 import { useState } from "react"
-import { useForm } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
+import { useForm } from "@tanstack/react-form"
 import { z } from "zod"
 import { IconArrowRight } from "@tabler/icons-react"
 
@@ -20,13 +19,11 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form"
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field"
 import {
   Select,
   SelectContent,
@@ -85,6 +82,14 @@ interface TransitionApplicationDialogProps {
   trigger?: React.ReactNode
 }
 
+function fieldErrors(errors: unknown[]): Array<{ message: string }> {
+  return errors.map((e) => {
+    if (typeof e === "string") return { message: e }
+    const err = e as { message?: string }
+    return { message: err?.message ?? String(e) }
+  })
+}
+
 export function TransitionApplicationDialog({
   application,
   onSuccess,
@@ -96,38 +101,35 @@ export function TransitionApplicationDialog({
   const allowedStatuses = ADMIN_TRANSITIONS[application.status] ?? []
 
   const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
     defaultValues: {
       status: "",
       note: "",
       placement_end_date: "",
     },
+    onSubmit: async ({ value }) => {
+      const result = formSchema.safeParse(value)
+      if (!result.success) return
+      const values = result.data
+      try {
+        await transitionMutation.mutateAsync({
+          status: values.status as ApplicationStatus,
+          note: values.note || undefined,
+          placement_end_date: values.placement_end_date || null,
+        })
+        toast.success(
+          "Status diperbarui",
+          `Lamaran berhasil dipindahkan ke "${APPLICATION_STATUS_LABELS[values.status as ApplicationStatus]}".`
+        )
+        setOpen(false)
+        form.reset()
+        onSuccess?.()
+      } catch (err: unknown) {
+        const error = err as { response?: { data?: { detail?: string } } }
+        const detail = error?.response?.data?.detail
+        toast.error("Gagal memperbarui status", detail ?? "Coba lagi nanti.")
+      }
+    },
   })
-
-  const watchStatus = form.watch("status") as ApplicationStatus | ""
-  const needsDate =
-    watchStatus !== "" && STATUSES_REQUIRING_DATE.includes(watchStatus as ApplicationStatus)
-
-  const onSubmit = async (values: FormValues) => {
-    try {
-      await transitionMutation.mutateAsync({
-        status: values.status as ApplicationStatus,
-        note: values.note || undefined,
-        placement_end_date: values.placement_end_date || null,
-      })
-      toast.success(
-        "Status diperbarui",
-        `Lamaran berhasil dipindahkan ke "${APPLICATION_STATUS_LABELS[values.status as ApplicationStatus]}".`
-      )
-      setOpen(false)
-      form.reset()
-      onSuccess?.()
-    } catch (err: unknown) {
-      const error = err as { response?: { data?: { detail?: string } } }
-      const detail = error?.response?.data?.detail
-      toast.error("Gagal memperbarui status", detail ?? "Coba lagi nanti.")
-    }
-  }
 
   if (!allowedStatuses.length) {
     return null // No transitions available from this status
@@ -158,23 +160,25 @@ export function TransitionApplicationDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="status"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Status Baru</FormLabel>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            void form.handleSubmit()
+          }}
+          className="space-y-4"
+        >
+          <FieldGroup>
+            <form.Field name="status">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>Status Baru</FieldLabel>
                   <Select
-                    onValueChange={field.onChange}
-                    value={field.value}
+                    value={field.state.value}
+                    onValueChange={(v) => field.handleChange(v)}
                   >
-                    <FormControl>
-                      <SelectTrigger className="cursor-pointer">
-                        <SelectValue placeholder="Pilih status..." />
-                      </SelectTrigger>
-                    </FormControl>
+                    <SelectTrigger id={field.name} className="cursor-pointer">
+                      <SelectValue placeholder="Pilih status..." />
+                    </SelectTrigger>
                     <SelectContent>
                       {allowedStatuses.map((s) => (
                         <SelectItem key={s} value={s}>
@@ -183,65 +187,70 @@ export function TransitionApplicationDialog({
                       ))}
                     </SelectContent>
                   </Select>
-                  <FormMessage />
-                </FormItem>
+                  <FieldError errors={fieldErrors(field.state.meta.errors as unknown[])} />
+                </Field>
               )}
-            />
+            </form.Field>
 
-            {needsDate && (
-              <FormField
-                control={form.control}
-                name="placement_end_date"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Tanggal Selesai Kerja</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
+            <form.Subscribe selector={(state) => state.values.status}>
+              {(status) =>
+                STATUSES_REQUIRING_DATE.includes(status as ApplicationStatus) && (
+                  <form.Field name="placement_end_date">
+                    {(field) => (
+                      <Field>
+                        <FieldLabel htmlFor={field.name}>Tanggal Selesai Kerja</FieldLabel>
+                        <Input
+                          id={field.name}
+                          type="date"
+                          value={field.state.value ?? ""}
+                          onChange={(e) => field.handleChange(e.target.value)}
+                          onBlur={field.handleBlur}
+                        />
+                        <FieldError errors={fieldErrors(field.state.meta.errors as unknown[])} />
+                      </Field>
+                    )}
+                  </form.Field>
+                )
+              }
+            </form.Subscribe>
 
-            <FormField
-              control={form.control}
-              name="note"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Catatan (opsional)</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Tambahkan catatan untuk perubahan status ini..."
-                      className="resize-none"
-                      rows={3}
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+            <form.Field name="note">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>Catatan (opsional)</FieldLabel>
+                  <Textarea
+                    id={field.name}
+                    placeholder="Tambahkan catatan untuk perubahan status ini..."
+                    className="resize-none"
+                    rows={3}
+                    value={field.state.value ?? ""}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    onBlur={field.handleBlur}
+                  />
+                  <FieldError errors={fieldErrors(field.state.meta.errors as unknown[])} />
+                </Field>
               )}
-            />
+            </form.Field>
+          </FieldGroup>
 
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                className="cursor-pointer"
-                onClick={() => setOpen(false)}
-              >
-                Batal
-              </Button>
-              <Button
-                type="submit"
-                className="cursor-pointer"
-                disabled={transitionMutation.isPending}
-              >
-                {transitionMutation.isPending ? "Memproses..." : "Simpan"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              className="cursor-pointer"
+              onClick={() => setOpen(false)}
+            >
+              Batal
+            </Button>
+            <Button
+              type="submit"
+              className="cursor-pointer"
+              disabled={transitionMutation.isPending}
+            >
+              {transitionMutation.isPending ? "Memproses..." : "Simpan"}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   )

@@ -227,3 +227,219 @@ export function SearchableSelect({
     </Popover>
   )
 }
+
+// ---------------------------------------------------------------------------
+// AsyncSearchableSelect
+// A server-side variant of SearchableSelect.
+// The parent owns the items list (fetched from server based on search query).
+// onSearchChange is called on every keystroke so the parent can debounce and
+// update the items prop accordingly.
+// ---------------------------------------------------------------------------
+
+interface AsyncSearchableSelectProps {
+  items: SearchableSelectItem[]
+  value: number | null
+  onChange: (id: number | null) => void
+  /** Called on every input keystroke. Parent should debounce and query API. */
+  onSearchChange: (query: string) => void
+  placeholder?: string
+  /** Label for the clear/none option (when clearable). Defaults to placeholder. */
+  clearLabel?: string
+  disabled?: boolean
+  /** True while the parent is fetching results from the server. */
+  loading?: boolean
+  emptyMessage?: string
+  /** Show "Clear" option to reset selection */
+  clearable?: boolean
+  className?: string
+}
+
+export function AsyncSearchableSelect({
+  items,
+  value,
+  onChange,
+  onSearchChange,
+  placeholder = "Cari atau pilih...",
+  clearLabel,
+  disabled = false,
+  loading = false,
+  emptyMessage = "Tidak ada hasil",
+  clearable = true,
+  className,
+}: AsyncSearchableSelectProps) {
+  const clearOptionLabel = clearLabel ?? placeholder
+  const [open, setOpen] = React.useState(false)
+  const [query, setQuery] = React.useState("")
+  const [highlightedIndex, setHighlightedIndex] = React.useState(0)
+  const listRef = React.useRef<HTMLUListElement>(null)
+  const inputRef = React.useRef<HTMLInputElement>(null)
+
+  const selected = items.find((i) => i.id === value)
+
+  // Items are already filtered by the server — no client-side filtering.
+  const selectableOptions = clearable
+    ? [{ id: CLEAR_ID, name: clearOptionLabel } as SearchableSelectItem, ...items]
+    : items
+
+  const highlightedId =
+    selectableOptions[highlightedIndex]?.id ?? selectableOptions[0]?.id
+
+  const handleSelect = (id: number) => {
+    onChange(id === CLEAR_ID ? null : id)
+    setQuery("")
+    onSearchChange("")
+    setHighlightedIndex(0)
+    setOpen(false)
+    inputRef.current?.blur()
+  }
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const q = e.target.value
+    setQuery(q)
+    onSearchChange(q)
+    setHighlightedIndex(0)
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!open) {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault()
+        setOpen(true)
+      }
+      return
+    }
+
+    switch (e.key) {
+      case "Escape":
+        e.preventDefault()
+        setOpen(false)
+        break
+      case "ArrowDown":
+        e.preventDefault()
+        setHighlightedIndex((i) =>
+          i < selectableOptions.length - 1 ? i + 1 : 0
+        )
+        break
+      case "ArrowUp":
+        e.preventDefault()
+        setHighlightedIndex((i) =>
+          i > 0 ? i - 1 : selectableOptions.length - 1
+        )
+        break
+      case "Enter":
+        e.preventDefault()
+        if (selectableOptions[highlightedIndex]) {
+          handleSelect(selectableOptions[highlightedIndex].id)
+        }
+        break
+    }
+  }
+
+  // When closing: reset query and notify parent so it can clear search params.
+  React.useEffect(() => {
+    if (!open) {
+      setQuery("")
+      // Only notify parent if there was an active search to avoid infinite loops.
+      // Using a ref to track if we actually need to clear.
+    } else {
+      setHighlightedIndex(0)
+    }
+  }, [open])
+
+  const handleOpenAutoFocus = (e: Event) => {
+    e.preventDefault()
+    requestAnimationFrame(() => inputRef.current?.focus())
+  }
+
+  React.useEffect(() => {
+    if (!open) return
+    const el = listRef.current?.querySelector(
+      `[data-value="${highlightedId}"]`
+    ) as HTMLElement | null
+    el?.scrollIntoView({ block: "nearest" })
+  }, [highlightedIndex, highlightedId, open])
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          aria-haspopup="listbox"
+          disabled={disabled}
+          className={cn(
+            "h-9 w-full justify-between font-normal",
+            !selected && "text-muted-foreground",
+            className
+          )}
+          onKeyDown={handleKeyDown}
+        >
+          <span className="truncate">
+            {selected?.name ?? placeholder}
+          </span>
+          <ChevronDownIcon
+            className={cn(
+              "ml-2 h-4 w-4 shrink-0 opacity-50 transition-transform",
+              open && "rotate-180"
+            )}
+          />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="min-w-(--radix-popover-trigger-width) p-0"
+        align="start"
+        onOpenAutoFocus={handleOpenAutoFocus}
+        onCloseAutoFocus={(e) => e.preventDefault()}
+      >
+        <div className="flex flex-col gap-1 p-1">
+          <Input
+            ref={inputRef}
+            placeholder="Ketik untuk mencari..."
+            value={query}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            className="h-8 shrink-0"
+            autoComplete="off"
+          />
+          {loading ? (
+            <div className="flex items-center justify-center py-4">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            </div>
+          ) : (
+            <ul
+              ref={listRef}
+              role="listbox"
+              className="max-h-60 overflow-auto py-1"
+            >
+              {selectableOptions.length === 0 ? (
+                <li className="text-muted-foreground py-6 text-center text-sm">
+                  {emptyMessage}
+                </li>
+              ) : (
+                selectableOptions.map((item, idx) => (
+                  <li
+                    key={item.id}
+                    role="option"
+                    aria-selected={value === (item.id === CLEAR_ID ? null : item.id)}
+                    data-value={item.id}
+                    className={cn(
+                      "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none",
+                      highlightedIndex === idx &&
+                        "bg-accent text-accent-foreground",
+                      "hover:bg-accent hover:text-accent-foreground"
+                    )}
+                    onClick={() => handleSelect(item.id)}
+                    onMouseEnter={() => setHighlightedIndex(idx)}
+                  >
+                    {item.name}
+                  </li>
+                ))
+              )}
+            </ul>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}

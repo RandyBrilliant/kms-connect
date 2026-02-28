@@ -314,10 +314,6 @@ class ApplicationAssignSerializer(serializers.Serializer):
         queryset=LowonganKerja.objects.filter(status="OPEN"),
         help_text="ID lowongan kerja yang dituju (harus berstatus OPEN).",
     )
-    applicant = serializers.PrimaryKeyRelatedField(
-        queryset=None,  # set lazily in __init__ to avoid circular import
-        help_text="ID ApplicantProfile pelamar yang ditugaskan.",
-    )
     note = serializers.CharField(
         required=False,
         allow_blank=True,
@@ -328,7 +324,10 @@ class ApplicationAssignSerializer(serializers.Serializer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         from account.models import ApplicantProfile
-        self.fields["applicant"].queryset = ApplicantProfile.objects.all()
+        self.fields["applicant"] = serializers.PrimaryKeyRelatedField(
+            queryset=ApplicantProfile.objects.all(),
+            help_text="ID ApplicantProfile pelamar yang ditugaskan.",
+        )
 
 
 class ApplicationTransitionSerializer(serializers.Serializer):

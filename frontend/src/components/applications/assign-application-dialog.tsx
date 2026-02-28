@@ -4,8 +4,7 @@
  */
 
 import { useState, useEffect } from "react"
-import { useForm } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
+import { useForm } from "@tanstack/react-form"
 import { z } from "zod"
 import { IconUserPlus } from "@tabler/icons-react"
 
@@ -20,13 +19,11 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form"
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { useAssignApplicationMutation } from "@/hooks/use-applications-query"
@@ -34,11 +31,11 @@ import { toast } from "@/lib/toast"
 
 const formSchema = z.object({
   job: z.coerce
-    .number({ required_error: "ID lowongan wajib diisi" })
+    .number({ error: "ID lowongan wajib diisi" })
     .int()
     .positive("ID lowongan harus positif"),
   applicant: z.coerce
-    .number({ required_error: "ID pelamar wajib diisi" })
+    .number({ error: "ID pelamar wajib diisi" })
     .int()
     .positive("ID pelamar harus positif"),
   note: z.string().max(500, "Catatan maksimal 500 karakter").optional(),
@@ -57,6 +54,14 @@ interface AssignApplicationDialogProps {
   trigger?: React.ReactNode
 }
 
+function fieldErrors(errors: unknown[]): Array<{ message: string }> {
+  return errors.map((e) => {
+    if (typeof e === "string") return { message: e }
+    const err = e as { message?: string }
+    return { message: err?.message ?? String(e) }
+  })
+}
+
 export function AssignApplicationDialog({
   defaultJobId,
   defaultApplicantId,
@@ -67,48 +72,48 @@ export function AssignApplicationDialog({
   const assignMutation = useAssignApplicationMutation()
 
   const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
     defaultValues: {
-      job: defaultJobId,
-      applicant: defaultApplicantId,
+      job: defaultJobId as number,
+      applicant: defaultApplicantId as number,
       note: "",
+    },
+    onSubmit: async ({ value }) => {
+      const result = formSchema.safeParse(value)
+      if (!result.success) return
+      const values = result.data
+      try {
+        await assignMutation.mutateAsync({
+          job: values.job,
+          applicant: values.applicant,
+          note: values.note || undefined,
+        })
+        toast.success("Berhasil", "Pelamar berhasil ditugaskan ke lowongan ini.")
+        setOpen(false)
+        onSuccess?.()
+      } catch (err: unknown) {
+        const error = err as { response?: { data?: { detail?: string; non_field_errors?: string[]; errors?: unknown } } }
+        const data = error?.response?.data
+        if (data?.detail) {
+          // Cooldown error has a specific detail message from the backend
+          toast.error("Tidak dapat menugaskan", data.detail)
+        } else if (data?.non_field_errors?.[0]) {
+          toast.error("Gagal", data.non_field_errors[0])
+        } else {
+          toast.error("Gagal menugaskan", "Periksa data dan coba lagi.")
+        }
+      }
     },
   })
 
   // Sync pre-filled props when dialog opens
   useEffect(() => {
     if (open) {
-      form.reset({
-        job: defaultJobId,
-        applicant: defaultApplicantId,
-        note: "",
-      })
+      form.reset()
+      form.setFieldValue("job", defaultJobId as number)
+      form.setFieldValue("applicant", defaultApplicantId as number)
+      form.setFieldValue("note", "")
     }
   }, [open, defaultJobId, defaultApplicantId, form])
-
-  const onSubmit = async (values: FormValues) => {
-    try {
-      await assignMutation.mutateAsync({
-        job: values.job,
-        applicant: values.applicant,
-        note: values.note || undefined,
-      })
-      toast.success("Berhasil", "Pelamar berhasil ditugaskan ke lowongan ini.")
-      setOpen(false)
-      onSuccess?.()
-    } catch (err: unknown) {
-      const error = err as { response?: { data?: { detail?: string; non_field_errors?: string[]; errors?: unknown } } }
-      const data = error?.response?.data
-      if (data?.detail) {
-        // Cooldown error has a specific detail message from the backend
-        toast.error("Tidak dapat menugaskan", data.detail)
-      } else if (data?.non_field_errors?.[0]) {
-        toast.error("Gagal", data.non_field_errors[0])
-      } else {
-        toast.error("Gagal menugaskan", "Periksa data dan coba lagi.")
-      }
-    }
-  }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -128,84 +133,85 @@ export function AssignApplicationDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="job"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>ID Lowongan</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      placeholder="Masukkan ID lowongan"
-                      {...field}
-                      value={field.value ?? ""}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            void form.handleSubmit()
+          }}
+          className="space-y-4"
+        >
+          <FieldGroup>
+            <form.Field name="job">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>ID Lowongan</FieldLabel>
+                  <Input
+                    id={field.name}
+                    type="number"
+                    placeholder="Masukkan ID lowongan"
+                    value={field.state.value ?? ""}
+                    onChange={(e) => field.handleChange(Number(e.target.value) || (undefined as unknown as number))}
+                    onBlur={field.handleBlur}
+                  />
+                  <FieldError errors={fieldErrors(field.state.meta.errors as unknown[])} />
+                </Field>
               )}
-            />
+            </form.Field>
 
-            <FormField
-              control={form.control}
-              name="applicant"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>ID Pelamar</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      placeholder="Masukkan ID pelamar"
-                      {...field}
-                      value={field.value ?? ""}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+            <form.Field name="applicant">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>ID Pelamar</FieldLabel>
+                  <Input
+                    id={field.name}
+                    type="number"
+                    placeholder="Masukkan ID pelamar"
+                    value={field.state.value ?? ""}
+                    onChange={(e) => field.handleChange(Number(e.target.value) || (undefined as unknown as number))}
+                    onBlur={field.handleBlur}
+                  />
+                  <FieldError errors={fieldErrors(field.state.meta.errors as unknown[])} />
+                </Field>
               )}
-            />
+            </form.Field>
 
-            <FormField
-              control={form.control}
-              name="note"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Catatan (opsional)</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Catatan untuk penugasan ini..."
-                      className="resize-none"
-                      rows={3}
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+            <form.Field name="note">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>Catatan (opsional)</FieldLabel>
+                  <Textarea
+                    id={field.name}
+                    placeholder="Catatan untuk penugasan ini..."
+                    className="resize-none"
+                    rows={3}
+                    value={field.state.value ?? ""}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    onBlur={field.handleBlur}
+                  />
+                  <FieldError errors={fieldErrors(field.state.meta.errors as unknown[])} />
+                </Field>
               )}
-            />
+            </form.Field>
+          </FieldGroup>
 
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                className="cursor-pointer"
-                onClick={() => setOpen(false)}
-              >
-                Batal
-              </Button>
-              <Button
-                type="submit"
-                className="cursor-pointer"
-                disabled={assignMutation.isPending}
-              >
-                {assignMutation.isPending ? "Memproses..." : "Tugaskan"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              className="cursor-pointer"
+              onClick={() => setOpen(false)}
+            >
+              Batal
+            </Button>
+            <Button
+              type="submit"
+              className="cursor-pointer"
+              disabled={assignMutation.isPending}
+            >
+              {assignMutation.isPending ? "Memproses..." : "Tugaskan"}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   )

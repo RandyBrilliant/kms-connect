@@ -4,7 +4,7 @@
  */
 
 import { useState, useMemo, useCallback } from "react"
-import { useNavigate } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import {
   flexRender,
   getCoreRowModel,
@@ -16,6 +16,7 @@ import {
   IconEye,
   IconMessage,
   IconSearch,
+  IconUserPlus,
 } from "@tabler/icons-react"
 import { format } from "date-fns"
 import { id } from "date-fns/locale"
@@ -40,7 +41,6 @@ import {
 } from "@/components/ui/table"
 import { useApplicationsQuery } from "@/hooks/use-applications-query"
 import { ApplicationStatusBadge } from "@/components/applications/application-status-badge"
-import { AssignApplicationDialog } from "@/components/applications/assign-application-dialog"
 import {
   APPLICATION_STATUS_LABELS,
   type ApplicationStatus,
@@ -70,7 +70,7 @@ const SOURCE_LABELS: Record<ApplicationSource, string> = {
 }
 
 interface ApplicationTableProps {
-  /** Base path used to build detail route, e.g. "/admin/lamaran" */
+  /** Base path used to build detail route, e.g. "/lamaran" */
   basePath: string
   /** Pre-filter by job when embedded in a job detail page. */
   jobId?: number
@@ -284,10 +284,12 @@ export function ApplicationTable({ basePath, jobId }: ApplicationTableProps) {
             </Select>
           </div>
         </div>
-        <AssignApplicationDialog
-          defaultJobId={jobId}
-          onSuccess={() => handleFilterChange("page", 1)}
-        />
+        <Button className="cursor-pointer shrink-0" asChild>
+          <Link to={`${basePath}/new`}>
+            <IconUserPlus className="mr-2 size-4" />
+            Tugaskan Pelamar
+          </Link>
+        </Button>
       </div>
 
       {/* Table */}

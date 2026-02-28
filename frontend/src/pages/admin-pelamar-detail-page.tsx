@@ -1,10 +1,13 @@
 /**
- * Pelamar detail page with tabs: Biodata, Pengalaman Kerja, Dokumen.
+ * Pelamar detail page with tabs: Biodata, Pengalaman Kerja, Dokumen, Lamaran.
  * Metadata & account actions are shown on the Biodata tab sidebar.
+ * Lamaran tab shows all applications with a direct "Buka Chat" link per application.
  */
 
 import { Link, useParams } from "react-router-dom"
-import { IconArrowLeft, IconMail, IconKey } from "@tabler/icons-react"
+import { format } from "date-fns"
+import { id as idLocale } from "date-fns/locale"
+import { IconArrowLeft, IconMail, IconKey, IconMessage, IconClipboardList, IconExternalLink } from "@tabler/icons-react"
 
 import { BreadcrumbNav } from "@/components/breadcrumb-nav"
 import { Button } from "@/components/ui/button"
@@ -14,6 +17,8 @@ import { ApplicantBiodataTab } from "@/components/applicants/applicant-biodata-t
 import { ApplicantWorkExperienceTab } from "@/components/applicants/applicant-work-experience-tab"
 import { ApplicantDocumentsTab } from "@/components/applicants/applicant-documents-tab"
 import { ApplicantMetadataTab } from "@/components/applicants/applicant-metadata-tab"
+import { ApplicationStatusBadge } from "@/components/applications/application-status-badge"
+import { Badge } from "@/components/ui/badge"
 import {
   useApplicantQuery,
   useUpdateApplicantMutation,
@@ -22,9 +27,12 @@ import {
   useSendVerificationEmailMutation,
   useSendPasswordResetMutation,
 } from "@/hooks/use-applicants-query"
+import { useApplicationsQuery } from "@/hooks/use-applications-query"
 import { toast } from "@/lib/toast"
 import type { ApplicantUser } from "@/types/applicant"
 import { usePageTitle } from "@/hooks/use-page-title"
+
+const APPLICATIONS_BASE = "/lamaran"
 
 const BASE_PATH = "/pelamar"
 
@@ -159,6 +167,98 @@ function ApplicantSidebar({ applicant }: { applicant: ApplicantUser }) {
   )
 }
 
+function ApplicantApplicationsTab({ profileId }: { profileId?: number }) {
+  const { data, isLoading } = useApplicationsQuery(
+    profileId ? { applicant: profileId, page_size: 50 } : {},
+    !!profileId
+  )
+
+  if (!profileId) {
+    return (
+      <Card>
+        <CardContent className="py-8 text-center text-sm text-muted-foreground">
+          Profil pelamar belum tersedia.
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="h-7 w-7 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    )
+  }
+
+  const applications = data?.results ?? []
+
+  if (!applications.length) {
+    return (
+      <Card>
+        <CardContent className="py-8 text-center">
+          <IconClipboardList className="mx-auto mb-3 size-8 text-muted-foreground/50" />
+          <p className="text-sm text-muted-foreground">Pelamar belum memiliki lamaran.</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      {applications.map((app) => (
+        <Card key={app.id}>
+          <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-medium text-sm">{app.job_title}</span>
+                {app.company_name && (
+                  <span className="text-muted-foreground text-xs">— {app.company_name}</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <ApplicationStatusBadge status={app.status} />
+                <Badge variant="outline" className="text-xs">
+                  {app.source === "ADMIN_ASSIGN" ? "Ditugaskan Admin" : "Mandiri"}
+                </Badge>
+                <span className="text-xs text-muted-foreground">
+                  {app.applied_at
+                    ? format(new Date(app.applied_at), "dd MMM yyyy", { locale: idLocale })
+                    : ""}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                asChild
+                variant="outline"
+                size="sm"
+                className="cursor-pointer"
+              >
+                <Link to={`${APPLICATIONS_BASE}/${app.id}?tab=chat`}>
+                  <IconMessage className="mr-2 size-4" />
+                  Chat
+                </Link>
+              </Button>
+              <Button
+                asChild
+                variant="ghost"
+                size="sm"
+                className="cursor-pointer"
+              >
+                <Link to={`${APPLICATIONS_BASE}/${app.id}`}>
+                  <IconExternalLink className="mr-2 size-4" />
+                  Detail
+                </Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  )
+}
+
 export function AdminPelamarDetailPage() {
   const { id } = useParams<{ id: string }>()
   const applicantId = id ? parseInt(id, 10) : null
@@ -220,7 +320,7 @@ export function AdminPelamarDetailPage() {
 
   if (isLoading || !applicantId) {
     return (
-      <div className="flex min-h-[200px] items-center justify-center px-6 py-8">
+      <div className="flex min-h-50 items-center justify-center px-6 py-8">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
       </div>
     )
@@ -282,6 +382,9 @@ export function AdminPelamarDetailPage() {
           <TabsTrigger value="dokumen" className="cursor-pointer">
             Dokumen
           </TabsTrigger>
+          <TabsTrigger value="lamaran" className="cursor-pointer">
+            Lamaran
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="biodata" className="mt-6">
@@ -306,6 +409,10 @@ export function AdminPelamarDetailPage() {
 
         <TabsContent value="dokumen">
           <ApplicantDocumentsTab applicantId={applicant.id} />
+        </TabsContent>
+
+        <TabsContent value="lamaran">
+          <ApplicantApplicationsTab profileId={applicant.applicant_profile?.id} />
         </TabsContent>
       </Tabs>
     </div>
