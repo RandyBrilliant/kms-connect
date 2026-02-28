@@ -74,8 +74,6 @@ const formSchema = z
     }
   )
 
-type FormValues = z.infer<typeof formSchema>
-
 interface TransitionApplicationDialogProps {
   application: JobApplication
   onSuccess?: () => void
@@ -100,7 +98,7 @@ export function TransitionApplicationDialog({
 
   const allowedStatuses = ADMIN_TRANSITIONS[application.status] ?? []
 
-  const form = useForm<FormValues>({
+  const form = useForm({
     defaultValues: {
       status: "",
       note: "",

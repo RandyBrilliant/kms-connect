@@ -3,7 +3,7 @@
  * Mirrors job-table.tsx conventions exactly.
  */
 
-import { useState, useMemo, useCallback } from "react"
+import { useState, useMemo } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import {
   flexRender,

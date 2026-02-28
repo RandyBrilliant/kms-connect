@@ -41,8 +41,6 @@ const formSchema = z.object({
   note: z.string().max(500, "Catatan maksimal 500 karakter").optional(),
 })
 
-type FormValues = z.infer<typeof formSchema>
-
 interface AssignApplicationDialogProps {
   /** Pre-fill the job ID (e.g. opened from job detail page). */
   defaultJobId?: number
@@ -71,7 +69,7 @@ export function AssignApplicationDialog({
   const [open, setOpen] = useState(false)
   const assignMutation = useAssignApplicationMutation()
 
-  const form = useForm<FormValues>({
+  const form = useForm({
     defaultValues: {
       job: defaultJobId as number,
       applicant: defaultApplicantId as number,

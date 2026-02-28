@@ -13,7 +13,7 @@ import {
   getCompanyDashboardStats,
 } from "@/api/company-self-service"
 import type { JobsListParams } from "@/types/jobs"
-import type { JobApplicationsListParams } from "@/types/job-applications"
+import type { ApplicationsListParams } from "@/types/job-applications"
 
 export const companyKeys = {
   all: ["company-self-service"] as const,
@@ -24,7 +24,7 @@ export const companyKeys = {
   applicantsList: (params: unknown) => [...companyKeys.applicants(), params] as const,
   applicantDetail: (id: number) => [...companyKeys.applicants(), id] as const,
   applications: () => [...companyKeys.all, "applications"] as const,
-  applicationsList: (params: JobApplicationsListParams) =>
+  applicationsList: (params: ApplicationsListParams) =>
     [...companyKeys.applications(), params] as const,
   applicationDetail: (id: number) => [...companyKeys.applications(), id] as const,
   dashboardStats: () => [...companyKeys.all, "dashboard-stats"] as const,
@@ -62,7 +62,7 @@ export function useCompanyApplicantQuery(id: number | null, enabled = true) {
   })
 }
 
-export function useCompanyApplicationsQuery(params: JobApplicationsListParams = {}) {
+export function useCompanyApplicationsQuery(params: ApplicationsListParams = {}) {
   return useQuery({
     queryKey: companyKeys.applicationsList(params),
     queryFn: () => getCompanyApplications(params),

@@ -38,7 +38,7 @@ function applicationStatusLabel(status: ApplicationStatus) {
       return "Dilamar"
     case "UNDER_REVIEW":
       return "Dalam Review"
-    case "ACCEPTED":
+    case "OFFER_ACCEPTED":
       return "Diterima"
     case "REJECTED":
       return "Ditolak"
@@ -53,7 +53,7 @@ function applicationStatusVariant(status: ApplicationStatus) {
       return "secondary"
     case "UNDER_REVIEW":
       return "default"
-    case "ACCEPTED":
+    case "OFFER_ACCEPTED":
       return "default"
     case "REJECTED":
       return "destructive"
@@ -169,7 +169,7 @@ export function CompanyDashboardHomePage() {
             <div className="space-y-1">
               <p className="text-muted-foreground text-sm">Diterima</p>
               <p className="text-2xl font-bold text-green-600">
-                {stats.status_breakdown.ACCEPTED || 0}
+                {stats.status_breakdown.OFFER_ACCEPTED || 0}
               </p>
             </div>
             <div className="space-y-1">

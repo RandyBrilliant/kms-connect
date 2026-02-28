@@ -8,7 +8,7 @@ import type { PaginatedResponse } from "@/types/admin"
 import type { JobItem, JobsListParams } from "@/types/jobs"
 import type {
   JobApplication,
-  JobApplicationsListParams,
+  ApplicationsListParams,
   CompanyDashboardStats,
 } from "@/types/job-applications"
 import type { ApplicantUser } from "@/types/applicant"
@@ -27,7 +27,7 @@ function buildJobsQueryString(params: JobsListParams): string {
   return str ? `?${str}` : ""
 }
 
-function buildApplicationsQueryString(params: JobApplicationsListParams): string {
+function buildApplicationsQueryString(params: ApplicationsListParams): string {
   const searchParams = new URLSearchParams()
   if (params.page) searchParams.set("page", params.page.toString())
   if (params.page_size) searchParams.set("page_size", params.page_size.toString())
@@ -81,7 +81,7 @@ export async function getCompanyApplicant(id: number): Promise<ApplicantUser> {
 
 /** GET /api/companies/me/applications/ - List applications to company's jobs */
 export async function getCompanyApplications(
-  params: JobApplicationsListParams = {}
+  params: ApplicationsListParams = {}
 ): Promise<PaginatedResponse<JobApplication>> {
   const { data } = await api.get<PaginatedResponse<JobApplication>>(
     `/api/companies/me/applications/${buildApplicationsQueryString(params)}`
