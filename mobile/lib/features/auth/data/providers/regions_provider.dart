@@ -51,3 +51,20 @@ final villagesByDistrictProvider =
   final data = response.data as List<dynamic>;
   return data.map((e) => Region.fromJson(e as Map<String, dynamic>)).toList();
 });
+
+// ── Kecamatan lookup from village ─────────────────────────────────────────────
+/// Fetches the parent kecamatan (District) for a given [villageId].
+///
+/// Used when restoring a saved profile where kecamatan is not stored directly —
+/// the village detail endpoint returns `district` (ID) and `district_name`.
+final kecamatanFromVillageProvider =
+    FutureProvider.family<Region, int>((ref, villageId) async {
+  final response =
+      await ApiClient().dio.get(ApiEndpoints.villageDetail(villageId));
+  final data = response.data as Map<String, dynamic>;
+  return Region(
+    id: data['district'] as int,
+    code: '',
+    name: data['district_name'] as String,
+  );
+});

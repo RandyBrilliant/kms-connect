@@ -31,6 +31,7 @@ class ApiCode:
     PROFILE_UPDATED = "profile_updated"
     EMAIL_SENT = "email_sent"
     EMAIL_ALREADY_VERIFIED = "email_already_verified"
+    EMAIL_NOT_VERIFIED = "email_not_verified"
     RESET_PASSWORD_SUCCESS = "reset_password_success"
 
     # Validasi field
@@ -64,6 +65,7 @@ class ApiMessage:
     PROFILE_UPDATED = "Profil berhasil diperbarui."
     EMAIL_SENT = "Email berhasil dikirim."
     EMAIL_ALREADY_VERIFIED = "Email sudah terverifikasi."
+    EMAIL_NOT_VERIFIED = "Email belum diverifikasi. Silakan cek kotak masuk email Anda dan klik tautan verifikasi."
     RESET_PASSWORD_SUCCESS = "Kata sandi berhasil diatur ulang."
 
     # Validasi

@@ -78,8 +78,28 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     // triggering rebuilds inside the build phase.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final profile = ref.read(profileNotifierProvider).profile;
-      if (profile != null) _populate(profile);
+      if (profile != null) {
+        _populate(profile);
+        // Kecamatan is not persisted in the profile model; derive it from
+        // the saved village via the detail endpoint.
+        if (profile.villageId != null) {
+          _loadKecamatan(profile.villageId!);
+        }
+      }
     });
+  }
+
+  /// Async-fetches the parent kecamatan (district) for [villageId] and
+  /// sets [_kecamatan] so the cascading kelurahan picker is pre-filled.
+  Future<void> _loadKecamatan(int villageId) async {
+    try {
+      final kecamatan = await ref.read(
+        kecamatanFromVillageProvider(villageId).future,
+      );
+      if (mounted) setState(() => _kecamatan = kecamatan);
+    } catch (_) {
+      // Silently fail — user can manually pick kecamatan to enable kelurahan.
+    }
   }
 
   @override
@@ -103,46 +123,46 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   void _populate(ApplicantProfile p) {
     if (_populated) return;
     _populated = true;
-    _fullName.text = p.fullName ?? '';
+    _fullName.text = (p.fullName ?? '').toUpperCase();
     _nik.text = p.nik ?? '';
     if (p.birthDate != null) {
       _pickedDate = p.birthDate;
       _birthDate.text = DateFormat('dd MMMM yyyy', 'id').format(p.birthDate!);
     }
     _gender = p.gender;
-    _address.text = p.address ?? '';
+    _address.text = (p.address ?? '').toUpperCase();
     _phone.text = p.contactPhone ?? '';
     _siblingCount.text = p.siblingCount?.toString() ?? '';
     _birthOrder.text = p.birthOrder?.toString() ?? '';
-    _fatherName.text = p.fatherName ?? '';
+    _fatherName.text = (p.fatherName ?? '').toUpperCase();
     _fatherAge.text = p.fatherAge?.toString() ?? '';
     if (p.fatherAge != null) {
       _pickedFatherBirthDate = DateTime(DateTime.now().year - p.fatherAge!);
       _fatherBirthDateCtrl.text =
           DateFormat('dd MMMM yyyy', 'id').format(_pickedFatherBirthDate!);
     }
-    _fatherOccupation.text = p.fatherOccupation ?? '';
-    _motherName.text = p.motherName ?? '';
+    _fatherOccupation.text = (p.fatherOccupation ?? '').toUpperCase();
+    _motherName.text = (p.motherName ?? '').toUpperCase();
     _motherAge.text = p.motherAge?.toString() ?? '';
     if (p.motherAge != null) {
       _pickedMotherBirthDate = DateTime(DateTime.now().year - p.motherAge!);
       _motherBirthDateCtrl.text =
           DateFormat('dd MMMM yyyy', 'id').format(_pickedMotherBirthDate!);
     }
-    _motherOccupation.text = p.motherOccupation ?? '';
-    _familyAddress.text = p.familyAddress ?? '';
+    _motherOccupation.text = (p.motherOccupation ?? '').toUpperCase();
+    _familyAddress.text = (p.familyAddress ?? '').toUpperCase();
     _familyPhone.text = p.familyContactPhone ?? '';
-    _spouseName.text = p.spouseName ?? '';
+    _spouseName.text = (p.spouseName ?? '').toUpperCase();
     _spouseAge.text = p.spouseAge?.toString() ?? '';
     if (p.spouseAge != null) {
       _pickedSpouseBirthDate = DateTime(DateTime.now().year - p.spouseAge!);
       _spouseBirthDateCtrl.text =
           DateFormat('dd MMMM yyyy', 'id').format(_pickedSpouseBirthDate!);
     }
-    _spouseOccupation.text = p.spouseOccupation ?? '';
+    _spouseOccupation.text = (p.spouseOccupation ?? '').toUpperCase();
 
     // Ahli Waris
-    _heirName.text = p.heirName ?? '';
+    _heirName.text = (p.heirName ?? '').toUpperCase();
     _heirRelationship = (p.heirRelationship?.isNotEmpty == true) ? p.heirRelationship : null;
     _heirContactPhone.text = p.heirContactPhone ?? '';
 
@@ -472,12 +492,11 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           hint: 'Sesuai KTP',
                           prefixIcon: Icons.badge_outlined,
                           readOnly: true,
-                          textCapitalization:
-                              TextCapitalization.words,
-                          validator: (v) =>
-                              (v == null || v.trim().isEmpty)
-                                  ? 'Nama lengkap wajib diisi'
-                                  : null,
+                          upperCase: true,
+                          suffixWidget: const Icon(
+                            Icons.lock_outline_rounded,
+                            size: 18,
+                          ),
                         ),
                         const SizedBox(height: 14),
                         M3TextField(
@@ -487,10 +506,10 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           prefixIcon: Icons.credit_card_outlined,
                           readOnly: true,
                           keyboardType: TextInputType.number,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                            LengthLimitingTextInputFormatter(16),
-                          ],
+                          suffixWidget: const Icon(
+                            Icons.lock_outline_rounded,
+                            size: 18,
+                          ),
                         ),
                         const SizedBox(height: 14),
                         // Tempat lahir – regency picker
@@ -554,6 +573,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           hint: 'Jalan, RT/RW',
                           prefixIcon: Icons.edit_road_outlined,
                           maxLines: 2,
+                          upperCase: true,
                         ),
                         const SizedBox(height: 14),
                         // Province
@@ -716,7 +736,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           label: 'Nama Ayah',
                           hint: 'Nama lengkap',
                           prefixIcon: Icons.person_outline_rounded,
-                          textCapitalization: TextCapitalization.words,
+                          upperCase: true,
                         ),
                         const SizedBox(height: 14),
                         M3TextField(
@@ -738,8 +758,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           label: 'Pekerjaan Ayah',
                           hint: 'Contoh: Wiraswasta',
                           prefixIcon: Icons.work_outline_rounded,
-                          textCapitalization:
-                              TextCapitalization.words,
+                          upperCase: true,
                         ),
                         const SizedBox(height: 18),
                         _SubLabel('Ibu'),
@@ -749,7 +768,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           label: 'Nama Ibu',
                           hint: 'Nama lengkap',
                           prefixIcon: Icons.person_outline_rounded,
-                          textCapitalization: TextCapitalization.words,
+                          upperCase: true,
                         ),
                         const SizedBox(height: 14),
                         M3TextField(
@@ -771,8 +790,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           label: 'Pekerjaan Ibu',
                           hint: 'Contoh: Ibu Rumah Tangga',
                           prefixIcon: Icons.work_outline_rounded,
-                          textCapitalization:
-                              TextCapitalization.words,
+                          upperCase: true,
                         ),
                         const SizedBox(height: 14),
                         M3TextField(
@@ -781,6 +799,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           hint: 'Jika berbeda dengan alamat KTP',
                           prefixIcon: Icons.home_outlined,
                           maxLines: 2,
+                          upperCase: true,
                         ),
                         const SizedBox(height: 14),
                         PhoneInputField(
@@ -808,7 +827,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           label: 'Nama Pasangan',
                           hint: 'Nama lengkap',
                           prefixIcon: Icons.person_outline_rounded,
-                          textCapitalization: TextCapitalization.words,
+                          upperCase: true,
                         ),
                         const SizedBox(height: 14),
                         M3TextField(
@@ -830,8 +849,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           label: 'Pekerjaan Pasangan',
                           hint: 'Contoh: Karyawan Swasta',
                           prefixIcon: Icons.work_outline_rounded,
-                          textCapitalization:
-                              TextCapitalization.words,
+                          upperCase: true,
                         ),
                       ],
                     ),
@@ -849,7 +867,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           label: 'Nama Ahli Waris',
                           hint: 'Nama lengkap',
                           prefixIcon: Icons.person_outline_rounded,
-                          textCapitalization: TextCapitalization.words,
+                          upperCase: true,
                         ),
                         const SizedBox(height: 14),
                         _HeirRelationshipSelector(

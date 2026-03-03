@@ -219,7 +219,7 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
   void _populateFields(KtpData data) {
     setState(() {
       if (data.nik != null) _nikCtrl.text = data.nik!;
-      if (data.name != null) _nameCtrl.text = data.name!;
+      if (data.name != null) _nameCtrl.text = data.name!.toUpperCase();
       if (data.birthPlace != null) {
         _ocrBirthPlace = data.birthPlace;
         _tryMatchCity(data.birthPlace!);
@@ -571,7 +571,7 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
             label: 'Nama Lengkap',
             hint: 'Sesuai KTP',
             prefixIcon: Icons.person_outline_rounded,
-            textCapitalization: TextCapitalization.words,
+            upperCase: true,
             textInputAction: TextInputAction.done,
             validator: (v) =>
                 (v == null || v.trim().isEmpty) ? 'Nama wajib diisi' : null,

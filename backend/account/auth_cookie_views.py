@@ -120,6 +120,18 @@ class CookieTokenObtainPairView(APIView):
 
         data = serializer.validated_data
         user = serializer.user
+
+        # Block login for users who have not verified their email.
+        if not user.email_verified:
+            return Response(
+                error_response(
+                    detail=ApiMessage.EMAIL_NOT_VERIFIED,
+                    code=ApiCode.EMAIL_NOT_VERIFIED,
+                    status_code=status.HTTP_403_FORBIDDEN,
+                ),
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         access = data["access"]
         refresh = data["refresh"]
         cookie_settings = _cookie_settings()
@@ -428,6 +440,51 @@ class ConfirmResetPasswordView(APIView):
             success_response(
                 detail=ApiMessage.RESET_PASSWORD_SUCCESS,
                 code=ApiCode.RESET_PASSWORD_SUCCESS,
+            ),
+            status=status.HTTP_200_OK,
+        )
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class ResendVerificationEmailView(APIView):
+    """
+    Public. POST { "email": "..." } → resend verification email if user exists and email not yet verified.
+    Always returns 200 to prevent email enumeration.
+    Throttled per IP (auth_public scope).
+    """
+    permission_classes = ()
+    authentication_classes = ()
+    throttle_classes = [AuthPublicRateThrottle]
+
+    def post(self, request):
+        from django.contrib.auth import get_user_model
+        from .email_utils import send_verification_email, verification_link
+
+        User = get_user_model()
+        email = (request.data.get("email") or "").strip().lower()
+        if not email:
+            return Response(
+                error_response(
+                    detail="Email wajib diisi.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        user = User.objects.filter(email__iexact=email, is_active=True).first()
+        if user and not user.email_verified:
+            frontend_url = (getattr(django_settings, "FRONTEND_URL", "") or "").rstrip("/")
+            verify_token = verification_link(user)
+            if frontend_url:
+                verify_url = f"{frontend_url}/verify-email?token={verify_token}"
+            else:
+                verify_url = request.build_absolute_uri(f"/api/auth/verify-email/?token={verify_token}")
+            logo_url = getattr(django_settings, "LOGO_URL", "") or ""
+            send_verification_email(user, logo_url=logo_url, verify_url=verify_url)
+        # Always return 200 so callers cannot enumerate registered emails
+        return Response(
+            success_response(
+                detail="Jika email terdaftar dan belum terverifikasi, email verifikasi akan dikirim.",
+                code=ApiCode.EMAIL_SENT,
             ),
             status=status.HTTP_200_OK,
         )

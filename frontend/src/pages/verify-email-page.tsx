@@ -15,12 +15,16 @@ import { verifyEmail } from "@/api/auth"
 
 type Status = "idle" | "loading" | "success" | "error"
 
+const APP_DEEP_LINK = "kmsconnect://"
+const REDIRECT_DELAY_SECONDS = 5
+
 export function VerifyEmailPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const [status, setStatus] = useState<Status>("idle")
   const [message, setMessage] = useState<string>("")
   const [email, setEmail] = useState<string | null>(null)
+  const [countdown, setCountdown] = useState(REDIRECT_DELAY_SECONDS)
 
   useEffect(() => {
     const token = searchParams.get("token")
@@ -57,6 +61,26 @@ export function VerifyEmailPage() {
     }
   }, [searchParams])
 
+  // Auto-redirect to the mobile app after countdown
+  useEffect(() => {
+    if (status !== "success") return
+
+    if (countdown <= 0) {
+      window.location.href = APP_DEEP_LINK
+      return
+    }
+
+    const timer = setTimeout(() => {
+      setCountdown((prev) => prev - 1)
+    }, 1000)
+
+    return () => clearTimeout(timer)
+  }, [status, countdown])
+
+  const handleOpenApp = () => {
+    window.location.href = APP_DEEP_LINK
+  }
+
   const handleGoLogin = () => {
     navigate("/login")
   }
@@ -91,6 +115,21 @@ export function VerifyEmailPage() {
               <span>Memproses verifikasi...</span>
             </div>
           )}
+          {status === "success" && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Mengalihkan ke aplikasi dalam{" "}
+                <span className="font-semibold text-foreground">{countdown}</span> detik...
+              </p>
+              <Button
+                type="button"
+                className="w-full cursor-pointer"
+                onClick={handleOpenApp}
+              >
+                Buka Aplikasi Sekarang
+              </Button>
+            </div>
+          )}
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={handleGoLogin} className="cursor-pointer">
               Ke Halaman Login
@@ -103,4 +142,3 @@ export function VerifyEmailPage() {
 }
 
 export default VerifyEmailPage
-

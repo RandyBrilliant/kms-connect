@@ -238,6 +238,20 @@ class ApplicantRegistrationView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Kirim email verifikasi (async via Celery task)
+        try:
+            from .email_utils import send_verification_email, verification_link
+            _frontend_url = (getattr(django_settings, "FRONTEND_URL", "") or "").rstrip("/")
+            _verify_token = verification_link(user)
+            if _frontend_url:
+                _verify_url = f"{_frontend_url}/verify-email?token={_verify_token}"
+            else:
+                _verify_url = request.build_absolute_uri(f"/api/auth/verify-email/?token={_verify_token}")
+            _logo_url = getattr(django_settings, "LOGO_URL", "") or ""
+            send_verification_email(user, logo_url=_logo_url, verify_url=_verify_url)
+        except Exception:
+            pass  # Jangan gagalkan registrasi jika email gagal dikirim
+
         # Generate JWT tokens
         try:
             token_serializer = TokenObtainPairSerializer()

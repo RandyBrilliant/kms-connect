@@ -1,7 +1,7 @@
 import { useState } from "react"
 import type { AxiosError } from "axios"
 import { useForm } from "@tanstack/react-form"
-import { EyeIcon, EyeOffIcon } from "lucide-react"
+import { EyeIcon, EyeOffIcon, MailWarningIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "@/lib/toast"
 import { Button } from "@/components/ui/button"
@@ -27,9 +27,10 @@ import {
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Input } from "@/components/ui/input"
 import { useLoginMutation } from "@/hooks/use-login-mutation"
-import { requestPasswordReset } from "@/api/auth"
+import { requestPasswordReset, resendVerificationEmail } from "@/api/auth"
 import type { ApiErrorResponse } from "@/types/api"
 import type { LoginFormValues } from "@/schemas/login"
 import { forgotPasswordSchema } from "@/schemas/forgot-password"
@@ -41,6 +42,8 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
   const [forgotOpen, setForgotOpen] = useState(false)
   const [forgotEmail, setForgotEmail] = useState("")
   const [forgotLoading, setForgotLoading] = useState(false)
+  const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null)
+  const [resendLoading, setResendLoading] = useState(false)
 
   // Backend field-level errors (from ApiErrorResponse.errors)
   const [serverFieldErrors, setServerFieldErrors] = useState<
@@ -56,11 +59,18 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
     },
     onSubmit: async ({ value }) => {
       setServerFieldErrors({})
+      setUnverifiedEmail(null)
       try {
         await mutation.mutateAsync(value)
       } catch (err: unknown) {
         const axiosError = err as AxiosError<ApiErrorResponse>
         const data = axiosError.response?.data
+
+        // Email not verified — show persistent inline banner instead of a toast
+        if (data?.code === "email_not_verified") {
+          setUnverifiedEmail(value.email)
+          return
+        }
 
         // Map backend field errors (if any) to our local state
         if (data?.errors) {
@@ -105,6 +115,25 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
       toast.error("Gagal", message)
     } finally {
       setForgotLoading(false)
+    }
+  }
+
+  const handleResendVerification = async () => {
+    if (!unverifiedEmail) return
+    setResendLoading(true)
+    try {
+      await resendVerificationEmail(unverifiedEmail)
+      toast.success(
+        "Email verifikasi dikirim",
+        "Silakan cek kotak masuk email Anda."
+      )
+    } catch (err: unknown) {
+      const message =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail ?? "Gagal mengirim. Coba lagi."
+      toast.error("Gagal", message)
+    } finally {
+      setResendLoading(false)
     }
   }
 
@@ -260,6 +289,31 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
               </Field>
             </FieldGroup>
           </form>
+
+          {/* Email not verified banner */}
+          {unverifiedEmail && (
+            <Alert className="mt-4 border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
+              <MailWarningIcon className="size-4 !text-amber-600 dark:!text-amber-400" />
+              <AlertTitle>Email belum diverifikasi</AlertTitle>
+              <AlertDescription className="mt-1 space-y-2">
+                <p>
+                  Silakan cek kotak masuk email{" "}
+                  <span className="font-medium">{unverifiedEmail}</span> dan klik
+                  tautan verifikasi yang telah dikirim.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="cursor-pointer border-amber-400 text-amber-800 hover:bg-amber-100 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900"
+                  disabled={resendLoading}
+                  onClick={handleResendVerification}
+                >
+                  {resendLoading ? "Mengirim..." : "Kirim ulang email verifikasi"}
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
         </CardContent>
       </Card>
     </div>

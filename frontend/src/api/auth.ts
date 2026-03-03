@@ -34,6 +34,11 @@ export async function requestPasswordReset(email: string): Promise<void> {
   await api.post("/api/auth/request-password-reset/", { email })
 }
 
+/** POST /api/auth/resend-verification-email/ - Resend verification email (public) */
+export async function resendVerificationEmail(email: string): Promise<void> {
+  await api.post("/api/auth/resend-verification-email/", { email })
+}
+
 /** GET /api/auth/verify-email/ - Verify email via token (public link from email) */
 export async function verifyEmail(token: string): Promise<ApiSuccessResponse<{ email: string }>> {
   const { data } = await api.get<ApiSuccessResponse<{ email: string }>>(

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../utils/formatters.dart';
+
 /// Reusable M3 "filled" text field.
 ///
 /// All colours and text styles come from the ambient [Theme] rather than
@@ -34,6 +36,7 @@ class M3TextField extends StatefulWidget {
     this.readOnly = false,
     this.onTap,
     this.autofillHints,
+    this.upperCase = false,
   });
 
   final TextEditingController controller;
@@ -54,6 +57,11 @@ class M3TextField extends StatefulWidget {
   final bool readOnly;
   final VoidCallback? onTap;
   final Iterable<String>? autofillHints;
+
+  /// When `true`, forces all typed characters to uppercase and sets keyboard
+  /// capitalisation to [TextCapitalization.characters].
+  /// Programmatic assignments to [controller] must also call `.toUpperCase()`.
+  final bool upperCase;
 
   @override
   State<M3TextField> createState() => _M3TextFieldState();
@@ -132,14 +140,22 @@ class _M3TextFieldState extends State<M3TextField> {
 
   @override
   Widget build(BuildContext context) {
+    final effectiveCapitalization = widget.upperCase
+        ? TextCapitalization.characters
+        : widget.textCapitalization;
+    final effectiveFormatters = widget.upperCase
+        ? [const UpperCaseTextInputFormatter(), ...?widget.inputFormatters]
+        : widget.inputFormatters;
+
     return TextFormField(
       controller: widget.controller,
       focusNode: _effectiveFocusNode,
       obscureText: widget.obscureText,
       keyboardType: widget.keyboardType,
       textInputAction: widget.textInputAction,
-      textCapitalization: widget.textCapitalization,
-      inputFormatters: widget.inputFormatters,
+      textCapitalization: effectiveCapitalization,
+      inputFormatters: effectiveFormatters,
+
       maxLines: widget.maxLines,
       readOnly: widget.readOnly,
       showCursor: !widget.readOnly,

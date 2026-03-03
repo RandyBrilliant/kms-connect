@@ -32,6 +32,7 @@ class AuthState {
   final bool isLoading;
   final bool initialized;
   final String? error;
+  final String? errorCode;
 
   /// True after Google Sign-In for a brand-new account that still needs
   /// KTP upload, NIK, referral code, and phone to complete registration.
@@ -42,6 +43,7 @@ class AuthState {
     this.isLoading = false,
     this.initialized = false,
     this.error,
+    this.errorCode,
     this.needsGoogleCompletion = false,
   });
 
@@ -50,6 +52,7 @@ class AuthState {
     bool? isLoading,
     bool? initialized,
     String? error,
+    String? errorCode,
     bool? needsGoogleCompletion,
   }) {
     return AuthState(
@@ -57,6 +60,7 @@ class AuthState {
       isLoading: isLoading ?? this.isLoading,
       initialized: initialized ?? this.initialized,
       error: error,
+      errorCode: errorCode,
       needsGoogleCompletion: needsGoogleCompletion ?? this.needsGoogleCompletion,
     );
   }
@@ -104,8 +108,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
     return fallback;
   }
 
+  /// Extracts the backend `code` field from a DioException response body.
+  String? _extractErrorCode(Object e) {
+    if (e is DioException) {
+      final data = e.response?.data;
+      if (data is Map<String, dynamic>) {
+        return data['code'] as String?;
+      }
+    }
+    return null;
+  }
+
   Future<bool> login(String email, String password) async {
-    state = state.copyWith(isLoading: true, error: null);
+    state = state.copyWith(isLoading: true, error: null, errorCode: null);
     try {
       final authResponse = await _repository.login(email, password);
       state = state.copyWith(
@@ -118,6 +133,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = state.copyWith(
         isLoading: false,
         error: _extractErrorMessage(e, 'Email atau password salah'),
+        errorCode: _extractErrorCode(e),
       );
       return false;
     }
@@ -261,6 +277,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = state.copyWith(user: user);
     } catch (e) {
       state = state.copyWith(user: null);
+    }
+  }
+
+  /// Resend verification email. Returns true on success.
+  Future<bool> resendVerificationEmail(String email) async {
+    try {
+      await _repository.resendVerificationEmail(email);
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 }

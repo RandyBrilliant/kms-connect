@@ -28,6 +28,10 @@ class _LoginPageState extends ConsumerState<LoginPage>
   final _passwordFocus = FocusNode();
   bool _obscurePassword = true;
 
+  // Email-not-verified banner state
+  String? _unverifiedEmail;
+  bool _resendLoading = false;
+
   //  Entrance animation
   late final AnimationController _entranceCtrl;
   late final Animation<Offset> _panelSlide;
@@ -92,6 +96,8 @@ class _LoginPageState extends ConsumerState<LoginPage>
     FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) return;
 
+    setState(() => _unverifiedEmail = null);
+
     final success = await ref
         .read(authStateProvider.notifier)
         .login(_emailCtrl.text.trim(), _passwordCtrl.text);
@@ -101,11 +107,31 @@ class _LoginPageState extends ConsumerState<LoginPage>
     if (success) {
       context.go('/home');
     } else {
-      final errorMsg = ref.read(authStateProvider).error;
-      if (errorMsg != null) {
-        CustomToast.show(context, message: errorMsg, type: ToastType.error);
+      final authState = ref.read(authStateProvider);
+      if (authState.errorCode == 'email_not_verified') {
+        setState(() => _unverifiedEmail = _emailCtrl.text.trim());
+      } else if (authState.error != null) {
+        CustomToast.show(context, message: authState.error!, type: ToastType.error);
       }
     }
+  }
+
+  Future<void> _handleResendVerification() async {
+    final email = _unverifiedEmail;
+    if (email == null) return;
+    setState(() => _resendLoading = true);
+    final ok = await ref
+        .read(authStateProvider.notifier)
+        .resendVerificationEmail(email);
+    if (!mounted) return;
+    setState(() => _resendLoading = false);
+    CustomToast.show(
+      context,
+      message: ok
+          ? 'Email verifikasi berhasil dikirim. Silakan cek kotak masuk Anda.'
+          : 'Gagal mengirim email. Silakan coba lagi.',
+      type: ok ? ToastType.success : ToastType.error,
+    );
   }
 
   void _handleGoogleLogin() async {
@@ -188,8 +214,9 @@ class _LoginPageState extends ConsumerState<LoginPage>
                               () => _obscurePassword = !_obscurePassword,
                             ),
                             onLogin: _handleLogin,
-                            onGoogleLogin: _handleGoogleLogin,
-                          ),
+                            onGoogleLogin: _handleGoogleLogin,                              unverifiedEmail: _unverifiedEmail,
+                              isResendLoading: _resendLoading,
+                              onResend: _handleResendVerification,                          ),
                         ),
                       ),
                   ],
@@ -273,6 +300,9 @@ class _FormPanel extends StatelessWidget {
   final VoidCallback onToggleObscure;
   final Future<void> Function() onLogin;
   final VoidCallback onGoogleLogin;
+  final String? unverifiedEmail;
+  final bool isResendLoading;
+  final Future<void> Function() onResend;
 
   const _FormPanel({
     required this.formKey,
@@ -285,6 +315,9 @@ class _FormPanel extends StatelessWidget {
     required this.onToggleObscure,
     required this.onLogin,
     required this.onGoogleLogin,
+    required this.unverifiedEmail,
+    required this.isResendLoading,
+    required this.onResend,
   });
 
   @override
@@ -417,6 +450,76 @@ class _FormPanel extends StatelessWidget {
                     )
                   : const Text('Masuk'),
             ),
+
+            // Email-not-verified banner
+            if (unverifiedEmail != null) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFFBEB),
+                  border: Border.all(color: const Color(0xFFFCD34D)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.mail_outlined,
+                            size: 18, color: Color(0xFFD97706)),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Email belum diverifikasi',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF92400E),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Cek kotak masuk $unverifiedEmail dan klik tautan verifikasi yang telah dikirim.',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 12,
+                        color: const Color(0xFF92400E),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        onPressed: isResendLoading ? null : onResend,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF92400E),
+                          side: const BorderSide(color: Color(0xFFF59E0B)),
+                          minimumSize: const Size(0, 40),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          textStyle: GoogleFonts.plusJakartaSans(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        child: isResendLoading
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Color(0xFFD97706)),
+                              )
+                            : const Text('Kirim ulang email verifikasi'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
             const SizedBox(height: 28),
 
             // Divider

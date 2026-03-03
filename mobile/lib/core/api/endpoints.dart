@@ -11,6 +11,7 @@ class ApiEndpoints {
   static const String refreshToken = '$baseUrl/auth/token/refresh/';
   static const String logout = '$baseUrl/auth/logout/';
   static const String verifyEmail = '$baseUrl/auth/verify-email/';
+  static const String resendVerificationEmail = '$baseUrl/auth/resend-verification-email/';
   static const String requestPasswordReset = '$baseUrl/auth/request-password-reset/';
   static const String confirmPasswordReset = '$baseUrl/auth/confirm-reset-password/';
 
@@ -73,4 +74,7 @@ class ApiEndpoints {
       '$baseUrl/districts/?regency_id=$regencyId';
   static String villagesByDistrict(int districtId) =>
       '$baseUrl/villages/?district_id=$districtId';
+
+  /// Returns village detail with parent kecamatan info (district, district_name).
+  static String villageDetail(int id) => '$baseUrl/villages/$id/';
 }

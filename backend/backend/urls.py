@@ -28,6 +28,7 @@ from account.auth_cookie_views import (
     VerifyEmailView,
     RequestPasswordResetView,
     ConfirmResetPasswordView,
+    ResendVerificationEmailView,
 )
 from account.registration_views import (
     ApplicantRegistrationView,
@@ -44,6 +45,7 @@ urlpatterns = [
     path("api/auth/token/verify/", TokenVerifyView.as_view(), name="token_verify"),
     path("api/auth/logout/", CookieLogoutView.as_view(), name="auth_logout"),
     path("api/auth/verify-email/", VerifyEmailView.as_view(), name="verify_email"),
+    path("api/auth/resend-verification-email/", ResendVerificationEmailView.as_view(), name="resend_verification_email"),
     path("api/auth/request-password-reset/", RequestPasswordResetView.as_view(), name="request_password_reset"),
     path("api/auth/confirm-reset-password/", ConfirmResetPasswordView.as_view(), name="confirm_reset_password"),
     path("api/auth/register/", ApplicantRegistrationView.as_view(), name="applicant_register"),

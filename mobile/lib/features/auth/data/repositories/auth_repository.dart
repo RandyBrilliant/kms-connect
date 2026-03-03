@@ -347,6 +347,18 @@ class AuthRepository {
     await _apiClient.clearTokens();
   }
 
+  /// Resend verification email for the given email address.
+  Future<void> resendVerificationEmail(String email) async {
+    try {
+      await _apiClient.dio.post(
+        ApiEndpoints.resendVerificationEmail,
+        data: {'email': email.trim().toLowerCase()},
+      );
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
   /// Check if user is authenticated
   Future<bool> isAuthenticated() async {
     final token = await _apiClient.getAccessToken();
