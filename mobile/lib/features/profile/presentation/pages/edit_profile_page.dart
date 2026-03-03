@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../../../core/models/region.dart';
 import '../../../../core/widgets/custom_toast.dart';
 import '../../../../core/widgets/m3_text_field.dart';
+import '../../../../core/widgets/phone_input_field.dart';
 import '../../../auth/data/providers/regions_provider.dart';
 import '../../data/providers/profile_provider.dart';
 import '../../domain/models/applicant_profile.dart';
@@ -528,12 +529,14 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                               setState(() => _gender = g),
                         ),
                         const SizedBox(height: 14),
-                        M3TextField(
+                        PhoneInputField(
                           controller: _phone,
                           label: 'Nomor Telepon',
-                          hint: 'Contoh: 0812xxxxxxxx',
-                          prefixIcon: Icons.phone_outlined,
-                          keyboardType: TextInputType.phone,
+                          hint: '812xxxxxxxx',
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) return null;
+                            return validatePhoneNumber(v);
+                          },
                         ),
                       ],
                     ),
@@ -780,12 +783,14 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           maxLines: 2,
                         ),
                         const SizedBox(height: 14),
-                        M3TextField(
+                        PhoneInputField(
                           controller: _familyPhone,
                           label: 'No. Telepon Keluarga',
-                          hint: 'Contoh: 0812xxxxxxxx',
-                          prefixIcon: Icons.phone_outlined,
-                          keyboardType: TextInputType.phone,
+                          hint: '812xxxxxxxx',
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) return null;
+                            return validatePhoneNumber(v);
+                          },
                         ),
                       ],
                     ),
@@ -853,12 +858,14 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                               setState(() => _heirRelationship = v),
                         ),
                         const SizedBox(height: 14),
-                        M3TextField(
+                        PhoneInputField(
                           controller: _heirContactPhone,
                           label: 'No. Telepon Ahli Waris',
-                          hint: 'Contoh: 0812xxxxxxxx',
-                          prefixIcon: Icons.phone_outlined,
-                          keyboardType: TextInputType.phone,
+                          hint: '812xxxxxxxx',
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) return null;
+                            return validatePhoneNumber(v);
+                          },
                         ),
                       ],
                     ),

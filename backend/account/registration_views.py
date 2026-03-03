@@ -26,6 +26,7 @@ from .api_responses import (
 from .throttles import AuthPublicRateThrottle
 from .document_specs import validate_document_file
 from .tasks import process_document_ocr, optimize_document_image
+from .validators import validate_indonesian_phone
 
 
 class ApplicantRegistrationView(APIView):
@@ -47,6 +48,7 @@ class ApplicantRegistrationView(APIView):
         nik = request.data.get("nik", "").strip()
         ktp_file = request.FILES.get("ktp")
         referral_code = request.data.get("referral_code", "").strip().upper()
+        phone_number = request.data.get("phone_number", "").strip()
 
         # Validasi email
         if not email:
@@ -114,6 +116,19 @@ class ApplicantRegistrationView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Validasi phone number (optional but validated if provided)
+        if phone_number:
+            try:
+                validate_indonesian_phone(phone_number)
+            except Exception:
+                return Response(
+                    error_response(
+                        detail="Format nomor telepon tidak valid. Gunakan format +628xxxxxxxxxx atau 08xxxxxxxxxx.",
+                        code=ApiCode.VALIDATION_ERROR,
+                    ),
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         # Validasi KTP file
         if not ktp_file:
             return Response(
@@ -175,6 +190,7 @@ class ApplicantRegistrationView(APIView):
                 nik=nik,
                 verification_status=ApplicantVerificationStatus.DRAFT,
                 referrer=referrer_user,
+                contact_phone=phone_number if phone_number else "",
             )
         except Exception as e:
             user.delete()  # Rollback
@@ -391,6 +407,17 @@ class GoogleOAuthView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
+        # Determine if profile needs completion (new user OR has placeholder NIK)
+        needs_registration = created
+        if not needs_registration:
+            try:
+                profile = user.applicant_profile
+                # Placeholder NIK starts with 'G' (set during Google OAuth creation)
+                if profile.nik and profile.nik.startswith('G'):
+                    needs_registration = True
+            except ApplicantProfile.DoesNotExist:
+                needs_registration = True
+
         # Return user data + tokens
         serializer = ApplicantUserSerializer(instance=user, context={"request": request})
         return Response(
@@ -399,10 +426,180 @@ class GoogleOAuthView(APIView):
                     "user": serializer.data,
                     "access": access_token,
                     "refresh": refresh_token,
+                    "needs_registration": needs_registration,
                 },
-                detail="Login dengan Google berhasil." if not created else "Registrasi dengan Google berhasil.",
+                detail="Login dengan Google berhasil." if not needs_registration else "Akun baru dibuat. Silakan lengkapi profil Anda.",
             ),
             status=status.HTTP_200_OK if not created else status.HTTP_201_CREATED,
+        )
+
+
+class GoogleCompleteRegistrationView(APIView):
+    """
+    Authenticated endpoint untuk melengkapi profil setelah Google Sign-In.
+    Dipanggil hanya untuk user baru (needs_registration=True dari GoogleOAuthView).
+    Menerima: nik, ktp file, referral_code, phone_number, full_name.
+    Membuat/mengupdate ApplicantProfile, upload KTP, trigger OCR.
+    """
+
+    throttle_classes = [AuthPublicRateThrottle]
+
+    def post(self, request):
+        from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+        from .validators import validate_indonesian_phone as _validate_phone
+
+        user = request.user
+        nik = request.data.get("nik", "").strip()
+        ktp_file = request.FILES.get("ktp")
+        referral_code = request.data.get("referral_code", "").strip().upper()
+        phone_number = request.data.get("phone_number", "").strip()
+        full_name = request.data.get("full_name", "").strip()
+
+        # Validasi NIK
+        if not nik or len(nik) != 16 or not nik.isdigit():
+            return Response(
+                error_response(
+                    detail="NIK wajib diisi, 16 digit angka.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validasi NIK belum dipakai user lain
+        if ApplicantProfile.objects.filter(nik=nik).exclude(user=user).exists():
+            return Response(
+                error_response(
+                    detail="NIK ini sudah terdaftar untuk akun lain.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validasi referral code
+        if not referral_code:
+            return Response(
+                error_response(
+                    detail="Kode rujukan wajib diisi.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            referrer_user = CustomUser.objects.get(
+                referral_code=referral_code,
+                role__in=[UserRole.STAFF, UserRole.ADMIN],
+                is_active=True,
+            )
+        except CustomUser.DoesNotExist:
+            return Response(
+                error_response(
+                    detail="Kode rujukan tidak valid atau sudah tidak aktif.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validasi phone (optional)
+        if phone_number:
+            try:
+                _validate_phone(phone_number)
+            except Exception:
+                return Response(
+                    error_response(
+                        detail="Format nomor telepon tidak valid.",
+                        code=ApiCode.VALIDATION_ERROR,
+                    ),
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # Validasi KTP file
+        if not ktp_file:
+            return Response(
+                error_response(
+                    detail="File KTP wajib diunggah.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            validate_document_file(ktp_file, "ktp")
+        except Exception as e:
+            return Response(
+                error_response(detail=str(e), code=ApiCode.VALIDATION_ERROR),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Update full_name on user if provided
+        if full_name and not user.full_name:
+            user.full_name = full_name
+            user.save(update_fields=["full_name"])
+
+        # Create or update ApplicantProfile
+        try:
+            profile, _ = ApplicantProfile.objects.get_or_create(
+                user=user,
+                defaults={
+                    "nik": nik,
+                    "verification_status": ApplicantVerificationStatus.DRAFT,
+                    "referrer": referrer_user,
+                    "contact_phone": phone_number,
+                },
+            )
+            # Overwrite placeholder fields regardless
+            profile.nik = nik
+            profile.referrer = referrer_user
+            if phone_number:
+                profile.contact_phone = phone_number
+            profile.save(update_fields=["nik", "referrer", "contact_phone"])
+        except Exception as e:
+            return Response(
+                error_response(
+                    detail=f"Gagal membuat profil: {str(e)}",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Upload KTP document (replace existing if any)
+        try:
+            ktp_doc_type = DocumentType.objects.filter(code="ktp").first()
+            if not ktp_doc_type:
+                ktp_doc_type = DocumentType.objects.create(
+                    code="ktp", name="KTP", is_required=True, sort_order=1
+                )
+
+            # Remove old placeholder KTP if exists
+            ApplicantDocument.objects.filter(
+                applicant_profile=profile, document_type=ktp_doc_type
+            ).delete()
+
+            ktp_document = ApplicantDocument.objects.create(
+                applicant_profile=profile,
+                document_type=ktp_doc_type,
+                file=ktp_file,
+            )
+
+            process_document_ocr.delay(ktp_document.id)
+            optimize_document_image.delay(ktp_document.id)
+
+        except Exception as e:
+            return Response(
+                error_response(
+                    detail=f"Gagal mengunggah KTP: {str(e)}",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = ApplicantUserSerializer(instance=user, context={"request": request})
+        return Response(
+            success_response(
+                data={"user": serializer.data},
+                detail="Profil berhasil dilengkapi. KTP sedang diproses dengan OCR.",
+            ),
+            status=status.HTTP_200_OK,
         )
 
 

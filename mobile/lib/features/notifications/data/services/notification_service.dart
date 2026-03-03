@@ -1,9 +1,11 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/api/api_client.dart';
 import '../../../../core/api/endpoints.dart';
@@ -28,6 +30,18 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
 
+  /// The Android notification channel used for all push notifications.
+  /// Must be created before any notification arrives (Android 8+).
+  static const AndroidNotificationChannel _androidChannel =
+      AndroidNotificationChannel(
+    'kms_connect_channel',
+    'KMS Connect Notifications',
+    description: 'Notifications for job applications, chat and updates',
+    importance: Importance.high,
+    playSound: true,
+    enableVibration: true,
+  );
+
   Future<void> initialize() async {
     // Respect user's in-app notification preference.
     final prefs = NotificationSettingsService();
@@ -51,6 +65,13 @@ class NotificationService {
     );
 
     if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+      // Create the Android notification channel BEFORE any notifications arrive.
+      // On Android 8+ this is required; on older versions it's a no-op.
+      await _localNotifications
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          ?.createNotificationChannel(_androidChannel);
+
       // Initialize local notifications
       const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
       const iosSettings = DarwinInitializationSettings();
@@ -105,6 +126,20 @@ class NotificationService {
     }
   }
 
+  /// Re-register the current device token with the backend.
+  /// Call this after every successful login / registration so the token is
+  /// always stored while the user is authenticated.
+  Future<void> registerToken() async {
+    try {
+      final token = await _firebaseMessaging?.getToken();
+      if (token != null) {
+        await _registerTokenWithBackend(token);
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('FCM registerToken failed: $e');
+    }
+  }
+
   /// Unregister the current device token from the backend (call on logout).
   Future<void> unregisterToken() async {
     try {
@@ -136,7 +171,7 @@ class NotificationService {
         ),
         iOS: DarwinNotificationDetails(),
       ),
-      payload: message.data.toString(),
+      payload: jsonEncode(message.data),
     );
   }
 
@@ -147,37 +182,54 @@ class NotificationService {
 
   void _onNotificationTapped(NotificationResponse response) {
     if (kDebugMode) debugPrint('Notification tapped: ${response.payload}');
-    // Navigate to notifications page — payload parsing would require
-    // reconstructing the map from toString(), so go to the list page.
+    final payload = response.payload;
+    if (payload != null && payload.isNotEmpty) {
+      try {
+        final data = jsonDecode(payload) as Map<String, dynamic>;
+        _navigateFromNotificationData(data);
+        return;
+      } catch (_) {
+        // Payload wasn't valid JSON — fall through to generic page.
+      }
+    }
     _navigateToNotifications();
   }
 
-  /// Navigate based on notification payload data.
+  /// Navigate based on notification payload data using GoRouter.
   void _navigateFromNotificationData(Map<String, dynamic> data) {
-    final navigatorKey = rootNavigatorKey;
-    final context = navigatorKey.currentContext;
+    final context = rootNavigatorKey.currentContext;
     if (context == null) return;
 
+    final router = GoRouter.of(context);
     final type = data['type'] as String?;
     switch (type) {
       case 'job':
         final jobId = data['job_id'];
         if (jobId != null) {
-          navigatorKey.currentState?.pushNamed('/jobs/$jobId');
+          router.push('/jobs/$jobId');
         } else {
           _navigateToNotifications();
         }
       case 'document':
-        navigatorKey.currentState?.pushNamed('/documents');
+        router.push('/documents');
       case 'application':
-        navigatorKey.currentState?.pushNamed('/jobs/my-applications');
+        router.push('/jobs/my-applications');
+      case 'chat_message':
+        final applicationId = data['application_id'];
+        if (applicationId != null) {
+          router.push('/jobs/applications/$applicationId/chat');
+        } else {
+          _navigateToNotifications();
+        }
       default:
         _navigateToNotifications();
     }
   }
 
   void _navigateToNotifications() {
-    rootNavigatorKey.currentState?.pushNamed('/notifications');
+    final context = rootNavigatorKey.currentContext;
+    if (context == null) return;
+    GoRouter.of(context).push('/notifications');
   }
 
   Future<String?> getToken() async {

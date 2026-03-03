@@ -6,7 +6,10 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../config/colors.dart';
+import '../../../../core/models/paginated_state.dart';
+import '../../../../core/utils/debouncer.dart';
 import '../../../../core/widgets/auth_wave_header.dart';
+import '../../../../core/widgets/shimmer_loading.dart';
 import '../../../home/presentation/widgets/bottom_nav_bar.dart';
 import '../../data/providers/job_provider.dart';
 import '../../domain/models/job.dart';
@@ -25,12 +28,18 @@ class JobsListPage extends ConsumerStatefulWidget {
 class _JobsListPageState extends ConsumerState<JobsListPage>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
+  final _scrollCtrl = ScrollController();
 
   // ── Filter state ──────────────────────────────────────────────────────────
   final _searchCtrl = TextEditingController();
   final _searchFocus = FocusNode();
+  final _searchDebouncer = Debouncer(milliseconds: 400);
   String? _selectedType; // FULL_TIME | PART_TIME | CONTRACT | INTERNSHIP
   String? _selectedLocation;
+
+  /// The debounced search text — only updates after the debounce timer fires,
+  /// so we don't fire an API request on every single keystroke.
+  String _debouncedSearch = '';
 
   JobFilters? _cachedFilters;
 
@@ -49,21 +58,36 @@ class _JobsListPageState extends ConsumerState<JobsListPage>
       vsync: this,
       duration: const Duration(milliseconds: 800),
     )..forward();
+    _scrollCtrl.addListener(_onScroll);
   }
 
   @override
   void dispose() {
     _ctrl.dispose();
+    _scrollCtrl.dispose();
     _searchCtrl.dispose();
     _searchFocus.dispose();
+    _searchDebouncer.dispose();
     super.dispose();
+  }
+
+  /// Trigger next-page load when user scrolls near the bottom.
+  void _onScroll() {
+    if (!_scrollCtrl.hasClients) return;
+    final maxScroll = _scrollCtrl.position.maxScrollExtent;
+    final currentScroll = _scrollCtrl.position.pixels;
+    // Start loading when within 200px of the bottom.
+    if (maxScroll - currentScroll <= 200) {
+      final filters = _getFilters();
+      ref.read(paginatedJobsProvider(filters).notifier).loadNextPage();
+    }
   }
 
   /// Returns cached [JobFilters]; only creates a new object when values change
   /// so provider equality keeps the network request stable.
   JobFilters _getFilters() {
     final search =
-        _searchCtrl.text.isEmpty ? null : _searchCtrl.text.trim();
+        _debouncedSearch.isEmpty ? null : _debouncedSearch.trim();
     final next = JobFilters(
       search: search,
       employmentType: _selectedType,
@@ -100,7 +124,7 @@ class _JobsListPageState extends ConsumerState<JobsListPage>
   @override
   Widget build(BuildContext context) {
     final filters = _getFilters();
-    final jobsAsync = ref.watch(jobsProvider(filters));
+    final jobsState = ref.watch(paginatedJobsProvider(filters));
     final cs = Theme.of(context).colorScheme;
     final size = MediaQuery.sizeOf(context);
 
@@ -112,8 +136,18 @@ class _JobsListPageState extends ConsumerState<JobsListPage>
         children: [
           // ── Scrollable content ───────────────────────────────────────
           Expanded(
-            child: CustomScrollView(
-              physics: const BouncingScrollPhysics(),
+            child: RefreshIndicator(
+              onRefresh: () async {
+                await ref
+                    .read(paginatedJobsProvider(filters).notifier)
+                    .loadFirstPage();
+              },
+              color: cs.primary,
+              child: CustomScrollView(
+                controller: _scrollCtrl,
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics(),
+                ),
               slivers: [
                 // ── Hero wave header ──────────────────────────────────
                 SliverToBoxAdapter(
@@ -135,9 +169,22 @@ class _JobsListPageState extends ConsumerState<JobsListPage>
                       searchFocus: _searchFocus,
                       selectedType: _selectedType,
                       typeChips: _typeChips,
-                      onSearchChanged: (_) => setState(() {}),
-                      onSearchCleared: () =>
-                          setState(() => _searchCtrl.clear()),
+                      onSearchChanged: (_) {
+                        _searchDebouncer.run(() {
+                          if (mounted) {
+                            setState(() {
+                              _debouncedSearch = _searchCtrl.text;
+                            });
+                          }
+                        });
+                      },
+                      onSearchCleared: () {
+                        _searchDebouncer.cancel();
+                        setState(() {
+                          _searchCtrl.clear();
+                          _debouncedSearch = '';
+                        });
+                      },
                       onTypeSelected: (v) =>
                           setState(() => _selectedType = v),
                     ),
@@ -151,10 +198,11 @@ class _JobsListPageState extends ConsumerState<JobsListPage>
                 SliverToBoxAdapter(
                   child: _animated(
                     _JobsContent(
-                      jobsAsync: jobsAsync,
-                      filters: filters,
+                      state: jobsState,
                       onCardTap: (id) => context.push('/jobs/$id'),
-                      onRetry: () => ref.invalidate(jobsProvider(filters)),
+                      onRetry: () => ref
+                          .read(paginatedJobsProvider(filters).notifier)
+                          .loadFirstPage(),
                     ),
                     0.30, 0.85,
                   ),
@@ -162,6 +210,7 @@ class _JobsListPageState extends ConsumerState<JobsListPage>
 
                 const SliverToBoxAdapter(child: SizedBox(height: 24)),
               ],
+            ),
             ),
           ),
 
@@ -177,46 +226,74 @@ class _JobsListPageState extends ConsumerState<JobsListPage>
 // Jobs Content  — loading / error / empty / data as a plain box widget
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _JobsContent extends ConsumerWidget {
+class _JobsContent extends StatelessWidget {
   const _JobsContent({
-    required this.jobsAsync,
-    required this.filters,
+    required this.state,
     required this.onCardTap,
     required this.onRetry,
   });
 
-  final AsyncValue<List<Job>> jobsAsync;
-  final JobFilters filters;
+  final PaginatedState<Job> state;
   final void Function(int id) onCardTap;
   final VoidCallback onRetry;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final cs = Theme.of(context).colorScheme;
+  Widget build(BuildContext context) {
+    // Initial loading
+    if (state.isLoading) {
+      return const ShimmerList(count: 4);
+    }
 
-    return jobsAsync.when(
-      loading: () => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 60),
-        child: Center(
-          child: CircularProgressIndicator(color: cs.primary, strokeWidth: 2),
-        ),
-      ),
-      error: (err, _) => _ErrorState(message: '$err', onRetry: onRetry),
-      data: (jobs) {
-        if (jobs.isEmpty) return const _EmptyState();
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Column(
-            children: [
-              for (var i = 0; i < jobs.length; i++)
-                _JobCard(
-                  job: jobs[i],
-                  onTap: () => onCardTap(jobs[i].id),
+    // Error on first page
+    if (state.error != null && state.items.isEmpty) {
+      return _ErrorState(message: state.error!, onRetry: onRetry);
+    }
+
+    // Empty state
+    if (state.items.isEmpty) {
+      return const _EmptyState();
+    }
+
+    // Data with optional loading-more indicator
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        children: [
+          for (var i = 0; i < state.items.length; i++)
+            RepaintBoundary(
+              child: _JobCard(
+                job: state.items[i],
+                onTap: () => onCardTap(state.items[i].id),
+              ),
+            ),
+          // Loading-more indicator
+          if (state.isLoadingMore)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
                 ),
-            ],
-          ),
-        );
-      },
+              ),
+            ),
+          // "All loaded" footer
+          if (!state.hasMore && state.items.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8, bottom: 4),
+              child: Text(
+                'Semua lowongan telah dimuat',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.4),
+                    ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

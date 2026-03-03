@@ -8,6 +8,7 @@ import 'core/widgets/custom_toast.dart';
 import 'features/auth/presentation/pages/splash_page.dart';
 import 'features/auth/presentation/pages/login_page.dart';
 import 'features/auth/presentation/pages/registration_page_new.dart';
+import 'features/auth/presentation/pages/google_complete_registration_page.dart';
 import 'features/auth/presentation/pages/verify_email_page.dart';
 import 'features/auth/presentation/pages/reset_password_page.dart';
 import 'features/home/presentation/pages/home_page.dart';
@@ -58,15 +59,30 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (loc == '/splash') return null;
 
       // Read current auth state at redirect-evaluation time.
-      final isAuthenticated = ref.read(authStateProvider).isAuthenticated;
-      final isAuthRoute = loc == '/login' || loc == '/register';
+      final authState = ref.read(authStateProvider);
+      final isAuthenticated = authState.isAuthenticated;
+      final needsGoogleCompletion = authState.needsGoogleCompletion;
 
-      if (!isAuthenticated && !isAuthRoute) {
-        return '/login';
+      // Pre-auth routes: login and register.
+      final isPreAuthRoute = loc == '/login' || loc == '/register';
+      // The Google-completion page is special: authenticated but not yet done.
+      final isGoogleCompletionRoute = loc == '/google-complete';
+
+      if (!isAuthenticated) {
+        // Unauthenticated users can only access pre-auth and completion routes.
+        return (isPreAuthRoute || isGoogleCompletionRoute) ? null : '/login';
       }
-      if (isAuthenticated && isAuthRoute) {
+
+      // Authenticated user still needs to complete Google registration.
+      if (needsGoogleCompletion) {
+        return isGoogleCompletionRoute ? null : '/google-complete';
+      }
+
+      // Authenticated & complete — send away from pre-auth routes.
+      if (isPreAuthRoute || isGoogleCompletionRoute) {
         return '/home';
       }
+
       return null;
     },
     routes: [
@@ -101,6 +117,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/register',
         name: 'register',
         builder: (context, state) => const RegistrationPageNew(),
+      ),
+      GoRoute(
+        path: '/google-complete',
+        name: 'google-complete',
+        builder: (context, state) => const GoogleCompleteRegistrationPage(),
       ),
       GoRoute(
         path: '/verify-email',

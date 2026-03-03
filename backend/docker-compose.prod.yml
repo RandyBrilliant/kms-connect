@@ -37,7 +37,7 @@ services:
       context: .
       dockerfile: Dockerfile.prod
     container_name: kms-backend
-    command: ./entrypoint.sh gunicorn backend.wsgi:application --bind 0.0.0.0:8000 --workers 1 --threads 2 --timeout 120 --access-logfile - --error-logfile - --log-level info
+    command: ./entrypoint.sh daphne -b 0.0.0.0 -p 8000 --proxy-headers backend.asgi:application
     env_file:
       - .env
     environment:

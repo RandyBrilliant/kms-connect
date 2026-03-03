@@ -108,12 +108,18 @@ class _LoginPageState extends ConsumerState<LoginPage>
     }
   }
 
-  void _handleGoogleLogin() {
-    CustomToast.show(
-      context,
-      message: 'Google Sign-In akan segera tersedia',
-      type: ToastType.info,
-    );
+  void _handleGoogleLogin() async {
+    final outcome =
+        await ref.read(authStateProvider.notifier).signInWithGoogle();
+    if (!mounted) return;
+    switch (outcome) {
+      case GoogleAuthOutcomeError(:final message):
+        CustomToast.show(context, message: message, type: ToastType.error);
+      case GoogleAuthOutcomeCancelled():
+        break; // user dismissed picker — nothing to do
+      case GoogleAuthOutcomeSuccess() || GoogleAuthOutcomeNeedsCompletion():
+        break; // router handles navigation via needsGoogleCompletion flag
+    }
   }
 
   @override

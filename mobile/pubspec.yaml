@@ -79,6 +79,15 @@ dependencies:
   
   google_fonts: ^8.0.2
 
+  # Image optimization
+  flutter_image_compress: ^2.3.0
+
+  # Native splash screen
+  flutter_native_splash: ^2.4.3
+
+  # WebSocket for real-time chat
+  web_socket_channel: ^3.0.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -92,8 +101,21 @@ dev_dependencies:
 
 flutter_launcher_icons:
   android: true
-  ios: false
+  ios: true
   image_path: "assets/images/logo.png"  # your 1024x1024 PNG
+
+flutter_native_splash:
+  color: "#2B6E36"
+  image: "assets/images/logo.png"
+  color_dark: "#1A4421"
+  image_dark: "assets/images/logo.png"
+  android_12:
+    color: "#2B6E36"
+    icon_background_color: "#2B6E36"
+    image: "assets/images/logo.png"
+    color_dark: "#1A4421"
+    icon_background_color_dark: "#1A4421"
+    image_dark: "assets/images/logo.png"
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -109,6 +131,7 @@ flutter:
   assets:
     - .env
     - assets/images/
+    - assets/fonts/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

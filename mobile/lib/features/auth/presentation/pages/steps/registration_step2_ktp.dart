@@ -437,10 +437,19 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
           birthDate: _formattedDate,
         ));
 
+    final isGoogleFlow = ref.read(registrationProvider).isGoogleFlow;
+
     try {
       setState(() => _isRegistering = true);
-      final authResponse =
-          await ref.read(registrationProvider.notifier).completeRegistration();
+
+      final authResponse = isGoogleFlow
+          ? await ref
+              .read(registrationProvider.notifier)
+              .completeGoogleRegistration()
+          : await ref
+              .read(registrationProvider.notifier)
+              .completeRegistration();
+
       if (!mounted) return;
 
       ref.read(registrationProvider.notifier).reset();
@@ -448,9 +457,18 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
           message: 'Registrasi berhasil! Selamat datang ',
           type: ToastType.success,
           duration: const Duration(seconds: 4));
-      ref
-          .read(authStateProvider.notifier)
-          .setAuthenticatedUser(authResponse.user);
+
+      if (isGoogleFlow) {
+        // For Google flow, the user is already authenticated — we just need
+        // to clear the "needs completion" flag so the router navigates to /home.
+        ref
+            .read(authStateProvider.notifier)
+            .markGoogleCompletionDone(authResponse.user);
+      } else {
+        ref
+            .read(authStateProvider.notifier)
+            .setAuthenticatedUser(authResponse.user);
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _isRegistering = false);

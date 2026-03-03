@@ -1,4 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/models/paginated_state.dart';
+import '../../../../core/utils/retry.dart';
 import '../../domain/models/job.dart';
 import '../../domain/models/job_application.dart';
 import '../repositories/job_repository.dart';
@@ -7,7 +9,10 @@ final jobRepositoryProvider = Provider<JobRepository>((ref) {
   return JobRepository();
 });
 
-// Helper class for filter equality
+// ─────────────────────────────────────────────────────────────────────────────
+// Filter value object
+// ─────────────────────────────────────────────────────────────────────────────
+
 class JobFilters {
   final String? search;
   final String? employmentType;
@@ -43,26 +48,98 @@ class JobFilters {
       locationCountry.hashCode;
 }
 
-final jobsProvider = FutureProvider.autoDispose.family<List<Job>, JobFilters>((ref, filters) async {
-  final repository = ref.read(jobRepositoryProvider);
-  return await repository.getJobs(
-    search: filters.search,
-    employmentType: filters.employmentType,
-    locationCountry: filters.locationCountry,
-  );
-});
+// ─────────────────────────────────────────────────────────────────────────────
+// Paginated jobs notifier
+// ─────────────────────────────────────────────────────────────────────────────
+
+class PaginatedJobsNotifier extends StateNotifier<PaginatedState<Job>> {
+  PaginatedJobsNotifier(this._repository, this._filters)
+      : super(const PaginatedState<Job>()) {
+    loadFirstPage();
+  }
+
+  final JobRepository _repository;
+  final JobFilters _filters;
+
+  /// Load (or reload) the first page.
+  Future<void> loadFirstPage() async {
+    state = const PaginatedState<Job>(isLoading: true);
+    try {
+      final response = await retryWithBackoff(
+        () => _repository.getJobs(
+          search: _filters.search,
+          employmentType: _filters.employmentType,
+          locationCountry: _filters.locationCountry,
+          page: 1,
+        ),
+      );
+      state = PaginatedState<Job>(
+        items: response.results,
+        currentPage: 1,
+        totalCount: response.count,
+        hasMore: response.hasNext,
+      );
+    } catch (e) {
+      state = PaginatedState<Job>(error: e.toString());
+    }
+  }
+
+  /// Load the next page and append results.
+  Future<void> loadNextPage() async {
+    if (state.isLoadingMore || !state.hasMore) return;
+
+    final nextPage = state.currentPage + 1;
+    state = state.copyWith(isLoadingMore: true);
+
+    try {
+      final response = await retryWithBackoff(
+        () => _repository.getJobs(
+          search: _filters.search,
+          employmentType: _filters.employmentType,
+          locationCountry: _filters.locationCountry,
+          page: nextPage,
+        ),
+      );
+      state = state.copyWith(
+        items: [...state.items, ...response.results],
+        currentPage: nextPage,
+        totalCount: response.count,
+        hasMore: response.hasNext,
+        isLoadingMore: false,
+      );
+    } catch (e) {
+      state = state.copyWith(
+        isLoadingMore: false,
+        error: () => e.toString(),
+      );
+    }
+  }
+}
+
+/// Paginated jobs provider — auto-disposes when filters change.
+final paginatedJobsProvider = StateNotifierProvider.autoDispose
+    .family<PaginatedJobsNotifier, PaginatedState<Job>, JobFilters>(
+  (ref, filters) {
+    final repository = ref.read(jobRepositoryProvider);
+    return PaginatedJobsNotifier(repository, filters);
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Non-paginated providers (detail, applications)
+// ─────────────────────────────────────────────────────────────────────────────
 
 final jobDetailProvider = FutureProvider.autoDispose.family<Job, int>((ref, jobId) async {
   final repository = ref.read(jobRepositoryProvider);
-  return await repository.getJobDetail(jobId);
+  return await retryWithBackoff(() => repository.getJobDetail(jobId));
 });
 
 final myApplicationsProvider = FutureProvider.autoDispose.family<List<JobApplication>, String?>((ref, status) async {
   final repository = ref.read(jobRepositoryProvider);
-  return await repository.getMyApplications(status: status);
+  return await retryWithBackoff(() => repository.getMyApplications(status: status));
 });
 
 final applicationDetailProvider = FutureProvider.autoDispose.family<JobApplication, int>((ref, applicationId) async {
   final repository = ref.read(jobRepositoryProvider);
-  return await repository.getApplicationDetail(applicationId);
+  return await retryWithBackoff(() => repository.getApplicationDetail(applicationId));
 });

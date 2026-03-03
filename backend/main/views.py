@@ -14,6 +14,7 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 from account.permissions import IsBackofficeAdmin, IsApplicant, IsCompany, IsStaff
 from account.api_responses import success_response, error_response, ApiCode
 from account.models import ApplicantProfile
+from account.pagination import StandardResultsSetPagination
 
 from .models import (
     ApplicationSource,
@@ -91,7 +92,7 @@ class PublicNewsListViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = NewsSerializer
     permission_classes = [AllowAny]
     authentication_classes = []  # No auth required for public endpoint
-    pagination_class = None  # Return plain list — mobile parses raw array
+    pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ["is_pinned"]
     search_fields = ["title", "summary"]
@@ -111,7 +112,7 @@ class PublicJobsListViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = LowonganKerjaSerializer
     permission_classes = [AllowAny]
     authentication_classes = []  # No auth required for public endpoint
-    pagination_class = None  # Return plain list — mobile parses raw array
+    pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ["employment_type", "company", "location_country"]
     search_fields = ["title", "description", "requirements", "company__company_name"]

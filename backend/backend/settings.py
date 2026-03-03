@@ -47,6 +47,7 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -58,6 +59,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'corsheaders',
     'anymail',
+    'channels',
     'regions.apps.RegionsConfig',
     'account.apps.AccountConfig',
     'main.apps.MainConfig',
@@ -95,6 +97,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'backend.wsgi.application'
+ASGI_APPLICATION = 'backend.asgi.application'
 
 
 # Database
@@ -255,6 +258,24 @@ else:
 
 # Document types public list cache TTL (seconds)
 DOCUMENT_TYPES_CACHE_TIMEOUT = int(_env("DOCUMENT_TYPES_CACHE_TIMEOUT", "900"))  # 15 min default
+
+# -----------------------------------------------------------------------------
+# Django Channels (WebSocket real-time chat)
+# -----------------------------------------------------------------------------
+# Use Redis DB 1 for the Channel layer (DB 0 = Celery, DB 2 = cache)
+_channels_redis_url = _env("CELERY_BROKER_URL", "redis://localhost:6379/0").strip()
+_channels_redis_host = _channels_redis_url.rsplit("/", 1)[0] + "/1" if "/" in _channels_redis_url else _channels_redis_url + "/1"
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [_channels_redis_host],
+            "capacity": 1500,
+            "expiry": 10,
+        },
+    },
+}
 
 # -----------------------------------------------------------------------------
 # Django REST Framework & SimpleJWT (untuk serializers/views API)

@@ -6,6 +6,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../../../core/widgets/custom_toast.dart';
 import '../../../../../core/widgets/google_logo_icon.dart';
 import '../../../../../core/widgets/m3_text_field.dart';
+import '../../../../../core/widgets/phone_input_field.dart';
+import '../../../data/providers/auth_provider.dart';
 import '../../../data/providers/staff_referrers_provider.dart';
 import '../../providers/registration_provider.dart';
 
@@ -32,10 +34,12 @@ class _RegistrationStep1CredentialsState
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
 
   final _emailFocus = FocusNode();
   final _passwordFocus = FocusNode();
   final _confirmFocus = FocusNode();
+  final _phoneFocus = FocusNode();
 
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
@@ -51,6 +55,7 @@ class _RegistrationStep1CredentialsState
       if (!mounted) return;
       final s = ref.read(registrationProvider);
       if (s.email?.isNotEmpty == true) _emailCtrl.text = s.email!;
+      if (s.phoneNumber?.isNotEmpty == true) _phoneCtrl.text = s.phoneNumber!;
       // Warm-up: pre-fetch staff list so the picker opens instantly.
       ref.read(staffReferrersProvider);
     });
@@ -61,9 +66,11 @@ class _RegistrationStep1CredentialsState
     _emailCtrl.dispose();
     _passwordCtrl.dispose();
     _confirmCtrl.dispose();
+    _phoneCtrl.dispose();
     _emailFocus.dispose();
     _passwordFocus.dispose();
     _confirmFocus.dispose();
+    _phoneFocus.dispose();
     super.dispose();
   }
 
@@ -77,10 +84,21 @@ class _RegistrationStep1CredentialsState
       );
       return;
     }
+    // Validate phone separately since PhoneInputField uses FormField
+    final phoneError = validatePhoneNumber(_phoneCtrl.text);
+    if (phoneError != null) {
+      CustomToast.show(
+        context,
+        message: phoneError,
+        type: ToastType.warning,
+      );
+      return;
+    }
     ref.read(registrationProvider.notifier).setCredentials(
           email: _emailCtrl.text.trim(),
           password: _passwordCtrl.text,
           referralCode: _selectedStaff!.referralCode,
+          phoneNumber: _phoneCtrl.text.trim(),
         );
     ref.read(registrationProvider.notifier).nextStep();
   }
@@ -187,7 +205,7 @@ class _RegistrationStep1CredentialsState
             prefixIcon: Icons.lock_outline_rounded,
             obscureText: _obscureConfirm,
             textInputAction: TextInputAction.done,
-            onSubmitted: (_) => _handleNext(),
+            onSubmitted: (_) => FocusScope.of(context).requestFocus(_phoneFocus),
             suffixWidget: _VisibilityToggle(
               obscure: _obscureConfirm,
               onTap: () => setState(() => _obscureConfirm = !_obscureConfirm),
@@ -196,6 +214,16 @@ class _RegistrationStep1CredentialsState
               if (v != _passwordCtrl.text) return 'Kata sandi tidak cocok';
               return null;
             },
+          ),
+          const SizedBox(height: 16),
+
+          //  Phone number 
+          PhoneInputField(
+            controller: _phoneCtrl,
+            focusNode: _phoneFocus,
+            label: 'Nomor Telepon',
+            hint: '81234567890',
+            textInputAction: TextInputAction.done,
           ),
           const SizedBox(height: 16),
 
@@ -248,11 +276,22 @@ class _RegistrationStep1CredentialsState
 
           //  Google sign-up 
           OutlinedButton.icon(
-            onPressed: () => CustomToast.show(
-              context,
-              message: 'Google Sign-In akan segera tersedia',
-              type: ToastType.info,
-            ),
+            onPressed: () async {
+              final outcome = await ref
+                  .read(authStateProvider.notifier)
+                  .signInWithGoogle();
+              if (!context.mounted) return;
+              switch (outcome) {
+                case GoogleAuthOutcomeError(:final message):
+                  CustomToast.show(context,
+                      message: message, type: ToastType.error);
+                case GoogleAuthOutcomeCancelled():
+                  break;
+                case GoogleAuthOutcomeSuccess() ||
+                      GoogleAuthOutcomeNeedsCompletion():
+                  break; // router handles navigation
+              }
+            },
             icon: const GoogleLogoIcon(),
             label: Text(
               'Daftar dengan Google',

@@ -11,20 +11,27 @@ class RegistrationState {
   final String? email;
   final String? password;
   final String? referralCode;
+  final String? phoneNumber;
   final File? ktpImage;
   final KtpData? ktpData;
   final bool isProcessing;
   final String? error;
+
+  /// True when the user arrived via Google Sign-In and needs to complete
+  /// their profile (NIK + KTP + referral code / phone) before accessing the app.
+  final bool isGoogleFlow;
 
   RegistrationState({
     this.currentStep = 0,
     this.email,
     this.password,
     this.referralCode,
+    this.phoneNumber,
     this.ktpImage,
     this.ktpData,
     this.isProcessing = false,
     this.error,
+    this.isGoogleFlow = false,
   });
 
   RegistrationState copyWith({
@@ -32,20 +39,24 @@ class RegistrationState {
     String? email,
     String? password,
     String? referralCode,
+    String? phoneNumber,
     File? ktpImage,
     KtpData? ktpData,
     bool? isProcessing,
     String? error,
+    bool? isGoogleFlow,
   }) {
     return RegistrationState(
       currentStep: currentStep ?? this.currentStep,
       email: email ?? this.email,
       password: password ?? this.password,
       referralCode: referralCode ?? this.referralCode,
+      phoneNumber: phoneNumber ?? this.phoneNumber,
       ktpImage: ktpImage ?? this.ktpImage,
       ktpData: ktpData ?? this.ktpData,
       isProcessing: isProcessing ?? this.isProcessing,
       error: error,
+      isGoogleFlow: isGoogleFlow ?? this.isGoogleFlow,
     );
   }
 }
@@ -72,11 +83,13 @@ class RegistrationNotifier extends StateNotifier<RegistrationState> {
     required String email,
     required String password,
     String? referralCode,
+    String? phoneNumber,
   }) {
     state = state.copyWith(
       email: email,
       password: password,
       referralCode: referralCode,
+      phoneNumber: phoneNumber,
     );
   }
 
@@ -134,6 +147,7 @@ class RegistrationNotifier extends StateNotifier<RegistrationState> {
         ktpFile: state.ktpImage!,
         referralCode: state.referralCode,
         fullName: state.ktpData?.name,
+        phoneNumber: state.phoneNumber,
       );
       state = state.copyWith(isProcessing: false);
       return authResponse;
@@ -142,6 +156,49 @@ class RegistrationNotifier extends StateNotifier<RegistrationState> {
         isProcessing: false,
         error: e.toString(),
       );
+      rethrow;
+    }
+  }
+
+  /// Called from [GoogleCompleteRegistrationPage] to set Google-flow context.
+  ///
+  /// email/password are not required for this path — the account was already
+  /// created by [GoogleOAuthView], and the Dio interceptor supplies the token.
+  void setGoogleFlowData({
+    String? referralCode,
+    String? phoneNumber,
+  }) {
+    state = state.copyWith(
+      isGoogleFlow: true,
+      referralCode: referralCode,
+      phoneNumber: phoneNumber,
+    );
+  }
+
+  /// Submit completion data for a Google-flow user.
+  ///
+  /// Requires that [setGoogleFlowData] has already been called (step 1) and
+  /// that [ktpData] and [ktpImage] have been populated (step 2 OCR).
+  Future<AuthResponse> completeGoogleRegistration() async {
+    if (state.ktpData?.nik == null || state.ktpImage == null) {
+      state = state.copyWith(error: 'Data KTP tidak lengkap');
+      throw Exception('Data KTP tidak lengkap');
+    }
+
+    state = state.copyWith(isProcessing: true, error: null);
+
+    try {
+      final authResponse = await _authRepository.googleCompleteRegistration(
+        nik: state.ktpData!.nik!,
+        ktpFile: state.ktpImage!,
+        referralCode: state.referralCode,
+        phoneNumber: state.phoneNumber,
+        fullName: state.ktpData?.name,
+      );
+      state = state.copyWith(isProcessing: false);
+      return authResponse;
+    } catch (e) {
+      state = state.copyWith(isProcessing: false, error: e.toString());
       rethrow;
     }
   }

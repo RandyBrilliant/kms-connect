@@ -3,20 +3,25 @@ import 'package:dio/dio.dart';
 import '../../../../core/api/api_client.dart';
 import '../../../../core/api/endpoints.dart';
 import '../../../../core/models/api_response.dart';
+import '../../../../core/models/paginated_state.dart';
 import '../../domain/models/job.dart';
 import '../../domain/models/job_application.dart';
 
 class JobRepository {
   final ApiClient _apiClient = ApiClient();
 
-  /// Get public jobs list
-  Future<List<Job>> getJobs({
+  /// Get public jobs list (paginated).
+  ///
+  /// Backend returns DRF `PageNumberPagination` format:
+  /// `{ "count": N, "next": "…?page=X", "previous": …, "results": [...] }`
+  Future<PaginatedResponse<Job>> getJobs({
     String? search,
     String? employmentType,
     String? locationCountry,
+    int page = 1,
   }) async {
     try {
-      final queryParams = <String, dynamic>{};
+      final queryParams = <String, dynamic>{'page': page};
       if (search != null && search.isNotEmpty) {
         queryParams['search'] = search;
       }
@@ -32,13 +37,34 @@ class JobRepository {
         queryParameters: queryParams,
       );
 
-      // Public endpoints return a raw JSON array (pagination_class = None).
       final data = response.data;
-      if (data is! List) return [];
 
-      return data
-          .map((json) => Job.fromJson(json as Map<String, dynamic>))
-          .toList();
+      // Handle paginated envelope { count, next, results }
+      if (data is Map<String, dynamic> && data['results'] is List) {
+        final results = (data['results'] as List)
+            .map((json) => Job.fromJson(json as Map<String, dynamic>))
+            .toList();
+        return PaginatedResponse<Job>(
+          count: (data['count'] as num?)?.toInt() ?? results.length,
+          results: results,
+          hasNext: data['next'] != null,
+        );
+      }
+
+      // Fallback: raw array (shouldn't happen after backend change)
+      if (data is List) {
+        final results = data
+            .map((json) => Job.fromJson(json as Map<String, dynamic>))
+            .toList();
+        return PaginatedResponse<Job>(
+          count: results.length,
+          results: results,
+          hasNext: false,
+        );
+      }
+
+      return const PaginatedResponse<Job>(
+          count: 0, results: [], hasNext: false);
     } on DioException catch (e) {
       throw _handleError(e);
     }

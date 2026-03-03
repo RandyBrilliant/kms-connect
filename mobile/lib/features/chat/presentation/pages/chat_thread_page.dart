@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../config/colors.dart';
+import '../../../../core/providers/app_lifecycle_provider.dart';
+import '../../../../core/services/chat_websocket_service.dart';
 import '../../../../core/widgets/custom_toast.dart';
 import '../../data/providers/chat_provider.dart';
 import '../../domain/models/chat_message.dart';
@@ -22,8 +24,22 @@ class ChatThreadPage extends ConsumerStatefulWidget {
 class _ChatThreadPageState extends ConsumerState<ChatThreadPage> {
   final _textCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
-  Timer? _pollTimer;
   bool _isSending = false;
+
+  // WebSocket
+  ChatWebSocketService? _ws;
+  StreamSubscription<ChatWsEvent>? _wsSub;
+
+  // Typing indicator
+  String? _typingUserName;
+  Timer? _typingTimer;
+
+  // Debounce outgoing typing events
+  Timer? _outgoingTypingTimer;
+
+  // Local messages list (populated from initial REST fetch + WS updates)
+  List<ChatMessage> _messages = [];
+  bool _initialLoaded = false;
 
   @override
   void initState() {
@@ -37,15 +53,89 @@ class _ChatThreadPageState extends ConsumerState<ChatThreadPage> {
           .ignore();
     });
 
-    // Poll every 5 seconds
-    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      ref.invalidate(chatMessagesProvider(widget.applicationId));
-    });
+    _connectWebSocket();
+  }
+
+  void _connectWebSocket() {
+    _ws = ChatWebSocketService(threadId: widget.applicationId);
+    _wsSub = _ws!.events.listen(_onWsEvent);
+    _ws!.connect();
+  }
+
+  void _onWsEvent(ChatWsEvent event) {
+    if (!mounted) return;
+
+    switch (event) {
+      case ChatWsNewMessage(:final message):
+        // Avoid duplicates (e.g. own message already added optimistically)
+        final exists = _messages.any((m) => m.id == message.id);
+        if (!exists) {
+          setState(() {
+            _messages = [..._messages, message];
+          });
+          // Clear typing indicator when a message arrives
+          _clearTyping();
+          Future.delayed(const Duration(milliseconds: 150), _scrollToBottom);
+
+          // Auto mark as read if the message is from the other side
+          if (message.senderRole != 'APPLICANT') {
+            _ws?.sendMarkRead();
+          }
+        }
+
+      case ChatWsTyping(:final userName):
+        setState(() => _typingUserName = userName);
+        _typingTimer?.cancel();
+        _typingTimer = Timer(const Duration(seconds: 3), _clearTyping);
+
+      case ChatWsRead():
+        // Update read status on messages sent by us
+        setState(() {
+          _messages = _messages.map((m) {
+            if (m.senderRole == 'APPLICANT' && !m.isRead) {
+              return ChatMessage(
+                id: m.id,
+                thread: m.thread,
+                sender: m.sender,
+                senderName: m.senderName,
+                senderRole: m.senderRole,
+                body: m.body,
+                sentAt: m.sentAt,
+                isRead: true,
+                readAt: DateTime.now(),
+              );
+            }
+            return m;
+          }).toList();
+        });
+
+      case ChatWsConnectionState(:final connected):
+        if (connected) {
+          // Re-fetch messages on reconnect to catch anything missed
+          ref.invalidate(chatMessagesProvider(widget.applicationId));
+        }
+    }
+  }
+
+  void _clearTyping() {
+    if (mounted) {
+      setState(() => _typingUserName = null);
+    }
+  }
+
+  /// Called when the user types — sends typing indicator with debounce.
+  void _onTextChanged() {
+    if (_outgoingTypingTimer?.isActive ?? false) return;
+    _ws?.sendTyping();
+    _outgoingTypingTimer = Timer(const Duration(seconds: 2), () {});
   }
 
   @override
   void dispose() {
-    _pollTimer?.cancel();
+    _wsSub?.cancel();
+    _ws?.dispose();
+    _typingTimer?.cancel();
+    _outgoingTypingTimer?.cancel();
     _textCtrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();
@@ -57,13 +147,19 @@ class _ChatThreadPageState extends ConsumerState<ChatThreadPage> {
 
     setState(() => _isSending = true);
     try {
-      await ref
+      final msg = await ref
           .read(chatRepositoryProvider)
           .sendMessage(widget.applicationId, body);
       _textCtrl.clear();
-      // Immediately refresh
-      ref.invalidate(chatMessagesProvider(widget.applicationId));
-      // Scroll to bottom after short delay for list to rebuild
+
+      // Add sent message to local list (WS will also deliver it but dedup handles it)
+      final exists = _messages.any((m) => m.id == msg.id);
+      if (!exists) {
+        setState(() {
+          _messages = [..._messages, msg];
+        });
+      }
+
       await Future.delayed(const Duration(milliseconds: 250));
       _scrollToBottom();
     } catch (e) {
@@ -96,11 +192,16 @@ class _ChatThreadPageState extends ConsumerState<ChatThreadPage> {
         ref.watch(chatMessagesProvider(widget.applicationId));
     final cs = Theme.of(context).colorScheme;
 
-    // Auto-scroll when data arrives
+    // Populate local messages from initial REST fetch
     ref.listen(chatMessagesProvider(widget.applicationId), (_, next) {
-      next.whenData((_) async {
-        await Future.delayed(const Duration(milliseconds: 150));
-        _scrollToBottom();
+      next.whenData((data) {
+        if (!_initialLoaded || data.length > _messages.length) {
+          setState(() {
+            _messages = data;
+            _initialLoaded = true;
+          });
+          Future.delayed(const Duration(milliseconds: 150), _scrollToBottom);
+        }
       });
     });
 
@@ -113,13 +214,20 @@ class _ChatThreadPageState extends ConsumerState<ChatThreadPage> {
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => context.pop(),
         ),
-        title: const Column(
+        title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Chat dengan Admin',
+            const Text('Chat dengan Admin',
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-            Text('Pesan akan dibalas secepatnya',
-                style: TextStyle(fontSize: 11, color: Colors.white70)),
+            if (_typingUserName != null)
+              Text('$_typingUserName sedang mengetik...',
+                  style: const TextStyle(
+                      fontSize: 11,
+                      color: Colors.white70,
+                      fontStyle: FontStyle.italic))
+            else
+              const Text('Pesan akan dibalas secepatnya',
+                  style: TextStyle(fontSize: 11, color: Colors.white70)),
           ],
         ),
         elevation: 0,
@@ -128,71 +236,20 @@ class _ChatThreadPageState extends ConsumerState<ChatThreadPage> {
         children: [
           // ── Message list ─────────────────────────────────────────
           Expanded(
-            child: messagesAsync.when(
-              data: (messages) {
-                if (messages.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.chat_bubble_outline_rounded,
-                            size: 56,
-                            color: cs.onSurfaceVariant
-                                .withValues(alpha: 0.35)),
-                        const SizedBox(height: 12),
-                        Text(
-                          'Belum ada pesan',
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyMedium
-                              ?.copyWith(color: cs.onSurfaceVariant),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Mulailah percakapan di bawah',
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(color: cs.onSurfaceVariant),
-                        ),
-                      ],
+            child: _initialLoaded
+                ? _buildMessageList(cs)
+                : messagesAsync.when(
+                    data: (_) => _buildMessageList(cs),
+                    loading: () =>
+                        const Center(child: CircularProgressIndicator()),
+                    error: (error, _) => Center(
+                      child: Text(
+                        '$error',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
                     ),
-                  );
-                }
-                return ListView.builder(
-                  controller: _scrollCtrl,
-                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-                  itemCount: messages.length,
-                  itemBuilder: (context, index) {
-                    final msg = messages[index];
-                    final isMine = msg.senderRole == 'APPLICANT';
-
-                    // Show date header when date changes
-                    final showDate = index == 0 ||
-                        !_isSameDay(
-                          messages[index - 1].sentAt,
-                          msg.sentAt,
-                        );
-
-                    return Column(
-                      children: [
-                        if (showDate) _DateDivider(date: msg.sentAt),
-                        _MessageBubble(message: msg, isMine: isMine),
-                      ],
-                    );
-                  },
-                );
-              },
-              loading: () =>
-                  const Center(child: CircularProgressIndicator()),
-              error: (error, _) => Center(
-                child: Text(
-                  '$error',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-              ),
-            ),
+                  ),
           ),
 
           // ── Input bar ────────────────────────────────────────────
@@ -200,9 +257,64 @@ class _ChatThreadPageState extends ConsumerState<ChatThreadPage> {
             controller: _textCtrl,
             isSending: _isSending,
             onSend: _send,
+            onChanged: _onTextChanged,
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildMessageList(ColorScheme cs) {
+    if (_messages.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.chat_bubble_outline_rounded,
+                size: 56,
+                color: cs.onSurfaceVariant.withValues(alpha: 0.35)),
+            const SizedBox(height: 12),
+            Text(
+              'Belum ada pesan',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Mulailah percakapan di bawah',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: cs.onSurfaceVariant),
+            ),
+          ],
+        ),
+      );
+    }
+    return ListView.builder(
+      controller: _scrollCtrl,
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+      itemCount: _messages.length,
+      itemBuilder: (context, index) {
+        final msg = _messages[index];
+        final isMine = msg.senderRole == 'APPLICANT';
+
+        // Show date header when date changes
+        final showDate = index == 0 ||
+            !_isSameDay(
+              _messages[index - 1].sentAt,
+              msg.sentAt,
+            );
+
+        return Column(
+          children: [
+            if (showDate) _DateDivider(date: msg.sentAt),
+            _MessageBubble(message: msg, isMine: isMine),
+          ],
+        );
+      },
     );
   }
 
@@ -365,11 +477,13 @@ class _InputBar extends StatelessWidget {
     required this.controller,
     required this.isSending,
     required this.onSend,
+    this.onChanged,
   });
 
   final TextEditingController controller;
   final bool isSending;
   final Future<void> Function() onSend;
+  final VoidCallback? onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -394,6 +508,7 @@ class _InputBar extends StatelessWidget {
                 maxLines: 4,
                 minLines: 1,
                 textCapitalization: TextCapitalization.sentences,
+                onChanged: (_) => onChanged?.call(),
                 decoration: InputDecoration(
                   hintText: 'Tulis pesan…',
                   hintStyle: TextStyle(color: cs.onSurfaceVariant),

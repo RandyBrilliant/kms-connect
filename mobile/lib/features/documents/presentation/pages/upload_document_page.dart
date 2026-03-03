@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../../config/colors.dart';
+import '../../../../core/utils/image_compressor.dart';
 import '../../../../core/widgets/auth_wave_header.dart';
 import '../../../../core/widgets/custom_toast.dart';
 import '../../../documents/data/providers/document_provider.dart';
@@ -200,11 +201,15 @@ class _UploadDocumentPageState
     }
     setState(() => _isUploading = true);
     try {
+      // Compress image documents before upload (skip PDFs).
+      final fileToUpload = _filePdf
+          ? _file!
+          : await ImageCompressor.compressDocument(_file!);
       await ref
           .read(documentRepositoryProvider)
           .uploadDocument(
             documentTypeId: _selectedType!.id,
-            file: _file!,
+            file: fileToUpload,
           );
       if (!mounted) return;
       setState(() => _isUploading = false);

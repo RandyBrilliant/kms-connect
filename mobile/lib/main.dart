@@ -1,7 +1,11 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -20,15 +24,64 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
   if (kDebugMode) debugPrint('Background message: ${message.messageId}');
+
+  // If the message is data-only (no notification payload), show a local
+  // notification so the user sees it in the system notification bar.
+  // Messages WITH a notification payload are auto-displayed by the OS.
+  if (message.notification == null && message.data.isNotEmpty) {
+    final plugin = FlutterLocalNotificationsPlugin();
+
+    // Ensure the channel exists (idempotent on Android 8+).
+    await plugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(const AndroidNotificationChannel(
+          'kms_connect_channel',
+          'KMS Connect Notifications',
+          description: 'Notifications for job applications, chat and updates',
+          importance: Importance.high,
+        ));
+
+    final title = message.data['title'] ?? 'KMS Connect';
+    final body = message.data['body'] ?? 'Anda memiliki pesan baru';
+
+    await plugin.show(
+      message.hashCode,
+      title,
+      body,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'kms_connect_channel',
+          'KMS Connect Notifications',
+          channelDescription: 'Notifications for job applications, chat and updates',
+          importance: Importance.high,
+          priority: Priority.high,
+        ),
+        iOS: DarwinNotificationDetails(),
+      ),
+      payload: message.data.containsKey('type')
+          ? jsonEncode(message.data)
+          : null,
+    );
+  }
 }
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+
+  // Keep the native splash screen visible while we initialise.
+  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
 
   // Prevent google_fonts from downloading fonts at runtime.
   // Fonts are resolved from the theme's textTheme which is cached as a static
   // final — this flag avoids network fetches that cause first-render jank.
   GoogleFonts.config.allowRuntimeFetching = false;
+
+  // Limit the Flutter image cache to prevent excessive memory usage when
+  // users scroll through long lists of job/news cards with images.
+  // Default is 1000 images / 100 MB — reduced for mobile.
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 50 * 1024 * 1024; // 50 MB
+  PaintingBinding.instance.imageCache.maximumSize = 200; // max 200 decoded images
 
   // Initialize locale data for intl date formatting (e.g. 'id_ID')
   await initializeDateFormatting('id_ID', null);
@@ -52,6 +105,9 @@ void main() async {
 
   // Initialize API client
   await ApiClient().initialize();
+
+  // All heavy init is done — remove the native splash.
+  FlutterNativeSplash.remove();
 
   // Set preferred orientations
   await SystemChrome.setPreferredOrientations([

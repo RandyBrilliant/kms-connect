@@ -7,6 +7,8 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../config/colors.dart';
+import '../../../../core/models/paginated_state.dart';
+import '../../../../core/utils/debouncer.dart';
 import '../../../../core/widgets/auth_wave_header.dart';
 import '../../../home/presentation/widgets/bottom_nav_bar.dart';
 import '../../data/providers/news_provider.dart';
@@ -26,8 +28,10 @@ class NewsListPage extends ConsumerStatefulWidget {
 class _NewsListPageState extends ConsumerState<NewsListPage>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
+  final _scrollCtrl = ScrollController();
   final PageController _carouselCtrl = PageController();
   final TextEditingController _searchCtrl = TextEditingController();
+  final _searchDebouncer = Debouncer(milliseconds: 400);
 
   int _currentPage = 0;
   String _searchQuery = '';
@@ -39,14 +43,28 @@ class _NewsListPageState extends ConsumerState<NewsListPage>
       vsync: this,
       duration: const Duration(milliseconds: 900),
     )..forward();
+    _scrollCtrl.addListener(_onScroll);
   }
 
   @override
   void dispose() {
     _ctrl.dispose();
+    _scrollCtrl.dispose();
     _carouselCtrl.dispose();
     _searchCtrl.dispose();
+    _searchDebouncer.dispose();
     super.dispose();
+  }
+
+  /// Trigger next-page load when user scrolls near the bottom.
+  void _onScroll() {
+    if (!_scrollCtrl.hasClients) return;
+    final maxScroll = _scrollCtrl.position.maxScrollExtent;
+    final currentScroll = _scrollCtrl.position.pixels;
+    if (maxScroll - currentScroll <= 200) {
+      final search = _searchQuery.isEmpty ? null : _searchQuery;
+      ref.read(paginatedNewsProvider(search).notifier).loadNextPage();
+    }
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────
@@ -79,9 +97,13 @@ class _NewsListPageState extends ConsumerState<NewsListPage>
   }
 
   void _onSearch(String value) {
-    setState(() {
-      _searchQuery = value.trim();
-      _currentPage = 0;
+    _searchDebouncer.run(() {
+      if (mounted) {
+        setState(() {
+          _searchQuery = value.trim();
+          _currentPage = 0;
+        });
+      }
     });
   }
 
@@ -89,46 +111,65 @@ class _NewsListPageState extends ConsumerState<NewsListPage>
 
   @override
   Widget build(BuildContext context) {
-    final newsAsync = ref.watch(newsProvider(_searchQuery.isEmpty ? null : _searchQuery));
+    final search = _searchQuery.isEmpty ? null : _searchQuery;
+    final newsState = ref.watch(paginatedNewsProvider(search));
     final topPad = MediaQuery.of(context).padding.top;
 
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surfaceContainerLowest,
-      body: newsAsync.when(
-        loading: () => _NewsShimmer(topPad: topPad),
-        error: (err, _) => _ErrorState(
-          error: err,
-          onRetry: () => ref.invalidate(newsProvider(null)),
-        ),
-        data: (all) => _buildContent(context, all, topPad),
-      ),
+      body: _buildBody(context, newsState, topPad, search),
       bottomNavigationBar: const BottomNavBar(currentRoute: '/news'),
     );
   }
 
-  Widget _buildContent(BuildContext context, List<News> all, double topPad) {
-    // Filter in-memory when search is active (server already handles it, this
-    // is a fallback for local state).
-    final filtered = _searchQuery.isEmpty
-        ? all
-        : all
-            .where((n) =>
-                n.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-                (n.summary?.toLowerCase().contains(_searchQuery.toLowerCase()) ??
-                    false))
-            .toList();
+  Widget _buildBody(
+    BuildContext context,
+    PaginatedState<News> state,
+    double topPad,
+    String? search,
+  ) {
+    // Initial loading
+    if (state.isLoading) {
+      return _NewsShimmer(topPad: topPad);
+    }
 
-    final featured = filtered.where((n) => n.isPinned && n.heroImage != null).toList();
-    final announcements = filtered.where((n) => n.isPinned && n.heroImage == null).toList();
-    final regular = filtered.where((n) => !n.isPinned).toList();
+    // Error on first page with no data
+    if (state.error != null && state.items.isEmpty) {
+      return _ErrorState(
+        error: state.error!,
+        onRetry: () =>
+            ref.read(paginatedNewsProvider(search).notifier).loadFirstPage(),
+      );
+    }
+
+    return _buildContent(context, state, topPad, search);
+  }
+
+  Widget _buildContent(
+    BuildContext context,
+    PaginatedState<News> state,
+    double topPad,
+    String? search,
+  ) {
+    final all = state.items;
+
+    final featured =
+        all.where((n) => n.isPinned && n.heroImage != null).toList();
+    final announcements =
+        all.where((n) => n.isPinned && n.heroImage == null).toList();
+    final regular = all.where((n) => !n.isPinned).toList();
 
     const headerHeight = 160.0;
 
     return RefreshIndicator(
       color: AppColors.primaryDarkGreen,
-      onRefresh: () async => ref.invalidate(
-          newsProvider(_searchQuery.isEmpty ? null : _searchQuery)),
+      onRefresh: () async =>
+          ref.read(paginatedNewsProvider(search).notifier).loadFirstPage(),
       child: CustomScrollView(
+        controller: _scrollCtrl,
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
         slivers: [
           // ── Wave hero header ───────────────────────────────────────────
           SliverToBoxAdapter(
@@ -144,7 +185,7 @@ class _NewsListPageState extends ConsumerState<NewsListPage>
           ),
 
           // ── Empty search state ─────────────────────────────────────────
-          if (filtered.isEmpty && _searchQuery.isNotEmpty)
+          if (all.isEmpty && _searchQuery.isNotEmpty)
             SliverFillRemaining(
               hasScrollBody: false,
               child: _animated(
@@ -154,7 +195,7 @@ class _NewsListPageState extends ConsumerState<NewsListPage>
             ),
 
           // ── Empty all news state ───────────────────────────────────────
-          if (filtered.isEmpty && _searchQuery.isEmpty)
+          if (all.isEmpty && _searchQuery.isEmpty)
             SliverFillRemaining(
               hasScrollBody: false,
               child: _animated(const _EmptyState(), 0.2, 0.6),
@@ -182,7 +223,8 @@ class _NewsListPageState extends ConsumerState<NewsListPage>
           // ── Announcements ──────────────────────────────────────────────
           if (announcements.isNotEmpty) ...[
             SliverPadding(
-              padding: EdgeInsets.fromLTRB(16, featured.isEmpty ? 20 : 20, 16, 8),
+              padding: EdgeInsets.fromLTRB(
+                  16, featured.isEmpty ? 20 : 20, 16, 8),
               sliver: SliverToBoxAdapter(
                 child: _animated(
                   _SectionLabel(
@@ -201,10 +243,13 @@ class _NewsListPageState extends ConsumerState<NewsListPage>
                   (_, i) => _animated(
                     Padding(
                       padding: const EdgeInsets.only(bottom: 10),
-                      child: _AnnouncementCard(
-                        news: announcements[i],
-                        relativeTime: _relativeTime,
-                        onTap: () => context.push('/news/${announcements[i].id}'),
+                      child: RepaintBoundary(
+                        child: _AnnouncementCard(
+                          news: announcements[i],
+                          relativeTime: _relativeTime,
+                          onTap: () =>
+                              context.push('/news/${announcements[i].id}'),
+                        ),
                       ),
                     ),
                     0.1 + i * 0.05, 0.65,
@@ -245,10 +290,13 @@ class _NewsListPageState extends ConsumerState<NewsListPage>
                   (_, i) => _animated(
                     Padding(
                       padding: const EdgeInsets.only(bottom: 10),
-                      child: _RegularCard(
-                        news: regular[i],
-                        relativeTime: _relativeTime,
-                        onTap: () => context.push('/news/${regular[i].id}'),
+                      child: RepaintBoundary(
+                        child: _RegularCard(
+                          news: regular[i],
+                          relativeTime: _relativeTime,
+                          onTap: () =>
+                              context.push('/news/${regular[i].id}'),
+                        ),
                       ),
                     ),
                     0.25 + math.min(i * 0.06, 0.5), 0.8,
@@ -258,8 +306,23 @@ class _NewsListPageState extends ConsumerState<NewsListPage>
               ),
             ),
 
+          // ── Loading-more indicator ─────────────────────────────────────
+          if (state.isLoadingMore)
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Center(
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              ),
+            ),
+
           // ── End indicator ──────────────────────────────────────────────
-          if (filtered.isNotEmpty)
+          if (!state.hasMore && all.isNotEmpty)
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.only(bottom: 28, top: 4),
@@ -974,39 +1037,41 @@ class _ErrorState extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.wifi_off_rounded, size: 56, color: cs.error),
-            const SizedBox(height: 16),
-            Text(
-              'Gagal memuat berita',
-              style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              error.toString(),
-              textAlign: TextAlign.center,
-              style: tt.bodySmall?.copyWith(
-                color: cs.onSurface.withValues(alpha: 0.5),
+    return SafeArea(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.wifi_off_rounded, size: 56, color: cs.error),
+              const SizedBox(height: 16),
+              Text(
+                'Gagal memuat berita',
+                style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 24),
-            FilledButton.icon(
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primaryDarkGreen,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              const SizedBox(height: 8),
+              Text(
+                error.toString(),
+                textAlign: TextAlign.center,
+                style: tt.bodySmall?.copyWith(
+                  color: cs.onSurface.withValues(alpha: 0.5),
+                ),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
               ),
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh_rounded, size: 18),
-              label: const Text('Coba Lagi'),
-            ),
-          ],
+              const SizedBox(height: 24),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primaryDarkGreen,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                ),
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: const Text('Coba Lagi'),
+              ),
+            ],
+          ),
         ),
       ),
     );

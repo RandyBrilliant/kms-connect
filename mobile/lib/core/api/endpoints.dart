@@ -6,6 +6,7 @@ class ApiEndpoints {
   static const String login = '$baseUrl/auth/token/';
   static const String register = '$baseUrl/auth/register/';
   static const String googleAuth = '$baseUrl/auth/google/';
+  static const String googleComplete = '$baseUrl/auth/google-complete/';
   static const String ocrPreview = '$baseUrl/auth/ocr-preview/';
   static const String refreshToken = '$baseUrl/auth/token/refresh/';
   static const String logout = '$baseUrl/auth/logout/';
@@ -40,9 +41,9 @@ class ApiEndpoints {
   static String chatMessages(int applicationId) =>
       '$baseUrl/chat/applicant/thread/$applicationId/messages/';
   static String chatSend(int applicationId) =>
-      '$baseUrl/chat/applicant/thread/$applicationId/send/';
+      '$baseUrl/chat/applicant/thread/$applicationId/messages/';
   static String chatMarkRead(int applicationId) =>
-      '$baseUrl/chat/applicant/thread/$applicationId/mark-read/';
+      '$baseUrl/chat/applicant/thread/$applicationId/read/';
 
   // News
   static String newsDetail(int id) => '$baseUrl/news/public/$id/';

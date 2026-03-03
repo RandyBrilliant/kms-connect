@@ -32,6 +32,7 @@ from account.auth_cookie_views import (
 from account.registration_views import (
     ApplicantRegistrationView,
     GoogleOAuthView,
+    GoogleCompleteRegistrationView,
     KTPOcrPreviewView,
 )
 
@@ -47,6 +48,7 @@ urlpatterns = [
     path("api/auth/confirm-reset-password/", ConfirmResetPasswordView.as_view(), name="confirm_reset_password"),
     path("api/auth/register/", ApplicantRegistrationView.as_view(), name="applicant_register"),
     path("api/auth/google/", GoogleOAuthView.as_view(), name="google_oauth"),
+    path("api/auth/google-complete/", GoogleCompleteRegistrationView.as_view(), name="google_complete_registration"),
     path("api/auth/ocr-preview/", KTPOcrPreviewView.as_view(), name="ktp_ocr_preview"),
     path("api/", include("regions.urls")),
     path("api/", include("account.urls")),

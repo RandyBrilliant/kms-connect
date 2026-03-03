@@ -33,6 +33,7 @@ from .serializers import (
     ChatThreadSerializer,
     SendMessageSerializer,
 )
+from .broadcast import broadcast_chat_message
 from .tasks import send_chat_push_notification
 
 
@@ -128,6 +129,8 @@ class ChatThreadViewSet(viewsets.ReadOnlyModelViewSet):
         # Bump thread updated_at so it rises in the admin list
         ChatThread.objects.filter(pk=thread.pk).update(updated_at=timezone.now())
 
+        # Real-time: broadcast to WebSocket clients, then push FCM
+        broadcast_chat_message(msg)
         send_chat_push_notification.delay(msg.pk)
 
         return Response(
@@ -260,10 +263,17 @@ class ApplicantChatMessagesView(_ApplicantThreadMixin, APIView):
     GET  /api/chat/applicant/thread/{id}/messages/ — fetch messages
     POST /api/chat/applicant/thread/{id}/messages/ — send a message
 
-    GET supports ?since=<ISO 8601 datetime> for incremental polling.
-    The mobile app should poll this endpoint every ~5s when the chat screen is open,
-    and on FCM push notification wake.
+    GET supports:
+      ?since=<ISO 8601 datetime> for incremental polling.
+      ?page=<int> for cursor-based pagination (newest first by default).
+      ?page_size=<int> to control items per page (default 50, max 100).
+
+    The mobile app should poll this endpoint every ~8s when the chat screen is
+    open, and on FCM push notification wake.
     """
+
+    PAGE_SIZE_DEFAULT = 50
+    PAGE_SIZE_MAX = 100
 
     def get(self, request, thread_id: int):
         thread, err = self._resolve_thread(request, thread_id)
@@ -278,9 +288,28 @@ class ApplicantChatMessagesView(_ApplicantThreadMixin, APIView):
             if since_dt:
                 qs = qs.filter(sent_at__gt=since_dt)
 
+        # Pagination — return a window of messages so long threads don't send
+        # thousands of rows on initial load.
+        page_size = min(
+            int(request.query_params.get("page_size", self.PAGE_SIZE_DEFAULT)),
+            self.PAGE_SIZE_MAX,
+        )
+        page = max(int(request.query_params.get("page", 1)), 1)
+        total = qs.count()
+        start = max(total - page * page_size, 0)
+        end = total - (page - 1) * page_size
+        page_qs = qs[start:end]
+
+        data = ChatMessageSerializer(page_qs, many=True, context={"request": request}).data
         return Response(
             success_response(
-                data=ChatMessageSerializer(qs, many=True, context={"request": request}).data
+                data={
+                    "messages": data,
+                    "total": total,
+                    "page": page,
+                    "page_size": page_size,
+                    "has_more": start > 0,
+                }
             )
         )
 
@@ -314,6 +343,9 @@ class ApplicantChatMessagesView(_ApplicantThreadMixin, APIView):
             body=serializer.validated_data["body"],
         )
         ChatThread.objects.filter(pk=thread.pk).update(updated_at=timezone.now())
+
+        # Real-time: broadcast to WebSocket clients, then push FCM
+        broadcast_chat_message(msg)
         send_chat_push_notification.delay(msg.pk)
 
         return Response(

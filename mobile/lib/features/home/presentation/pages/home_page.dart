@@ -5,7 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../config/colors.dart';
+import '../../../../core/models/paginated_state.dart';
 import '../../../../core/widgets/auth_wave_header.dart';
+import '../../../../core/widgets/offline_banner.dart';
 import '../../../auth/data/providers/auth_provider.dart';
 import '../../../notifications/data/providers/notification_provider.dart';
 import '../../../news/data/providers/news_provider.dart';
@@ -121,7 +123,7 @@ class _HomePageState extends ConsumerState<HomePage>
   Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
     final profileState = ref.watch(profileNotifierProvider);
-    final newsAsync = ref.watch(newsProvider(null));
+    final newsState = ref.watch(paginatedNewsProvider(null));
     final notifState = ref.watch(notificationProvider);
     final cs = Theme.of(context).colorScheme;
     final size = MediaQuery.sizeOf(context);
@@ -147,10 +149,25 @@ class _HomePageState extends ConsumerState<HomePage>
       backgroundColor: cs.surfaceContainerLowest,
       body: Column(
         children: [
+          // ── Offline indicator ───────────────────────────────────────────
+          const OfflineBanner(),
+
           // ── Scrollable body ────────────────────────────────────────────
           Expanded(
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
+            child: RefreshIndicator(
+              onRefresh: () async {
+                // Refresh all homepage data sources concurrently.
+                await Future.wait([
+                  ref.read(profileNotifierProvider.notifier).loadProfile(force: true),
+                  ref.read(notificationProvider.notifier).load(),
+                  ref.read(paginatedNewsProvider(null).notifier).loadFirstPage(),
+                ]);
+              },
+              color: cs.primary,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics(),
+                ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -219,7 +236,7 @@ class _HomePageState extends ConsumerState<HomePage>
                   // ── News list ────────────────────────────────────────
                   _animated(
                     _NewsList(
-                      newsAsync: newsAsync,
+                      newsState: newsState,
                       iconBg: _iconBg,
                       iconFg: _iconFg,
                       icons: _icons,
@@ -230,6 +247,7 @@ class _HomePageState extends ConsumerState<HomePage>
                   ),
                 ],
               ),
+            ),
             ),
           ),
 
@@ -655,7 +673,7 @@ class _SectionHeader extends StatelessWidget {
 
 class _NewsList extends StatelessWidget {
   const _NewsList({
-    required this.newsAsync,
+    required this.newsState,
     required this.iconBg,
     required this.iconFg,
     required this.icons,
@@ -663,7 +681,7 @@ class _NewsList extends StatelessWidget {
     required this.onTap,
   });
 
-  final AsyncValue<List<News>> newsAsync;
+  final PaginatedState<News> newsState;
   final List<Color> iconBg;
   final List<Color> iconFg;
   final List<IconData> icons;
@@ -675,14 +693,19 @@ class _NewsList extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
-    return newsAsync.when(
-      loading: () => Padding(
+    // Loading state
+    if (newsState.isLoading) {
+      return Padding(
         padding: const EdgeInsets.symmetric(vertical: 40),
         child: Center(
           child: CircularProgressIndicator(color: cs.primary, strokeWidth: 2),
         ),
-      ),
-      error: (err, stack) => Padding(
+      );
+    }
+
+    // Error state
+    if (newsState.error != null && newsState.items.isEmpty) {
+      return Padding(
         padding:
             const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
         child: Center(
@@ -691,40 +714,43 @@ class _NewsList extends StatelessWidget {
             style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
           ),
         ),
-      ),
-      data: (list) {
-        if (list.isEmpty) {
-          return Padding(
-            padding:
-                const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
-            child: Center(
-              child: Text(
-                'Belum ada pengumuman.',
-                style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+      );
+    }
+
+    // Empty state
+    if (newsState.items.isEmpty) {
+      return Padding(
+        padding:
+            const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
+        child: Center(
+          child: Text(
+            'Belum ada pengumuman.',
+            style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+          ),
+        ),
+      );
+    }
+
+    final list = newsState.items;
+    final items = list.length > 5 ? list.sublist(0, 5) : list;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
+      child: Column(
+        children: [
+          for (var i = 0; i < items.length; i++)
+            RepaintBoundary(
+              child: _NewsCard(
+                news: items[i],
+                iconBg: iconBg[i % iconBg.length],
+                iconFg: iconFg[i % iconFg.length],
+                icon: icons[i % icons.length],
+                relativeTime:
+                    relativeTime(items[i].publishedAt ?? items[i].createdAt),
+                onTap: () => onTap(items[i].id),
               ),
             ),
-          );
-        }
-
-        final items = list.length > 5 ? list.sublist(0, 5) : list;
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
-          child: Column(
-            children: [
-              for (var i = 0; i < items.length; i++)
-                _NewsCard(
-                  news: items[i],
-                  iconBg: iconBg[i % iconBg.length],
-                  iconFg: iconFg[i % iconFg.length],
-                  icon: icons[i % icons.length],
-                  relativeTime:
-                      relativeTime(items[i].publishedAt ?? items[i].createdAt),
-                  onTap: () => onTap(items[i].id),
-                ),
-            ],
-          ),
-        );
-      },
+        ],
+      ),
     );
   }
 }

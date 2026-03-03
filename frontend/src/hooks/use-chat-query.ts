@@ -1,6 +1,7 @@
 /**
  * TanStack Query hooks for chat (admin side).
- * Messages use a 5-second polling interval when the chat panel is open.
+ * Messages use a 30-second polling fallback when WebSocket is connected.
+ * WebSocket (use-chat-websocket.ts) handles real-time invalidation.
  */
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
@@ -15,7 +16,9 @@ import {
 } from "@/api/chat"
 import type { ChatThreadsListParams, SendMessageInput } from "@/types/chat"
 
-const POLL_INTERVAL_MS = 5_000
+// Fallback polling interval — WebSocket handles instant updates;
+// this is a safety net for missed events.
+const POLL_INTERVAL_MS = 30_000
 
 export const chatKeys = {
   all: ["chat"] as const,
@@ -43,9 +46,8 @@ export function useChatThreadQuery(id: number | null, enabled = true) {
 }
 
 /**
- * Messages query with polling.
- * While the component is mounted and `enabled`, this refetches every 5 s
- * (simulating lightweight real-time). Disable when panel is not visible.
+ * Messages query with polling fallback.
+ * WebSocket provides instant updates; this refetches every 30s as safety net.
  */
 export function useChatMessagesQuery(threadId: number | null, enabled = true) {
   return useQuery({

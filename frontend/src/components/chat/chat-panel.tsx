@@ -1,6 +1,6 @@
 /**
  * Full inline chat panel for a specific JobApplication / ChatThread.
- * Automatically polls for new messages every 5 s via useChatMessagesQuery.
+ * Uses WebSocket for real-time updates with polling fallback via useChatMessagesQuery.
  */
 
 import { useState, useRef, useEffect } from "react"
@@ -19,6 +19,7 @@ import {
   useCloseChatThreadMutation,
   useReopenChatThreadMutation,
 } from "@/hooks/use-chat-query"
+import { useChatWebSocket } from "@/hooks/use-chat-websocket"
 import { toast } from "@/lib/toast"
 import { cn } from "@/lib/utils"
 
@@ -45,12 +46,24 @@ export function ChatPanel({
   const closeMutation = useCloseChatThreadMutation()
   const reopenMutation = useReopenChatThreadMutation()
 
+  // WebSocket for real-time updates + typing indicator
+  const { connected, typingUser, sendTyping, sendMarkRead } =
+    useChatWebSocket(threadId, canManage)
+
   const isClosed = thread?.is_closed ?? false
 
   // Scroll to bottom when messages arrive
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
+
+  // Mark as read when panel opens
+  useEffect(() => {
+    if (threadId && connected) {
+      sendMarkRead()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [threadId, connected])
 
   const handleSend = async () => {
     const trimmed = body.trim()
@@ -92,6 +105,20 @@ export function ChatPanel({
             <Badge variant="secondary" className="text-xs">
               Ditutup
             </Badge>
+          )}
+          {!isClosed && (
+            <span
+              className={cn(
+                "inline-block size-2 rounded-full",
+                connected ? "bg-green-500" : "bg-muted-foreground/40"
+              )}
+              title={connected ? "Terhubung" : "Terputus"}
+            />
+          )}
+          {typingUser && (
+            <span className="text-xs text-muted-foreground italic animate-pulse">
+              {typingUser} sedang mengetik...
+            </span>
           )}
         </div>
         {canManage && (
@@ -184,7 +211,10 @@ export function ChatPanel({
         >
           <Input
             value={body}
-            onChange={(e) => setBody(e.target.value)}
+            onChange={(e) => {
+              setBody(e.target.value)
+              sendTyping()
+            }}
             placeholder="Tulis pesan..."
             className="flex-1"
             onKeyDown={(e) => {

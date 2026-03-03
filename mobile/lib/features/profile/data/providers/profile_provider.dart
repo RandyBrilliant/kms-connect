@@ -137,21 +137,27 @@ class ProfileState {
   final bool isLoading;
   final String? error;
 
+  /// When the profile was last successfully fetched from the server.
+  final DateTime? lastFetchedAt;
+
   ProfileState({
     this.profile,
     this.isLoading = false,
     this.error,
+    this.lastFetchedAt,
   });
 
   ProfileState copyWith({
     ApplicantProfile? profile,
     bool? isLoading,
     String? error,
+    DateTime? lastFetchedAt,
   }) {
     return ProfileState(
       profile: profile ?? this.profile,
       isLoading: isLoading ?? this.isLoading,
       error: error,
+      lastFetchedAt: lastFetchedAt ?? this.lastFetchedAt,
     );
   }
 }
@@ -159,18 +165,35 @@ class ProfileState {
 class ProfileNotifier extends StateNotifier<ProfileState> {
   final ProfileRepository _repository;
 
+  /// How long cached profile data stays fresh before a network
+  /// re-fetch is attempted.
+  static const _cacheTtl = Duration(minutes: 5);
+
   ProfileNotifier(this._repository) : super(ProfileState());
 
-  /// Call explicitly from pages that need profile data.
-  /// NOT called in constructor to avoid duplicate network requests
-  /// (HomePage, ProfilePage, EditProfilePage each call this).
-  Future<void> loadProfile() async {
-    // Skip if already loading to avoid duplicate in-flight requests.
+  /// Load profile data, skipping the network call if the cache is fresh.
+  ///
+  /// Pass [force] = true to bypass the TTL and always hit the server
+  /// (e.g. after the user edits their profile).
+  Future<void> loadProfile({bool force = false}) async {
     if (state.isLoading) return;
+
+    // Return cached data if it's still within the TTL window.
+    if (!force &&
+        state.profile != null &&
+        state.lastFetchedAt != null &&
+        DateTime.now().difference(state.lastFetchedAt!) < _cacheTtl) {
+      return;
+    }
+
     state = state.copyWith(isLoading: true, error: null);
     try {
       final profile = await _repository.getProfile();
-      state = state.copyWith(profile: profile, isLoading: false);
+      state = state.copyWith(
+        profile: profile,
+        isLoading: false,
+        lastFetchedAt: DateTime.now(),
+      );
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
@@ -188,7 +211,11 @@ class ProfileNotifier extends StateNotifier<ProfileState> {
     }
     try {
       final profile = await _repository.updateProfile(profileId, data);
-      state = state.copyWith(profile: profile, isLoading: false);
+      state = state.copyWith(
+        profile: profile,
+        isLoading: false,
+        lastFetchedAt: DateTime.now(),
+      );
       return true;
     } catch (e) {
       state = state.copyWith(
@@ -203,7 +230,11 @@ class ProfileNotifier extends StateNotifier<ProfileState> {
     state = state.copyWith(isLoading: true, error: null);
     try {
       final profile = await _repository.submitForVerification();
-      state = state.copyWith(profile: profile, isLoading: false);
+      state = state.copyWith(
+        profile: profile,
+        isLoading: false,
+        lastFetchedAt: DateTime.now(),
+      );
       return true;
     } catch (e) {
       state = state.copyWith(

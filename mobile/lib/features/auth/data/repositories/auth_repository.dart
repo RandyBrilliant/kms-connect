@@ -4,6 +4,7 @@ import 'dart:io';
 import '../../../../core/api/api_client.dart';
 import '../../../../core/api/endpoints.dart';
 import '../../../../core/models/api_response.dart';
+import '../../../../core/utils/image_compressor.dart';
 import '../../domain/models/user.dart';
 import '../../domain/models/auth_response.dart';
 import '../../domain/models/ktp_data.dart';
@@ -123,9 +124,11 @@ class AuthRepository {
   /// Preview OCR data from KTP image before registration
   Future<KtpData> ocrPreview(File ktpFile) async {
     try {
+      // Compress KTP image before uploading for OCR.
+      final compressed = await ImageCompressor.compressDocument(ktpFile);
       final formData = FormData.fromMap({
         'ktp': await MultipartFile.fromFile(
-          ktpFile.path,
+          compressed.path,
           filename: 'ktp.jpg',
         ),
       });
@@ -168,20 +171,25 @@ class AuthRepository {
     required File ktpFile,
     String? referralCode,
     String? fullName,
+    String? phoneNumber,
   }) async {
     try {
+      // Compress KTP image before uploading to save bandwidth.
+      final compressed = await ImageCompressor.compressDocument(ktpFile);
       final formData = FormData.fromMap({
         'email': email.trim().toLowerCase(),
         'password': password,
         'nik': nik.trim(),
         'ktp': await MultipartFile.fromFile(
-          ktpFile.path,
+          compressed.path,
           filename: 'ktp.jpg',
         ),
         if (referralCode != null && referralCode.isNotEmpty)
           'referral_code': referralCode.trim().toUpperCase(),
         if (fullName != null && fullName.trim().isNotEmpty)
           'full_name': fullName.trim(),
+        if (phoneNumber != null && phoneNumber.trim().isNotEmpty)
+          'phone_number': phoneNumber.trim(),
       });
 
       final response = await _apiClient.dio.post(
@@ -261,6 +269,63 @@ class AuthRepository {
       );
 
       return authResponse;
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  /// Complete registration for a Google-authenticated user.
+  ///
+  /// Called from [GoogleCompleteRegistrationPage] after Google Sign-In creates
+  /// a placeholder account. The user must supply their NIK, KTP photo,
+  /// referral code, and optionally phone/full_name.
+  ///
+  /// The endpoint is authenticated — the access token stored during
+  /// [googleAuth] is attached automatically by the Dio interceptor.
+  Future<AuthResponse> googleCompleteRegistration({
+    required String nik,
+    required File ktpFile,
+    String? referralCode,
+    String? phoneNumber,
+    String? fullName,
+  }) async {
+    try {
+      final compressed = await ImageCompressor.compressDocument(ktpFile);
+      final formData = FormData.fromMap({
+        'nik': nik.trim(),
+        'ktp': await MultipartFile.fromFile(
+          compressed.path,
+          filename: 'ktp.jpg',
+        ),
+        if (referralCode != null && referralCode.isNotEmpty)
+          'referral_code': referralCode.trim().toUpperCase(),
+        if (phoneNumber != null && phoneNumber.trim().isNotEmpty)
+          'phone_number': phoneNumber.trim(),
+        if (fullName != null && fullName.trim().isNotEmpty)
+          'full_name': fullName.trim(),
+      });
+
+      final response = await _apiClient.dio.post(
+        ApiEndpoints.googleComplete,
+        data: formData,
+        options: Options(headers: {'Content-Type': 'multipart/form-data'}),
+      );
+
+      final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
+        response.data,
+        (data) => data as Map<String, dynamic>,
+      );
+
+      if (!apiResponse.isSuccess) {
+        throw DioException(
+          requestOptions: response.requestOptions,
+          response: response,
+          type: DioExceptionType.badResponse,
+          message: apiResponse.detail ?? 'Pendaftaran gagal',
+        );
+      }
+
+      return AuthResponse.fromJson(apiResponse.data!);
     } on DioException catch (e) {
       throw _handleError(e);
     }

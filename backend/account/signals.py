@@ -93,14 +93,57 @@ def auto_generate_referral_code(sender, instance: CustomUser, created, **kwargs)
 @receiver(post_save, sender=Notification)
 def send_push_on_notification_created(sender, instance: Notification, created: bool, **kwargs):
     """
-    Immediately queue an FCM push notification whenever a new Notification
+    Immediately deliver an FCM push notification whenever a new Notification
     record is created — regardless of how it was created (Django admin,
     broadcast delivery, API, signals, etc.).
 
-    This ensures users see the notification on their device in real-time
-    without having to open or refresh the app.
+    Runs in a daemon thread so it is non-blocking and does NOT depend on the
+    Celery worker being available. This guarantees real-time delivery even in
+    development environments where Celery may not be running.
     """
     if not created:
         return
-    from .tasks import send_notification_push_task
-    send_notification_push_task.delay(instance.pk)
+
+    # Capture all values before entering the thread (instance will be stale
+    # if accessed from a different thread after the Django ORM session ends).
+    notification_id = instance.pk
+    user = instance.user
+    title = instance.title
+    message = instance.message
+    notification_type = instance.notification_type
+    priority = instance.priority
+    action_url = instance.action_url or ""
+    action_label = instance.action_label or ""
+
+    import threading
+
+    def _send_push():
+        try:
+            from .services.fcm_service import send_fcm_to_user
+            import django.db
+            try:
+                data = {
+                    "notification_id": str(notification_id),
+                    "action_url": action_url,
+                    "action_label": action_label,
+                }
+                fcm_priority = "high" if priority in ["HIGH", "URGENT"] else "normal"
+                send_fcm_to_user(
+                    user=user,
+                    title=title,
+                    body=message,
+                    data=data,
+                    notification_type=notification_type,
+                    priority=fcm_priority,
+                )
+            finally:
+                # Close thread-local DB connections to prevent connection leaks.
+                django.db.close_old_connections()
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning(
+                "FCM push delivery failed for notification %s: %s", notification_id, exc
+            )
+
+    thread = threading.Thread(target=_send_push, daemon=True)
+    thread.start()

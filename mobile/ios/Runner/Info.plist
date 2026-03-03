@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Mobile</string>
+	<string>KMS Connect</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -13,7 +13,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>mobile</string>
+	<string>KMS Connect</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -49,5 +49,37 @@
 	<string>Aplikasi memerlukan akses kamera untuk mengambil foto KTP Anda</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Aplikasi memerlukan akses galeri untuk memilih foto KTP Anda</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Aplikasi memerlukan akses mikrofon untuk fitur kamera</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Gunakan Face ID untuk mengamankan akun Anda</string>
+
+	<!-- Deep linking: custom URL scheme -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>kmsconnect</string>
+			</array>
+		</dict>
+	</array>
+
+	<!-- Deep linking: Universal Links domain -->
+	<!-- NOTE: Also add the Associated Domains entitlement in Xcode:
+	     applinks:kmsconnect.id
+	     and host an apple-app-site-association file at
+	     https://kmsconnect.id/.well-known/apple-app-site-association -->
+	<key>FlutterDeepLinkingEnabled</key>
+	<true/>
+
+	<!-- Background Modes for push notifications -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>remote-notification</string>
+	</array>
 </dict>
 </plist>
