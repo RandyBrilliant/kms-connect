@@ -46,10 +46,10 @@ TRANSITIONS: dict[tuple[str, str], list[str]] = {
     ("APPLIED",        "admin"): ["UNDER_REVIEW", "SHORTLISTED", "OFFERED", "REJECTED"],
     ("UNDER_REVIEW",   "admin"): ["SHORTLISTED", "OFFERED", "REJECTED"],
     ("SHORTLISTED",    "admin"): ["OFFERED", "REJECTED"],
-    ("OFFERED",        "admin"): ["REJECTED"],              # admin can rescind offer
+    ("OFFERED",        "admin"): ["OFFER_ACCEPTED", "OFFER_DECLINED", "REJECTED"],  # admin can accept/decline on behalf or rescind
     ("OFFER_ACCEPTED", "admin"): ["PLACED", "REJECTED"],
     ("OFFER_DECLINED", "admin"): ["SHORTLISTED", "REJECTED"],  # admin gives another chance
-    ("PLACED",         "admin"): ["COMPLETED"],             # contract ended
+    ("PLACED",         "admin"): ["COMPLETED", "REJECTED"],    # contract ended or terminated
 
     # Applicant transitions
     ("APPLIED",        "applicant"): ["WITHDRAWN"],
