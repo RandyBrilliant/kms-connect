@@ -6,6 +6,9 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.views import APIView
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.shortcuts import get_object_or_404
 
 from .models import (
@@ -285,6 +288,15 @@ class ApplicantDocumentSelfServiceViewSet(ApplicantSelfServiceMixin, viewsets.Mo
             document_type=document_type,
         ).first()
 
+        if existing and existing.review_status == DocumentReviewStatus.APPROVED:
+            return Response(
+                error_response(
+                    detail="Dokumen ini sudah disetujui dan tidak dapat diganti.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         if existing:
             # Ganti file lama dan reset status review / OCR
             existing.file = file
@@ -317,6 +329,21 @@ class ApplicantDocumentSelfServiceViewSet(ApplicantSelfServiceMixin, viewsets.Mo
         response_serializer = self.get_serializer(document)
         response_status = status.HTTP_201_CREATED if created else status.HTTP_200_OK
         return Response(response_serializer.data, status=response_status)
+
+    def destroy(self, request, *args, **kwargs):
+        """
+        Hapus dokumen. Dokumen yang sudah disetujui (APPROVED) tidak dapat dihapus.
+        """
+        document = self.get_object()
+        if document.review_status == DocumentReviewStatus.APPROVED:
+            return Response(
+                error_response(
+                    detail="Dokumen yang sudah disetujui tidak dapat dihapus.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return super().destroy(request, *args, **kwargs)
 
     @action(detail=True, methods=["get"])
     def ocr_prefill(self, request, pk=None):
@@ -353,3 +380,74 @@ class ApplicantDocumentSelfServiceViewSet(ApplicantSelfServiceMixin, viewsets.Mo
 # Ahli waris (next of kin) is now stored as flat fields on ApplicantProfile:
 #   heir_name, heir_relationship, heir_contact_phone
 # Update them via PATCH /api/applicants/me/profile/
+
+
+class ApplicantChangePasswordView(APIView):
+    """
+    POST /api/applicants/me/change-password/
+    Allows an authenticated applicant to change their own password.
+    Body: { "old_password": "...", "new_password": "..." }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        old_password = request.data.get("old_password", "").strip()
+        new_password = request.data.get("new_password", "").strip()
+
+        if not old_password or not new_password:
+            return Response(
+                error_response(
+                    detail="old_password dan new_password wajib diisi.",
+                    code=ApiCode.VALIDATION_ERROR,
+                    errors={
+                        **({"old_password": ["Wajib diisi."]} if not old_password else {}),
+                        **({"new_password": ["Wajib diisi."]} if not new_password else {}),
+                    },
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not user.check_password(old_password):
+            return Response(
+                error_response(
+                    detail="Password lama tidak sesuai.",
+                    code=ApiCode.VALIDATION_ERROR,
+                    errors={"old_password": ["Password lama tidak sesuai."]},
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if old_password == new_password:
+            return Response(
+                error_response(
+                    detail="Password baru tidak boleh sama dengan password lama.",
+                    code=ApiCode.VALIDATION_ERROR,
+                    errors={"new_password": ["Password baru tidak boleh sama dengan password lama."]},
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            validate_password(new_password, user)
+        except DjangoValidationError as e:
+            msgs = list(e.messages)
+            return Response(
+                error_response(
+                    detail=msgs[0] if msgs else "Password tidak memenuhi syarat.",
+                    code=ApiCode.VALIDATION_ERROR,
+                    errors={"new_password": msgs},
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user.set_password(new_password)
+        user.save(update_fields=["password"])
+
+        return Response(
+            success_response(
+                detail="Password berhasil diubah.",
+                code=ApiCode.SUCCESS,
+            ),
+            status=status.HTTP_200_OK,
+        )

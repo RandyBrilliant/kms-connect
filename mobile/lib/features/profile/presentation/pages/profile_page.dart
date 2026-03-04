@@ -237,6 +237,14 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                       label: 'Akun',
                       items: [
                         _MenuItem(
+                          icon: Icons.lock_outline_rounded,
+                          color: const Color(0xFF0891B2),
+                          bg: const Color(0xFFCFFAFE),
+                          title: 'Ganti Password',
+                          subtitle: 'Ubah password akun kamu',
+                          onTap: () => context.push('/profile/change-password'),
+                        ),
+                        _MenuItem(
                           icon: Icons.logout_rounded,
                           color: AppColors.error,
                           bg: const Color(0xFFFFE4E6),

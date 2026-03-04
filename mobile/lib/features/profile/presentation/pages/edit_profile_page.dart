@@ -213,7 +213,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
 
     // ── New: Data Paspor ────────────────────────────────────────────────
     _hasPassport = p.hasPassport;
-    _passportNumber.text = p.passportNumber ?? '';
+    _passportNumber.text = (p.passportNumber ?? '').toUpperCase();
     _passportIssuePlace.text = (p.passportIssuePlace ?? '').toUpperCase();
     if (p.passportIssueDate != null) {
       _pickedPassportIssueDate = p.passportIssueDate;
@@ -228,7 +228,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
 
     // ── New: Data Dokumen ───────────────────────────────────────────────
     _familyCardNumber.text = p.familyCardNumber ?? '';
-    _diplomaNumber.text = p.diplomaNumber ?? '';
+    _diplomaNumber.text = (p.diplomaNumber ?? '').toUpperCase();
     _bpjsNumber.text = p.bpjsNumber ?? '';
 
     // ── Keluarga ────────────────────────────────────────────────────────
@@ -1036,6 +1036,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           label: 'Nomor Ijazah',
                           hint: 'Nomor ijazah terakhir',
                           prefixIcon: Icons.school_outlined,
+                          upperCase: true,
                         ),
                         const SizedBox(height: 14),
                         M3TextField(
@@ -1073,6 +1074,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                             label: 'Nomor Paspor',
                             hint: 'A12345678',
                             prefixIcon: Icons.confirmation_number_outlined,
+                            upperCase: true,
                           ),
                           const SizedBox(height: 14),
                           M3TextField(
@@ -1251,7 +1253,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                         const SizedBox(height: 14),
                         M3TextField(
                           controller: _familyAddress,
-                          label: 'Alamat Keluarga',
+                          label: 'Alamat Orang Tua / Keluarga',
                           hint: 'Jika berbeda dengan alamat KTP',
                           prefixIcon: Icons.home_outlined,
                           maxLines: 2,
@@ -1260,7 +1262,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                         const SizedBox(height: 14),
                         // ── Family address region pickers ──
                         _RegionPickerField(
-                          label: 'Provinsi (Keluarga)',
+                          label: 'Provinsi Orang Tua / Keluarga',
                           hint: 'Pilih provinsi',
                           prefixIcon: Icons.map_outlined,
                           selected: _familyProvince,
@@ -1281,7 +1283,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                         ),
                         const SizedBox(height: 14),
                         _RegionPickerField(
-                          label: 'Kab/Kota (Keluarga)',
+                          label: 'Kab/Kota (Orang Tua / Keluarga)',
                           hint: _familyProvince == null
                               ? 'Pilih provinsi dahulu'
                               : 'Pilih kab/kota',
@@ -1306,7 +1308,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                         ),
                         const SizedBox(height: 14),
                         _RegionPickerField(
-                          label: 'Kecamatan (Keluarga)',
+                          label: 'Kecamatan (Orang Tua / Keluarga)',
                           hint: _familyKabupaten == null
                               ? 'Pilih kab/kota dahulu'
                               : 'Pilih kecamatan',
@@ -1330,7 +1332,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                         ),
                         const SizedBox(height: 14),
                         _RegionPickerField(
-                          label: 'Kelurahan (Keluarga)',
+                          label: 'Kelurahan (Orang Tua / Keluarga)',
                           hint: _familyKecamatan == null
                               ? 'Pilih kecamatan dahulu'
                               : 'Pilih kelurahan',

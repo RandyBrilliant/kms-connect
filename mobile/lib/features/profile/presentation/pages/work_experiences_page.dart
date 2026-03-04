@@ -273,6 +273,20 @@ class _WorkExpCard extends StatelessWidget {
                             color: AppColors.primaryDarkGreen,
                             fontWeight: FontWeight.w600),
                       ),
+                      if (exp.industryType != null &&
+                          exp.industryType!.isNotEmpty) ...[                        
+                        const SizedBox(height: 2),
+                        Text(
+                          _kIndustryTypes
+                              .where((i) => i.value == exp.industryType)
+                              .map((i) => i.label)
+                              .firstOrNull ??
+                              exp.industryType!,
+                          style: tt.labelSmall?.copyWith(
+                              color: cs.onSurfaceVariant,
+                              fontStyle: FontStyle.italic),
+                        ),
+                      ],
                       if ((exp.location ?? exp.country) != null &&
                           (exp.location ?? exp.country)!.isNotEmpty) ...[
                         const SizedBox(height: 2),
@@ -447,6 +461,7 @@ class _WorkExperienceFormSheetState
 
   String? _selectedCountryCode; // ISO 3166-1 alpha-2
   String? _selectedCountryName;
+  String? _selectedIndustryType;
   DateTime? _startPicked;
   DateTime? _endPicked;
   bool _stillEmployed = false;
@@ -457,16 +472,19 @@ class _WorkExperienceFormSheetState
     super.initState();
     final e = widget.existing;
     if (e != null) {
-      _company.text = e.companyName;
-      _position.text = e.position;
-      _location.text = e.location ?? '';
-      _description.text = e.description ?? '';
+      _company.text = e.companyName.toUpperCase();
+      _position.text = e.position.toUpperCase();
+      _location.text = (e.location ?? '').toUpperCase();
+      _description.text = (e.description ?? '').toUpperCase();
       _stillEmployed = e.stillEmployed;
       // Pre-select country from existing data
       if (e.country != null && e.country!.isNotEmpty) {
         final match = _kCountries.where((c) => c.code == e.country).firstOrNull;
         _selectedCountryCode = e.country;
         _selectedCountryName = match?.name ?? e.country;
+      }
+      if (e.industryType != null && e.industryType!.isNotEmpty) {
+        _selectedIndustryType = e.industryType;
       }
       if (e.startDate != null) {
         _startPicked = e.startDate;
@@ -535,6 +553,8 @@ class _WorkExperienceFormSheetState
         'location': _location.text.trim(),
       if (_selectedCountryCode != null && _selectedCountryCode!.isNotEmpty)
         'country': _selectedCountryCode,
+      if (_selectedIndustryType != null && _selectedIndustryType!.isNotEmpty)
+        'industry_type': _selectedIndustryType,
       if (_description.text.trim().isNotEmpty)
         'description': _description.text.trim(),
       'still_employed': _stillEmployed,
@@ -565,6 +585,64 @@ class _WorkExperienceFormSheetState
           ?? 'Gagal menyimpan';
       CustomToast.show(context, message: err, type: ToastType.error);
     }
+  }
+
+  Future<_IndustryTypeItem?> _showIndustryTypePicker(BuildContext ctx) async {
+    final cs = Theme.of(ctx).colorScheme;
+    final tt = Theme.of(ctx).textTheme;
+    return showModalBottomSheet<_IndustryTypeItem>(
+      context: ctx,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: cs.surfaceContainerLow,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (sheetCtx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 32, height: 4,
+              decoration: BoxDecoration(
+                color: cs.onSurfaceVariant.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Text('Pilih Jenis Industri',
+                  style: tt.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700)),
+            ),
+            const Divider(height: 1),
+            ...List.generate(_kIndustryTypes.length, (i) {
+              final item = _kIndustryTypes[i];
+              final isSelected = _selectedIndustryType == item.value;
+              return ListTile(
+                leading: Icon(
+                  Icons.factory_outlined,
+                  color: isSelected ? cs.primary : cs.onSurfaceVariant,
+                  size: 20,
+                ),
+                title: Text(item.label,
+                    style: tt.bodyMedium?.copyWith(
+                        fontWeight: isSelected
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                        color: isSelected ? cs.primary : null)),
+                trailing: isSelected
+                    ? Icon(Icons.check_rounded, color: cs.primary, size: 18)
+                    : null,
+                onTap: () => Navigator.pop(sheetCtx, item),
+              );
+            }),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<_CountryItem?> _showCountryPicker(BuildContext ctx) async {
@@ -735,12 +813,25 @@ class _WorkExperienceFormSheetState
                       label: 'Nama Perusahaan',
                       hint: 'PT. Contoh Indonesia',
                       prefixIcon: Icons.business_rounded,
-                      textCapitalization:
-                          TextCapitalization.words,
+                      upperCase: true,
                       validator: (v) =>
                           (v == null || v.trim().isEmpty)
                               ? 'Wajib diisi'
                               : null,
+                    ),
+                    const SizedBox(height: 10),
+                    _IndustryTypePickerField(
+                      value: _selectedIndustryType,
+                      onTap: () async {
+                        final picked =
+                            await _showIndustryTypePicker(context);
+                        if (picked != null && mounted) {
+                          setState(
+                              () => _selectedIndustryType = picked.value);
+                        }
+                      },
+                      onClear: () =>
+                          setState(() => _selectedIndustryType = null),
                     ),
                     const SizedBox(height: 10),
                     M3TextField(
@@ -748,8 +839,7 @@ class _WorkExperienceFormSheetState
                       label: 'Jabatan',
                       hint: 'Staff, Manager, dll.',
                       prefixIcon: Icons.work_outline_rounded,
-                      textCapitalization:
-                          TextCapitalization.words,
+                      upperCase: true,
                       validator: (v) =>
                           (v == null || v.trim().isEmpty)
                               ? 'Wajib diisi'
@@ -761,8 +851,7 @@ class _WorkExperienceFormSheetState
                       label: 'Kota / Lokasi',
                       hint: 'Jakarta, Kuala Lumpur, dll.',
                       prefixIcon: Icons.location_city_outlined,
-                      textCapitalization:
-                          TextCapitalization.words,
+                      upperCase: true,
                     ),
                     const SizedBox(height: 10),
                     _CountryPickerField(
@@ -838,9 +927,10 @@ class _WorkExperienceFormSheetState
                     M3TextField(
                       controller: _description,
                       label: 'Deskripsi (opsional)',
-                      hint: 'Tanggung jawab dan pencapaian',
+                      hint: 'Tugas dan Tanggung Jawab',
                       prefixIcon: Icons.description_outlined,
                       maxLines: 3,
+                      upperCase: true,
                     ),
                     const SizedBox(height: 20),
                     SizedBox(
@@ -971,6 +1061,95 @@ class _CountryPickerField extends StatelessWidget {
             : Text('Pilih negara',
                 style: tt.bodyLarge?.copyWith(
                     color: cs.onSurface.withValues(alpha: 0.38))),
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// Industry type picker support
+// =============================================================================
+
+class _IndustryTypeItem {
+  const _IndustryTypeItem(this.value, this.label);
+  final String value;
+  final String label;
+}
+
+const List<_IndustryTypeItem> _kIndustryTypes = [
+  _IndustryTypeItem('SEMICONDUCTOR', 'Semiconductor'),
+  _IndustryTypeItem('ELEKTRONIK', 'Elektronik'),
+  _IndustryTypeItem('PABRIK LAIN', 'Pabrik Lain'),
+  _IndustryTypeItem('JASA', 'Jasa'),
+  _IndustryTypeItem('LAIN LAIN', 'Lain Lain'),
+  _IndustryTypeItem('BELUM PERNAH BEKERJA', 'Belum Pernah Bekerja'),
+];
+
+class _IndustryTypePickerField extends StatelessWidget {
+  const _IndustryTypePickerField({
+    required this.onTap,
+    required this.onClear,
+    this.value,
+  });
+
+  final String? value;
+  final VoidCallback onTap;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final hasValue = value != null && value!.isNotEmpty;
+    final label = hasValue
+        ? (_kIndustryTypes
+                .where((i) => i.value == value)
+                .firstOrNull
+                ?.label ??
+            value!)
+        : null;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: 'Jenis Industri',
+          floatingLabelBehavior: FloatingLabelBehavior.always,
+          prefixIcon: Icon(Icons.factory_outlined,
+              size: 20, color: cs.onSurfaceVariant),
+          suffixIcon: hasValue
+              ? IconButton(
+                  icon: Icon(Icons.close_rounded,
+                      size: 18, color: cs.onSurfaceVariant),
+                  onPressed: onClear,
+                )
+              : Icon(Icons.arrow_drop_down_rounded,
+                  color: cs.onSurfaceVariant),
+          filled: true,
+          fillColor: cs.surfaceContainerHighest,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        ),
+        isEmpty: !hasValue,
+        child: hasValue
+            ? Text(
+                label!,
+                style: tt.bodyLarge?.copyWith(
+                    color: cs.onSurface, fontWeight: FontWeight.w500),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              )
+            : Text('Pilih jenis industri',
+                style: tt.bodyLarge
+                    ?.copyWith(color: cs.onSurface.withValues(alpha: 0.38))),
       ),
     );
   }

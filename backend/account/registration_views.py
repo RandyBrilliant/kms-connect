@@ -184,6 +184,30 @@ class ApplicantRegistrationView(APIView):
         birth_place = _resolve_birth_place(request.data.get("birth_place"))
         birth_date = _parse_birth_date(request.data.get("birth_date", ""))
 
+        # Validasi usia: minimal 18 tahun, maksimal 45 tahun
+        if birth_date:
+            from datetime import date as _date
+            today = _date.today()
+            age = today.year - birth_date.year - (
+                (today.month, today.day) < (birth_date.month, birth_date.day)
+            )
+            if age < 18:
+                return Response(
+                    error_response(
+                        detail="Usia Anda kurang dari 18 tahun. Anda tidak memenuhi syarat untuk mendaftar.",
+                        code=ApiCode.VALIDATION_ERROR,
+                    ),
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if age > 45:
+                return Response(
+                    error_response(
+                        detail="Usia Anda lebih dari 45 tahun. Anda tidak memenuhi syarat untuk mendaftar.",
+                        code=ApiCode.VALIDATION_ERROR,
+                    ),
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         # Buat user
         try:
             user = CustomUser.objects.create_user(

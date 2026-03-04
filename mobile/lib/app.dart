@@ -10,11 +10,13 @@ import 'features/auth/presentation/pages/login_page.dart';
 import 'features/auth/presentation/pages/registration_page_new.dart';
 import 'features/auth/presentation/pages/google_complete_registration_page.dart';
 import 'features/auth/presentation/pages/email_verification_page.dart';
+import 'features/auth/presentation/pages/forgot_password_page.dart';
 import 'features/auth/presentation/pages/reset_password_page.dart';
 import 'features/home/presentation/pages/home_page.dart';
 import 'features/profile/presentation/pages/profile_page.dart';
 import 'features/profile/presentation/pages/edit_profile_page.dart';
 import 'features/profile/presentation/pages/work_experiences_page.dart';
+import 'features/profile/presentation/pages/change_password_page.dart';
 import 'features/documents/presentation/pages/documents_page.dart';
 import 'features/documents/presentation/pages/upload_document_page.dart';
 import 'features/jobs/presentation/pages/jobs_list_page.dart';
@@ -141,6 +143,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
+        path: '/forgot-password',
+        name: 'forgot-password',
+        builder: (context, state) => const ForgotPasswordPage(),
+      ),
+      GoRoute(
         path: '/reset-password',
         name: 'reset-password',
         builder: (context, state) {
@@ -178,6 +185,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/profile/work-experiences',
         name: 'work-experiences',
         builder: (context, state) => const WorkExperiencesPage(),
+      ),
+      GoRoute(
+        path: '/profile/change-password',
+        name: 'change-password',
+        builder: (context, state) => const ChangePasswordPage(),
       ),
       GoRoute(
         path: '/documents',

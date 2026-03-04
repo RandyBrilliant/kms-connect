@@ -238,6 +238,7 @@ class _UploadDocumentPageState
   @override
   Widget build(BuildContext context) {
     final typesAsync = ref.watch(documentTypesProvider);
+    final docsAsync = ref.watch(myDocumentsProvider);
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     const headerH = 140.0;
@@ -247,6 +248,18 @@ class _UploadDocumentPageState
     if (!_didPreselect && widget.documentTypeId != null) {
       _tryPreselectType();
     }
+
+    // Check whether the currently selected document type already has an
+    // APPROVED document — if so the form is locked.
+    final isApproved = _selectedType != null &&
+        docsAsync.whenOrNull(
+              data: (docs) => docs.any(
+                (d) =>
+                    d.documentType == _selectedType!.id &&
+                    d.reviewStatus == 'APPROVED',
+              ),
+            ) ==
+            true;
 
     return Scaffold(
       backgroundColor: cs.surfaceContainerLowest,
@@ -309,6 +322,56 @@ class _UploadDocumentPageState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Approved-type banner (shown when doc is locked)
+                  if (isApproved) ...[                    
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFD1FAE5),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: const Color(0xFF6EE7B7),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(
+                            Icons.lock_rounded,
+                            size: 18,
+                            color: Color(0xFF065F46),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Dokumen Sudah Disetujui',
+                                  style: tt.bodySmall?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    color: const Color(0xFF065F46),
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Dokumen ini telah disetujui oleh tim kami dan tidak dapat diganti.',
+                                  style: tt.bodySmall?.copyWith(
+                                    color: const Color(0xFF047857),
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
                   // Format hint chip (shown only when type selected)
                   if (_selectedType != null) ...[
                     _FormatHintChip(isPdf: _isPdf),
@@ -317,25 +380,29 @@ class _UploadDocumentPageState
 
                   // File picker area
                   GestureDetector(
-                    onTap: _onTapFilePicker,
+                    onTap: isApproved ? null : _onTapFilePicker,
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
                       width: double.infinity,
                       height: (_file != null && !_filePdf) ? 220 : 130,
                       decoration: BoxDecoration(
-                        color: _file != null
-                            ? (_filePdf
-                                ? const Color(0xFFF0FDF4)
-                                : Colors.black)
-                            : cs.surfaceContainerHighest,
+                        color: isApproved
+                            ? cs.surfaceContainerHighest.withValues(alpha: 0.5)
+                            : _file != null
+                                ? (_filePdf
+                                    ? const Color(0xFFF0FDF4)
+                                    : Colors.black)
+                                : cs.surfaceContainerHighest,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
-                          color: _file != null
-                              ? (_filePdf
-                                  ? AppColors.primaryDarkGreen
-                                  : cs.outlineVariant)
-                              : AppColors.primaryDarkGreen
-                                  .withValues(alpha: 0.4),
+                          color: isApproved
+                              ? cs.outlineVariant.withValues(alpha: 0.4)
+                              : _file != null
+                                  ? (_filePdf
+                                      ? AppColors.primaryDarkGreen
+                                      : cs.outlineVariant)
+                                  : AppColors.primaryDarkGreen
+                                      .withValues(alpha: 0.4),
                           width: _file != null ? 1.5 : 2,
                         ),
                       ),
@@ -427,12 +494,18 @@ class _UploadDocumentPageState
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton(
-                      onPressed: _isUploading
+                      onPressed: _isUploading || isApproved
                           ? null
                           : _handleUpload,
                       style: FilledButton.styleFrom(
                         backgroundColor:
-                            AppColors.primaryDarkGreen,
+                            isApproved
+                                ? const Color(0xFF059669)
+                                : AppColors.primaryDarkGreen,
+                        disabledBackgroundColor:
+                            isApproved
+                                ? const Color(0xFF059669).withValues(alpha: 0.5)
+                                : null,
                         padding: const EdgeInsets.symmetric(
                             vertical: 16),
                         shape: RoundedRectangleBorder(
@@ -448,12 +521,24 @@ class _UploadDocumentPageState
                                   strokeWidth: 2,
                                   color: Colors.white),
                             )
-                          : Text(
-                              'Unggah Dokumen',
-                              style: tt.labelLarge?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                              ),
+                          : Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (isApproved) ...[
+                                  const Icon(Icons.lock_rounded,
+                                      size: 16, color: Colors.white),
+                                  const SizedBox(width: 6),
+                                ],
+                                Text(
+                                  isApproved
+                                      ? 'Dokumen Disetujui'
+                                      : 'Unggah Dokumen',
+                                  style: tt.labelLarge?.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
                             ),
                     ),
                   ),

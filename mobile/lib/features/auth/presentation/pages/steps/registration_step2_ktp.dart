@@ -431,6 +431,30 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
   Future<void> _handleRegister() async {
     if (!_formKey.currentState!.validate()) return;
 
+    // Validasi usia: minimal 18 tahun, maksimal 45 tahun
+    if (_selectedDate != null) {
+      final now = DateTime.now();
+      int age = now.year - _selectedDate!.year;
+      if (now.month < _selectedDate!.month ||
+          (now.month == _selectedDate!.month && now.day < _selectedDate!.day)) {
+        age--;
+      }
+      if (age < 18) {
+        CustomToast.show(context,
+            message:
+                'Usia Anda kurang dari 18 tahun. Anda tidak memenuhi syarat untuk mendaftar.',
+            type: ToastType.error);
+        return;
+      }
+      if (age > 45) {
+        CustomToast.show(context,
+            message:
+                'Usia Anda lebih dari 45 tahun. Anda tidak memenuhi syarat untuk mendaftar.',
+            type: ToastType.error);
+        return;
+      }
+    }
+
     ref.read(registrationProvider.notifier).updateKtpData(KtpData(
           nik: _nikCtrl.text.trim(),
           name: _nameCtrl.text.trim(),

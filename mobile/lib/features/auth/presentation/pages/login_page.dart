@@ -408,7 +408,7 @@ class _FormPanel extends StatelessWidget {
             Align(
               alignment: Alignment.centerRight,
               child: TextButton(
-                onPressed: () => context.push('/reset-password'),
+                onPressed: () => context.push('/forgot-password'),
                 style: TextButton.styleFrom(
                   foregroundColor: colorScheme.primary,
                   padding:

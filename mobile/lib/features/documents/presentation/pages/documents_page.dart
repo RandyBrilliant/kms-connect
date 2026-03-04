@@ -127,6 +127,15 @@ class DocumentsPage extends ConsumerWidget {
     DocumentChecklistItem item,
   ) async {
     if (item.document == null) return;
+    // Approved documents cannot be deleted
+    if (item.isApproved) {
+      CustomToast.show(
+        context,
+        message: 'Dokumen yang sudah disetujui tidak dapat dihapus.',
+        type: ToastType.warning,
+      );
+      return;
+    }
     final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
 
@@ -579,20 +588,24 @@ class _ChecklistCard extends StatelessWidget {
                   ],
                   const Spacer(),
                   if (item.isUploaded) ...[
-                    _SmallButton(
-                      icon: Icons.upload_rounded,
-                      label: item.isRejected
-                          ? 'Unggah Ulang'
-                          : 'Ganti',
-                      color: AppColors.primaryDarkGreen,
-                      onTap: onUpload,
-                    ),
-                    const SizedBox(width: 6),
-                    _SmallButton(
-                      icon: Icons.delete_outline_rounded,
-                      color: AppColors.error,
-                      onTap: onDelete,
-                    ),
+                    if (item.isApproved)
+                      _LockedBadge()
+                    else ...[
+                      _SmallButton(
+                        icon: Icons.upload_rounded,
+                        label: item.isRejected
+                            ? 'Unggah Ulang'
+                            : 'Ganti',
+                        color: AppColors.primaryDarkGreen,
+                        onTap: onUpload,
+                      ),
+                      const SizedBox(width: 6),
+                      _SmallButton(
+                        icon: Icons.delete_outline_rounded,
+                        color: AppColors.error,
+                        onTap: onDelete,
+                      ),
+                    ],
                   ] else
                     _SmallButton(
                       icon: Icons.upload_rounded,
@@ -734,6 +747,43 @@ class _ChecklistCard extends StatelessWidget {
           'Menunggu Review',
         ),
     };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Locked Badge (shown on approved documents instead of Ganti/Hapus buttons)
+// ---------------------------------------------------------------------------
+
+class _LockedBadge extends StatelessWidget {
+  const _LockedBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: const Color(0xFFD1FAE5),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.lock_rounded,
+            size: 13,
+            color: Color(0xFF065F46),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            'Terkunci',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: const Color(0xFF065F46),
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

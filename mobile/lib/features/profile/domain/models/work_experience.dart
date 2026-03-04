@@ -6,6 +6,8 @@ class WorkExperience {
   final String? location;
   /// ISO 3166-1 alpha-2 country code (backend: `country` CountryField). Read-only from server.
   final String? country;
+  /// Industry type (backend: `industry_type` field, e.g. SEMICONDUCTOR, ELEKTRONIK).
+  final String? industryType;
   final DateTime? startDate;
   final DateTime? endDate;
   final bool stillEmployed;
@@ -20,6 +22,7 @@ class WorkExperience {
     required this.position,
     this.location,
     this.country,
+    this.industryType,
     this.startDate,
     this.endDate,
     this.stillEmployed = false,
@@ -36,6 +39,7 @@ class WorkExperience {
       position: json['position'] as String,
       location: json['location'] as String?,
       country: json['country'] as String?,
+      industryType: json['industry_type'] as String?,
       startDate: json['start_date'] != null 
           ? DateTime.parse(json['start_date'] as String) 
           : null,
@@ -55,6 +59,8 @@ class WorkExperience {
       'company_name': companyName,
       'position': position,
       if (location != null) 'location': location,
+      if (industryType != null && industryType!.isNotEmpty)
+        'industry_type': industryType,
       'start_date': startDate?.toIso8601String(),
       'end_date': endDate?.toIso8601String(),
       'still_employed': stillEmployed,

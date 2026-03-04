@@ -24,6 +24,7 @@ class ApiEndpoints {
   static const String myWorkExperiences = '$baseUrl/applicants/me/work_experiences/';
   static const String myDocuments = '$baseUrl/applicants/me/documents/';
   static const String myApplications = '$baseUrl/applicants/me/applications/';
+  static const String changePassword = '$baseUrl/applicants/me/change-password/';
 
   // Public
   static const String publicJobs = '$baseUrl/jobs/public/';

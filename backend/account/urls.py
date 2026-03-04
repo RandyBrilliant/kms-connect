@@ -100,6 +100,15 @@ applicant_self_service_router.register(
     basename="applicant-me-documents",
 )
 
+# Applicant self-service non-router paths
+applicant_self_service_paths = [
+    path(
+        "applicants/me/change-password/",
+        applicant_self_service_views.ApplicantChangePasswordView.as_view(),
+        name="applicant-me-change-password",
+    ),
+]
+
 # Admin dashboard (applicants overview)
 dashboard_paths = [
     path(
@@ -142,6 +151,7 @@ urlpatterns = [
     path("", include(referrer_paths)),
     path("", include(admin_email_paths)),
     path("", include(fcm_paths)),
+    path("", include(applicant_self_service_paths)),  # Change-password + other flat paths
     path("", include(applicant_self_service_router.urls)),  # Self-service endpoints
     path("", include(nested_applicant)),
     path("", include(router.urls)),
