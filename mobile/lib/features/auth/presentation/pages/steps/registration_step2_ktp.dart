@@ -468,20 +468,12 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
 
       if (isGoogleFlow) {
         // Google flow — email is already verified by Google
-        CustomToast.show(context,
-            message: 'Registrasi berhasil! Selamat datang.',
-            type: ToastType.success,
-            duration: const Duration(seconds: 4));
         ref
             .read(authStateProvider.notifier)
             .markGoogleCompletionDone(authResponse.user);
       } else {
         // Email registration — do NOT set authenticated user yet.
         // Auth tokens are stored; the user must verify email first.
-        CustomToast.show(context,
-            message: 'Registrasi berhasil! Silakan verifikasi email Anda.',
-            type: ToastType.success,
-            duration: const Duration(seconds: 3));
         if (mounted && email != null) {
           context.go('/email-verification?email=${Uri.encodeComponent(email)}');
         }

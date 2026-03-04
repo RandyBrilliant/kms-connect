@@ -118,11 +118,35 @@ class PhoneInputField extends StatefulWidget {
 
 class _PhoneInputFieldState extends State<PhoneInputField> {
   late CountryOption _selectedCountry;
+  late TextEditingController _localController;
+  bool _updatingFromLocal = false;
 
   @override
   void initState() {
     super.initState();
     _selectedCountry = _deriveCountry(widget.controller.text);
+    _localController = TextEditingController(
+        text: _localPart(widget.controller.text));
+    widget.controller.addListener(_onOuterControllerChanged);
+  }
+
+  void _onOuterControllerChanged() {
+    if (_updatingFromLocal) return; // avoid feedback loop
+    final newLocal = _localPart(widget.controller.text);
+    if (_localController.text != newLocal) {
+      _localController.text = newLocal;
+      final newCountry = _deriveCountry(widget.controller.text);
+      if (newCountry.code != _selectedCountry.code && mounted) {
+        setState(() => _selectedCountry = newCountry);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onOuterControllerChanged);
+    _localController.dispose();
+    super.dispose();
   }
 
   /// Derive the matching country from the current full-value.
@@ -168,18 +192,19 @@ class _PhoneInputFieldState extends State<PhoneInputField> {
         ? ''
         : '${country.dialCode}$withoutLeadingZero';
 
+    _updatingFromLocal = true;
     widget.controller.text = full;
     // Keep cursor at the end
     widget.controller.selection = TextSelection.collapsed(
       offset: widget.controller.text.length,
     );
+    _updatingFromLocal = false;
     widget.onChanged?.call(full);
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final currentLocal = _localPart(widget.controller.text);
 
     return FormField<String>(
       initialValue: widget.controller.text,
@@ -216,8 +241,9 @@ class _PhoneInputFieldState extends State<PhoneInputField> {
                   enabled: widget.enabled,
                   hasError: field.hasError,
                   onChanged: (country) {
+                    final local = _localController.text;
                     setState(() => _selectedCountry = country);
-                    _updateValue(country, currentLocal);
+                    _updateValue(country, local);
                     field.didChange(widget.controller.text);
                   },
                 ),
@@ -225,7 +251,7 @@ class _PhoneInputFieldState extends State<PhoneInputField> {
                 // Phone number text field
                 Expanded(
                   child: TextFormField(
-                    initialValue: currentLocal,
+                    controller: _localController,
                     focusNode: widget.focusNode,
                     enabled: widget.enabled,
                     keyboardType: TextInputType.phone,

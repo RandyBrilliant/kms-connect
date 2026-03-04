@@ -12,11 +12,24 @@ import '../../../home/presentation/widgets/bottom_nav_bar.dart';
 ///
 /// Each thread corresponds to a job application. Tapping a row opens the
 /// [ChatThreadPage] for that application.
-class ChatInboxPage extends ConsumerWidget {
+class ChatInboxPage extends ConsumerStatefulWidget {
   const ChatInboxPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ChatInboxPage> createState() => _ChatInboxPageState();
+}
+
+class _ChatInboxPageState extends ConsumerState<ChatInboxPage> {
+  @override
+  void initState() {
+    super.initState();
+    // Always refresh inbox data when the page opens so threads created
+    // after the initial provider load (e.g. new job application) appear.
+    Future.microtask(() => ref.read(chatInboxProvider.notifier).load());
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(chatInboxProvider);
     final cs = Theme.of(context).colorScheme;
 
