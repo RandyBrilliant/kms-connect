@@ -82,7 +82,9 @@ class AdminUserSerializer(serializers.ModelSerializer):
                 "password": [ApiMessage.PASSWORD_REQUIRED_ON_CREATE],
             })
         validated_data.setdefault("is_active", True)
-        validated_data.setdefault("email_verified", False)
+        # Admin accounts are always verified on creation
+        validated_data["email_verified"] = True
+        validated_data["email_verified_at"] = timezone.now()
         user = CustomUser.objects.create_user(
             role=UserRole.ADMIN,
             **validated_data,
@@ -190,6 +192,9 @@ class StaffUserSerializer(serializers.ModelSerializer):
                 "password": [ApiMessage.PASSWORD_REQUIRED_ON_CREATE],
             })
         validated_data["full_name"] = full_name
+        # Staff accounts are always verified on creation
+        validated_data["email_verified"] = True
+        validated_data["email_verified_at"] = timezone.now()
         user = CustomUser.objects.create_user(role=UserRole.STAFF, **validated_data)
         user.set_password(password)
         user.save(update_fields=["password"])
@@ -284,6 +289,9 @@ class CompanyUserSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({
                 "password": [ApiMessage.PASSWORD_REQUIRED_ON_CREATE],
             })
+        # Company accounts are always verified on creation
+        validated_data["email_verified"] = True
+        validated_data["email_verified_at"] = timezone.now()
         user = CustomUser.objects.create_user(role=UserRole.COMPANY, **validated_data)
         user.set_password(password)
         user.save(update_fields=["password"])
@@ -326,7 +334,16 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
 
     village_display = serializers.SerializerMethodField(read_only=True)
     family_village_display = serializers.SerializerMethodField(read_only=True)
+    birth_place_display = serializers.SerializerMethodField(read_only=True)
     heir_relationship_display = serializers.SerializerMethodField(read_only=True)
+    # Write-only field so applicants can set their referrer via code string
+    referral_code_input = serializers.CharField(
+        write_only=True,
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        label="Kode Rujukan",
+    )
     referrer = serializers.PrimaryKeyRelatedField(
         queryset=CustomUser.objects.none(),
         required=False,
@@ -355,10 +372,12 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "referrer",
+            "referral_code_input",
             "registration_date",
             "destination_country",
             "full_name",
             "birth_place",
+            "birth_place_display",
             "birth_date",
             "address",
             "district",
@@ -371,9 +390,11 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
             "father_name",
             "father_age",
             "father_occupation",
+            "father_phone",
             "mother_name",
             "mother_age",
             "mother_occupation",
+            "mother_phone",
             "spouse_name",
             "spouse_age",
             "spouse_occupation",
@@ -382,7 +403,6 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
             "family_province",
             "family_village",
             "family_village_display",
-            "family_contact_phone",
             "heir_name",
             "heir_relationship",
             "heir_relationship_display",
@@ -472,6 +492,13 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
                         result["province"] = regency.province.name
         return result or None
 
+    def get_birth_place_display(self, obj):
+        """Return the regency (kab/kota) name for birth_place."""
+        if not obj or not obj.birth_place_id:
+            return None
+        bp = getattr(obj, "birth_place", None)
+        return bp.name if bp else None
+
     def get_village_display(self, obj):
         """Full hierarchy for KTP address: Province, Regency, District (Kecamatan), Village."""
         if not obj:
@@ -501,7 +528,24 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
         Update ApplicantProfile. full_name (source='user.full_name') arrives as
         validated_data['user']['full_name'] — we extract it and save it to the
         related CustomUser so the change actually persists.
+        Also handles referral_code_input → resolves to referrer FK.
         """
+        # Resolve referral_code_input to a referrer FK if provided
+        referral_code_input = validated_data.pop("referral_code_input", None)
+        if referral_code_input:
+            code = referral_code_input.strip().upper()
+            try:
+                referrer_user = CustomUser.objects.get(
+                    referral_code=code,
+                    role__in=[UserRole.STAFF, UserRole.ADMIN],
+                    is_active=True,
+                )
+                validated_data["referrer"] = referrer_user
+            except CustomUser.DoesNotExist:
+                raise serializers.ValidationError(
+                    {"referral_code_input": "Kode rujukan tidak valid atau tidak aktif."}
+                )
+
         # Extract full_name from the nested 'user' dict that DRF builds for source="user.full_name"
         user_data = validated_data.pop("user", None)
         full_name = user_data.get("full_name") if isinstance(user_data, dict) else None

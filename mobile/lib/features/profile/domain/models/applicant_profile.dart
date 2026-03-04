@@ -78,7 +78,11 @@ class ApplicantProfile {
   final String? familyDistrictName;
   final int? familyVillageId;
   final String? familyVillageName;
-  final String? familyContactPhone;
+  final String? fatherPhone;
+  final String? motherPhone;
+
+  // Referral (who referred this applicant)
+  final int? referrerId;
 
   // Ahli Waris (Next of Kin)
   final String? heirName;
@@ -149,7 +153,9 @@ class ApplicantProfile {
     this.familyDistrictName,
     this.familyVillageId,
     this.familyVillageName,
-    this.familyContactPhone,
+    this.fatherPhone,
+    this.motherPhone,
+    this.referrerId,
     this.heirName,
     this.heirRelationship,
     this.heirContactPhone,
@@ -184,22 +190,27 @@ class ApplicantProfile {
   static String? _str(dynamic v) => v?.toString();
 
   factory ApplicantProfile.fromJson(Map<String, dynamic> json) {
+    // Backend returns region FK fields as plain integer PKs.
+    // Region *names* are embedded in the display helper dicts.
+    final vd = json['village_display'] as Map<String, dynamic>?;
+    final fvd = json['family_village_display'] as Map<String, dynamic>?;
+
     return ApplicantProfile(
       id: _parseId(json['id'])!,
       fullName: _str(json['full_name']),
       birthPlaceId: _idFromField(json['birth_place']),
-      birthPlaceName: _nameFromField(json['birth_place']),
+      birthPlaceName: _str(json['birth_place_display']) ?? _nameFromField(json['birth_place']),
       birthDate: json['birth_date'] != null
           ? DateTime.tryParse(json['birth_date'].toString())
           : null,
       gender: _str(json['gender']),
       address: _str(json['address']),
       provinceId: _idFromField(json['province']),
-      provinceName: _nameFromField(json['province']),
+      provinceName: _str(vd?['province']) ?? _nameFromField(json['province']),
       districtId: _idFromField(json['district']),
-      districtName: _nameFromField(json['district']),
+      districtName: _str(vd?['regency']) ?? _nameFromField(json['district']),
       villageId: _idFromField(json['village']),
-      villageName: _nameFromField(json['village']),
+      villageName: _str(vd?['village']) ?? _nameFromField(json['village']),
       contactPhone: _str(json['contact_phone']),
       nik: _str(json['nik']),
       religion: _str(json['religion']),
@@ -237,12 +248,14 @@ class ApplicantProfile {
       spouseOccupation: _str(json['spouse_occupation']),
       familyAddress: _str(json['family_address']),
       familyProvinceId: _idFromField(json['family_province']),
-      familyProvinceName: _nameFromField(json['family_province']),
+      familyProvinceName: _str(fvd?['province']) ?? _nameFromField(json['family_province']),
       familyDistrictId: _idFromField(json['family_district']),
-      familyDistrictName: _nameFromField(json['family_district']),
+      familyDistrictName: _str(fvd?['regency']) ?? _nameFromField(json['family_district']),
       familyVillageId: _idFromField(json['family_village']),
-      familyVillageName: _nameFromField(json['family_village']),
-      familyContactPhone: _str(json['family_contact_phone']),
+      familyVillageName: _str(fvd?['village']) ?? _nameFromField(json['family_village']),
+      fatherPhone: _str(json['father_phone']),
+      motherPhone: _str(json['mother_phone']),
+      referrerId: _parseId(json['referrer']),
       heirName: _str(json['heir_name']),
       heirRelationship: _str(json['heir_relationship']),
       heirContactPhone: _str(json['heir_contact_phone']),
@@ -288,7 +301,8 @@ class ApplicantProfile {
         'family_province': familyProvinceId,
         'family_district': familyDistrictId,
         'family_village': familyVillageId,
-        'family_contact_phone': familyContactPhone,
+        'father_phone': fatherPhone,
+        'mother_phone': motherPhone,
         'heir_name': heirName,
         'heir_relationship': heirRelationship,
         'heir_contact_phone': heirContactPhone,

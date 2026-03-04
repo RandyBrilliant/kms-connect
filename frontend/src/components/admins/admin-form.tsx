@@ -152,7 +152,7 @@ export function AdminForm({
         full_name: payload.full_name || undefined,
         password: payload.password,
         is_active: true,
-        email_verified: false,
+        email_verified: true,
       }
       await onSubmit(submitData)
     },

@@ -10,7 +10,7 @@ export const staffCreateSchema = z
     address: z.string().trim().optional(),
     contact_phone: z.string().trim().optional(),
     is_active: z.boolean().default(true),
-    email_verified: z.boolean().default(false),
+    email_verified: z.boolean().default(true),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Password dan konfirmasi password tidak sama",

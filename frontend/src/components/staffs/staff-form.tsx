@@ -170,7 +170,7 @@ export function StaffForm({
                 contact_phone: payload.contact_phone || undefined,
                 password: payload.password,
                 is_active: true,
-                email_verified: false,
+                email_verified: true,
             }
             await onSubmit(submitData)
         },

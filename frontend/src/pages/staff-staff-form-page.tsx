@@ -4,7 +4,7 @@
  */
 
 import { Link, useNavigate, useParams } from "react-router-dom"
-import { IconArrowLeft, IconMail, IconKey, IconPhone, IconUser, IconCopy, IconBrandGoogle } from "@tabler/icons-react"
+import { IconArrowLeft, IconKey, IconPhone, IconUser, IconCopy, IconBrandGoogle } from "@tabler/icons-react"
 
 import { StaffForm } from "@/components/staffs/staff-form"
 import { BreadcrumbNav } from "@/components/breadcrumb-nav"
@@ -18,7 +18,6 @@ import {
     useUpdateStaffMutation,
     useDeactivateStaffMutation,
     useActivateStaffMutation,
-    useSendVerificationEmailMutation,
     useSendPasswordResetMutation,
 } from "@/hooks/use-staffs-query"
 import { toast } from "@/lib/toast"
@@ -38,7 +37,6 @@ function formatDate(value: string | null) {
 function StaffEditSidebar({ staff }: { staff: StaffUser }) {
     const deactivateMutation = useDeactivateStaffMutation()
     const activateMutation = useActivateStaffMutation()
-    const sendVerificationMutation = useSendVerificationEmailMutation()
     const sendPasswordResetMutation = useSendPasswordResetMutation()
 
     const handleToggleActive = async () => {
@@ -53,16 +51,6 @@ function StaffEditSidebar({ staff }: { staff: StaffUser }) {
         } catch (err: unknown) {
             const res = err as { response?: { data?: { detail?: string } } }
             toast.error("Gagal", res?.response?.data?.detail ?? "Coba lagi nanti")
-        }
-    }
-
-    const handleSendVerification = async () => {
-        try {
-            await sendVerificationMutation.mutateAsync(staff.id)
-            toast.success("Email terkirim", "Email verifikasi telah dikirim ke " + staff.email)
-        } catch (err: unknown) {
-            const res = err as { response?: { data?: { detail?: string } } }
-            toast.error("Gagal mengirim", res?.response?.data?.detail ?? "Coba lagi nanti")
         }
     }
 
@@ -204,31 +192,6 @@ function StaffEditSidebar({ staff }: { staff: StaffUser }) {
                 </CardContent>
             </Card>
 
-            {/* Send email verification */}
-            <Card>
-                <CardHeader>
-                    <CardTitle>Email Verifikasi</CardTitle>
-                    <CardDescription>
-                        Kirim email verifikasi ke {staff.email}. Hanya untuk akun yang belum terverifikasi.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="cursor-pointer"
-                        onClick={handleSendVerification}
-                        disabled={
-                            staff.email_verified || sendVerificationMutation.isPending
-                        }
-                    >
-                        <IconMail className="mr-2 size-4" />
-                        Kirim Email Verifikasi
-                    </Button>
-                </CardContent>
-            </Card>
-
             {/* Send password reset */}
             <Card>
                 <CardHeader>
@@ -354,7 +317,7 @@ export function StaffStaffFormPage() {
                         contact_phone: values.contact_phone || undefined,
                     },
                     is_active: true,
-                    email_verified: false,
+                    email_verified: true,
                 })
                 toast.success("Staff ditambahkan", "Staff baru berhasil dibuat")
                 navigate(BASE_PATH)

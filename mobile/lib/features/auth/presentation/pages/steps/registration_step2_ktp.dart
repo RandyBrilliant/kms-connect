@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -437,7 +438,18 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
           birthDate: _formattedDate,
         ));
 
+    // Save the confirmed region ID and ISO date so the backend can persist them.
+    ref.read(registrationProvider.notifier).setBirthInfo(
+      birthPlaceId: _selectedCity?.id,
+      birthDateIso: _selectedDate != null
+          ? '${_selectedDate!.year.toString().padLeft(4, '0')}-'
+            '${_selectedDate!.month.toString().padLeft(2, '0')}-'
+            '${_selectedDate!.day.toString().padLeft(2, '0')}'
+          : null,
+    );
+
     final isGoogleFlow = ref.read(registrationProvider).isGoogleFlow;
+    final email = ref.read(registrationProvider).email;
 
     try {
       setState(() => _isRegistering = true);
@@ -453,21 +465,26 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
       if (!mounted) return;
 
       ref.read(registrationProvider.notifier).reset();
-      CustomToast.show(context,
-          message: 'Registrasi berhasil! Selamat datang ',
-          type: ToastType.success,
-          duration: const Duration(seconds: 4));
 
       if (isGoogleFlow) {
-        // For Google flow, the user is already authenticated — we just need
-        // to clear the "needs completion" flag so the router navigates to /home.
+        // Google flow — email is already verified by Google
+        CustomToast.show(context,
+            message: 'Registrasi berhasil! Selamat datang.',
+            type: ToastType.success,
+            duration: const Duration(seconds: 4));
         ref
             .read(authStateProvider.notifier)
             .markGoogleCompletionDone(authResponse.user);
       } else {
-        ref
-            .read(authStateProvider.notifier)
-            .setAuthenticatedUser(authResponse.user);
+        // Email registration — do NOT set authenticated user yet.
+        // Auth tokens are stored; the user must verify email first.
+        CustomToast.show(context,
+            message: 'Registrasi berhasil! Silakan verifikasi email Anda.',
+            type: ToastType.success,
+            duration: const Duration(seconds: 3));
+        if (mounted && email != null) {
+          context.go('/email-verification?email=${Uri.encodeComponent(email)}');
+        }
       }
     } catch (e) {
       if (!mounted) return;

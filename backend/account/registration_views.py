@@ -29,6 +29,29 @@ from .tasks import process_document_ocr, optimize_document_image
 from .validators import validate_indonesian_phone
 
 
+def _resolve_birth_place(birth_place_id):
+    """Return a regions.Regency instance for the given PK, or None."""
+    if not birth_place_id:
+        return None
+    try:
+        from regions.models import Regency
+        return Regency.objects.get(pk=int(birth_place_id))
+    except Exception:
+        return None
+
+
+def _parse_birth_date(birth_date_str):
+    """Parse an ISO date string (yyyy-MM-dd) into a date object, or return None."""
+    if not birth_date_str:
+        return None
+    try:
+        from datetime import date
+        y, m, d = birth_date_str.strip().split('-')
+        return date(int(y), int(m), int(d))
+    except Exception:
+        return None
+
+
 class ApplicantRegistrationView(APIView):
     """
     Public endpoint untuk registrasi pelamar dengan KTP upload.
@@ -90,31 +113,24 @@ class ApplicantRegistrationView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Validasi referral code (REQUIRED)
-        if not referral_code:
-            return Response(
-                error_response(
-                    detail="Kode rujukan wajib diisi. Hubungi staff atau admin untuk mendapatkan kode rujukan.",
-                    code=ApiCode.VALIDATION_ERROR,
-                ),
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Verifikasi referral code exists and belongs to staff/admin
-        try:
-            referrer_user = CustomUser.objects.get(
-                referral_code=referral_code,
-                role__in=[UserRole.STAFF, UserRole.ADMIN],
-                is_active=True,
-            )
-        except CustomUser.DoesNotExist:
-            return Response(
-                error_response(
-                    detail="Kode rujukan tidak valid atau sudah tidak aktif. Pastikan Anda memasukkan kode dengan benar.",
-                    code=ApiCode.VALIDATION_ERROR,
-                ),
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        # Validasi referral code (OPTIONAL - can be filled in via edit profile)
+        referrer_user = None
+        if referral_code:
+            # Verifikasi referral code exists and belongs to staff/admin
+            try:
+                referrer_user = CustomUser.objects.get(
+                    referral_code=referral_code,
+                    role__in=[UserRole.STAFF, UserRole.ADMIN],
+                    is_active=True,
+                )
+            except CustomUser.DoesNotExist:
+                return Response(
+                    error_response(
+                        detail="Kode rujukan tidak valid atau sudah tidak aktif. Pastikan Anda memasukkan kode dengan benar.",
+                        code=ApiCode.VALIDATION_ERROR,
+                    ),
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         # Validasi phone number (optional but validated if provided)
         if phone_number:
@@ -164,6 +180,10 @@ class ApplicantRegistrationView(APIView):
         # Ambil full_name dari form (dikirim dari mobile setelah OCR/input manual)
         full_name = request.data.get("full_name", "").strip()
 
+        # Parse birth_place (optional FK) and birth_date (optional date)
+        birth_place = _resolve_birth_place(request.data.get("birth_place"))
+        birth_date = _parse_birth_date(request.data.get("birth_date", ""))
+
         # Buat user
         try:
             user = CustomUser.objects.create_user(
@@ -191,6 +211,8 @@ class ApplicantRegistrationView(APIView):
                 verification_status=ApplicantVerificationStatus.DRAFT,
                 referrer=referrer_user,
                 contact_phone=phone_number if phone_number else "",
+                birth_place=birth_place,
+                birth_date=birth_date,
             )
         except Exception as e:
             user.delete()  # Rollback
@@ -238,17 +260,11 @@ class ApplicantRegistrationView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Kirim email verifikasi (async via Celery task)
+        # Kirim email verifikasi dengan 6-digit kode (async via Celery task)
         try:
-            from .email_utils import send_verification_email, verification_link
-            _frontend_url = (getattr(django_settings, "FRONTEND_URL", "") or "").rstrip("/")
-            _verify_token = verification_link(user)
-            if _frontend_url:
-                _verify_url = f"{_frontend_url}/verify-email?token={_verify_token}"
-            else:
-                _verify_url = request.build_absolute_uri(f"/api/auth/verify-email/?token={_verify_token}")
+            from .email_utils import send_verification_email
             _logo_url = getattr(django_settings, "LOGO_URL", "") or ""
-            send_verification_email(user, logo_url=_logo_url, verify_url=_verify_url)
+            send_verification_email(user, logo_url=_logo_url)
         except Exception:
             pass  # Jangan gagalkan registrasi jika email gagal dikirim
 
@@ -489,30 +505,23 @@ class GoogleCompleteRegistrationView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Validasi referral code
-        if not referral_code:
-            return Response(
-                error_response(
-                    detail="Kode rujukan wajib diisi.",
-                    code=ApiCode.VALIDATION_ERROR,
-                ),
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            referrer_user = CustomUser.objects.get(
-                referral_code=referral_code,
-                role__in=[UserRole.STAFF, UserRole.ADMIN],
-                is_active=True,
-            )
-        except CustomUser.DoesNotExist:
-            return Response(
-                error_response(
-                    detail="Kode rujukan tidak valid atau sudah tidak aktif.",
-                    code=ApiCode.VALIDATION_ERROR,
-                ),
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        # Validasi referral code (OPTIONAL - can be filled in via edit profile)
+        referrer_user = None
+        if referral_code:
+            try:
+                referrer_user = CustomUser.objects.get(
+                    referral_code=referral_code,
+                    role__in=[UserRole.STAFF, UserRole.ADMIN],
+                    is_active=True,
+                )
+            except CustomUser.DoesNotExist:
+                return Response(
+                    error_response(
+                        detail="Kode rujukan tidak valid atau sudah tidak aktif.",
+                        code=ApiCode.VALIDATION_ERROR,
+                    ),
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         # Validasi phone (optional)
         if phone_number:
@@ -550,6 +559,10 @@ class GoogleCompleteRegistrationView(APIView):
             user.full_name = full_name
             user.save(update_fields=["full_name"])
 
+        # Parse birth_place (optional FK) and birth_date (optional date)
+        birth_place = _resolve_birth_place(request.data.get("birth_place"))
+        birth_date = _parse_birth_date(request.data.get("birth_date", ""))
+
         # Create or update ApplicantProfile
         try:
             profile, _ = ApplicantProfile.objects.get_or_create(
@@ -559,6 +572,8 @@ class GoogleCompleteRegistrationView(APIView):
                     "verification_status": ApplicantVerificationStatus.DRAFT,
                     "referrer": referrer_user,
                     "contact_phone": phone_number,
+                    "birth_place": birth_place,
+                    "birth_date": birth_date,
                 },
             )
             # Overwrite placeholder fields regardless
@@ -566,7 +581,16 @@ class GoogleCompleteRegistrationView(APIView):
             profile.referrer = referrer_user
             if phone_number:
                 profile.contact_phone = phone_number
-            profile.save(update_fields=["nik", "referrer", "contact_phone"])
+            if birth_place:
+                profile.birth_place = birth_place
+            if birth_date:
+                profile.birth_date = birth_date
+            update_fields = ["nik", "referrer", "contact_phone"]
+            if birth_place:
+                update_fields.append("birth_place")
+            if birth_date:
+                update_fields.append("birth_date")
+            profile.save(update_fields=update_fields)
         except Exception as e:
             return Response(
                 error_response(

@@ -135,25 +135,31 @@ def send_email_async(to_email: str, subject: str, body: str, html_message: str =
 
 
 @shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=2)
-def send_verification_email_task(self, user_id: int, logo_url: str = "", verify_url: str = ""):
+def send_verification_email_task(self, user_id: int, logo_url: str = "", verification_code: str = ""):
     """
-    Kirim email verifikasi ke user. Dipanggil oleh admin (send-verification-email).
-    verify_url: URL lengkap untuk link verifikasi (dibangun di view).
+    Kirim email verifikasi dengan 6-digit kode ke user.
+    verification_code: 6-digit kode verifikasi.
     """
     from django.conf import settings
     from .models import CustomUser
     from .email_utils import render_email, COMPANY_NAME
 
     user = CustomUser.objects.filter(pk=user_id).first()
-    if not user or not verify_url:
+    if not user or not verification_code:
         return
 
     context = {
         "user": user,
-        "verify_url": verify_url,
+        "verification_code": verification_code,
         "logo_url": logo_url or "",
-        "subject": "Verifikasi Email – " + COMPANY_NAME,
-        "body_text": f"Halo,\n\nSilakan verifikasi email Anda dengan mengklik tautan berikut:\n{verify_url}\n\nSalam,\n{COMPANY_NAME}",
+        "subject": "Kode Verifikasi Email – " + COMPANY_NAME,
+        "body_text": (
+            f"Halo,\n\n"
+            f"Kode verifikasi email Anda adalah: {verification_code}\n\n"
+            f"Kode ini berlaku selama 10 menit.\n"
+            f"Jika Anda tidak mendaftar, abaikan email ini.\n\n"
+            f"Salam,\n{COMPANY_NAME}"
+        ),
     }
     html, plain = render_email("account/emails/verification_email.html", context)
     from django.core.mail import send_mail

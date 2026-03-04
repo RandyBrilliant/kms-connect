@@ -16,7 +16,6 @@ import {
   useUpdateCompanyMutation,
   useDeactivateCompanyMutation,
   useActivateCompanyMutation,
-  useSendVerificationEmailMutation,
   useSendPasswordResetMutation,
 } from "@/hooks/use-companies-query"
 import { toast } from "@/lib/toast"
@@ -36,7 +35,6 @@ function formatDate(value: string | null) {
 function CompanyEditSidebar({ company }: { company: CompanyUser }) {
   const deactivateMutation = useDeactivateCompanyMutation()
   const activateMutation = useActivateCompanyMutation()
-  const sendVerificationMutation = useSendVerificationEmailMutation()
   const sendPasswordResetMutation = useSendPasswordResetMutation()
 
   const handleToggleActive = async () => {
@@ -51,22 +49,6 @@ function CompanyEditSidebar({ company }: { company: CompanyUser }) {
     } catch (err: unknown) {
       const res = err as { response?: { data?: { detail?: string } } }
       toast.error("Gagal", res?.response?.data?.detail ?? "Coba lagi nanti")
-    }
-  }
-
-  const handleSendVerification = async () => {
-    try {
-      await sendVerificationMutation.mutateAsync(company.id)
-      toast.success(
-        "Email terkirim",
-        "Email verifikasi telah dikirim ke " + company.email
-      )
-    } catch (err: unknown) {
-      const res = err as { response?: { data?: { detail?: string } } }
-      toast.error(
-        "Gagal mengirim",
-        res?.response?.data?.detail ?? "Coba lagi nanti"
-      )
     }
   }
 
@@ -113,31 +95,6 @@ function CompanyEditSidebar({ company }: { company: CompanyUser }) {
             }
           >
             {company.is_active ? "Nonaktifkan" : "Aktifkan"}
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Send email verification */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Email Verifikasi</CardTitle>
-          <CardDescription>
-            Kirim email verifikasi ke {company.email}. Hanya untuk akun yang belum
-            terverifikasi.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="cursor-pointer"
-            onClick={handleSendVerification}
-            disabled={
-              company.email_verified || sendVerificationMutation.isPending
-            }
-          >
-            Kirim Email Verifikasi
           </Button>
         </CardContent>
       </Card>
@@ -252,7 +209,7 @@ export function CompanyCompanyFormPage() {
             contact_person_position: values.contact_person_position,
           },
           is_active: true,
-          email_verified: false,
+          email_verified: true,
         })
         toast.success("Perusahaan ditambahkan", "Perusahaan baru berhasil dibuat")
         navigate(BASE_PATH)

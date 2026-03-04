@@ -504,6 +504,12 @@ class ApplicantProfile(models.Model):
         max_length=255,
         blank=True,
     )
+    father_phone = models.CharField(
+        _("no. HP / WA ayah"),
+        max_length=50,
+        blank=True,
+        help_text=_("Nomor HP/WA ayah yang aktif."),
+    )
     mother_name = models.CharField(
         _("nama ibu"),
         max_length=255,
@@ -519,6 +525,12 @@ class ApplicantProfile(models.Model):
         _("pekerjaan ibu"),
         max_length=255,
         blank=True,
+    )
+    mother_phone = models.CharField(
+        _("no. HP / WA ibu"),
+        max_length=50,
+        blank=True,
+        help_text=_("Nomor HP/WA ibu yang aktif."),
     )
     spouse_name = models.CharField(
         _("nama suami / istri"),
@@ -567,12 +579,6 @@ class ApplicantProfile(models.Model):
         related_name="applicant_profiles_family_address",
         verbose_name=_("kelurahan / desa (alamat keluarga)"),
         help_text=_("Pilih kelurahan/desa untuk alamat keluarga."),
-    )
-    family_contact_phone = models.CharField(
-        _("no. HP / WA keluarga yang aktif"),
-        max_length=50,
-        blank=True,
-        help_text=_("Nomor HP/WA keluarga yang aktif."),
     )
     # ---- Ahli waris (next of kin) ----
     heir_name = models.CharField(
@@ -1910,3 +1916,130 @@ class DeviceToken(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user.email} - {self.device_type} - {self.token[:20]}..."
+
+
+# ---------------------------------------------------------------------------
+# Email Verification Code (6-digit OTP)
+# ---------------------------------------------------------------------------
+
+class EmailVerificationCode(models.Model):
+    """
+    6-digit verification code for email verification.
+    Replaces the old link-based verification for mobile-friendly UX.
+    Codes expire after a configurable number of minutes.
+    """
+
+    user = models.ForeignKey(
+        CustomUser,
+        on_delete=models.CASCADE,
+        related_name="verification_codes",
+        verbose_name=_("pengguna"),
+        db_index=True,
+    )
+    code = models.CharField(
+        _("kode verifikasi"),
+        max_length=6,
+        db_index=True,
+        help_text=_("6-digit kode verifikasi email."),
+    )
+    created_at = models.DateTimeField(_("dibuat pada"), auto_now_add=True)
+    expires_at = models.DateTimeField(
+        _("kedaluwarsa pada"),
+        db_index=True,
+        help_text=_("Waktu kedaluwarsa kode."),
+    )
+    is_used = models.BooleanField(
+        _("sudah digunakan"),
+        default=False,
+        help_text=_("Kode sudah diverifikasi."),
+    )
+    attempts = models.PositiveSmallIntegerField(
+        _("percobaan"),
+        default=0,
+        help_text=_("Jumlah percobaan verifikasi gagal."),
+    )
+
+    MAX_ATTEMPTS = 5
+    CODE_EXPIRY_MINUTES = 10
+
+    class Meta:
+        verbose_name = _("kode verifikasi email")
+        verbose_name_plural = _("kode verifikasi email")
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "is_used"]),
+            models.Index(fields=["code", "is_used"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user.email} - {self.code} ({'used' if self.is_used else 'active'})"
+
+    @property
+    def is_expired(self) -> bool:
+        return timezone.now() >= self.expires_at
+
+    @property
+    def is_valid(self) -> bool:
+        return not self.is_used and not self.is_expired and self.attempts < self.MAX_ATTEMPTS
+
+    @classmethod
+    def generate_code(cls) -> str:
+        """Generate a secure random 6-digit code."""
+        import secrets
+        return f"{secrets.randbelow(1000000):06d}"
+
+    @classmethod
+    def create_for_user(cls, user):
+        """
+        Create a new verification code for a user.
+        Invalidates any existing unused codes for this user.
+        """
+        from datetime import timedelta
+
+        # Invalidate existing unused codes
+        cls.objects.filter(user=user, is_used=False).update(is_used=True)
+
+        code = cls.generate_code()
+        expires_at = timezone.now() + timedelta(minutes=cls.CODE_EXPIRY_MINUTES)
+
+        return cls.objects.create(
+            user=user,
+            code=code,
+            expires_at=expires_at,
+        )
+
+    @classmethod
+    def verify_code(cls, email: str, code: str):
+        """
+        Verify a code for the given email.
+        Returns the user if valid, None otherwise.
+        Also increments attempt count on failure.
+        """
+        try:
+            verification = cls.objects.select_related("user").get(
+                user__email__iexact=email,
+                code=code,
+                is_used=False,
+            )
+        except cls.DoesNotExist:
+            # Increment attempts on all active codes for this email
+            cls.objects.filter(
+                user__email__iexact=email,
+                is_used=False,
+            ).update(attempts=models.F("attempts") + 1)
+            return None
+
+        if not verification.is_valid:
+            return None
+
+        # Mark as used and verify the user's email
+        verification.is_used = True
+        verification.save(update_fields=["is_used"])
+
+        user = verification.user
+        if not user.email_verified:
+            user.email_verified = True
+            user.email_verified_at = timezone.now()
+            user.save(update_fields=["email_verified", "email_verified_at"])
+
+        return user

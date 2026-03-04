@@ -18,6 +18,7 @@ from .models import (
     Broadcast,
     Notification,
     DeviceToken,
+    EmailVerificationCode,
 )
 
 
@@ -141,7 +142,8 @@ class ApplicantProfileAdmin(admin.ModelAdmin):
                     "family_district",
                     "family_province",
                     "family_village",
-                    "family_contact_phone",
+                    "father_phone",
+                    "mother_phone",
                 ),
                 "description": _("Ayah, Ibu, dan Suami/Istri (isi sesuai yang berlaku)."),
             },
@@ -323,4 +325,14 @@ class DeviceTokenAdmin(admin.ModelAdmin):
         (_("Token"), {"fields": ("token", "device_type", "is_active")}),
         (_("Tanggal"), {"fields": ("created_at", "last_used_at")}),
     )
+
+
+@admin.register(EmailVerificationCode)
+class EmailVerificationCodeAdmin(admin.ModelAdmin):
+    list_display = ("user", "code", "is_used", "attempts", "created_at", "expires_at")
+    list_filter = ("is_used", "created_at")
+    search_fields = ("user__email", "code")
+    raw_id_fields = ("user",)
+    readonly_fields = ("created_at",)
+    ordering = ("-created_at",)
 

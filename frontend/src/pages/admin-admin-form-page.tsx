@@ -4,7 +4,7 @@
  */
 
 import { Link, useNavigate, useParams } from "react-router-dom"
-import { IconArrowLeft, IconMail, IconKey } from "@tabler/icons-react"
+import { IconArrowLeft, IconKey } from "@tabler/icons-react"
 
 import { AdminForm } from "@/components/admins/admin-form"
 import { BreadcrumbNav } from "@/components/breadcrumb-nav"
@@ -16,7 +16,6 @@ import {
   useUpdateAdminMutation,
   useDeactivateAdminMutation,
   useActivateAdminMutation,
-  useSendVerificationEmailMutation,
   useSendPasswordResetMutation,
 } from "@/hooks/use-admins-query"
 import { toast } from "@/lib/toast"
@@ -36,7 +35,6 @@ function formatDate(value: string | null) {
 function AdminEditSidebar({ admin }: { admin: AdminUser }) {
   const deactivateMutation = useDeactivateAdminMutation()
   const activateMutation = useActivateAdminMutation()
-  const sendVerificationMutation = useSendVerificationEmailMutation()
   const sendPasswordResetMutation = useSendPasswordResetMutation()
 
   const handleToggleActive = async () => {
@@ -51,16 +49,6 @@ function AdminEditSidebar({ admin }: { admin: AdminUser }) {
     } catch (err: unknown) {
       const res = err as { response?: { data?: { detail?: string } } }
       toast.error("Gagal", res?.response?.data?.detail ?? "Coba lagi nanti")
-    }
-  }
-
-  const handleSendVerification = async () => {
-    try {
-      await sendVerificationMutation.mutateAsync(admin.id)
-      toast.success("Email terkirim", "Email verifikasi telah dikirim ke " + admin.email)
-    } catch (err: unknown) {
-      const res = err as { response?: { data?: { detail?: string } } }
-      toast.error("Gagal mengirim", res?.response?.data?.detail ?? "Coba lagi nanti")
     }
   }
 
@@ -101,31 +89,6 @@ function AdminEditSidebar({ admin }: { admin: AdminUser }) {
             }
           >
             {admin.is_active ? "Nonaktifkan" : "Aktifkan"}
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Send email verification */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Email Verifikasi</CardTitle>
-          <CardDescription>
-            Kirim email verifikasi ke {admin.email}. Hanya untuk akun yang belum terverifikasi.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="cursor-pointer"
-            onClick={handleSendVerification}
-            disabled={
-              admin.email_verified || sendVerificationMutation.isPending
-            }
-          >
-            <IconMail className="mr-2 size-4" />
-            Kirim Email Verifikasi
           </Button>
         </CardContent>
       </Card>
@@ -228,7 +191,7 @@ export function AdminAdminFormPage() {
           full_name: values.full_name,
           password: values.password!,
           is_active: true,
-          email_verified: false,
+          email_verified: true,
         })
         toast.success("Admin ditambahkan", "Admin baru berhasil dibuat")
         navigate(BASE_PATH)

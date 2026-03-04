@@ -11,7 +11,7 @@ export const companyCreateSchema = z
     contact_person_name: z.string().optional(),
     contact_person_position: z.string().optional(),
     is_active: z.boolean().default(true),
-    email_verified: z.boolean().default(false),
+    email_verified: z.boolean().default(true),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Password dan konfirmasi password tidak sama",

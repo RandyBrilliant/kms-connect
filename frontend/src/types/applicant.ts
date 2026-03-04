@@ -89,9 +89,11 @@ export interface ApplicantProfile {
   father_name: string
   father_age: number | null
   father_occupation: string
+  father_phone: string
   mother_name: string
   mother_age: number | null
   mother_occupation: string
+  mother_phone: string
   spouse_name: string
   spouse_age: number | null
   spouse_occupation: string
@@ -100,7 +102,6 @@ export interface ApplicantProfile {
   family_district: number | null
   family_village: number | null
   family_village_display?: RegionDisplay | null
-  family_contact_phone: string
   heir_name: string
   heir_relationship: NextOfKinRelationship | ""
   heir_relationship_display?: string

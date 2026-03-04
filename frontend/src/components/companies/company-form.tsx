@@ -174,7 +174,7 @@ export function CompanyForm({
         contact_person_position: payload.contact_person_position || undefined,
         password: payload.password,
         is_active: true,
-        email_verified: false,
+        email_verified: true,
       }
       await onSubmit(submitData)
     },

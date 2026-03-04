@@ -172,6 +172,8 @@ class AuthRepository {
     String? referralCode,
     String? fullName,
     String? phoneNumber,
+    int? birthPlaceId,
+    String? birthDateIso,
   }) async {
     try {
       // Compress KTP image before uploading to save bandwidth.
@@ -190,6 +192,8 @@ class AuthRepository {
           'full_name': fullName.trim(),
         if (phoneNumber != null && phoneNumber.trim().isNotEmpty)
           'phone_number': phoneNumber.trim(),
+        if (birthPlaceId != null) 'birth_place': birthPlaceId,
+        if (birthDateIso != null) 'birth_date': birthDateIso,
       });
 
       final response = await _apiClient.dio.post(
@@ -288,6 +292,8 @@ class AuthRepository {
     String? referralCode,
     String? phoneNumber,
     String? fullName,
+    int? birthPlaceId,
+    String? birthDateIso,
   }) async {
     try {
       final compressed = await ImageCompressor.compressDocument(ktpFile);
@@ -303,6 +309,8 @@ class AuthRepository {
           'phone_number': phoneNumber.trim(),
         if (fullName != null && fullName.trim().isNotEmpty)
           'full_name': fullName.trim(),
+        if (birthPlaceId != null) 'birth_place': birthPlaceId,
+        if (birthDateIso != null) 'birth_date': birthDateIso,
       });
 
       final response = await _apiClient.dio.post(

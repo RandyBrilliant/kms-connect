@@ -22,18 +22,38 @@ FRONTEND_URL = (getattr(settings, "FRONTEND_URL", "") or "").rstrip("/")
 
 
 # ---------------------------------------------------------------------------
-# Verification (signed token)
+# Verification (6-digit code for mobile)
+# ---------------------------------------------------------------------------
+
+def create_verification_code(user):
+    """
+    Generate a 6-digit verification code for the user.
+    Invalidates any previous unused codes.
+    Returns the EmailVerificationCode instance.
+    """
+    from .models import EmailVerificationCode
+    return EmailVerificationCode.create_for_user(user)
+
+
+def verify_email_code(email: str, code: str):
+    """
+    Validate a 6-digit code for the given email.
+    Returns the user if valid, None otherwise.
+    """
+    from .models import EmailVerificationCode
+    return EmailVerificationCode.verify_code(email, code)
+
+
+# ---------------------------------------------------------------------------
+# Legacy: Verification (signed token) — kept for backward compatibility
+# with previously-sent verification emails. Can be removed once all
+# outstanding link-based emails have expired (VERIFICATION_MAX_AGE_DAYS).
 # ---------------------------------------------------------------------------
 
 def make_verification_token(user):
     """Signed token for email verification; expires after VERIFICATION_MAX_AGE_DAYS."""
     payload = f"verify:{user.pk}"
     return SIGNER.sign(payload)
-
-
-def verification_link(user):
-    """Token only; caller builds full URL (e.g. request.build_absolute_uri + ?token=)."""
-    return make_verification_token(user)
 
 
 def verify_email_token(token):
@@ -104,14 +124,20 @@ def render_email(template_name, context):
     return html, plain
 
 
-def send_verification_email(user, logo_url=None, verify_url=None):
+def send_verification_email(user, logo_url=None, verification_code=None):
     """
-    Queue sending verification email.
-    verify_url: full URL for verify link (build in view: request.build_absolute_uri(...)).
+    Queue sending verification email with a 6-digit code.
+    verification_code: the 6-digit code string to include in the email.
     logo_url: optional absolute URL for logo.
     """
     from .tasks import send_verification_email_task
-    send_verification_email_task.delay(user.pk, logo_url or "", verify_url or "")
+    if not verification_code:
+        # Generate a new code if none provided
+        code_obj = create_verification_code(user)
+        verification_code = code_obj.code
+    send_verification_email_task.delay(
+        user.pk, logo_url or "", verification_code
+    )
 
 
 def send_password_reset_email(user, logo_url=None):

@@ -8,6 +8,7 @@ import '../../../../core/widgets/custom_toast.dart';
 import '../../../../core/widgets/m3_text_field.dart';
 import '../../../../core/widgets/phone_input_field.dart';
 import '../../../auth/data/providers/regions_provider.dart';
+import '../../../auth/data/providers/staff_referrers_provider.dart';
 import '../../data/providers/profile_provider.dart';
 import '../../domain/models/applicant_profile.dart';
 
@@ -40,7 +41,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   final _motherAge = TextEditingController();
   final _motherOccupation = TextEditingController();
   final _familyAddress = TextEditingController();
-  final _familyPhone = TextEditingController();
+  final _fatherPhone = TextEditingController();
+  final _motherPhone = TextEditingController();
   final _spouseName = TextEditingController();
   final _spouseAge = TextEditingController();
   final _spouseOccupation = TextEditingController();
@@ -54,6 +56,23 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   final _motherBirthDateCtrl = TextEditingController();
   final _spouseBirthDateCtrl = TextEditingController();
 
+  // ── New: Data Fisik / Pendidikan / Dokumen ─────────────────────────────
+  final _educationMajor = TextEditingController();
+  final _heightCm = TextEditingController();
+  final _weightKg = TextEditingController();
+  final _shoeSize = TextEditingController();
+
+  // ── New: Data Paspor ──────────────────────────────────────────────────
+  final _passportNumber = TextEditingController();
+  final _passportIssuePlace = TextEditingController();
+  final _passportIssueDateCtrl = TextEditingController();
+  final _passportExpiryDateCtrl = TextEditingController();
+
+  // ── New: Data Dokumen ─────────────────────────────────────────────────
+  final _familyCardNumber = TextEditingController();
+  final _diplomaNumber = TextEditingController();
+  final _bpjsNumber = TextEditingController();
+
   // ── Region state – KTP address (cascading) ────────────────────────────────
   Region? _province;
   Region? _kabupaten;   // Kabupaten/Kota (regency)
@@ -63,13 +82,31 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   // ── Region state – Tempat Lahir ──────────────────────────────────────────
   Region? _birthPlace;  // Regency
 
+  // ── Region state – Alamat Keluarga (cascading) ────────────────────────
+  Region? _familyProvince;
+  Region? _familyKabupaten;
+  Region? _familyKecamatan;
+  Region? _familyKelurahan;
+
   String? _gender;
   String? _heirRelationship;
+  StaffReferrer? _selectedStaff;
   DateTime? _pickedDate;
   DateTime? _pickedFatherBirthDate;
   DateTime? _pickedMotherBirthDate;
   DateTime? _pickedSpouseBirthDate;
   bool _populated = false;
+
+  // ── New: dropdown state ───────────────────────────────────────────────
+  String? _religion;
+  String? _educationLevel;
+  String? _writingHand;
+  String? _maritalStatus;
+  String? _shirtSize;
+  bool? _wearsGlasses;
+  bool? _hasPassport;
+  DateTime? _pickedPassportIssueDate;
+  DateTime? _pickedPassportExpiryDate;
 
   @override
   void initState() {
@@ -80,23 +117,43 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
       final profile = ref.read(profileNotifierProvider).profile;
       if (profile != null) {
         _populate(profile);
+        // Warm-up: pre-fetch staff list
+        ref.read(staffReferrersProvider).whenData((list) {
+          if (!mounted) return;
+          if (profile.referrerId != null) {
+            final match = list.where((s) => s.id == profile.referrerId).firstOrNull;
+            if (match != null) setState(() => _selectedStaff = match);
+          }
+        });
         // Kecamatan is not persisted in the profile model; derive it from
         // the saved village via the detail endpoint.
         if (profile.villageId != null) {
-          _loadKecamatan(profile.villageId!);
+          _loadKecamatan(profile.villageId!, isFamily: false);
+        }
+        if (profile.familyVillageId != null) {
+          _loadKecamatan(profile.familyVillageId!, isFamily: true);
         }
       }
     });
   }
 
   /// Async-fetches the parent kecamatan (district) for [villageId] and
-  /// sets [_kecamatan] so the cascading kelurahan picker is pre-filled.
-  Future<void> _loadKecamatan(int villageId) async {
+  /// sets [_kecamatan] (or [_familyKecamatan]) so the cascading kelurahan
+  /// picker is pre-filled.
+  Future<void> _loadKecamatan(int villageId, {bool isFamily = false}) async {
     try {
       final kecamatan = await ref.read(
         kecamatanFromVillageProvider(villageId).future,
       );
-      if (mounted) setState(() => _kecamatan = kecamatan);
+      if (mounted) {
+        setState(() {
+          if (isFamily) {
+            _familyKecamatan = kecamatan;
+          } else {
+            _kecamatan = kecamatan;
+          }
+        });
+      }
     } catch (_) {
       // Silently fail — user can manually pick kecamatan to enable kelurahan.
     }
@@ -107,10 +164,15 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     for (final c in [
       _fullName, _nik, _birthDate, _address, _phone,
       _siblingCount, _birthOrder, _fatherName, _fatherAge, _fatherOccupation,
-      _motherName, _motherAge, _motherOccupation, _familyAddress, _familyPhone,
+      _motherName, _motherAge, _motherOccupation, _familyAddress, _fatherPhone,
+      _motherPhone,
       _spouseName, _spouseAge, _spouseOccupation,
       _heirName, _heirContactPhone,
       _fatherBirthDateCtrl, _motherBirthDateCtrl, _spouseBirthDateCtrl,
+      _educationMajor, _heightCm, _weightKg, _shoeSize,
+      _passportNumber, _passportIssuePlace, _passportIssueDateCtrl,
+      _passportExpiryDateCtrl,
+      _familyCardNumber, _diplomaNumber, _bpjsNumber,
     ]) {
       c.dispose();
     }
@@ -134,6 +196,42 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     _phone.text = p.contactPhone ?? '';
     _siblingCount.text = p.siblingCount?.toString() ?? '';
     _birthOrder.text = p.birthOrder?.toString() ?? '';
+
+    // ── New: Data Pribadi dropdowns ──────────────────────────────────────
+    _religion = (p.religion?.isNotEmpty == true) ? p.religion : null;
+    _educationLevel = (p.educationLevel?.isNotEmpty == true) ? p.educationLevel : null;
+    _educationMajor.text = (p.educationMajor ?? '').toUpperCase();
+    _maritalStatus = (p.maritalStatus?.isNotEmpty == true) ? p.maritalStatus : null;
+
+    // ── New: Data Fisik ──────────────────────────────────────────────────
+    _heightCm.text = p.heightCm?.toString() ?? '';
+    _weightKg.text = p.weightKg?.toString() ?? '';
+    _wearsGlasses = p.wearsGlasses;
+    _writingHand = (p.writingHand?.isNotEmpty == true) ? p.writingHand : null;
+    _shoeSize.text = p.shoeSize?.toString() ?? '';
+    _shirtSize = (p.shirtSize?.isNotEmpty == true) ? p.shirtSize : null;
+
+    // ── New: Data Paspor ────────────────────────────────────────────────
+    _hasPassport = p.hasPassport;
+    _passportNumber.text = p.passportNumber ?? '';
+    _passportIssuePlace.text = (p.passportIssuePlace ?? '').toUpperCase();
+    if (p.passportIssueDate != null) {
+      _pickedPassportIssueDate = p.passportIssueDate;
+      _passportIssueDateCtrl.text =
+          DateFormat('dd MMMM yyyy', 'id').format(p.passportIssueDate!);
+    }
+    if (p.passportExpiryDate != null) {
+      _pickedPassportExpiryDate = p.passportExpiryDate;
+      _passportExpiryDateCtrl.text =
+          DateFormat('dd MMMM yyyy', 'id').format(p.passportExpiryDate!);
+    }
+
+    // ── New: Data Dokumen ───────────────────────────────────────────────
+    _familyCardNumber.text = p.familyCardNumber ?? '';
+    _diplomaNumber.text = p.diplomaNumber ?? '';
+    _bpjsNumber.text = p.bpjsNumber ?? '';
+
+    // ── Keluarga ────────────────────────────────────────────────────────
     _fatherName.text = (p.fatherName ?? '').toUpperCase();
     _fatherAge.text = p.fatherAge?.toString() ?? '';
     if (p.fatherAge != null) {
@@ -151,7 +249,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     }
     _motherOccupation.text = (p.motherOccupation ?? '').toUpperCase();
     _familyAddress.text = (p.familyAddress ?? '').toUpperCase();
-    _familyPhone.text = p.familyContactPhone ?? '';
+    _fatherPhone.text = p.fatherPhone ?? '';
+    _motherPhone.text = p.motherPhone ?? '';
     _spouseName.text = (p.spouseName ?? '').toUpperCase();
     _spouseAge.text = p.spouseAge?.toString() ?? '';
     if (p.spouseAge != null) {
@@ -179,6 +278,18 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     if (p.villageId != null && p.villageName != null) {
       _kelurahan = Region(id: p.villageId!, code: '', name: p.villageName!);
     }
+
+    // Family address regions
+    if (p.familyProvinceId != null && p.familyProvinceName != null) {
+      _familyProvince = Region(id: p.familyProvinceId!, code: '', name: p.familyProvinceName!);
+    }
+    if (p.familyDistrictId != null && p.familyDistrictName != null) {
+      _familyKabupaten = Region(id: p.familyDistrictId!, code: '', name: p.familyDistrictName!);
+    }
+    if (p.familyVillageId != null && p.familyVillageName != null) {
+      _familyKelurahan = Region(id: p.familyVillageId!, code: '', name: p.familyVillageName!);
+    }
+
     // Trigger a single rebuild for the non-controller state (_gender, regions).
     if (mounted) setState(() {});
   }
@@ -233,6 +344,28 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     }
   }
 
+  /// Generic date picker for passport and other date fields.
+  Future<void> _pickGenericDate({
+    required DateTime? current,
+    required DateTime firstDate,
+    required DateTime lastDate,
+    required ValueChanged<DateTime> onPicked,
+  }) async {
+    final initial = current ?? DateTime.now();
+    final clamped = initial.isBefore(firstDate)
+        ? firstDate
+        : initial.isAfter(lastDate)
+            ? lastDate
+            : initial;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: clamped,
+      firstDate: firstDate,
+      lastDate: lastDate,
+    );
+    if (picked != null && mounted) onPicked(picked);
+  }
+
   Future<void> _handleSave() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     final data = <String, dynamic>{
@@ -251,6 +384,45 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
       if (_kelurahan != null) 'village': _kelurahan!.id,
       if (_phone.text.trim().isNotEmpty)
         'contact_phone': _phone.text.trim(),
+
+      // ── New: Data Pribadi dropdowns ──────────────────────────────────
+      if (_religion != null) 'religion': _religion,
+      if (_educationLevel != null) 'education_level': _educationLevel,
+      if (_educationMajor.text.trim().isNotEmpty)
+        'education_major': _educationMajor.text.trim(),
+      if (_maritalStatus != null) 'marital_status': _maritalStatus,
+
+      // ── New: Data Fisik ──────────────────────────────────────────────
+      if (_heightCm.text.trim().isNotEmpty)
+        'height_cm': int.tryParse(_heightCm.text.trim()),
+      if (_weightKg.text.trim().isNotEmpty)
+        'weight_kg': int.tryParse(_weightKg.text.trim()),
+      if (_wearsGlasses != null) 'wears_glasses': _wearsGlasses,
+      if (_writingHand != null) 'writing_hand': _writingHand,
+      if (_shoeSize.text.trim().isNotEmpty)
+        'shoe_size': _shoeSize.text.trim(),
+      if (_shirtSize != null) 'shirt_size': _shirtSize,
+
+      // ── New: Data Paspor ─────────────────────────────────────────────
+      if (_hasPassport != null) 'has_passport': _hasPassport,
+      if (_passportNumber.text.trim().isNotEmpty)
+        'passport_number': _passportNumber.text.trim(),
+      if (_pickedPassportIssueDate != null)
+        'passport_issue_date': DateFormat('yyyy-MM-dd').format(_pickedPassportIssueDate!),
+      if (_passportIssuePlace.text.trim().isNotEmpty)
+        'passport_issue_place': _passportIssuePlace.text.trim(),
+      if (_pickedPassportExpiryDate != null)
+        'passport_expiry_date': DateFormat('yyyy-MM-dd').format(_pickedPassportExpiryDate!),
+
+      // ── New: Data Dokumen ────────────────────────────────────────────
+      if (_familyCardNumber.text.trim().isNotEmpty)
+        'family_card_number': _familyCardNumber.text.trim(),
+      if (_diplomaNumber.text.trim().isNotEmpty)
+        'diploma_number': _diplomaNumber.text.trim(),
+      if (_bpjsNumber.text.trim().isNotEmpty)
+        'bpjs_number': _bpjsNumber.text.trim(),
+
+      // ── Keluarga ────────────────────────────────────────────────────
       if (_siblingCount.text.trim().isNotEmpty)
         'sibling_count': int.tryParse(_siblingCount.text.trim()),
       if (_birthOrder.text.trim().isNotEmpty)
@@ -269,8 +441,15 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
         'mother_occupation': _motherOccupation.text.trim(),
       if (_familyAddress.text.trim().isNotEmpty)
         'family_address': _familyAddress.text.trim(),
-      if (_familyPhone.text.trim().isNotEmpty)
-        'family_contact_phone': _familyPhone.text.trim(),
+      if (_familyProvince != null) 'family_province': _familyProvince!.id,
+      if (_familyKabupaten != null) 'family_district': _familyKabupaten!.id,
+      if (_familyKelurahan != null) 'family_village': _familyKelurahan!.id,
+      if (_fatherPhone.text.trim().isNotEmpty)
+        'father_phone': _fatherPhone.text.trim(),
+      if (_motherPhone.text.trim().isNotEmpty)
+        'mother_phone': _motherPhone.text.trim(),
+      if (_selectedStaff != null)
+        'referral_code_input': _selectedStaff!.referralCode,
       if (_spouseName.text.trim().isNotEmpty)
         'spouse_name': _spouseName.text.trim(),
       if (_pickedSpouseBirthDate != null)
@@ -557,6 +736,157 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                             return validatePhoneNumber(v);
                           },
                         ),
+                        const SizedBox(height: 14),
+                        _DropdownField<String>(
+                          label: 'Agama',
+                          prefixIcon: Icons.mosque_outlined,
+                          value: _religion,
+                          hint: 'Pilih agama',
+                          items: const [
+                            ('ISLAM', 'Islam'),
+                            ('KRISTEN', 'Kristen'),
+                            ('KATHOLIK', 'Katholik'),
+                            ('HINDU', 'Hindu'),
+                            ('BUDHA', 'Budha'),
+                            ('LAINNYA', 'Lainnya'),
+                          ],
+                          onChanged: (v) => setState(() => _religion = v),
+                        ),
+                        const SizedBox(height: 14),
+                        _DropdownField<String>(
+                          label: 'Status Perkawinan',
+                          prefixIcon: Icons.family_restroom_outlined,
+                          value: _maritalStatus,
+                          hint: 'Pilih status',
+                          items: const [
+                            ('BELUM MENIKAH', 'Belum Menikah'),
+                            ('MENIKAH', 'Menikah'),
+                            ('CERAI HIDUP', 'Cerai Hidup'),
+                            ('CERAI MATI', 'Cerai Mati'),
+                          ],
+                          onChanged: (v) => setState(() => _maritalStatus = v),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // ─── Data Pendidikan & Fisik ───────────────────────
+                    _SectionCard(
+                      icon: Icons.school_outlined,
+                      label: 'Pendidikan & Fisik',
+                      children: [
+                        _DropdownField<String>(
+                          label: 'Pendidikan Terakhir',
+                          prefixIcon: Icons.school_outlined,
+                          value: _educationLevel,
+                          hint: 'Pilih pendidikan',
+                          items: const [
+                            ('SMP', 'SMP'),
+                            ('SMA', 'SMA'),
+                            ('SMK', 'SMK'),
+                            ('MA', 'MA'),
+                            ('D3', 'D3'),
+                            ('S1', 'S1'),
+                          ],
+                          onChanged: (v) => setState(() => _educationLevel = v),
+                        ),
+                        const SizedBox(height: 14),
+                        M3TextField(
+                          controller: _educationMajor,
+                          label: 'Jurusan',
+                          hint: 'Contoh: Teknik Mesin',
+                          prefixIcon: Icons.menu_book_outlined,
+                          upperCase: true,
+                        ),
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: M3TextField(
+                                controller: _heightCm,
+                                label: 'Tinggi (cm)',
+                                hint: '165',
+                                prefixIcon: Icons.height_rounded,
+                                keyboardType: TextInputType.number,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: M3TextField(
+                                controller: _weightKg,
+                                label: 'Berat (kg)',
+                                hint: '60',
+                                prefixIcon: Icons.monitor_weight_outlined,
+                                keyboardType: TextInputType.number,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        _DropdownField<bool>(
+                          label: 'Memakai Kacamata?',
+                          prefixIcon: Icons.visibility_outlined,
+                          value: _wearsGlasses,
+                          hint: 'Pilih',
+                          items: const [
+                            (true, 'Ya'),
+                            (false, 'Tidak'),
+                          ],
+                          onChanged: (v) => setState(() => _wearsGlasses = v),
+                        ),
+                        const SizedBox(height: 14),
+                        _DropdownField<String>(
+                          label: 'Menulis dengan Tangan',
+                          prefixIcon: Icons.draw_outlined,
+                          value: _writingHand,
+                          hint: 'Pilih tangan',
+                          items: const [
+                            ('KANAN', 'Kanan'),
+                            ('KIRI', 'Kiri'),
+                          ],
+                          onChanged: (v) => setState(() => _writingHand = v),
+                        ),
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: M3TextField(
+                                controller: _shoeSize,
+                                label: 'Ukuran Sepatu',
+                                hint: '42',
+                                prefixIcon: Icons.ice_skating_outlined,
+                                keyboardType: TextInputType.number,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: _DropdownField<String>(
+                                label: 'Ukuran Baju',
+                                prefixIcon: Icons.checkroom_outlined,
+                                value: _shirtSize,
+                                hint: 'Pilih',
+                                items: const [
+                                  ('S', 'S'),
+                                  ('M', 'M'),
+                                  ('L', 'L'),
+                                  ('XL', 'XL'),
+                                  ('XXL', 'XXL'),
+                                ],
+                                onChanged: (v) => setState(() => _shirtSize = v),
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
 
@@ -688,6 +1018,112 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
 
                     const SizedBox(height: 20),
 
+                    // ─── Data Dokumen ──────────────────────────────────
+                    _SectionCard(
+                      icon: Icons.folder_outlined,
+                      label: 'Data Dokumen',
+                      children: [
+                        M3TextField(
+                          controller: _familyCardNumber,
+                          label: 'Nomor Kartu Keluarga',
+                          hint: 'Nomor KK',
+                          prefixIcon: Icons.credit_card_outlined,
+                          keyboardType: TextInputType.number,
+                        ),
+                        const SizedBox(height: 14),
+                        M3TextField(
+                          controller: _diplomaNumber,
+                          label: 'Nomor Ijazah',
+                          hint: 'Nomor ijazah terakhir',
+                          prefixIcon: Icons.school_outlined,
+                        ),
+                        const SizedBox(height: 14),
+                        M3TextField(
+                          controller: _bpjsNumber,
+                          label: 'Nomor BPJS / KIS',
+                          hint: 'Nomor BPJS kesehatan',
+                          prefixIcon: Icons.health_and_safety_outlined,
+                          keyboardType: TextInputType.number,
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // ─── Data Paspor ───────────────────────────────────
+                    _SectionCard(
+                      icon: Icons.flight_outlined,
+                      label: 'Data Paspor',
+                      children: [
+                        _DropdownField<bool>(
+                          label: 'Memiliki Paspor?',
+                          prefixIcon: Icons.article_outlined,
+                          value: _hasPassport,
+                          hint: 'Pilih',
+                          items: const [
+                            (true, 'Ya'),
+                            (false, 'Tidak'),
+                          ],
+                          onChanged: (v) => setState(() => _hasPassport = v),
+                        ),
+                        if (_hasPassport == true) ...[
+                          const SizedBox(height: 14),
+                          M3TextField(
+                            controller: _passportNumber,
+                            label: 'Nomor Paspor',
+                            hint: 'A12345678',
+                            prefixIcon: Icons.confirmation_number_outlined,
+                          ),
+                          const SizedBox(height: 14),
+                          M3TextField(
+                            controller: _passportIssuePlace,
+                            label: 'Tempat Terbit Paspor',
+                            hint: 'Contoh: Jakarta',
+                            prefixIcon: Icons.location_on_outlined,
+                            upperCase: true,
+                          ),
+                          const SizedBox(height: 14),
+                          M3TextField(
+                            controller: _passportIssueDateCtrl,
+                            label: 'Tanggal Terbit',
+                            hint: 'Pilih tanggal',
+                            prefixIcon: Icons.calendar_today_outlined,
+                            readOnly: true,
+                            onTap: () => _pickGenericDate(
+                              current: _pickedPassportIssueDate,
+                              firstDate: DateTime(2000),
+                              lastDate: DateTime.now(),
+                              onPicked: (d) => setState(() {
+                                _pickedPassportIssueDate = d;
+                                _passportIssueDateCtrl.text =
+                                    DateFormat('dd MMMM yyyy', 'id').format(d);
+                              }),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          M3TextField(
+                            controller: _passportExpiryDateCtrl,
+                            label: 'Tanggal Berakhir',
+                            hint: 'Pilih tanggal',
+                            prefixIcon: Icons.event_outlined,
+                            readOnly: true,
+                            onTap: () => _pickGenericDate(
+                              current: _pickedPassportExpiryDate,
+                              firstDate: DateTime.now(),
+                              lastDate: DateTime(DateTime.now().year + 20),
+                              onPicked: (d) => setState(() {
+                                _pickedPassportExpiryDate = d;
+                                _passportExpiryDateCtrl.text =
+                                    DateFormat('dd MMMM yyyy', 'id').format(d);
+                              }),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+
+                    const SizedBox(height: 20),
+
                     // ─── Data Keluarga ─────────────────────────────────
                     _SectionCard(
                       icon: Icons.family_restroom_outlined,
@@ -760,6 +1196,16 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           prefixIcon: Icons.work_outline_rounded,
                           upperCase: true,
                         ),
+                        const SizedBox(height: 14),
+                        PhoneInputField(
+                          controller: _fatherPhone,
+                          label: 'No. Telepon Ayah',
+                          hint: '812xxxxxxxx',
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) return null;
+                            return validatePhoneNumber(v);
+                          },
+                        ),
                         const SizedBox(height: 18),
                         _SubLabel('Ibu'),
                         const SizedBox(height: 8),
@@ -793,6 +1239,16 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           upperCase: true,
                         ),
                         const SizedBox(height: 14),
+                        PhoneInputField(
+                          controller: _motherPhone,
+                          label: 'No. Telepon Ibu',
+                          hint: '812xxxxxxxx',
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) return null;
+                            return validatePhoneNumber(v);
+                          },
+                        ),
+                        const SizedBox(height: 14),
                         M3TextField(
                           controller: _familyAddress,
                           label: 'Alamat Keluarga',
@@ -802,13 +1258,95 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           upperCase: true,
                         ),
                         const SizedBox(height: 14),
-                        PhoneInputField(
-                          controller: _familyPhone,
-                          label: 'No. Telepon Keluarga',
-                          hint: '812xxxxxxxx',
-                          validator: (v) {
-                            if (v == null || v.trim().isEmpty) return null;
-                            return validatePhoneNumber(v);
+                        // ── Family address region pickers ──
+                        _RegionPickerField(
+                          label: 'Provinsi (Keluarga)',
+                          hint: 'Pilih provinsi',
+                          prefixIcon: Icons.map_outlined,
+                          selected: _familyProvince,
+                          onTap: () async {
+                            final items = await ref.read(provincesProvider.future);
+                            if (!mounted) return;
+                            final picked = await _showRegionPicker(
+                                title: 'Pilih Provinsi', items: items);
+                            if (picked != null) {
+                              setState(() {
+                                _familyProvince = picked;
+                                _familyKabupaten = null;
+                                _familyKecamatan = null;
+                                _familyKelurahan = null;
+                              });
+                            }
+                          },
+                        ),
+                        const SizedBox(height: 14),
+                        _RegionPickerField(
+                          label: 'Kab/Kota (Keluarga)',
+                          hint: _familyProvince == null
+                              ? 'Pilih provinsi dahulu'
+                              : 'Pilih kab/kota',
+                          prefixIcon: Icons.location_city_outlined,
+                          selected: _familyKabupaten,
+                          enabled: _familyProvince != null,
+                          onTap: () async {
+                            if (_familyProvince == null) return;
+                            final items = await ref.read(
+                                regenciesByProvinceProvider(_familyProvince!.id).future);
+                            if (!mounted) return;
+                            final picked = await _showRegionPicker(
+                                title: 'Pilih Kab/Kota', items: items);
+                            if (picked != null) {
+                              setState(() {
+                                _familyKabupaten = picked;
+                                _familyKecamatan = null;
+                                _familyKelurahan = null;
+                              });
+                            }
+                          },
+                        ),
+                        const SizedBox(height: 14),
+                        _RegionPickerField(
+                          label: 'Kecamatan (Keluarga)',
+                          hint: _familyKabupaten == null
+                              ? 'Pilih kab/kota dahulu'
+                              : 'Pilih kecamatan',
+                          prefixIcon: Icons.place_outlined,
+                          selected: _familyKecamatan,
+                          enabled: _familyKabupaten != null,
+                          onTap: () async {
+                            if (_familyKabupaten == null) return;
+                            final items = await ref.read(
+                                districtsByRegencyProvider(_familyKabupaten!.id).future);
+                            if (!mounted) return;
+                            final picked = await _showRegionPicker(
+                                title: 'Pilih Kecamatan', items: items);
+                            if (picked != null) {
+                              setState(() {
+                                _familyKecamatan = picked;
+                                _familyKelurahan = null;
+                              });
+                            }
+                          },
+                        ),
+                        const SizedBox(height: 14),
+                        _RegionPickerField(
+                          label: 'Kelurahan (Keluarga)',
+                          hint: _familyKecamatan == null
+                              ? 'Pilih kecamatan dahulu'
+                              : 'Pilih kelurahan',
+                          prefixIcon: Icons.villa_outlined,
+                          selected: _familyKelurahan,
+                          enabled: _familyKecamatan != null,
+                          onTap: () async {
+                            if (_familyKecamatan == null) return;
+                            final items = await ref.read(
+                                villagesByDistrictProvider(_familyKecamatan!.id).future);
+                            if (!mounted) return;
+                            final picked = await _showRegionPicker(
+                                title: 'Pilih Kelurahan/Desa', items: items);
+                            if (picked != null) {
+                              setState(() => _familyKelurahan = picked);
+                            }
                           },
                         ),
                       ],
@@ -883,6 +1421,37 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           validator: (v) {
                             if (v == null || v.trim().isEmpty) return null;
                             return validatePhoneNumber(v);
+                          },
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 28),
+
+                    // ─── Informasi Staff Rujukan ───────────────────────
+                    _SectionCard(
+                      icon: Icons.person_pin_outlined,
+                      label: 'Staff Rujukan',
+                      subtitle: 'Petugas yang merujuk Anda',
+                      children: [
+                        _StaffReferrerPickerField(
+                          selected: _selectedStaff,
+                          onTap: () async {
+                            final staffAsync =
+                                ref.read(staffReferrersProvider);
+                            final picked =
+                                await showModalBottomSheet<StaffReferrer>(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) => _StaffPickerSheet(
+                                staffAsync: staffAsync,
+                                initialSelected: _selectedStaff,
+                              ),
+                            );
+                            if (picked != null && mounted) {
+                              setState(() => _selectedStaff = picked);
+                            }
                           },
                         ),
                       ],
@@ -1127,6 +1696,60 @@ class _SubLabel extends StatelessWidget {
   }
 }
 
+/// Generic dropdown field matching the M3 filled style.
+class _DropdownField<T> extends StatelessWidget {
+  const _DropdownField({
+    required this.label,
+    required this.prefixIcon,
+    required this.value,
+    required this.hint,
+    required this.items,
+    required this.onChanged,
+    super.key,
+  });
+
+  final String label;
+  final IconData prefixIcon;
+  final T? value;
+  final String hint;
+  /// Each item is `(value, displayLabel)`.
+  final List<(T, String)> items;
+  final ValueChanged<T?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return DropdownButtonFormField<T>(
+      value: value,
+      decoration: InputDecoration(
+        labelText: label,
+        floatingLabelBehavior: FloatingLabelBehavior.always,
+        prefixIcon: Icon(prefixIcon, size: 20, color: cs.onSurfaceVariant),
+        filled: true,
+        fillColor: cs.surfaceContainerHighest,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        hintText: hint,
+      ),
+      items: [
+        DropdownMenuItem<T>(value: null, child: Text(hint)),
+        ...items.map(
+          (i) => DropdownMenuItem<T>(value: i.$1, child: Text(i.$2)),
+        ),
+      ],
+      onChanged: onChanged,
+    );
+  }
+}
+
 /// M3 SegmentedButton gender picker.
 class _GenderSelector extends StatelessWidget {
   const _GenderSelector(
@@ -1242,6 +1865,259 @@ class _HeirRelationshipSelector extends StatelessWidget {
           onChanged: onChanged,
         ),
       ],
+    );
+  }
+}
+
+// =============================================================================
+// Staff referrer picker widgets
+// =============================================================================
+
+class _StaffReferrerPickerField extends StatelessWidget {
+  const _StaffReferrerPickerField({
+    required this.selected,
+    required this.onTap,
+  });
+
+  final StaffReferrer? selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final hasValue = selected != null;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: 'Staff Penerima Rujukan',
+          floatingLabelBehavior: FloatingLabelBehavior.always,
+          prefixIcon:
+              Icon(Icons.person_outline_rounded, size: 20, color: cs.onSurfaceVariant),
+          suffixIcon: Icon(Icons.arrow_drop_down_rounded, color: cs.onSurfaceVariant),
+          filled: true,
+          fillColor: cs.surfaceContainerHighest,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        ),
+        isEmpty: !hasValue,
+        child: hasValue
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(selected!.fullName,
+                      style: tt.bodyMedium?.copyWith(color: cs.onSurface)),
+                  Text(
+                    'Kode: ${selected!.referralCode}',
+                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                  ),
+                ],
+              )
+            : Text('Pilih staff...',
+                style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
+      ),
+    );
+  }
+}
+
+class _StaffPickerSheet extends ConsumerStatefulWidget {
+  final AsyncValue<List<StaffReferrer>> staffAsync;
+  final StaffReferrer? initialSelected;
+
+  const _StaffPickerSheet({
+    required this.staffAsync,
+    this.initialSelected,
+  });
+
+  @override
+  ConsumerState<_StaffPickerSheet> createState() => _StaffPickerSheetState();
+}
+
+class _StaffPickerSheetState extends ConsumerState<_StaffPickerSheet> {
+  final _searchCtrl = TextEditingController();
+  List<StaffReferrer> _filtered = [];
+  List<StaffReferrer> _all = [];
+
+  @override
+  void initState() {
+    super.initState();
+    widget.staffAsync.whenData((list) {
+      _all = list;
+      _filtered = list;
+    });
+    _searchCtrl.addListener(_onSearch);
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.removeListener(_onSearch);
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onSearch() {
+    final q = _searchCtrl.text.toLowerCase();
+    setState(() {
+      _filtered = q.isEmpty
+          ? _all
+          : _all
+              .where((s) =>
+                  s.fullName.toLowerCase().contains(q) ||
+                  s.referralCode.toLowerCase().contains(q))
+              .toList();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final staffAsync = ref.watch(staffReferrersProvider);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.6,
+        minChildSize: 0.4,
+        maxChildSize: 0.92,
+        builder: (ctx, scrollCtrl) => Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: cs.onSurfaceVariant.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Text('Pilih Staff Rujukan',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700)),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: TextField(
+                controller: _searchCtrl,
+                autofocus: true,
+                decoration: InputDecoration(
+                  hintText: 'Cari nama atau kode...',
+                  prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                  suffixIcon: _searchCtrl.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear_rounded, size: 18),
+                          onPressed: () {
+                            _searchCtrl.clear();
+                            FocusScope.of(context).unfocus();
+                          },
+                        )
+                      : null,
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 12),
+                ),
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: staffAsync.when(
+                loading: () =>
+                    const Center(child: CircularProgressIndicator.adaptive()),
+                error: (e, _) => Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.wifi_off_rounded,
+                          size: 40, color: cs.onSurfaceVariant),
+                      const SizedBox(height: 8),
+                      Text('Gagal memuat data',
+                          style: TextStyle(color: cs.onSurfaceVariant)),
+                      const SizedBox(height: 12),
+                      FilledButton.tonal(
+                        onPressed: () => ref.invalidate(staffReferrersProvider),
+                        child: const Text('Coba lagi'),
+                      ),
+                    ],
+                  ),
+                ),
+                data: (list) {
+                  if (_all.isEmpty && list.isNotEmpty) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (!mounted) return;
+                      setState(() {
+                        _all = list;
+                        _filtered = list;
+                      });
+                    });
+                  }
+                  if (_filtered.isEmpty) {
+                    return Center(
+                      child: Text('Tidak ada staff ditemukan',
+                          style: TextStyle(color: cs.onSurfaceVariant)),
+                    );
+                  }
+                  return ListView.builder(
+                    controller: scrollCtrl,
+                    itemCount: _filtered.length,
+                    itemBuilder: (_, i) {
+                      final staff = _filtered[i];
+                      final isSelected =
+                          widget.initialSelected?.id == staff.id;
+                      return ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: isSelected
+                              ? cs.primary
+                              : cs.primaryContainer,
+                          child: Text(
+                            staff.fullName.isNotEmpty
+                                ? staff.fullName[0].toUpperCase()
+                                : '?',
+                            style: TextStyle(
+                              color: isSelected
+                                  ? cs.onPrimary
+                                  : cs.onPrimaryContainer,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        title: Text(staff.fullName,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w600, fontSize: 14)),
+                        subtitle: Text('Kode: ${staff.referralCode}',
+                            style: TextStyle(
+                                fontSize: 12, color: cs.onSurfaceVariant)),
+                        trailing: isSelected
+                            ? Icon(Icons.check_circle_rounded, color: cs.primary)
+                            : null,
+                        onTap: () => Navigator.of(context).pop(staff),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+            SizedBox(height: MediaQuery.paddingOf(context).bottom + 8),
+          ],
+        ),
+      ),
     );
   }
 }

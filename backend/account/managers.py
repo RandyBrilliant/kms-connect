@@ -71,6 +71,7 @@ class ApplicantProfileQuerySet(models.QuerySet):
             "user",
             "referrer",
             "verified_by",
+            "birth_place",
             "province",
             "district",
             "district__province",

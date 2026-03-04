@@ -59,14 +59,15 @@ type BiodataFormValues = {
   father_name: string
   father_age: string
   father_occupation: string
+  father_phone: string
   mother_name: string
   mother_age: string
   mother_occupation: string
+  mother_phone: string
   spouse_name: string
   spouse_age: string
   spouse_occupation: string
   family_address: string
-  family_contact_phone: string
   heir_name: string
   heir_relationship: string
   heir_contact_phone: string
@@ -106,14 +107,15 @@ function toFormValues(p: ApplicantProfile): BiodataFormValues {
     father_name: p.father_name || "",
     father_age: p.father_age != null ? String(p.father_age) : "",
     father_occupation: p.father_occupation || "",
+    father_phone: p.father_phone || "",
     mother_name: p.mother_name || "",
     mother_age: p.mother_age != null ? String(p.mother_age) : "",
     mother_occupation: p.mother_occupation || "",
+    mother_phone: p.mother_phone || "",
     spouse_name: p.spouse_name || "",
     spouse_age: p.spouse_age != null ? String(p.spouse_age) : "",
     spouse_occupation: p.spouse_occupation || "",
     family_address: p.family_address || "",
-    family_contact_phone: p.family_contact_phone || "",
     heir_name: p.heir_name || "",
     heir_relationship: p.heir_relationship || "",
     heir_contact_phone: p.heir_contact_phone || "",
@@ -172,14 +174,15 @@ export function ApplicantBiodataTab({
         father_name: value.father_name || undefined,
         father_age: toNum(value.father_age),
         father_occupation: value.father_occupation || undefined,
+        father_phone: value.father_phone || undefined,
         mother_name: value.mother_name || undefined,
         mother_age: toNum(value.mother_age),
         mother_occupation: value.mother_occupation || undefined,
+        mother_phone: value.mother_phone || undefined,
         spouse_name: value.spouse_name || undefined,
         spouse_age: toNum(value.spouse_age),
         spouse_occupation: value.spouse_occupation || undefined,
         family_address: value.family_address || undefined,
-        family_contact_phone: value.family_contact_phone || undefined,
         heir_name: value.heir_name || undefined,
         heir_relationship: value.heir_relationship || undefined,
         heir_contact_phone: value.heir_contact_phone || undefined,
@@ -831,6 +834,21 @@ export function ApplicantBiodataTab({
               </form.Field>
             </div>
 
+            <form.Field name="father_phone">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>No. HP / WA Ayah</FieldLabel>
+                  <PhoneInput
+                    id={field.name}
+                    value={field.state.value}
+                    onChange={(val) => field.handleChange(val)}
+                    disabled={isSubmitting}
+                    placeholder="No. HP aktif"
+                  />
+                </Field>
+              )}
+            </form.Field>
+
             <div className="grid gap-6 sm:grid-cols-3">
               <form.Field name="mother_name">
                 {(field) => (
@@ -874,6 +892,21 @@ export function ApplicantBiodataTab({
                 )}
               </form.Field>
             </div>
+
+            <form.Field name="mother_phone">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>No. HP / WA Ibu</FieldLabel>
+                  <PhoneInput
+                    id={field.name}
+                    value={field.state.value}
+                    onChange={(val) => field.handleChange(val)}
+                    disabled={isSubmitting}
+                    placeholder="No. HP aktif"
+                  />
+                </Field>
+              )}
+            </form.Field>
 
             <div className="grid gap-6 sm:grid-cols-3">
               <form.Field name="spouse_name">
@@ -957,21 +990,6 @@ export function ApplicantBiodataTab({
                     </form.Field>
                   )}
                 </form.Field>
-              )}
-            </form.Field>
-
-            <form.Field name="family_contact_phone">
-              {(field) => (
-                <Field>
-                  <FieldLabel htmlFor={field.name}>No. HP Keluarga</FieldLabel>
-                  <PhoneInput
-                    id={field.name}
-                    value={field.state.value}
-                    onChange={(val) => field.handleChange(val)}
-                    disabled={isSubmitting}
-                    placeholder="No. HP keluarga"
-                  />
-                </Field>
               )}
             </form.Field>
 

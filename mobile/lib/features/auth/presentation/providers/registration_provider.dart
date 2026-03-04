@@ -21,6 +21,12 @@ class RegistrationState {
   /// their profile (NIK + KTP + referral code / phone) before accessing the app.
   final bool isGoogleFlow;
 
+  /// Confirmed birth place region ID (FK → regions.Regency).
+  final int? birthPlaceId;
+
+  /// Confirmed birth date in ISO format (yyyy-MM-dd).
+  final String? birthDateIso;
+
   RegistrationState({
     this.currentStep = 0,
     this.email,
@@ -32,6 +38,8 @@ class RegistrationState {
     this.isProcessing = false,
     this.error,
     this.isGoogleFlow = false,
+    this.birthPlaceId,
+    this.birthDateIso,
   });
 
   RegistrationState copyWith({
@@ -45,6 +53,8 @@ class RegistrationState {
     bool? isProcessing,
     String? error,
     bool? isGoogleFlow,
+    int? birthPlaceId,
+    String? birthDateIso,
   }) {
     return RegistrationState(
       currentStep: currentStep ?? this.currentStep,
@@ -57,6 +67,8 @@ class RegistrationState {
       isProcessing: isProcessing ?? this.isProcessing,
       error: error,
       isGoogleFlow: isGoogleFlow ?? this.isGoogleFlow,
+      birthPlaceId: birthPlaceId ?? this.birthPlaceId,
+      birthDateIso: birthDateIso ?? this.birthDateIso,
     );
   }
 }
@@ -95,6 +107,14 @@ class RegistrationNotifier extends StateNotifier<RegistrationState> {
 
   void setKtpImage(File image) {
     state = state.copyWith(ktpImage: image);
+  }
+
+  /// Saves the confirmed birth place region ID and ISO birth date from step 2.
+  void setBirthInfo({int? birthPlaceId, String? birthDateIso}) {
+    state = state.copyWith(
+      birthPlaceId: birthPlaceId,
+      birthDateIso: birthDateIso,
+    );
   }
 
   void updateKtpData(KtpData data) {
@@ -148,6 +168,8 @@ class RegistrationNotifier extends StateNotifier<RegistrationState> {
         referralCode: state.referralCode,
         fullName: state.ktpData?.name,
         phoneNumber: state.phoneNumber,
+        birthPlaceId: state.birthPlaceId,
+        birthDateIso: state.birthDateIso,
       );
       state = state.copyWith(isProcessing: false);
       return authResponse;
@@ -194,6 +216,8 @@ class RegistrationNotifier extends StateNotifier<RegistrationState> {
         referralCode: state.referralCode,
         phoneNumber: state.phoneNumber,
         fullName: state.ktpData?.name,
+        birthPlaceId: state.birthPlaceId,
+        birthDateIso: state.birthDateIso,
       );
       state = state.copyWith(isProcessing: false);
       return authResponse;

@@ -1,13 +1,15 @@
 {% extends "account/emails/base_email.html" %}
-{% block title %}Verifikasi Email – {{ company_name }}{% endblock %}
+{% block title %}Kode Verifikasi Email – {{ company_name }}{% endblock %}
 {% block content %}
 <p>Halo{% if user.email %} {{ user.email }}{% endif %},</p>
-<p>Silakan verifikasi alamat email Anda dengan mengklik tombol di bawah ini:</p>
-<p style="text-align: center;">
-  <a href="{{ verify_url }}" class="btn">Verifikasi Email</a>
-</p>
-<p>Atau salin dan buka tautan ini di peramban:</p>
-<p style="word-break: break-all; font-size: 13px; color: #6b7280;">{{ verify_url }}</p>
-<p>Tautan ini berlaku terbatas. Jika Anda tidak mendaftar atau meminta verifikasi ini, abaikan email ini.</p>
+<p>Gunakan kode verifikasi berikut untuk memverifikasi alamat email Anda:</p>
+<div style="text-align: center; margin: 28px 0;">
+  <div style="display: inline-block; background: #f0fdf4; border: 2px solid #bbf7d0; border-radius: 12px; padding: 20px 40px;">
+    <span style="font-family: 'Courier New', Courier, monospace; font-size: 36px; font-weight: 700; letter-spacing: 12px; color: #166534;">{{ verification_code }}</span>
+  </div>
+</div>
+<p style="text-align: center; font-size: 14px; color: #6b7280;">Kode ini berlaku selama <strong>10 menit</strong>.</p>
+<p>Masukkan kode di atas pada halaman verifikasi di aplikasi untuk menyelesaikan proses pendaftaran.</p>
+<p style="font-size: 13px; color: #9ca3af; margin-top: 24px;">Jika Anda tidak mendaftar atau meminta verifikasi ini, abaikan email ini.</p>
 <p>Salam,<br>{{ company_name }}</p>
 {% endblock %}

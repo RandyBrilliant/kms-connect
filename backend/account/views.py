@@ -16,7 +16,6 @@ from django.conf import settings as django_settings
 from django.core.cache import cache
 from django.shortcuts import get_object_or_404
 from django.http import HttpResponse
-from urllib.parse import urlencode
 from datetime import timedelta, datetime
 
 from django.db.models import Count, F, Q
@@ -37,8 +36,6 @@ from .models import (
 from .permissions import IsBackofficeAdmin, IsApplicant
 from .throttles import AuthPublicRateThrottle
 from .email_utils import (
-    FRONTEND_URL,
-    verification_link,
     send_verification_email,
     send_password_reset_email,
 )
@@ -640,7 +637,7 @@ def _admin_email_logo_url(request):
 
 class SendVerificationEmailView(APIView):
     """
-    Admin only. POST { "user_id": <id> } → kirim email verifikasi ke user.
+    Admin only. POST { "user_id": <id> } → kirim kode verifikasi email ke user.
     """
     permission_classes = [IsBackofficeAdmin]
 
@@ -672,15 +669,8 @@ class SendVerificationEmailView(APIView):
                 ),
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        verify_token = verification_link(user)
-        # Prefer frontend URL for a friendly verification page; fallback to API endpoint.
-        if FRONTEND_URL:
-            base = FRONTEND_URL.rstrip("/")
-            verify_url = f"{base}/verify-email?token={verify_token}"
-        else:
-            verify_url = request.build_absolute_uri("/api/auth/verify-email/") + "?" + urlencode({"token": verify_token})
         logo_url = _admin_email_logo_url(request)
-        send_verification_email(user, logo_url=logo_url, verify_url=verify_url)
+        send_verification_email(user, logo_url=logo_url)
         return Response(
             success_response(
                 data={"user_id": user.pk, "email": user.email},

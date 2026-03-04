@@ -11,6 +11,7 @@ class ApiEndpoints {
   static const String refreshToken = '$baseUrl/auth/token/refresh/';
   static const String logout = '$baseUrl/auth/logout/';
   static const String verifyEmail = '$baseUrl/auth/verify-email/';
+  static const String verifyEmailCode = '$baseUrl/auth/verify-email-code/';
   static const String resendVerificationEmail = '$baseUrl/auth/resend-verification-email/';
   static const String requestPasswordReset = '$baseUrl/auth/request-password-reset/';
   static const String confirmPasswordReset = '$baseUrl/auth/confirm-reset-password/';

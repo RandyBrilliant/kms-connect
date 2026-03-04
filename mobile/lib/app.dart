@@ -9,7 +9,7 @@ import 'features/auth/presentation/pages/splash_page.dart';
 import 'features/auth/presentation/pages/login_page.dart';
 import 'features/auth/presentation/pages/registration_page_new.dart';
 import 'features/auth/presentation/pages/google_complete_registration_page.dart';
-import 'features/auth/presentation/pages/verify_email_page.dart';
+import 'features/auth/presentation/pages/email_verification_page.dart';
 import 'features/auth/presentation/pages/reset_password_page.dart';
 import 'features/home/presentation/pages/home_page.dart';
 import 'features/profile/presentation/pages/profile_page.dart';
@@ -63,8 +63,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       final isAuthenticated = authState.isAuthenticated;
       final needsGoogleCompletion = authState.needsGoogleCompletion;
 
-      // Pre-auth routes: login and register.
-      final isPreAuthRoute = loc == '/login' || loc == '/register';
+      // Pre-auth routes: login, register, and email verification.
+      final isPreAuthRoute = loc == '/login' || loc == '/register' || loc.startsWith('/email-verification');
       // The Google-completion page is special: authenticated but not yet done.
       final isGoogleCompletionRoute = loc == '/google-complete';
 
@@ -76,6 +76,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       // Authenticated user still needs to complete Google registration.
       if (needsGoogleCompletion) {
         return isGoogleCompletionRoute ? null : '/google-complete';
+      }
+
+      // Authenticated but email not verified — must verify before accessing app.
+      final emailVerified = authState.user?.emailVerified ?? true;
+      if (!emailVerified) {
+        final userEmail = Uri.encodeComponent(authState.user!.email);
+        return loc.startsWith('/email-verification')
+            ? null
+            : '/email-verification?email=$userEmail';
       }
 
       // Authenticated & complete — send away from pre-auth routes.
@@ -124,11 +133,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const GoogleCompleteRegistrationPage(),
       ),
       GoRoute(
-        path: '/verify-email',
-        name: 'verify-email',
+        path: '/email-verification',
+        name: 'email-verification',
         builder: (context, state) {
-          final token = state.uri.queryParameters['token'];
-          return VerifyEmailPage(token: token ?? '');
+          final email = state.uri.queryParameters['email'] ?? '';
+          return EmailVerificationPage(email: email);
         },
       ),
       GoRoute(

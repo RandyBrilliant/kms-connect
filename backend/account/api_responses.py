@@ -65,7 +65,7 @@ class ApiMessage:
     PROFILE_UPDATED = "Profil berhasil diperbarui."
     EMAIL_SENT = "Email berhasil dikirim."
     EMAIL_ALREADY_VERIFIED = "Email sudah terverifikasi."
-    EMAIL_NOT_VERIFIED = "Email belum diverifikasi. Silakan cek kotak masuk email Anda dan klik tautan verifikasi."
+    EMAIL_NOT_VERIFIED = "Email belum diverifikasi. Silakan cek kotak masuk email Anda dan masukkan kode verifikasi."
     RESET_PASSWORD_SUCCESS = "Kata sandi berhasil diatur ulang."
 
     # Validasi

@@ -109,7 +109,9 @@ class _LoginPageState extends ConsumerState<LoginPage>
     } else {
       final authState = ref.read(authStateProvider);
       if (authState.errorCode == 'email_not_verified') {
-        setState(() => _unverifiedEmail = _emailCtrl.text.trim());
+        // Immediately navigate to verification page (it auto-sends the code).
+        final email = _emailCtrl.text.trim();
+        context.go('/email-verification?email=${Uri.encodeComponent(email)}');
       } else if (authState.error != null) {
         CustomToast.show(context, message: authState.error!, type: ToastType.error);
       }
@@ -125,13 +127,16 @@ class _LoginPageState extends ConsumerState<LoginPage>
         .resendVerificationEmail(email);
     if (!mounted) return;
     setState(() => _resendLoading = false);
-    CustomToast.show(
-      context,
-      message: ok
-          ? 'Email verifikasi berhasil dikirim. Silakan cek kotak masuk Anda.'
-          : 'Gagal mengirim email. Silakan coba lagi.',
-      type: ok ? ToastType.success : ToastType.error,
-    );
+    if (ok) {
+      // Navigate to the verification code entry page
+      context.push('/email-verification?email=${Uri.encodeComponent(email)}');
+    } else {
+      CustomToast.show(
+        context,
+        message: 'Gagal mengirim kode verifikasi. Silakan coba lagi.',
+        type: ToastType.error,
+      );
+    }
   }
 
   void _handleGoogleLogin() async {
@@ -481,7 +486,7 @@ class _FormPanel extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Cek kotak masuk $unverifiedEmail dan klik tautan verifikasi yang telah dikirim.',
+                      'Email $unverifiedEmail belum diverifikasi. Kirim kode verifikasi untuk melanjutkan.',
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 12,
                         color: const Color(0xFF92400E),
@@ -512,7 +517,7 @@ class _FormPanel extends StatelessWidget {
                                     strokeWidth: 2,
                                     color: Color(0xFFD97706)),
                               )
-                            : const Text('Kirim ulang email verifikasi'),
+                            : const Text('Kirim Kode Verifikasi'),
                       ),
                     ),
                   ],

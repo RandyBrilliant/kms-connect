@@ -6,14 +6,13 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/widgets/auth_wave_header.dart';
 import '../../../../core/widgets/phone_input_field.dart';
-import '../../data/providers/staff_referrers_provider.dart';
 import '../providers/registration_provider.dart';
 import 'steps/registration_step2_ktp.dart';
 
 /// Completion flow for users who signed in via Google but have no KTP / NIK
 /// on file yet.
 ///
-/// Step 0 — collect referral code (staff picker) + phone number.
+/// Step 0 — collect phone number.
 /// Step 1 — upload KTP, OCR, confirm NIK / name (reuses [RegistrationStep2Ktp]).
 class GoogleCompleteRegistrationPage extends ConsumerStatefulWidget {
   const GoogleCompleteRegistrationPage({super.key});
@@ -295,15 +294,11 @@ class _GoogleStep1State extends ConsumerState<_GoogleStep1> {
   final _phoneCtrl = TextEditingController();
   final _phoneFocus = FocusNode();
 
-  StaffReferrer? _selectedStaff;
-
   @override
   void initState() {
     super.initState();
-    // Pre-fetch staff list
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      ref.read(staffReferrersProvider);
       // Restore state if user navigated back
       final s = ref.read(registrationProvider);
       if (s.phoneNumber?.isNotEmpty == true) {
@@ -319,27 +314,10 @@ class _GoogleStep1State extends ConsumerState<_GoogleStep1> {
     super.dispose();
   }
 
-  void _onStaffTap() async {
-    final staffAsync = ref.read(staffReferrersProvider);
-    final selected = await showModalBottomSheet<StaffReferrer>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _StaffPickerSheet(
-        staffAsync: staffAsync,
-        initialSelected: _selectedStaff,
-      ),
-    );
-    if (selected != null && mounted) {
-      setState(() => _selectedStaff = selected);
-    }
-  }
-
   void _next() {
     if (!_formKey.currentState!.validate()) return;
 
     ref.read(registrationProvider.notifier).setGoogleFlowData(
-          referralCode: _selectedStaff?.referralCode,
           phoneNumber: _phoneCtrl.text.trim().isEmpty
               ? null
               : _phoneCtrl.text.trim(),
@@ -370,17 +348,10 @@ class _GoogleStep1State extends ConsumerState<_GoogleStep1> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Pilih petugas pendamping dan masukkan nomor telepon Anda.',
+            'Masukkan nomor telepon Anda.',
             style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
           ),
           const SizedBox(height: 24),
-
-          // Staff referrer picker
-          _StaffReferrerField(
-            selectedStaff: _selectedStaff,
-            onTap: _onStaffTap,
-          ),
-          const SizedBox(height: 16),
 
           // Phone number
           PhoneInputField(
@@ -410,216 +381,6 @@ class _GoogleStep1State extends ConsumerState<_GoogleStep1> {
           ),
           const SizedBox(height: 32),
         ],
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Staff referrer field (identical pattern to registration_step1_credentials)
-// ---------------------------------------------------------------------------
-
-class _StaffReferrerField extends StatelessWidget {
-  final StaffReferrer? selectedStaff;
-  final VoidCallback onTap;
-
-  const _StaffReferrerField({
-    required this.selectedStaff,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    final hasValue = selectedStaff != null;
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: InputDecorator(
-        decoration: InputDecoration(
-          labelText: 'Petugas Pendamping (Opsional)',
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          suffixIcon: const Icon(Icons.arrow_drop_down),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        ),
-        child: hasValue
-            ? Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(selectedStaff!.fullName,
-                      style: tt.bodyMedium
-                          ?.copyWith(color: cs.onSurface)),
-                  Text(
-                    'Kode: ${selectedStaff!.referralCode}',
-                    style: tt.bodySmall
-                        ?.copyWith(color: cs.onSurfaceVariant),
-                  ),
-                ],
-              )
-            : Text(
-                'Pilih petugas...',
-                style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
-              ),
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Staff picker bottom sheet (self-contained, with search)
-// ---------------------------------------------------------------------------
-
-class _StaffPickerSheet extends ConsumerStatefulWidget {
-  final AsyncValue<List<StaffReferrer>> staffAsync;
-  final StaffReferrer? initialSelected;
-
-  const _StaffPickerSheet({
-    required this.staffAsync,
-    this.initialSelected,
-  });
-
-  @override
-  ConsumerState<_StaffPickerSheet> createState() => _StaffPickerSheetState();
-}
-
-class _StaffPickerSheetState extends ConsumerState<_StaffPickerSheet> {
-  final _searchCtrl = TextEditingController();
-  List<StaffReferrer> _filtered = [];
-  List<StaffReferrer> _all = [];
-
-  @override
-  void initState() {
-    super.initState();
-    widget.staffAsync.whenData((list) {
-      _all = list;
-      _filtered = list;
-    });
-    _searchCtrl.addListener(() {
-      final q = _searchCtrl.text.toLowerCase();
-      setState(() {
-        _filtered = q.isEmpty
-            ? _all
-            : _all
-                .where((s) =>
-                    s.fullName.toLowerCase().contains(q) ||
-                    s.referralCode.toLowerCase().contains(q))
-                .toList();
-      });
-    });
-  }
-
-  @override
-  void dispose() {
-    _searchCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final staffAsync = ref.watch(staffReferrersProvider);
-
-    return DraggableScrollableSheet(
-      initialChildSize: 0.6,
-      minChildSize: 0.4,
-      maxChildSize: 0.9,
-      expand: false,
-      builder: (_, scrollController) => Container(
-        decoration: BoxDecoration(
-          color: cs.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          children: [
-            const SizedBox(height: 12),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: cs.outlineVariant,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Text(
-                'Pilih Petugas Pendamping',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: cs.onSurface,
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: TextField(
-                controller: _searchCtrl,
-                decoration: InputDecoration(
-                  hintText: 'Cari nama atau kode...',
-                  prefixIcon: const Icon(Icons.search),
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 10),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: staffAsync.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (e, _) => Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('Gagal memuat data',
-                          style: TextStyle(color: cs.error)),
-                      TextButton(
-                        onPressed: () => ref.invalidate(staffReferrersProvider),
-                        child: const Text('Coba lagi'),
-                      ),
-                    ],
-                  ),
-                ),
-                data: (_) => ListView.builder(
-                  controller: scrollController,
-                  itemCount: _filtered.length,
-                  itemBuilder: (_, i) {
-                    final staff = _filtered[i];
-                    final isSelected =
-                        staff.referralCode ==
-                            widget.initialSelected?.referralCode;
-                    return ListTile(
-                      selected: isSelected,
-                      selectedTileColor: cs.primaryContainer,
-                      leading: CircleAvatar(
-                        backgroundColor: cs.primaryContainer,
-                        child: Text(
-                          staff.fullName.isNotEmpty
-                              ? staff.fullName[0].toUpperCase()
-                              : '?',
-                          style: TextStyle(
-                              color: cs.onPrimaryContainer,
-                              fontWeight: FontWeight.w700),
-                        ),
-                      ),
-                      title: Text(staff.fullName,
-                          style: GoogleFonts.plusJakartaSans(
-                              fontWeight: FontWeight.w600)),
-                      subtitle: Text('Kode: ${staff.referralCode}'),
-                      onTap: () => Navigator.of(context).pop(staff),
-                    );
-                  },
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

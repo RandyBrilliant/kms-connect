@@ -39,13 +39,14 @@ export async function resendVerificationEmail(email: string): Promise<void> {
   await api.post("/api/auth/resend-verification-email/", { email })
 }
 
-/** GET /api/auth/verify-email/ - Verify email via token (public link from email) */
-export async function verifyEmail(token: string): Promise<ApiSuccessResponse<{ email: string }>> {
-  const { data } = await api.get<ApiSuccessResponse<{ email: string }>>(
-    "/api/auth/verify-email/",
-    {
-      params: { token },
-    }
+/** POST /api/auth/verify-email-code/ - Verify email with 6-digit code */
+export async function verifyEmailCode(
+  email: string,
+  code: string,
+): Promise<ApiSuccessResponse<{ email: string }>> {
+  const { data } = await api.post<ApiSuccessResponse<{ email: string }>>(
+    "/api/auth/verify-email-code/",
+    { email, code },
   )
   return data
 }

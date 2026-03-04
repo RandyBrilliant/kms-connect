@@ -63,7 +63,7 @@ const PROFILE_KEYS = [
   "full_name", "nik", "birth_place", "birth_date", "address", "province", "district", "village",
   "contact_phone", "gender", "sibling_count", "birth_order", "father_name", "father_age", "father_occupation",
   "mother_name", "mother_age", "mother_occupation", "spouse_name", "spouse_age", "spouse_occupation",
-  "family_address", "family_province", "family_district", "family_village", "family_contact_phone",
+  "family_address", "family_province", "family_district", "family_village", "father_phone", "mother_phone",
   "heir_name", "heir_relationship", "heir_contact_phone",
   "religion", "education_level", "education_major", "marital_status", "height_cm", "weight_kg", "wears_glasses", "writing_hand",
   "passport_number", "passport_issue_date", "passport_issue_place", "passport_expiry_date",
@@ -141,7 +141,8 @@ const defaultBiodata = {
   spouse_age: "",
   spouse_occupation: "",
   family_address: "",
-  family_contact_phone: "",
+  father_phone: "",
+  mother_phone: "",
   heir_name: "",
   heir_relationship: "",
   heir_contact_phone: "",
@@ -594,6 +595,14 @@ export function ApplicantForm({
                 )}
               </form.Field>
             </div>
+            <form.Field name="father_phone">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>No. HP / WA Ayah</FieldLabel>
+                  <PhoneInput id={field.name} value={field.state.value} onChange={(val) => field.handleChange(val)} disabled={isSubmitting} placeholder="No. HP aktif" />
+                </Field>
+              )}
+            </form.Field>
             <div className="grid gap-6 sm:grid-cols-3">
               <form.Field name="mother_name">
                 {(field) => (
@@ -620,6 +629,14 @@ export function ApplicantForm({
                 )}
               </form.Field>
             </div>
+            <form.Field name="mother_phone">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>No. HP / WA Ibu</FieldLabel>
+                  <PhoneInput id={field.name} value={field.state.value} onChange={(val) => field.handleChange(val)} disabled={isSubmitting} placeholder="No. HP aktif" />
+                </Field>
+              )}
+            </form.Field>
             <div className="grid gap-6 sm:grid-cols-3">
               <form.Field name="spouse_name">
                 {(field) => (
@@ -678,14 +695,6 @@ export function ApplicantForm({
                     </form.Field>
                   )}
                 </form.Field>
-              )}
-            </form.Field>
-            <form.Field name="family_contact_phone">
-              {(field) => (
-                <Field>
-                  <FieldLabel htmlFor={field.name}>No. HP Keluarga</FieldLabel>
-                  <PhoneInput id={field.name} value={field.state.value} onChange={(val) => field.handleChange(val)} disabled={isSubmitting} placeholder="No. HP keluarga" />
-                </Field>
               )}
             </form.Field>
           </FieldGroup>

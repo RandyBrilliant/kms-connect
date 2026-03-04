@@ -279,15 +279,14 @@ class CookieLogoutView(APIView):
 
 
 # ---------------------------------------------------------------------------
-# Public: verifikasi email (GET ?token=) & konfirmasi reset password (POST)
+# Public: verifikasi email (POST code) & konfirmasi reset password (POST)
 # ---------------------------------------------------------------------------
 
 @method_decorator(csrf_exempt, name="dispatch")
 class VerifyEmailView(APIView):
     """
-    GET /api/auth/verify-email/?token=xxx → validasi token, set email_verified=True.
-    Tidak perlu auth. Untuk link di email verifikasi.
-    Throttled per IP (auth_public scope).
+    GET /api/auth/verify-email/?token=xxx → legacy link-based verification.
+    Kept for backward compatibility with emails already sent.
     """
     permission_classes = ()
     authentication_classes = ()
@@ -328,6 +327,81 @@ class VerifyEmailView(APIView):
         user.email_verified = True
         user.email_verified_at = timezone.now()
         user.save(update_fields=["email_verified", "email_verified_at"])
+        return Response(
+            success_response(
+                data={"email": user.email},
+                detail="Email berhasil diverifikasi.",
+                code=ApiCode.SUCCESS,
+            ),
+            status=status.HTTP_200_OK,
+        )
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class VerifyEmailCodeView(APIView):
+    """
+    POST { "email": "...", "code": "123456" } → verify 6-digit code.
+    Mobile-friendly email verification endpoint.
+    Throttled per IP (auth_public scope).
+    """
+    permission_classes = ()
+    authentication_classes = ()
+    throttle_classes = [AuthPublicRateThrottle]
+
+    def post(self, request):
+        from .email_utils import verify_email_code
+        from .models import CustomUser
+
+        email = (request.data.get("email") or "").strip().lower()
+        code = (request.data.get("code") or "").strip()
+
+        if not email:
+            return Response(
+                error_response(
+                    detail="Email wajib diisi.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not code or len(code) != 6 or not code.isdigit():
+            return Response(
+                error_response(
+                    detail="Kode verifikasi harus 6 digit angka.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Check if already verified BEFORE verify_code mutates the user.
+        already_verified = False
+        try:
+            existing = CustomUser.objects.get(email__iexact=email)
+            already_verified = existing.email_verified
+        except CustomUser.DoesNotExist:
+            pass
+
+        user = verify_email_code(email, code)
+        if not user:
+            return Response(
+                error_response(
+                    detail="Kode verifikasi tidak valid atau sudah kedaluwarsa. Silakan minta kode baru.",
+                    code=ApiCode.PERMISSION_DENIED,
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if already_verified:
+            return Response(
+                success_response(
+                    data={"email": user.email},
+                    detail=ApiMessage.EMAIL_ALREADY_VERIFIED,
+                    code=ApiCode.EMAIL_ALREADY_VERIFIED,
+                ),
+                status=status.HTTP_200_OK,
+            )
+
         return Response(
             success_response(
                 data={"email": user.email},
@@ -448,7 +522,7 @@ class ConfirmResetPasswordView(APIView):
 @method_decorator(csrf_exempt, name="dispatch")
 class ResendVerificationEmailView(APIView):
     """
-    Public. POST { "email": "..." } → resend verification email if user exists and email not yet verified.
+    Public. POST { "email": "..." } → resend verification code if user exists and email not yet verified.
     Always returns 200 to prevent email enumeration.
     Throttled per IP (auth_public scope).
     """
@@ -458,7 +532,7 @@ class ResendVerificationEmailView(APIView):
 
     def post(self, request):
         from django.contrib.auth import get_user_model
-        from .email_utils import send_verification_email, verification_link
+        from .email_utils import send_verification_email
 
         User = get_user_model()
         email = (request.data.get("email") or "").strip().lower()
@@ -472,18 +546,12 @@ class ResendVerificationEmailView(APIView):
             )
         user = User.objects.filter(email__iexact=email, is_active=True).first()
         if user and not user.email_verified:
-            frontend_url = (getattr(django_settings, "FRONTEND_URL", "") or "").rstrip("/")
-            verify_token = verification_link(user)
-            if frontend_url:
-                verify_url = f"{frontend_url}/verify-email?token={verify_token}"
-            else:
-                verify_url = request.build_absolute_uri(f"/api/auth/verify-email/?token={verify_token}")
             logo_url = getattr(django_settings, "LOGO_URL", "") or ""
-            send_verification_email(user, logo_url=logo_url, verify_url=verify_url)
+            send_verification_email(user, logo_url=logo_url)
         # Always return 200 so callers cannot enumerate registered emails
         return Response(
             success_response(
-                detail="Jika email terdaftar dan belum terverifikasi, email verifikasi akan dikirim.",
+                detail="Jika email terdaftar dan belum terverifikasi, kode verifikasi akan dikirim.",
                 code=ApiCode.EMAIL_SENT,
             ),
             status=status.HTTP_200_OK,
