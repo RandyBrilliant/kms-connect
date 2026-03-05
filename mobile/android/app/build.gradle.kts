@@ -7,11 +7,13 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-// Load key.properties
+// Load key.properties (required for release signing)
 val keyPropertiesFile = rootProject.file("key.properties")
-val keyProperties = Properties()
-if (keyPropertiesFile.exists()) {
-    keyProperties.load(keyPropertiesFile.inputStream())
+if (!keyPropertiesFile.exists()) {
+    error("key.properties not found at ${keyPropertiesFile.path}. Please create it as per ANDROID_BUILD_GUIDE.md.")
+}
+val keyProperties = Properties().apply {
+    load(keyPropertiesFile.inputStream())
 }
 
 android {
@@ -41,10 +43,19 @@ android {
 
     signingConfigs {
         create("release") {
-            keyAlias = keyProperties["keyAlias"]?.toString()
-            keyPassword = keyProperties["keyPassword"]?.toString()
-            storeFile = file(keyProperties["storeFile"]?.toString() ?: "")
-            storePassword = keyProperties["storePassword"]?.toString()
+            val alias = keyProperties["keyAlias"]?.toString()
+                ?: error("Missing 'keyAlias' in key.properties")
+            val keyPass = keyProperties["keyPassword"]?.toString()
+                ?: error("Missing 'keyPassword' in key.properties")
+            val storePass = keyProperties["storePassword"]?.toString()
+                ?: error("Missing 'storePassword' in key.properties")
+            val storePath = keyProperties["storeFile"]?.toString()
+                ?: error("Missing 'storeFile' in key.properties")
+
+            keyAlias = alias
+            keyPassword = keyPass
+            storeFile = file(storePath)
+            storePassword = storePass
         }
     }
 
