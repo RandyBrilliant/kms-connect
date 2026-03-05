@@ -386,6 +386,99 @@ class ApplicantUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
+    @action(detail=True, methods=["get"], url_path="download-documents")
+    def download_documents(self, request, pk=None):
+        """
+        GET /api/applicants/{id}/download-documents/
+
+        Returns a ZIP archive containing all uploaded documents for this applicant.
+        The ZIP is structured as:
+
+            <FullName>_<NIK>_<id>/
+                ktp.jpg
+                ijasah.pdf
+                paspor.jpg
+                ...
+
+        Files that are physically missing from storage are silently skipped;
+        a custom response header `X-Missing-Files` lists any skipped doc-type
+        codes so the caller can surface a warning if needed.
+        """
+        import io
+        import os
+        import zipfile
+        from django.core.files.storage import default_storage
+
+        applicant = self.get_object()
+        profile = getattr(applicant, "applicant_profile", None)
+
+        if not profile:
+            return Response(
+                error_response(
+                    detail="Profil pelamar tidak ditemukan.",
+                    code=ApiCode.NOT_FOUND,
+                ),
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        documents = (
+            ApplicantDocument.objects
+            .filter(applicant_profile=profile)
+            .select_related("document_type")
+            .order_by("document_type__sort_order", "document_type__code")
+        )
+
+        if not documents.exists():
+            return Response(
+                error_response(
+                    detail="Pelamar belum memiliki dokumen yang diunggah.",
+                    code=ApiCode.NOT_FOUND,
+                ),
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Build a safe folder name: FullName_NIK_id
+        full_name = (applicant.full_name or "pelamar").strip()
+        nik = (profile.nik or "").strip()
+        safe_name = "".join(
+            c for c in full_name if c.isalnum() or c in (" ", "-", "_")
+        ).strip().replace(" ", "_") or "pelamar"
+        folder = f"{safe_name}_{nik}_{applicant.id}" if nik else f"{safe_name}_{applicant.id}"
+
+        buffer = io.BytesIO()
+        missing = []
+
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            for doc in documents:
+                try:
+                    doc_type_code = (
+                        doc.document_type.code if doc.document_type_id else "dokumen"
+                    )
+                    _, ext = os.path.splitext(doc.file.name)
+                    arc_name = f"{folder}/{doc_type_code}{ext.lower() or '.bin'}"
+
+                    with default_storage.open(doc.file.name, "rb") as fh:
+                        zf.writestr(arc_name, fh.read())
+                except Exception:
+                    label = (
+                        doc.document_type.code
+                        if doc.document_type_id
+                        else str(doc.pk)
+                    )
+                    missing.append(label)
+
+        buffer.seek(0)
+
+        zip_filename = (
+            f"Dokumen_{safe_name}_{nik}.zip" if nik else f"Dokumen_{safe_name}.zip"
+        )
+        response = HttpResponse(buffer.read(), content_type="application/zip")
+        response["Content-Disposition"] = f'attachment; filename="{zip_filename}"'
+        response["Content-Transfer-Encoding"] = "binary"
+        if missing:
+            response["X-Missing-Files"] = ",".join(missing)
+        return response
+
 
 # ---------------------------------------------------------------------------
 # ApplicantProfile ViewSet (Admin approval/rejection workflow)

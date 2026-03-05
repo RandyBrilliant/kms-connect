@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/models/paginated_state.dart';
 import '../../../../core/utils/retry.dart';
+import '../../domain/models/batch_announcement.dart';
 import '../../domain/models/job.dart';
 import '../../domain/models/job_application.dart';
 import '../repositories/job_repository.dart';
@@ -142,4 +143,15 @@ final myApplicationsProvider = FutureProvider.autoDispose.family<List<JobApplica
 final applicationDetailProvider = FutureProvider.autoDispose.family<JobApplication, int>((ref, applicationId) async {
   final repository = ref.read(jobRepositoryProvider);
   return await retryWithBackoff(() => repository.getApplicationDetail(applicationId));
+});
+
+/// Batch announcements for a specific application.
+/// Returns an empty list when the application has no batch.
+/// Used on PRA_SELEKSI / INTERVIEW stages instead of individual chat.
+final applicationAnnouncementsProvider = FutureProvider.autoDispose
+    .family<List<BatchAnnouncement>, int>((ref, applicationId) async {
+  final repository = ref.read(jobRepositoryProvider);
+  return await retryWithBackoff(
+    () => repository.getApplicationAnnouncements(applicationId),
+  );
 });

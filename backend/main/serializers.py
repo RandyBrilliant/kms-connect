@@ -2,17 +2,20 @@
 Serializers untuk konten main app:
 - News: berita / pengumuman di halaman utama.
 - LowonganKerja: lowongan kerja yang dikelola dari backoffice.
+- LamaranBatch: grup penugasan pelamar oleh admin.
+- JobApplication: lamaran individual dalam sebuah batch.
 """
 
 from rest_framework import serializers
 from django.utils import timezone
 
 from .models import (
-    ApplicationSource,
     ApplicationStatus,
     ApplicationStatusHistory,
+    BatchAnnouncement,
     JobApplication,
     JobStatus,
+    LamaranBatch,
     LowonganKerja,
     News,
     NewsStatus,
@@ -119,6 +122,8 @@ class LowonganKerjaSerializer(serializers.ModelSerializer):
             "status",
             "posted_at",
             "deadline",
+            "start_date",
+            "quota",
             "created_by",
             "created_by_name",
             "created_at",
@@ -231,8 +236,8 @@ class JobApplicationSerializer(serializers.ModelSerializer):
     applicant_email = serializers.SerializerMethodField(read_only=True)
     job_title = serializers.SerializerMethodField(read_only=True)
     company_name = serializers.SerializerMethodField(read_only=True)
-    reviewed_by_name = serializers.SerializerMethodField(read_only=True)
     assigned_by_name = serializers.SerializerMethodField(read_only=True)
+    batch_name = serializers.SerializerMethodField(read_only=True)
     cooldown_eligible_date = serializers.SerializerMethodField(read_only=True)
     status_history = ApplicationStatusHistorySerializer(many=True, read_only=True)
 
@@ -246,14 +251,14 @@ class JobApplicationSerializer(serializers.ModelSerializer):
             "job",
             "job_title",
             "company_name",
+            "batch",
+            "batch_name",
             "status",
-            "source",
+            "pra_seleksi_confirmed_at",
+            "interview_confirmed_at",
             "applied_at",
-            "reviewed_at",
             "placement_end_date",
             "cooldown_eligible_date",
-            "reviewed_by",
-            "reviewed_by_name",
             "assigned_by",
             "assigned_by_name",
             "notes",
@@ -267,12 +272,12 @@ class JobApplicationSerializer(serializers.ModelSerializer):
             "applicant_email",
             "job_title",
             "company_name",
-            "reviewed_by_name",
-            "assigned_by_name",
+            "batch_name",
             "cooldown_eligible_date",
+            "pra_seleksi_confirmed_at",
+            "interview_confirmed_at",
             "status_history",
             "applied_at",
-            "reviewed_at",
             "created_at",
             "updated_at",
         ]
@@ -289,51 +294,28 @@ class JobApplicationSerializer(serializers.ModelSerializer):
     def get_company_name(self, obj) -> str:
         return obj.job.company.company_name if obj.job and obj.job.company else ""
 
-    def get_reviewed_by_name(self, obj) -> str | None:
-        if not obj.reviewed_by:
-            return None
-        return obj.reviewed_by.full_name or obj.reviewed_by.email
-
     def get_assigned_by_name(self, obj) -> str | None:
         if not obj.assigned_by:
             return None
         return obj.assigned_by.full_name or obj.assigned_by.email
+
+    def get_batch_name(self, obj) -> str | None:
+        return obj.batch.name if obj.batch else None
 
     def get_cooldown_eligible_date(self, obj):
         """Serializable version of the model property."""
         return obj.cooldown_eligible_date
 
 
-class ApplicationAssignSerializer(serializers.Serializer):
-    """
-    Input serializer for POST /api/applications/assign/.
-    Admin provides the job and applicant to directly assign.
-    """
-
-    job = serializers.PrimaryKeyRelatedField(
-        queryset=LowonganKerja.objects.filter(status="OPEN"),
-        help_text="ID lowongan kerja yang dituju (harus berstatus OPEN).",
-    )
-    note = serializers.CharField(
-        required=False,
-        allow_blank=True,
-        max_length=500,
-        help_text="Catatan penugasan opsional.",
-    )
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        from account.models import ApplicantProfile
-        self.fields["applicant"] = serializers.PrimaryKeyRelatedField(
-            queryset=ApplicantProfile.objects.all(),
-            help_text="ID ApplicantProfile pelamar yang ditugaskan.",
-        )
-
-
 class ApplicationTransitionSerializer(serializers.Serializer):
     """
     Input serializer for PATCH /api/applications/{id}/transition/.
-    Actor provides the desired next status and an optional note.
+    Admin provides the desired next status and an optional note.
+    Valid transitions (admin only):
+      PRA_SELEKSI → INTERVIEW | DITOLAK
+      INTERVIEW   → DITERIMA  | DITOLAK
+      DITERIMA    → BERANGKAT | DITOLAK
+      BERANGKAT   → SELESAI
     """
 
     status = serializers.ChoiceField(
@@ -349,6 +331,281 @@ class ApplicationTransitionSerializer(serializers.Serializer):
     placement_end_date = serializers.DateField(
         required=False,
         allow_null=True,
-        help_text="Wajib diisi saat transisi ke COMPLETED. Default: hari ini.",
+        help_text="Wajib diisi saat transisi ke SELESAI. Default: hari ini.",
     )
 
+
+# ---------------------------------------------------------------------------
+# LamaranBatch
+# ---------------------------------------------------------------------------
+
+
+class LamaranBatchSerializer(serializers.ModelSerializer):
+    """
+    Full read serializer for LamaranBatch.
+    Returned by GET /api/batches/ and GET /api/batches/{id}/.
+    """
+
+    job_title = serializers.SerializerMethodField(read_only=True)
+    created_by_name = serializers.SerializerMethodField(read_only=True)
+    applicant_count = serializers.IntegerField(read_only=True)
+    confirmed_pra_seleksi_count = serializers.IntegerField(read_only=True)
+    confirmed_interview_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = LamaranBatch
+        fields = [
+            "id",
+            "job",
+            "job_title",
+            "name",
+            "notes",
+            # Pra-seleksi schedule
+            "pra_seleksi_date",
+            "pra_seleksi_location",
+            "pra_seleksi_notes",
+            # Interview schedule
+            "interview_date",
+            "interview_location",
+            "interview_notes",
+            # Stats
+            "applicant_count",
+            "confirmed_pra_seleksi_count",
+            "confirmed_interview_count",
+            # Meta
+            "created_by",
+            "created_by_name",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "job_title",
+            "created_by",
+            "created_by_name",
+            "applicant_count",
+            "confirmed_pra_seleksi_count",
+            "confirmed_interview_count",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_job_title(self, obj) -> str:
+        return obj.job.title if obj.job else ""
+
+    def get_created_by_name(self, obj) -> str | None:
+        if not obj.created_by:
+            return None
+        return obj.created_by.full_name or obj.created_by.email
+
+
+class LamaranBatchCreateSerializer(serializers.Serializer):
+    """
+    Input serializer for POST /api/batches/.
+    Admin creates a new batch for a specific job opening.
+    """
+
+    job = serializers.PrimaryKeyRelatedField(
+        queryset=LowonganKerja.objects.filter(status="OPEN"),
+        help_text="ID lowongan kerja (harus berstatus OPEN).",
+    )
+    name = serializers.CharField(
+        max_length=200,
+        help_text="Nama batch, misalnya 'Batch Maret 2026'.",
+    )
+    notes = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        help_text="Catatan umum untuk batch ini.",
+    )
+
+
+class GroupAssignSerializer(serializers.Serializer):
+    """
+    Input serializer for POST /api/batches/{id}/assign/.
+    Admin picks applicants from the search/table result and submits their IDs in bulk.
+
+    Workflow:
+    1. Admin opens a batch detail page.
+    2. Admin searches the applicant table by name or NIK/ID.
+    3. Admin selects one or more rows (checkboxes).
+    4. Admin clicks "Tambah ke Batch" → this serializer is submitted.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from account.models import ApplicantProfile
+        self.fields["applicant_ids"] = serializers.PrimaryKeyRelatedField(
+            queryset=ApplicantProfile.objects.select_related("user").filter(
+                user__is_active=True
+            ),
+            many=True,
+            help_text=(
+                "Daftar ID ApplicantProfile yang akan ditambahkan ke batch ini. "
+                "Maksimal 200 pelamar per permintaan."
+            ),
+        )
+
+    note = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=500,
+        help_text="Catatan penugasan yang akan disimpan di riwayat status semua pelamar.",
+    )
+
+    def validate_applicant_ids(self, value):
+        if len(value) == 0:
+            raise serializers.ValidationError("Pilih minimal 1 pelamar.")
+        if len(value) > 200:
+            raise serializers.ValidationError("Maksimal 200 pelamar per permintaan.")
+        return value
+
+
+class BatchCheckEligibilitySerializer(serializers.Serializer):
+    """
+    Input serializer for POST /api/batches/{id}/check-eligibility/.
+    Dry-run: returns eligibility status for each applicant without persisting anything.
+    Used so the admin can see which selected applicants are eligible BEFORE assigning.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from account.models import ApplicantProfile
+        self.fields["applicant_ids"] = serializers.PrimaryKeyRelatedField(
+            queryset=ApplicantProfile.objects.select_related("user").filter(
+                user__is_active=True
+            ),
+            many=True,
+            help_text="Daftar ID ApplicantProfile untuk dicek kelayakannya.",
+        )
+
+    def validate_applicant_ids(self, value):
+        if len(value) == 0:
+            raise serializers.ValidationError("Pilih minimal 1 pelamar.")
+        if len(value) > 200:
+            raise serializers.ValidationError("Maksimal 200 pelamar per permintaan.")
+        return value
+
+
+class BatchScheduleSerializer(serializers.Serializer):
+    """
+    Input serializer for PATCH /api/batches/{id}/schedule/.
+    Admin sets the date, location, and notes for pra_seleksi or interview stage.
+    Both stages share this serializer; the 'stage' field determines which fields are written.
+    """
+
+    STAGE_CHOICES = [
+        ("pra_seleksi", "Pra-Seleksi"),
+        ("interview", "Interview"),
+    ]
+
+    stage = serializers.ChoiceField(
+        choices=STAGE_CHOICES,
+        help_text="Tahap yang dijadwalkan: 'pra_seleksi' atau 'interview'.",
+    )
+    date = serializers.DateTimeField(
+        help_text="Tanggal dan waktu pelaksanaan tahap.",
+    )
+    location = serializers.CharField(
+        max_length=255,
+        help_text="Lokasi pelaksanaan (alamat lengkap atau nama gedung).",
+    )
+    notes = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        help_text="Informasi tambahan untuk peserta (dress code, dokumen yang dibawa, dll.).",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Applicant search (used by admin batch assignment table)
+# ---------------------------------------------------------------------------
+
+
+class ApplicantSearchSerializer(serializers.Serializer):
+    """
+    Read serializer for a single applicant row in the batch-assignment search table.
+    Returned by GET /api/batches/{id}/eligible-applicants/?q=...
+
+    Each row shows enough info for the admin to identify the applicant and
+    decide whether to include them in the batch.
+    """
+
+    id = serializers.IntegerField(source="pk")
+    nik = serializers.SerializerMethodField()
+    full_name = serializers.SerializerMethodField()
+    email = serializers.SerializerMethodField()
+    phone = serializers.SerializerMethodField()
+    domicile = serializers.SerializerMethodField()
+    # Whether this applicant passes all eligibility rules for the target batch/job.
+    is_eligible = serializers.BooleanField(default=True)
+    # Human-readable reason when is_eligible=False.
+    ineligible_reason = serializers.CharField(allow_null=True, default=None)
+
+    def get_nik(self, obj) -> str:
+        return getattr(obj, "nik", "") or ""
+
+    def get_full_name(self, obj) -> str:
+        return obj.user.full_name if obj.user else ""
+
+    def get_email(self, obj) -> str:
+        return obj.user.email if obj.user else ""
+
+    def get_phone(self, obj) -> str:
+        return obj.user.phone_number if obj.user else ""
+
+    def get_domicile(self, obj) -> str:
+        """Kelurahan / Kecamatan / city concatenated for display."""
+        parts = [
+            getattr(obj, "domicile_kelurahan", None),
+            getattr(obj, "domicile_kecamatan", None),
+            getattr(obj, "domicile_city", None),
+        ]
+        return ", ".join(p for p in parts if p)
+
+
+# ---------------------------------------------------------------------------
+# BatchAnnouncement — broadcast pengumuman admin ke seluruh batch
+# ---------------------------------------------------------------------------
+
+
+class BatchAnnouncementSerializer(serializers.ModelSerializer):
+    """
+    Serializer baca untuk pengumuman batch.
+    Digunakan oleh admin (list dan detail) dan pelamar (hanya baca).
+    """
+
+    created_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = BatchAnnouncement
+        fields = [
+            "id",
+            "batch",
+            "title",
+            "body",
+            "created_by",
+            "created_by_name",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+    def get_created_by_name(self, obj) -> str | None:
+        if obj.created_by:
+            return obj.created_by.full_name or obj.created_by.email
+        return None
+
+
+class BatchAnnouncementCreateSerializer(serializers.Serializer):
+    """
+    Input serializer untuk admin membuat pengumuman batch baru.
+    POST /api/batches/{id}/announcements/
+    """
+
+    title = serializers.CharField(
+        max_length=200,
+        help_text="Judul singkat pengumuman.",
+    )
+    body = serializers.CharField(
+        help_text="Isi lengkap pengumuman yang akan dibaca pelamar.",
+    )

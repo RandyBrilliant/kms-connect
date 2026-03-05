@@ -34,10 +34,11 @@ class ApiEndpoints {
 
   // Jobs
   static String jobDetail(int id) => '$baseUrl/jobs/public/$id/';
-  static String applyForJob(int id) => '$baseUrl/jobs/$id/apply/';
 
   // Applicant Applications
   static String applicationDetail(int id) => '$baseUrl/applicants/me/applications/$id/';
+  static String confirmAttendance(int id) => '$baseUrl/applicants/me/applications/$id/confirm/';
+  static String applicationAnnouncements(int id) => '$baseUrl/applicants/me/applications/$id/announcements/';
 
   // Chat (applicant side)
   static const String chatThreads = '$baseUrl/chat/applicant/threads/';

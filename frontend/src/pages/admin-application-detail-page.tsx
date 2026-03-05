@@ -1,12 +1,14 @@
 /**
  * Admin — Application detail page with tabs: Info, Riwayat Status, Chat.
+ * Chat is only available for DITERIMA / BERANGKAT / SELESAI stages.
+ * For PRA_SELEKSI / INTERVIEW, use batch announcements instead.
  * Opens with `?tab=chat` to jump directly to the chat panel.
  */
 
 import { useParams, useSearchParams, Link } from "react-router-dom"
 import { format } from "date-fns"
 import { id as idLocale } from "date-fns/locale"
-import { IconArrowLeft, IconClipboardList } from "@tabler/icons-react"
+import { IconArrowLeft, IconBell, IconClipboardList } from "@tabler/icons-react"
 
 import { BreadcrumbNav } from "@/components/breadcrumb-nav"
 import { Button } from "@/components/ui/button"
@@ -27,6 +29,8 @@ import { useChatThreadsQuery } from "@/hooks/use-chat-query"
 import { useAuth } from "@/hooks/use-auth"
 
 const BASE_PATH = "/lamaran"
+
+const CHAT_ALLOWED_STATUSES = new Set(["DITERIMA", "BERANGKAT", "SELESAI"])
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -158,22 +162,22 @@ export function AdminApplicationDetailPage() {
                 <dl>
                   <DetailRow label="Lowongan" value={application.job_title} />
                   <DetailRow label="Perusahaan" value={application.company_name} />
+                  <DetailRow label="Batch" value={application.batch_name ?? "-"} />
+                  <DetailRow label="Tanggal Ditugaskan" value={formatDate(application.applied_at)} />
                   <DetailRow
-                    label="Sumber"
-                    value={
-                      application.source === "ADMIN_ASSIGN"
-                        ? "Ditugaskan Admin"
-                        : "Mandiri"
-                    }
+                    label="Konfirmasi Pra-Seleksi"
+                    value={formatDate(application.pra_seleksi_confirmed_at)}
                   />
-                  <DetailRow label="Tanggal Lamar" value={formatDate(application.applied_at)} />
-                  <DetailRow label="Tanggal Review" value={formatDate(application.reviewed_at)} />
+                  <DetailRow
+                    label="Konfirmasi Interview"
+                    value={formatDate(application.interview_confirmed_at)}
+                  />
                   <DetailRow
                     label="Tanggal Selesai Kerja"
                     value={formatDate(application.placement_end_date)}
                   />
                   <DetailRow
-                    label="Dapat Melamar Kembali"
+                    label="Dapat Ditugaskan Kembali"
                     value={formatDate(application.cooldown_eligible_date)}
                   />
                   {application.assigned_by_name && (
@@ -208,7 +212,28 @@ export function AdminApplicationDetailPage() {
 
         {/* Tab: Chat */}
         <TabsContent value="chat">
-          {!threadId ? (
+          {!CHAT_ALLOWED_STATUSES.has(application.status) ? (
+            <Card>
+              <CardContent className="py-8 text-center flex flex-col items-center gap-3">
+                <IconBell className="size-8 text-muted-foreground" />
+                <p className="text-sm font-medium">
+                  Chat tidak tersedia pada tahap{" "}
+                  <span className="font-bold">{application.status.replace("_", "-")}</span>.
+                </p>
+                <p className="text-xs text-muted-foreground max-w-md">
+                  Pada tahap Pra-Seleksi dan Interview, komunikasi dilakukan melalui
+                  Pengumuman Batch. Kirim pengumuman dari halaman detail batch.
+                </p>
+                {application.batch != null && (
+                  <Button asChild variant="outline" size="sm" className="cursor-pointer mt-1">
+                    <Link to={`/batch/${application.batch}`}>
+                      Ke Halaman Batch
+                    </Link>
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          ) : !threadId ? (
             <Card>
               <CardContent className="py-8 text-center">
                 <p className="text-muted-foreground text-sm">

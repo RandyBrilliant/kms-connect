@@ -1,6 +1,9 @@
 """
-API views untuk main app (admin-side CRUD untuk News dan LowonganKerja).
-Public endpoints untuk pelamar: jobs dan news yang sudah dipublikasikan.
+API views untuk main app.
+Admin-side CRUD: News, LowonganKerja, LamaranBatch, JobApplication (read).
+Applicant self-service: my applications, confirm attendance.
+Public endpoints: published news, OPEN jobs.
+Company/Staff self-service: read-only views of their own data.
 """
 
 from django_filters.rest_framework import DjangoFilterBackend
@@ -13,27 +16,35 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 
 from account.permissions import IsBackofficeAdmin, IsApplicant, IsCompany, IsStaff
 from account.api_responses import success_response, error_response, ApiCode
-from account.models import ApplicantProfile
+from account.models import ApplicantProfile, ApplicantVerificationStatus
 from account.pagination import StandardResultsSetPagination
 
 from .models import (
-    ApplicationSource,
     ApplicationStatus,
     ApplicationStatusHistory,
+    BatchAnnouncement,
     JobApplication,
     JobStatus,
+    LamaranBatch,
     LowonganKerja,
     News,
     NewsStatus,
 )
 from .serializers import (
-    ApplicationAssignSerializer,
+    ApplicantSearchSerializer,
     ApplicationTransitionSerializer,
+    BatchAnnouncementCreateSerializer,
+    BatchAnnouncementSerializer,
+    BatchCheckEligibilitySerializer,
+    BatchScheduleSerializer,
+    GroupAssignSerializer,
     JobApplicationSerializer,
+    LamaranBatchCreateSerializer,
+    LamaranBatchSerializer,
     LowonganKerjaSerializer,
     NewsSerializer,
 )
-from .services import ApplicationService, CooldownError, TransitionError
+from .services import ApplicationService, CooldownError, EligibilityError, TransitionError
 
 
 class NewsViewSet(viewsets.ModelViewSet):
@@ -127,52 +138,154 @@ class PublicJobsListViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 # ---------------------------------------------------------------------------
-# Job Application endpoints
+# LamaranBatch — Admin batch management
 # ---------------------------------------------------------------------------
 
 
-class JobApplicationViewSet(viewsets.ModelViewSet):
+class LamaranBatchViewSet(viewsets.ModelViewSet):
     """
-    CRUD + custom actions untuk lamaran kerja (admin/backoffice).
+    CRUD + custom actions untuk LamaranBatch (admin/backoffice).
 
     Standard CRUD:
-      GET    /api/applications/          — list all applications
-      GET    /api/applications/{id}/     — application detail (includes status_history)
-      PATCH  /api/applications/{id}/     — update notes field only (status via transition/)
-      DELETE /api/applications/{id}/     — hard delete (use sparingly)
+      GET    /api/batches/             — list all batches (newest first)
+      POST   /api/batches/             — create a new batch
+      GET    /api/batches/{id}/        — batch detail + counts
+      PATCH  /api/batches/{id}/        — update name/notes on the batch
+      DELETE /api/batches/{id}/        — delete batch (only if has no applications)
 
     Custom actions:
-      POST  /api/applications/assign/            — admin assigns applicant to job
-      PATCH /api/applications/{id}/transition/   — move to a new status (FSM enforced)
+      GET   /api/batches/{id}/eligible-applicants/?q=   — applicant search table with eligibility
+      POST  /api/batches/{id}/check-eligibility/         — dry-run: check selected applicant IDs
+      POST  /api/batches/{id}/assign/                    — bulk assign selected applicants
+      PATCH /api/batches/{id}/schedule/                  — set date/location for pra_seleksi or interview
+      POST  /api/batches/{id}/bulk-transition/           — advance all apps in batch at once
     """
 
-    serializer_class = JobApplicationSerializer
     permission_classes = [IsBackofficeAdmin]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ["status", "source", "job", "applicant"]
-    search_fields = ["applicant__user__full_name", "applicant__user__email", "job__title"]
-    ordering_fields = ["applied_at", "reviewed_at", "status"]
-    ordering = ["-applied_at"]
+    filterset_fields = ["job"]
+    search_fields = ["name", "notes", "job__title"]
+    ordering_fields = ["created_at", "pra_seleksi_date", "interview_date"]
+    ordering = ["-created_at"]
+
+    def get_serializer_class(self):
+        if self.action == "create":
+            return LamaranBatchCreateSerializer
+        return LamaranBatchSerializer
 
     def get_queryset(self):
         return (
-            JobApplication.objects
-            .select_related(
-                "applicant", "applicant__user",
-                "job", "job__company",
-                "reviewed_by", "assigned_by",
-            )
-            .prefetch_related("status_history__changed_by")
+            LamaranBatch.objects.select_related("job", "job__company", "created_by")
+            .prefetch_related("applications")
         )
 
-    @action(detail=False, methods=["post"], url_path="assign")
-    def assign(self, request):
+    def create(self, request, *args, **kwargs):
+        serializer = LamaranBatchCreateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                error_response(
+                    detail="Data tidak valid.",
+                    code=ApiCode.VALIDATION_ERROR,
+                    errors=serializer.errors,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        batch = ApplicationService.create_batch(
+            job=serializer.validated_data["job"],
+            name=serializer.validated_data["name"],
+            notes=serializer.validated_data.get("notes", ""),
+            created_by=request.user,
+        )
+        out = LamaranBatchSerializer(
+            self.get_queryset().get(pk=batch.pk),
+            context={"request": request},
+        )
+        return Response(
+            success_response(data=out.data, detail="Batch berhasil dibuat."),
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["get"], url_path="eligible-applicants")
+    def eligible_applicants(self, request, pk=None):
         """
-        POST /api/applications/assign/
-        Admin directly assigns an applicant to a job at OFFERED status.
-        Body: { "job": <id>, "applicant": <id>, "note": "..." }
+        GET /api/batches/{id}/eligible-applicants/?q=...
+
+        Returns a paginated table of ApplicantProfiles filtered by the search
+        query `q` (searches full_name, email, NIK).  Each row includes an
+        `is_eligible` flag and an `ineligible_reason` computed via the service
+        layer so the admin can see at a glance who can be added to this batch.
+
+        The admin uses this table to select applicants (checkboxes) before
+        calling the `assign` or `check-eligibility` endpoints.
         """
-        serializer = ApplicationAssignSerializer(data=request.data)
+        batch = self.get_object()
+        q = request.query_params.get("q", "").strip()
+
+        qs = (
+            ApplicantProfile.objects.select_related("user")
+            .filter(
+                user__is_active=True,
+                verification_status=ApplicantVerificationStatus.ACCEPTED,
+            )
+        )
+
+        if q:
+            from django.db.models import Q as DQ
+            qs = qs.filter(
+                DQ(user__full_name__icontains=q)
+                | DQ(user__email__icontains=q)
+                | DQ(nik__icontains=q)
+            )
+
+        qs = qs.order_by("user__full_name")
+
+        # Paginate
+        paginator = StandardResultsSetPagination()
+        page = paginator.paginate_queryset(qs, request, view=self)
+
+        # Bulk-check eligibility for the current page only (2 queries)
+        profiles_on_page = list(page)
+        eligibility_map = {
+            r.applicant_id: r
+            for r in ApplicationService.bulk_check_eligibility(
+                applicant_profiles=profiles_on_page,
+                job=batch.job,
+            )
+        }
+
+        rows = []
+        for profile in profiles_on_page:
+            result = eligibility_map.get(profile.pk)
+            rows.append({
+                "id": profile.pk,
+                "nik": profile.nik or "",
+                "full_name": profile.user.full_name if profile.user else "",
+                "email": profile.user.email if profile.user else "",
+                "phone": profile.user.phone_number if profile.user else "",
+                "domicile": ", ".join(filter(None, [
+                    getattr(profile, "domicile_kelurahan", None),
+                    getattr(profile, "domicile_kecamatan", None),
+                    getattr(profile, "domicile_city", None),
+                ])),
+                "is_eligible": result.eligible if result else True,
+                "ineligible_reason": result.reason if result and not result.eligible else None,
+            })
+
+        serializer = ApplicantSearchSerializer(rows, many=True)
+        return paginator.get_paginated_response(serializer.data)
+
+    @action(detail=True, methods=["post"], url_path="check-eligibility")
+    def check_eligibility(self, request, pk=None):
+        """
+        POST /api/batches/{id}/check-eligibility/
+        Body: { "applicant_ids": [1, 2, 3] }
+
+        Dry-run: returns eligibility result per selected applicant_id.
+        No applications are created. Use this before calling `assign/` to
+        preview which applicants will be skipped due to ineligibility.
+        """
+        batch = self.get_object()
+        serializer = BatchCheckEligibilitySerializer(data=request.data)
         if not serializer.is_valid():
             return Response(
                 error_response(
@@ -183,45 +296,469 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        job = serializer.validated_data["job"]
-        applicant_profile = serializer.validated_data["applicant"]
-        note = serializer.validated_data.get("note", "")
+        profiles = serializer.validated_data["applicant_ids"]
+        results = ApplicationService.bulk_check_eligibility(
+            applicant_profiles=profiles,
+            job=batch.job,
+        )
 
-        try:
-            application = ApplicationService.admin_assign(
-                job=job,
-                applicant_profile=applicant_profile,
-                assigned_by=request.user,
-                note=note,
-            )
-        except CooldownError as e:
+        data = [
+            {
+                "applicant_id": r.applicant_id,
+                "eligible": r.eligible,
+                "reason": r.reason,
+            }
+            for r in results
+        ]
+
+        return Response(success_response(data=data, detail="Hasil pengecekan kelayakan."))
+
+    @action(detail=True, methods=["post"], url_path="assign")
+    def assign(self, request, pk=None):
+        """
+        POST /api/batches/{id}/assign/
+        Body: { "applicant_ids": [1, 2, 3], "note": "..." }
+
+        Admin selects applicants from the eligible-applicants table and submits
+        their IDs here.  The service layer bulk-creates applications (bulk_create,
+        no N+1) and re-checks eligibility atomically, skipping ineligible ones.
+
+        Response includes how many were assigned and which were skipped.
+        """
+        batch = self.get_object()
+        serializer = GroupAssignSerializer(data=request.data)
+        if not serializer.is_valid():
             return Response(
                 error_response(
-                    detail=str(e),
+                    detail="Data tidak valid.",
                     code=ApiCode.VALIDATION_ERROR,
-                    errors={"eligible_date": str(e.eligible_date)},
+                    errors=serializer.errors,
                 ),
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Re-fetch with full relations for response
-        application.refresh_from_db()
-        out = JobApplicationSerializer(
-            self.get_queryset().get(pk=application.pk),
+        profiles = serializer.validated_data["applicant_ids"]
+        note = serializer.validated_data.get("note", "")
+
+        result = ApplicationService.group_assign(
+            batch=batch,
+            applicant_profiles=profiles,
+            assigned_by=request.user,
+            note=note,
+        )
+
+        return Response(
+            success_response(
+                data={
+                    "assigned_count": len(result.assigned),
+                    "skipped_count": len(result.skipped),
+                    "skipped": [
+                        {
+                            "applicant_id": s.applicant_id,
+                            "reason": s.reason,
+                        }
+                        for s in result.skipped
+                    ],
+                },
+                detail=(
+                    f"{len(result.assigned)} pelamar berhasil ditambahkan ke batch."
+                    + (
+                        f" {len(result.skipped)} dilewati karena tidak memenuhi syarat."
+                        if result.skipped else ""
+                    )
+                ),
+            ),
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["patch"], url_path="schedule")
+    def schedule(self, request, pk=None):
+        """
+        PATCH /api/batches/{id}/schedule/
+        Body: { "stage": "pra_seleksi", "date": "...", "location": "...", "notes": "..." }
+              OR
+              { "stage": "interview", "date": "...", "location": "...", "notes": "..." }
+
+        Admin sets the date, location, and notes for either the pra-seleksi
+        or interview stage so applicants know when/where to show up.
+        """
+        batch = self.get_object()
+        serializer = BatchScheduleSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                error_response(
+                    detail="Data tidak valid.",
+                    code=ApiCode.VALIDATION_ERROR,
+                    errors=serializer.errors,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            ApplicationService.schedule_stage(
+                batch=batch,
+                stage=serializer.validated_data["stage"],
+                stage_date=serializer.validated_data["date"],
+                location=serializer.validated_data.get("location", ""),
+                notes=serializer.validated_data.get("notes", ""),
+            )
+        except ValueError as e:
+            return Response(
+                error_response(detail=str(e), code=ApiCode.VALIDATION_ERROR),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        out = LamaranBatchSerializer(
+            self.get_queryset().get(pk=batch.pk),
             context={"request": request},
         )
+        return Response(success_response(data=out.data, detail="Jadwal berhasil disimpan."))
+
+    @action(detail=True, methods=["post"], url_path="bulk-transition")
+    def bulk_transition(self, request, pk=None):
+        """
+        POST /api/batches/{id}/bulk-transition/
+        Body: { "status": "INTERVIEW", "note": "...", "placement_end_date": "..." }
+
+        Advance ALL eligible applications in this batch to the next status at once.
+        Useful for moving the entire batch from PRA_SELEKSI → INTERVIEW etc.
+        """
+        batch = self.get_object()
+        serializer = ApplicationTransitionSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                error_response(
+                    detail="Data tidak valid.",
+                    code=ApiCode.VALIDATION_ERROR,
+                    errors=serializer.errors,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            updated = ApplicationService.bulk_transition(
+                batch=batch,
+                new_status=serializer.validated_data["status"],
+                actor=request.user,
+                note=serializer.validated_data.get("note", ""),
+                placement_end_date=serializer.validated_data.get("placement_end_date"),
+            )
+        except TransitionError as e:
+            return Response(
+                error_response(detail=str(e), code=ApiCode.VALIDATION_ERROR),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         return Response(
-            success_response(data=out.data, detail="Pelamar berhasil ditugaskan."),
+            success_response(
+                data={"updated_count": len(updated)},
+                detail=f"{len(updated)} lamaran berhasil dipindahkan ke status '{serializer.validated_data['status']}'.",
+            )
+        )
+
+    @action(detail=True, methods=["get", "post"], url_path="announcements")
+    def announcements(self, request, pk=None):
+        """
+        GET  /api/batches/{id}/announcements/  — list all announcements for this batch.
+        POST /api/batches/{id}/announcements/  — admin creates a new broadcast announcement.
+
+        Announcements are batch-level broadcast messages visible to all applicants
+        in this batch. Used for early-stage communication (PRA_SELEKSI / INTERVIEW)
+        instead of individual chat threads.
+        """
+        batch = self.get_object()
+
+        if request.method == "GET":
+            qs = (
+                BatchAnnouncement.objects
+                .filter(batch=batch)
+                .select_related("created_by")
+                .order_by("-created_at")
+            )
+            serializer = BatchAnnouncementSerializer(qs, many=True, context={"request": request})
+            return Response(success_response(data=serializer.data))
+
+        # POST — create announcement
+        serializer = BatchAnnouncementCreateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                error_response(
+                    detail="Data tidak valid.",
+                    code=ApiCode.VALIDATION_ERROR,
+                    errors=serializer.errors,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        announcement = BatchAnnouncement.objects.create(
+            batch=batch,
+            title=serializer.validated_data["title"],
+            body=serializer.validated_data["body"],
+            created_by=request.user,
+        )
+        return Response(
+            success_response(
+                data=BatchAnnouncementSerializer(announcement, context={"request": request}).data,
+                detail="Pengumuman berhasil dibuat dan dikirim ke semua pelamar dalam batch ini.",
+            ),
             status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["get"], url_path="export-excel")
+    def export_excel(self, request, pk=None):
+        """
+        GET /api/batches/{id}/export-excel/
+
+        Returns an .xlsx file containing all applicant biodata for every
+        JobApplication in this batch.  Each row = one applicant.
+
+        Columns exported (aligned with FORM BIODATA PMI):
+          No, Nama, NIK, Email, No HP, TTL (Tempat/Tanggal Lahir),
+          Jenis Kelamin, Agama, Pendidikan, Status Perkawinan,
+          Alamat KTP, Provinsi, Kabupaten/Kota,
+          Tinggi (cm), Berat (kg),
+          Paspor, No Paspor, Tgl Terbit Paspor, Tgl Kadaluarsa Paspor,
+          No KK, No Ijazah, No BPJS,
+          Status Lamaran, Konfirmasi Pra-Seleksi, Konfirmasi Interview,
+          Tgl Masuk Batch
+        """
+        import io
+        from django.http import HttpResponse
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+
+        batch = self.get_object()
+
+        applications = (
+            JobApplication.objects
+            .filter(batch=batch)
+            .select_related(
+                "applicant__user",
+                "applicant__birth_place",
+                "applicant__province",
+                "applicant__district",
+                "applicant__village",
+            )
+            .order_by("applicant__user__full_name")
+        )
+
+        # ── Workbook setup ─────────────────────────────────────────────────
+        wb = openpyxl.Workbook()
+        ws = wb.active
+
+        safe_title = "".join(
+            c for c in batch.name if c.isalnum() or c in (" ", "-", "_")
+        )[:31] or "Batch"
+        ws.title = safe_title
+
+        # ── Styles ─────────────────────────────────────────────────────────
+        header_font = Font(name="Calibri", bold=True, color="FFFFFF", size=11)
+        header_fill = PatternFill("solid", fgColor="1F5C3A")   # dark green
+        subheader_fill = PatternFill("solid", fgColor="2E7D52") # medium green
+        center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        left = Alignment(horizontal="left", vertical="center", wrap_text=True)
+        thin = Side(style="thin", color="CCCCCC")
+        border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+        # ── Title row ──────────────────────────────────────────────────────
+        num_cols = 26
+        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=num_cols)
+        title_cell = ws.cell(row=1, column=1,
+                             value=f"DATA PELAMAR — {batch.name.upper()}")
+        title_cell.font = Font(name="Calibri", bold=True, size=13, color="FFFFFF")
+        title_cell.fill = header_fill
+        title_cell.alignment = center
+
+        ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=num_cols)
+        subtitle_cell = ws.cell(row=2, column=1,
+                                value=f"Lowongan: {batch.job.title}  |  Total Pelamar: {applications.count()}")
+        subtitle_cell.font = Font(name="Calibri", italic=True, size=10, color="FFFFFF")
+        subtitle_cell.fill = subheader_fill
+        subtitle_cell.alignment = center
+
+        # ── Column headers ─────────────────────────────────────────────────
+        HEADERS = [
+            "No", "Nama Lengkap", "NIK", "Email", "No. HP / WA",
+            "Tempat Lahir", "Tanggal Lahir", "Jenis Kelamin", "Agama",
+            "Pendidikan Terakhir", "Status Perkawinan",
+            "Alamat KTP", "Provinsi", "Kabupaten / Kota", "Kelurahan / Desa",
+            "Tinggi (cm)", "Berat (kg)",
+            "Memiliki Paspor", "No. Paspor", "Tgl. Terbit Paspor", "Tgl. Kadaluarsa Paspor",
+            "No. KK", "No. Ijazah", "No. BPJS",
+            "Status Lamaran", "Tgl. Masuk Batch",
+        ]
+
+        HEADER_ROW = 3
+        for col_idx, header in enumerate(HEADERS, 1):
+            cell = ws.cell(row=HEADER_ROW, column=col_idx, value=header)
+            cell.font = Font(name="Calibri", bold=True, size=10, color="FFFFFF")
+            cell.fill = PatternFill("solid", fgColor="2E7D52")
+            cell.alignment = center
+            cell.border = border
+
+        # Freeze panes at row 4
+        ws.freeze_panes = "A4"
+
+        # ── Data rows ──────────────────────────────────────────────────────
+        STATUS_LABELS = {
+            "PRA_SELEKSI": "Pra-Seleksi",
+            "INTERVIEW": "Interview",
+            "DITERIMA": "Diterima",
+            "BERANGKAT": "Berangkat",
+            "SELESAI": "Selesai",
+            "DITOLAK": "Ditolak",
+        }
+        GENDER_LABELS = {"M": "Laki-laki", "F": "Perempuan"}
+        YES_NO = {True: "Ya", False: "Tidak", None: "-"}
+
+        for row_num, app in enumerate(applications, 1):
+            profile = app.applicant
+            user = profile.user
+            row = HEADER_ROW + row_num
+
+            def fmt_date(d):
+                return d.strftime("%d/%m/%Y") if d else "-"
+
+            row_data = [
+                row_num,
+                user.full_name or "-",
+                profile.nik or "-",
+                user.email or "-",
+                profile.contact_phone or "-",
+                getattr(profile.birth_place, "name", "-") or "-",
+                fmt_date(profile.birth_date),
+                GENDER_LABELS.get(profile.gender, profile.gender or "-"),
+                profile.get_religion_display() if profile.religion else "-",
+                profile.get_education_level_display() if profile.education_level else "-",
+                profile.get_marital_status_display() if profile.marital_status else "-",
+                profile.address or "-",
+                getattr(profile.province, "name", "-") or "-",
+                getattr(profile.district, "name", "-") or "-",
+                getattr(profile.village, "name", "-") or "-",
+                profile.height_cm if profile.height_cm else "-",
+                profile.weight_kg if profile.weight_kg else "-",
+                YES_NO.get(profile.has_passport, "-"),
+                profile.passport_number or "-",
+                fmt_date(profile.passport_issue_date),
+                fmt_date(profile.passport_expiry_date),
+                profile.family_card_number or "-",
+                profile.diploma_number or "-",
+                profile.bpjs_number or "-",
+                STATUS_LABELS.get(app.status, app.status),
+                fmt_date(app.applied_at.date()),
+            ]
+
+            alt_fill = PatternFill("solid", fgColor="F0F7F4") if row_num % 2 == 0 else None
+
+            for col_idx, value in enumerate(row_data, 1):
+                cell = ws.cell(row=row, column=col_idx, value=value)
+                cell.font = Font(name="Calibri", size=10)
+                cell.alignment = center if col_idx == 1 else left
+                cell.border = border
+                if alt_fill:
+                    cell.fill = alt_fill
+
+        # ── Column widths ──────────────────────────────────────────────────
+        COL_WIDTHS = [
+            5,   # No
+            28,  # Nama
+            18,  # NIK
+            28,  # Email
+            18,  # No HP
+            16,  # Tempat Lahir
+            14,  # Tgl Lahir
+            14,  # Gender
+            14,  # Agama
+            20,  # Pendidikan
+            18,  # Status Kawin
+            32,  # Alamat
+            18,  # Provinsi
+            20,  # Kabupaten
+            20,  # Kelurahan
+            12,  # Tinggi
+            12,  # Berat
+            14,  # Has Paspor
+            16,  # No Paspor
+            16,  # Tgl Terbit
+            16,  # Tgl Kadaluarsa
+            16,  # No KK
+            16,  # No Ijazah
+            16,  # BPJS
+            16,  # Status Lamaran
+            16,  # Tgl Masuk
+        ]
+        for col_idx, width in enumerate(COL_WIDTHS, 1):
+            ws.column_dimensions[get_column_letter(col_idx)].width = width
+
+        ws.row_dimensions[1].height = 22
+        ws.row_dimensions[2].height = 18
+        ws.row_dimensions[HEADER_ROW].height = 30
+
+        # ── Build response ──────────────────────────────────────────────────
+        buffer = io.BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+
+        safe_filename = "".join(
+            c for c in batch.name if c.isalnum() or c in (" ", "-", "_")
+        ).strip().replace(" ", "_")
+        filename = f"pelamar_{safe_filename}.xlsx"
+
+        response = HttpResponse(
+            buffer.read(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        response["Content-Transfer-Encoding"] = "binary"
+        return response
+
+
+# ---------------------------------------------------------------------------
+# Job Application — Admin read + individual transitions
+# ---------------------------------------------------------------------------
+
+
+class JobApplicationViewSet(viewsets.ModelViewSet):
+    """
+    Read + individual transitions for JobApplication (admin/backoffice).
+
+    Standard:
+      GET    /api/applications/          — list with filters
+      GET    /api/applications/{id}/     — detail (includes status_history)
+      PATCH  /api/applications/{id}/     — update notes field only
+      DELETE /api/applications/{id}/     — hard delete (use sparingly)
+
+    Custom actions:
+      PATCH /api/applications/{id}/transition/   — FSM transition for one application
+    """
+
+    serializer_class = JobApplicationSerializer
+    permission_classes = [IsBackofficeAdmin]
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ["status", "job", "applicant", "batch"]
+    search_fields = ["applicant__user__full_name", "applicant__user__email", "job__title"]
+    ordering_fields = ["applied_at", "status"]
+    ordering = ["-applied_at"]
+
+    def get_queryset(self):
+        return (
+            JobApplication.objects
+            .select_related(
+                "applicant", "applicant__user",
+                "job", "job__company",
+                "batch",
+                "assigned_by",
+            )
+            .prefetch_related("status_history__changed_by")
         )
 
     @action(detail=True, methods=["patch"], url_path="transition")
     def transition(self, request, pk=None):
         """
         PATCH /api/applications/{id}/transition/
-        Move an application to a new status (FSM enforced).
-        Body: { "status": "OFFERED", "note": "...", "placement_end_date": "2026-02-27" }
-        placement_end_date is only required when transitioning to COMPLETED.
+        Body: { "status": "INTERVIEW", "note": "...", "placement_end_date": "2026-12-31" }
+        placement_end_date is only required when transitioning to SELESAI.
         """
         application = self.get_object()
 
@@ -250,7 +787,6 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Re-fetch with full relations (history just appended)
         out = JobApplicationSerializer(
             self.get_queryset().get(pk=application.pk),
             context={"request": request},
@@ -258,18 +794,26 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
         return Response(success_response(data=out.data, detail="Status lamaran diperbarui."))
 
 
+# ---------------------------------------------------------------------------
+# Applicant self-service
+# ---------------------------------------------------------------------------
+
+
 class ApplicantJobApplicationViewSet(viewsets.ReadOnlyModelViewSet):
     """
     Self-service untuk pelamar melihat lamaran mereka sendiri.
-    GET /api/applicants/me/applications/     — list own applications
-    GET /api/applicants/me/applications/:id/ — detail (includes status_history)
+    GET /api/applicants/me/applications/      — list own applications
+    GET /api/applicants/me/applications/{id}/ — detail (includes status_history + batch schedule)
+
+    Custom actions:
+      POST /api/applicants/me/applications/{id}/confirm/ — confirm attendance at current stage
     """
 
     serializer_class = JobApplicationSerializer
     permission_classes = [IsApplicant]
     pagination_class = None  # Return plain list — mobile parses raw array
     filter_backends = [DjangoFilterBackend, OrderingFilter]
-    filterset_fields = ["status", "source"]
+    filterset_fields = ["status"]
     ordering_fields = ["applied_at", "status"]
     ordering = ["-applied_at"]
 
@@ -283,63 +827,31 @@ class ApplicantJobApplicationViewSet(viewsets.ReadOnlyModelViewSet):
         return (
             JobApplication.objects
             .filter(applicant=applicant_profile)
-            .select_related("job", "job__company", "reviewed_by", "assigned_by")
+            .select_related("job", "job__company", "batch", "assigned_by")
             .prefetch_related("status_history__changed_by")
         )
 
+    @action(detail=True, methods=["post"], url_path="confirm")
+    def confirm(self, request, pk=None):
+        """
+        POST /api/applicants/me/applications/{id}/confirm/
+        No body required.
 
-class ApplyForJobView(APIView):
-    """
-    Endpoint untuk pelamar melamar pekerjaan.
-    POST /api/jobs/:id/apply/
+        Pelamar mengkonfirmasi kehadiran di tahap saat ini:
+        - PRA_SELEKSI → sets pra_seleksi_confirmed_at
+        - INTERVIEW   → sets interview_confirmed_at
+        """
+        application = self.get_object()
 
-    Enforces via ApplicationService:
-      - 2-year re-apply cooldown after COMPLETED placement.
-      - No duplicate active application for (applicant, job).
-      - Job must be OPEN.
-    """
-
-    permission_classes = [IsApplicant]
-
-    def post(self, request, pk=None):
-        # Validate job exists and is OPEN
         try:
-            job = LowonganKerja.objects.get(pk=pk, status=JobStatus.OPEN)
-        except LowonganKerja.DoesNotExist:
-            return Response(
-                error_response(
-                    detail="Lowongan kerja tidak ditemukan atau sudah ditutup.",
-                    code=ApiCode.NOT_FOUND,
-                ),
-                status=status.HTTP_404_NOT_FOUND,
+            ApplicationService.confirm_attendance(
+                application=application,
+                applicant_user=request.user,
             )
-
-        # Resolve applicant profile
-        try:
-            applicant_profile = request.user.applicant_profile
-        except Exception:
+        except TransitionError as e:
             return Response(
-                error_response(
-                    detail="Profil pelamar tidak ditemukan.",
-                    code=ApiCode.NOT_FOUND,
-                ),
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        # Delegate to service layer (cooldown + duplicate check + create)
-        try:
-            application = ApplicationService.apply(
-                job=job,
-                applicant_profile=applicant_profile,
-            )
-        except CooldownError as e:
-            return Response(
-                error_response(
-                    detail=str(e),
-                    code=ApiCode.VALIDATION_ERROR,
-                    errors={"eligible_date": str(e.eligible_date)},
-                ),
-                status=status.HTTP_400_BAD_REQUEST,
+                error_response(detail=str(e), code=ApiCode.PERMISSION_DENIED),
+                status=status.HTTP_403_FORBIDDEN,
             )
         except ValueError as e:
             return Response(
@@ -347,11 +859,38 @@ class ApplyForJobView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        serializer = JobApplicationSerializer(instance=application, context={"request": request})
-        return Response(
-            success_response(data=serializer.data, detail="Lamaran berhasil dikirim."),
-            status=status.HTTP_201_CREATED,
+        out = JobApplicationSerializer(
+            self.get_queryset().get(pk=application.pk),
+            context={"request": request},
         )
+        return Response(success_response(data=out.data, detail="Kehadiran berhasil dikonfirmasi."))
+
+    @action(detail=True, methods=["get"], url_path="announcements")
+    def announcements(self, request, pk=None):
+        """
+        GET /api/applicants/me/applications/{id}/announcements/
+
+        Returns all broadcast announcements for this application's batch, ordered
+        newest-first. Returns an empty list when the application has no batch
+        (i.e. it was not assigned via the batch workflow).
+
+        This endpoint is the primary communication channel for PRA_SELEKSI and
+        INTERVIEW stages — applicants read batch-level messages here instead of
+        opening an individual chat thread.
+        """
+        application = self.get_object()
+
+        if application.batch_id is None:
+            return Response(success_response(data=[]))
+
+        qs = (
+            BatchAnnouncement.objects
+            .filter(batch_id=application.batch_id)
+            .select_related("created_by")
+            .order_by("-created_at")
+        )
+        serializer = BatchAnnouncementSerializer(qs, many=True, context={"request": request})
+        return Response(success_response(data=serializer.data))
 
 
 # ---------------------------------------------------------------------------
@@ -459,7 +998,7 @@ class CompanyJobApplicationsViewSet(viewsets.ReadOnlyModelViewSet):
             return JobApplication.objects.none()
         return (
             JobApplication.objects.filter(job__company=company_profile)
-            .select_related("applicant", "applicant__user", "job", "job__company", "reviewed_by", "assigned_by")
+            .select_related("applicant", "applicant__user", "job", "job__company", "batch", "assigned_by")
             .prefetch_related("status_history__changed_by")
         )
 

@@ -27,6 +27,9 @@ from account.api_responses import ApiCode, error_response, success_response
 from account.permissions import IsApplicant, IsBackofficeAdmin
 
 from .models import ChatMessage, ChatThread
+
+# Statuses at which an applicant is permitted to use individual chat.
+_CHAT_ALLOWED_STATUSES = {"DITERIMA", "BERANGKAT", "SELESAI"}
 from .serializers import (
     ApplicantChatThreadSerializer,
     ChatMessageSerializer,
@@ -215,6 +218,21 @@ class _ApplicantThreadMixin:
                 error_response(detail="Thread tidak ditemukan.", code=ApiCode.NOT_FOUND),
                 status=status.HTTP_404_NOT_FOUND,
             )
+
+        # Chat is only available once the application reaches DITERIMA or later.
+        # For PRA_SELEKSI and INTERVIEW stages, use batch announcements instead.
+        if thread.application.status not in _CHAT_ALLOWED_STATUSES:
+            return None, Response(
+                error_response(
+                    detail=(
+                        "Fitur chat belum tersedia pada tahap ini. "
+                        "Gunakan pengumuman batch untuk komunikasi pada tahap Pra-Seleksi dan Interview."
+                    ),
+                    code=ApiCode.PERMISSION_DENIED,
+                ),
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         return thread, None
 
 
@@ -243,7 +261,10 @@ class ApplicantThreadListView(_ApplicantThreadMixin, APIView):
 
         threads = (
             ChatThread.objects
-            .filter(application__applicant=applicant_profile)
+            .filter(
+                application__applicant=applicant_profile,
+                application__status__in=_CHAT_ALLOWED_STATUSES,
+            )
             .select_related(
                 "application__job",
                 "application__applicant__user",

@@ -22,6 +22,7 @@ import {
   createApplicantDocument,
   updateApplicantDocument,
   deleteApplicantDocument,
+  downloadApplicantDocuments,
   getDocumentTypes,
   sendVerificationEmail,
   sendPasswordResetEmail,

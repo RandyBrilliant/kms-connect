@@ -6,7 +6,6 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../config/colors.dart';
-import '../../../../core/widgets/custom_toast.dart';
 import '../../data/providers/job_provider.dart';
 import '../../domain/models/job.dart';
 
@@ -26,7 +25,6 @@ class JobDetailPage extends ConsumerStatefulWidget {
 class _JobDetailPageState extends ConsumerState<JobDetailPage>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
-  bool _applying = false;
 
   @override
   void initState() {
@@ -56,40 +54,6 @@ class _JobDetailPageState extends ConsumerState<JobDetailPage>
         child: child,
       ),
     );
-  }
-
-  // ── Apply logic ──────────────────────────────────────────────────────────
-
-  Future<void> _handleApply() async {
-    final ctx = context; // capture before async gap
-    final confirmed = await showDialog<bool>(
-      context: ctx,
-      builder: (_) => const _ApplyConfirmDialog(),
-    );
-    if (confirmed != true || !mounted) return;
-
-    setState(() => _applying = true);
-    try {
-      await ref.read(jobRepositoryProvider).applyForJob(widget.jobId);
-      if (!mounted) return;
-      CustomToast.show(
-        context,
-        title: 'Lamaran Terkirim',
-        message: 'Lamaran kamu berhasil dikirim. Semoga berhasil!',
-        type: ToastType.success,
-      );
-      context.pop();
-    } catch (e) {
-      if (!mounted) return;
-      CustomToast.show(
-        context,
-        title: 'Gagal Melamar',
-        message: '$e',
-        type: ToastType.error,
-      );
-    } finally {
-      if (mounted) setState(() => _applying = false);
-    }
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────
@@ -183,16 +147,13 @@ class _JobDetailPageState extends ConsumerState<JobDetailPage>
           child: _CircleBackButton(onTap: context.pop),
         ),
 
-        // ── Sticky bottom CTA ────────────────────────────────────────
+        // ── Sticky bottom info bar ────────────────────────────────────────
         Positioned(
           left: 0,
           right: 0,
           bottom: 0,
           child: _animated(
-            _ApplyCta(
-              isApplying: _applying,
-              onApply: _handleApply,
-            ),
+            const _AdminAssignedNotice(),
             0.45, 0.85,
           ),
         ),
@@ -566,18 +527,16 @@ class _ContentSection extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Apply CTA  (sticky bottom bar)
+// Admin-assigned notice bar  (replaces apply CTA)
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _ApplyCta extends StatelessWidget {
-  const _ApplyCta({required this.isApplying, required this.onApply});
-
-  final bool isApplying;
-  final VoidCallback onApply;
+class _AdminAssignedNotice extends StatelessWidget {
+  const _AdminAssignedNotice();
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
     final bottomPad = MediaQuery.paddingOf(context).bottom;
 
     return Container(
@@ -593,23 +552,20 @@ class _ApplyCta extends StatelessWidget {
           ),
         ],
       ),
-      child: FilledButton(
-        onPressed: isApplying ? null : onApply,
-        style: FilledButton.styleFrom(
-          minimumSize: const Size(double.infinity, 52),
-          backgroundColor: AppColors.primaryDarkGreen,
-          foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14)),
-        ),
-        child: isApplying
-            ? const SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(
-                    color: Colors.white, strokeWidth: 2.5),
-              )
-            : const Text('Lamar Sekarang'),
+      child: Row(
+        children: [
+          Icon(Icons.info_outline_rounded,
+              size: 18, color: AppColors.primaryDarkGreen),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Penugasan ke lowongan ini dikelola oleh admin.',
+              style: tt.bodySmall?.copyWith(
+                color: cs.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -642,63 +598,6 @@ class _CircleBackButton extends StatelessWidget {
         child: const Icon(Icons.arrow_back_ios_new_rounded,
             size: 16, color: Colors.white),
       ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Apply Confirmation Dialog
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _ApplyConfirmDialog extends StatelessWidget {
-  const _ApplyConfirmDialog();
-
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    final cs = Theme.of(context).colorScheme;
-
-    return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      icon: Container(
-        width: 52,
-        height: 52,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: AppColors.primaryDarkGreen.withValues(alpha: 0.10),
-        ),
-        child: const Icon(Icons.send_rounded,
-            color: AppColors.primaryDarkGreen, size: 26),
-      ),
-      title: Text('Lamar Pekerjaan',
-          style: tt.titleLarge, textAlign: TextAlign.center),
-      content: Text(
-        'Pastikan data profilmu sudah lengkap sebelum melamar.\nLanjutkan?',
-        style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
-        textAlign: TextAlign.center,
-      ),
-      actionsAlignment: MainAxisAlignment.center,
-      actions: [
-        OutlinedButton(
-          onPressed: () => Navigator.pop(context, false),
-          style: OutlinedButton.styleFrom(
-            minimumSize: const Size(110, 44),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12)),
-          ),
-          child: const Text('Batal'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(context, true),
-          style: FilledButton.styleFrom(
-            minimumSize: const Size(110, 44),
-            backgroundColor: AppColors.primaryDarkGreen,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12)),
-          ),
-          child: const Text('Lamar'),
-        ),
-      ],
     );
   }
 }

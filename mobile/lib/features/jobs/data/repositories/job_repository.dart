@@ -4,6 +4,7 @@ import '../../../../core/api/api_client.dart';
 import '../../../../core/api/endpoints.dart';
 import '../../../../core/models/api_response.dart';
 import '../../../../core/models/paginated_state.dart';
+import '../../domain/models/batch_announcement.dart';
 import '../../domain/models/job.dart';
 import '../../domain/models/job_application.dart';
 
@@ -90,30 +91,6 @@ class JobRepository {
     }
   }
 
-  /// Apply for a job
-  Future<JobApplication> applyForJob(int jobId) async {
-    try {
-      final response = await _apiClient.dio.post(ApiEndpoints.applyForJob(jobId));
-      final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
-        response.data,
-        (data) => data as Map<String, dynamic>,
-      );
-
-      if (!apiResponse.isSuccess || apiResponse.data == null) {
-        throw DioException(
-          requestOptions: response.requestOptions,
-          response: response,
-          type: DioExceptionType.badResponse,
-          message: apiResponse.detail ?? 'Gagal melamar pekerjaan',
-        );
-      }
-
-      return JobApplication.fromJson(apiResponse.data!);
-    } on DioException catch (e) {
-      throw _handleError(e);
-    }
-  }
-
   /// Get my applications
   Future<List<JobApplication>> getMyApplications({String? status}) async {
     try {
@@ -168,6 +145,63 @@ class JobRepository {
         requestOptions: response.requestOptions,
         message: 'Gagal mengambil detail lamaran',
       );
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  /// Confirm attendance at the current stage (PRA_SELEKSI or INTERVIEW).
+  Future<JobApplication> confirmAttendance(int applicationId) async {
+    try {
+      final response = await _apiClient.dio.post(
+        ApiEndpoints.confirmAttendance(applicationId),
+      );
+      final data = response.data;
+      if (data is Map<String, dynamic>) {
+        // Try plain object first, then ApiResponse envelope.
+        if (data.containsKey('id')) {
+          return JobApplication.fromJson(data);
+        }
+        final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
+          data,
+          (d) => d as Map<String, dynamic>,
+        );
+        if (apiResponse.data != null) {
+          return JobApplication.fromJson(apiResponse.data!);
+        }
+      }
+      throw DioException(
+        requestOptions: response.requestOptions,
+        message: 'Gagal mengkonfirmasi kehadiran',
+      );
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  /// Fetch batch broadcast announcements for an application.
+  ///
+  /// Returns the announcements for the batch this application belongs to.
+  /// Empty list when the application has no batch.
+  /// This is the primary communication channel for PRA_SELEKSI and INTERVIEW stages.
+  Future<List<BatchAnnouncement>> getApplicationAnnouncements(int applicationId) async {
+    try {
+      final response = await _apiClient.dio.get(
+        ApiEndpoints.applicationAnnouncements(applicationId),
+      );
+      final data = response.data;
+      // Backend wraps in { "status": "...", "data": [...] }
+      if (data is Map<String, dynamic> && data['data'] is List) {
+        return (data['data'] as List)
+            .map((e) => BatchAnnouncement.fromJson(e as Map<String, dynamic>))
+            .toList();
+      }
+      if (data is List) {
+        return data
+            .map((e) => BatchAnnouncement.fromJson(e as Map<String, dynamic>))
+            .toList();
+      }
+      return [];
     } on DioException catch (e) {
       throw _handleError(e);
     }

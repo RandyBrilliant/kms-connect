@@ -270,6 +270,41 @@ export async function updateApplicantDocument(
   return data
 }
 
+/**
+ * GET /api/applicants/:id/download-documents/
+ * Downloads all uploaded documents for this applicant as a single ZIP archive.
+ * Triggers a browser save-file dialog automatically.
+ */
+export async function downloadApplicantDocuments(
+  applicantId: number,
+  displayName: string
+): Promise<void> {
+  const response = await api.get(
+    `/api/applicants/${applicantId}/download-documents/`,
+    { responseType: "blob" }
+  )
+
+  // Prefer filename from Content-Disposition if available
+  const disposition: string = response.headers["content-disposition"] ?? ""
+  const match = disposition.match(/filename="?([^"]+)"?/)
+  const safeName = displayName
+    .replace(/[^a-zA-Z0-9\s_-]/g, "")
+    .trim()
+    .replace(/\s+/g, "_")
+  const filename = match?.[1] ?? `Dokumen_${safeName}.zip`
+
+  const blob = new Blob([response.data as BlobPart], { type: "application/zip" })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = filename
+  a.style.display = "none"
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
 /** DELETE /api/applicants/:applicantId/documents/:id/ */
 export async function deleteApplicantDocument(
   applicantId: number,

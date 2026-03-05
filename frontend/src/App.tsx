@@ -46,7 +46,8 @@ const AdminBroadcastFormPage = lazy(() => import("@/pages/admin-broadcast-form-p
 const AdminLaporanPage = lazy(() => import("@/pages/admin-laporan-page").then(m => ({ default: m.AdminLaporanPage })))
 const AdminApplicationsPage = lazy(() => import("@/pages/admin-applications-page").then(m => ({ default: m.AdminApplicationsPage })))
 const AdminApplicationDetailPage = lazy(() => import("@/pages/admin-application-detail-page").then(m => ({ default: m.AdminApplicationDetailPage })))
-const AdminAssignApplicationPage = lazy(() => import("@/pages/admin-assign-application-page").then(m => ({ default: m.AdminAssignApplicationPage })))
+const AdminBatchListPage = lazy(() => import("@/pages/admin-batch-list-page").then(m => ({ default: m.AdminBatchListPage })))
+const AdminBatchDetailPage = lazy(() => import("@/pages/admin-batch-detail-page").then(m => ({ default: m.AdminBatchDetailPage })))
 const AdminChatPage = lazy(() => import("@/pages/admin-chat-page").then(m => ({ default: m.AdminChatPage })))
 
 // Loading fallback component
@@ -143,8 +144,9 @@ function AppRoutes() {
         <Route path="broadcasts/:id/edit" element={<AdminBroadcastFormPage />} />
         <Route path="laporan" element={<AdminLaporanPage />} />
         <Route path="lamaran" element={<AdminApplicationsPage />} />
-        <Route path="lamaran/new" element={<AdminAssignApplicationPage />} />
         <Route path="lamaran/:id" element={<AdminApplicationDetailPage />} />
+        <Route path="batch" element={<AdminBatchListPage />} />
+        <Route path="batch/:id" element={<AdminBatchDetailPage />} />
         <Route path="chat" element={<AdminChatPage />} />
         <Route path="notifikasi" element={<NotificationsPage />} />
         <Route path="profil" element={<ProfilePage />} />

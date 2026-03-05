@@ -5,8 +5,12 @@ import 'package:intl/intl.dart';
 
 import '../../../../config/colors.dart';
 import '../../data/providers/job_provider.dart';
+import '../../domain/models/batch_announcement.dart';
 import '../../domain/models/job_application.dart';
 import '../../domain/models/application_status_history.dart';
+
+/// Statuses that allow individual chat. All others use batch announcements.
+const _kChatAllowedStatuses = {'DITERIMA', 'BERANGKAT', 'SELESAI'};
 
 class ApplicationDetailPage extends ConsumerStatefulWidget {
   const ApplicationDetailPage({super.key, required this.applicationId});
@@ -46,10 +50,41 @@ class _ApplicationDetailPageState
     ));
   }
 
+  bool _isConfirming = false;
+
   @override
   void dispose() {
     _animCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _confirmAttendance(BuildContext ctx) async {
+    if (_isConfirming) return;
+    setState(() => _isConfirming = true);
+    try {
+      final repo = ref.read(jobRepositoryProvider);
+      await repo.confirmAttendance(widget.applicationId);
+      ref.invalidate(applicationDetailProvider(widget.applicationId));
+      if (mounted) {
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          const SnackBar(
+            content: Text('Kehadiran berhasil dikonfirmasi!'),
+            backgroundColor: Color(0xFF28A745),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          SnackBar(
+            content: Text('Gagal mengkonfirmasi: $e'),
+            backgroundColor: const Color(0xFFDC3545),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isConfirming = false);
+    }
   }
 
   @override
@@ -109,8 +144,23 @@ class _ApplicationDetailPageState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _InfoCard(application: application),
+                    _InfoCard(
+                    application: application,
+                    onConfirm: application.canConfirm
+                        ? () => _confirmAttendance(context)
+                        : null,
+                    isConfirming: _isConfirming,
+                  ),
                     const SizedBox(height: 16),
+                    // Announcements section (PRA_SELEKSI / INTERVIEW only)
+                    if (!_kChatAllowedStatuses.contains(application.status)) ...[
+                      _SectionHeader(title: 'Pengumuman Batch'),
+                      const SizedBox(height: 8),
+                      _AnnouncementsSection(
+                        applicationId: widget.applicationId,
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     if (application.statusHistory.isNotEmpty) ...[
                       _SectionHeader(title: 'Riwayat Status'),
                       const SizedBox(height: 8),
@@ -198,14 +248,21 @@ class _ApplicationDetailPageState
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _InfoCard extends StatelessWidget {
-  const _InfoCard({required this.application});
+  const _InfoCard({
+    required this.application,
+    this.onConfirm,
+    this.isConfirming = false,
+  });
 
   final JobApplication application;
+  final VoidCallback? onConfirm;
+  final bool isConfirming;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final fmt = DateFormat('dd MMMM yyyy', 'id_ID');
+    final fmtDt = DateFormat('dd MMM yyyy, HH:mm', 'id_ID');
 
     return Card(
       elevation: 0,
@@ -223,14 +280,42 @@ class _InfoCard extends StatelessWidget {
               label: 'Tanggal Melamar',
               value: fmt.format(application.appliedAt),
             ),
-            const Divider(height: 20),
-            _InfoRow(
-              icon: application.source == 'ADMIN_ASSIGN'
-                  ? Icons.admin_panel_settings_outlined
-                  : Icons.person_outline_rounded,
-              label: 'Sumber',
-              value: application.sourceDisplay,
-            ),
+            if (application.batchName != null) ...[
+              const Divider(height: 20),
+              _InfoRow(
+                icon: Icons.group_outlined,
+                label: 'Batch',
+                value: application.batchName!,
+              ),
+            ],
+            // Pra-Seleksi confirmation
+            if (application.status == 'PRA_SELEKSI' ||
+                application.praSeleksiConfirmedAt != null) ...[
+              const Divider(height: 20),
+              _InfoRow(
+                icon: application.praSeleksiConfirmedAt != null
+                    ? Icons.check_circle_outline_rounded
+                    : Icons.radio_button_unchecked_rounded,
+                label: 'Konfirmasi Pra-Seleksi',
+                value: application.praSeleksiConfirmedAt != null
+                    ? fmtDt.format(application.praSeleksiConfirmedAt!)
+                    : 'Belum dikonfirmasi',
+              ),
+            ],
+            // Interview confirmation
+            if (application.status == 'INTERVIEW' ||
+                application.interviewConfirmedAt != null) ...[
+              const Divider(height: 20),
+              _InfoRow(
+                icon: application.interviewConfirmedAt != null
+                    ? Icons.check_circle_outline_rounded
+                    : Icons.radio_button_unchecked_rounded,
+                label: 'Konfirmasi Interview',
+                value: application.interviewConfirmedAt != null
+                    ? fmtDt.format(application.interviewConfirmedAt!)
+                    : 'Belum dikonfirmasi',
+              ),
+            ],
             if (application.assignedByName != null) ...[
               const Divider(height: 20),
               _InfoRow(
@@ -256,19 +341,44 @@ class _InfoCard extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 12),
-            // Chat button lives inside card body bottom
-            FilledButton.icon(
-              onPressed: () => context.push(
-                  '/jobs/applications/${application.id}/chat'),
-              icon: const Icon(Icons.chat_bubble_outline_rounded, size: 16),
-              label: const Text('Chat dengan Admin'),
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primaryDarkGreen,
-                minimumSize: const Size.fromHeight(44),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
+            // Confirm attendance button (PRA_SELEKSI / INTERVIEW stage)
+            if (onConfirm != null) ...[
+              FilledButton.icon(
+                onPressed: isConfirming ? null : onConfirm,
+                icon: isConfirming
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.how_to_reg_outlined, size: 16),
+                label: Text(isConfirming
+                    ? 'Mengkonfirmasi...'
+                    : 'Konfirmasi Kehadiran'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF17A2B8),
+                  minimumSize: const Size.fromHeight(44),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
               ),
-            ),
+              const SizedBox(height: 8),
+            ],
+            // Chat button — only available from DITERIMA onwards
+            if (_kChatAllowedStatuses.contains(application.status))
+              FilledButton.icon(
+                onPressed: () => context.push(
+                    '/jobs/applications/${application.id}/chat'),
+                icon: const Icon(Icons.chat_bubble_outline_rounded, size: 16),
+                label: const Text('Chat dengan Admin'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primaryDarkGreen,
+                  minimumSize: const Size.fromHeight(44),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
           ],
         ),
       ),
@@ -513,3 +623,153 @@ class _StatusPillLarge extends StatelessWidget {
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Announcements section (PRA_SELEKSI / INTERVIEW)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _AnnouncementsSection extends ConsumerWidget {
+  const _AnnouncementsSection({required this.applicationId});
+
+  final int applicationId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final annoAsync = ref.watch(applicationAnnouncementsProvider(applicationId));
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final fmt = DateFormat('dd MMM yyyy, HH:mm', 'id_ID');
+
+    return annoAsync.when(
+      loading: () => const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 16),
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      ),
+      error: (_, __) => Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: cs.errorContainer,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          'Gagal memuat pengumuman.',
+          style: tt.bodySmall?.copyWith(color: cs.onErrorContainer),
+        ),
+      ),
+      data: (announcements) {
+        if (announcements.isEmpty) {
+          return Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: cs.outlineVariant),
+              border: Border.all(color: cs.outlineVariant),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.notifications_none_rounded,
+                    size: 18, color: cs.onSurfaceVariant),
+                const SizedBox(width: 10),
+                Text(
+                  'Belum ada pengumuman dari admin.',
+                  style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Column(
+          children: announcements
+              .map(
+                (anno) => _AnnouncementCard(
+                  announcement: anno,
+                  fmt: fmt,
+                ),
+              )
+              .toList(),
+        );
+      },
+    );
+  }
+}
+
+class _AnnouncementCard extends StatelessWidget {
+  const _AnnouncementCard({required this.announcement, required this.fmt});
+
+  final BatchAnnouncement announcement;
+  final DateFormat fmt;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Card(
+      elevation: 0,
+      color: cs.surfaceContainerLow,
+      margin: const EdgeInsets.only(bottom: 8),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: cs.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Row(
+                    children: [
+                      Icon(Icons.notifications_active_outlined,
+                          size: 16, color: AppColors.primaryDarkGreen),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          announcement.title,
+                          style: tt.labelLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Text(
+                  fmt.format(announcement.createdAt),
+                  style: tt.labelSmall?.copyWith(
+                    color: cs.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              announcement.body,
+              style: tt.bodySmall?.copyWith(
+                color: cs.onSurface,
+                height: 1.5,
+              ),
+            ),
+            if (announcement.createdByName != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                'oleh ${announcement.createdByName}',
+                style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+

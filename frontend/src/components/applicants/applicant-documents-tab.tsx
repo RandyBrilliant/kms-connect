@@ -3,7 +3,7 @@
  */
 
 import { useRef, useState } from "react"
-import { IconPlus, IconTrash, IconFileUpload, IconPencil } from "@tabler/icons-react"
+import { IconDownload, IconPlus, IconTrash, IconFileUpload, IconPencil } from "@tabler/icons-react"
 import { format } from "date-fns"
 import { id } from "date-fns/locale"
 
@@ -46,12 +46,15 @@ import {
   useDeleteApplicantDocumentMutation,
   useDocumentTypesQuery,
 } from "@/hooks/use-applicants-query"
+import { downloadApplicantDocuments } from "@/api/applicants"
 import { toast } from "@/lib/toast"
 import type { ApplicantDocument, DocumentType, DocumentReviewStatus } from "@/types/applicant"
 import { env } from "@/lib/env"
 
 interface ApplicantDocumentsTabProps {
   applicantId: number
+  /** Full name of the applicant, used for the ZIP download filename hint. */
+  fullName?: string
 }
 
 const REVIEW_STATUS_LABELS: Record<DocumentReviewStatus, string> = {
@@ -70,7 +73,26 @@ function getFileUrl(filePath: string): string {
 
 export function ApplicantDocumentsTab({
   applicantId,
+  fullName = "",
 }: ApplicantDocumentsTabProps) {
+  const [isDownloading, setIsDownloading] = useState(false)
+
+  const handleDownloadAll = async () => {
+    setIsDownloading(true)
+    try {
+      await downloadApplicantDocuments(applicantId, fullName)
+      toast.success("Dokumen berhasil diunduh", "File ZIP telah tersimpan.")
+    } catch (err: unknown) {
+      const res = err as { response?: { status?: number; data?: { detail?: string } } }
+      if (res?.response?.status === 404) {
+        toast.error("Tidak ada dokumen", "Pelamar belum memiliki dokumen yang diunggah.")
+      } else {
+        toast.error("Gagal mengunduh", "Coba lagi nanti.")
+      }
+    } finally {
+      setIsDownloading(false)
+    }
+  }
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
@@ -271,8 +293,21 @@ export function ApplicantDocumentsTab({
         <p className="text-muted-foreground text-sm">
           Kelola dokumen pelamar (KTP, Ijasah, dll.).
         </p>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="cursor-pointer"
+            disabled={isDownloading || list.length === 0}
+            onClick={handleDownloadAll}
+            title={list.length === 0 ? "Belum ada dokumen yang diunggah" : "Unduh semua dokumen sebagai ZIP"}
+          >
+            <IconDownload className="mr-2 size-4" />
+            {isDownloading ? "Mengunduh..." : "Unduh Semua"}
+          </Button>
         <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
-          <DialogTrigger asChild>
+            <DialogTrigger asChild>
             <Button
               type="button"
               size="sm"
@@ -388,6 +423,7 @@ export function ApplicantDocumentsTab({
             )}
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       <Card>

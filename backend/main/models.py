@@ -260,6 +260,24 @@ class LowonganKerja(models.Model):
         verbose_name=_("dibuat oleh"),
         help_text=_("Admin/Staf/Perusahaan yang membuat lowongan ini."),
     )
+    start_date = models.DateField(
+        _("tanggal mulai kerja"),
+        null=True,
+        blank=True,
+        help_text=_(
+            "Target tanggal pelamar mulai bekerja. "
+            "Digunakan sebagai informasi bagi pelamar dan admin."
+        ),
+    )
+    quota = models.PositiveSmallIntegerField(
+        _("kuota pelamar"),
+        null=True,
+        blank=True,
+        help_text=_(
+            "Jumlah maksimum pelamar yang diterima untuk lowongan ini. "
+            "Kosongkan jika tidak ada batasan."
+        ),
+    )
     created_at = models.DateTimeField(_("dibuat pada"), auto_now_add=True)
     updated_at = models.DateTimeField(_("diperbarui pada"), auto_now=True)
 
@@ -271,85 +289,196 @@ class LowonganKerja(models.Model):
             models.Index(fields=["status", "employment_type"]),
             models.Index(fields=["company", "status"]),
             models.Index(fields=["deadline"]),
+            models.Index(fields=["start_date"]),
         ]
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.start_date and self.deadline:
+            if self.start_date < self.deadline.date():
+                raise ValidationError(
+                    {"start_date": _("Tanggal mulai kerja tidak boleh sebelum batas akhir lamaran.")}
+                )
 
     def __str__(self) -> str:
         return f"{self.title} – {self.company.company_name}"
 
 
 # ---------------------------------------------------------------------------
-# Job Application (Lamaran Kerja)
+# Lamaran (Application) — Stage-based FSM
 # ---------------------------------------------------------------------------
 
 
 class ApplicationStatus(models.TextChoices):
     """
-    Status lamaran kerja — Finite State Machine (FSM).
+    Status lamaran kerja — 6-tahap Finite State Machine (FSM).
 
-    Self-applied flow:
-      APPLIED → UNDER_REVIEW → SHORTLISTED → OFFERED → OFFER_ACCEPTED → PLACED → COMPLETED
-      Any non-terminal → REJECTED (admin) | APPLIED/OFFERED → WITHDRAWN (applicant)
+    Semua lamaran dibuat oleh admin melalui batch assignment.
+    Tidak ada self-apply — admin memilih pelamar ke dalam LamaranBatch.
 
-    Admin-assign flow (entry point = OFFERED, skips queue):
-      [admin creates row] → OFFERED → OFFER_ACCEPTED → PLACED → COMPLETED
+    Flow:
+      PRA_SELEKSI → INTERVIEW → DITERIMA → BERANGKAT → SELESAI
+      PRA_SELEKSI | INTERVIEW | DITERIMA → DITOLAK  (terminal negatif)
 
-    Transitions are enforced in main.services.ApplicationService — not here.
+    Pelamar mengkonfirmasi kehadiran di tahap PRA_SELEKSI dan INTERVIEW.
+    Transitions ditegakkan di main.services.ApplicationService.
     """
 
-    # Applicant-initiated entry
-    APPLIED        = "APPLIED",        _("Dilamar")
-    UNDER_REVIEW   = "UNDER_REVIEW",   _("Dalam Review")
-    SHORTLISTED    = "SHORTLISTED",    _("Shortlist")
-
-    # Admin offers the position
-    OFFERED        = "OFFERED",        _("Ditawarkan")
-
-    # Applicant responds to the offer
-    OFFER_ACCEPTED = "OFFER_ACCEPTED", _("Tawaran Diterima")
-    OFFER_DECLINED = "OFFER_DECLINED", _("Tawaran Ditolak")
-
-    # Terminal: positive
-    PLACED         = "PLACED",         _("Ditempatkan")
-    COMPLETED      = "COMPLETED",      _("Selesai Bekerja")  # 2-yr cooldown starts here
-
-    # Terminal: negative
-    REJECTED       = "REJECTED",       _("Ditolak")
-    WITHDRAWN      = "WITHDRAWN",      _("Dicabut")
+    PRA_SELEKSI = "PRA_SELEKSI", _("Tahap Pra-Seleksi")
+    INTERVIEW   = "INTERVIEW",   _("Tahap Interview")
+    DITERIMA    = "DITERIMA",    _("Tahap Diterima")
+    DITOLAK     = "DITOLAK",     _("Tahap Ditolak")    # terminal: negatif
+    BERANGKAT   = "BERANGKAT",   _("Tahap Berangkat")
+    SELESAI     = "SELESAI",     _("Tahap Selesai")    # terminal: positif — cooldown 2 thn
 
 
-class ApplicationSource(models.TextChoices):
-    """Asal / inisiasi lamaran."""
+# ---------------------------------------------------------------------------
+# LamaranBatch — Group container for batch assignment
+# ---------------------------------------------------------------------------
 
-    SELF_APPLIED = "SELF_APPLIED", _("Lamar Sendiri")
-    ADMIN_ASSIGN = "ADMIN_ASSIGN", _("Ditugaskan Admin")
+
+class LamaranBatch(models.Model):
+    """
+    Kelompok pelamar yang ditugaskan admin ke satu lowongan kerja.
+
+    Admin membuat batch, lalu menambahkan pelamar ke dalamnya.
+    Setiap pelamar mendapat satu JobApplication individual di dalam batch.
+
+    Jadwal tahap (pra-seleksi/interview) disimpan di sini karena
+    semua pelamar dalam satu batch mengikuti jadwal yang sama.
+    Konfirmasi kehadiran individual disimpan di JobApplication.
+    """
+
+    job = models.ForeignKey(
+        LowonganKerja,
+        on_delete=models.CASCADE,
+        related_name="batches",
+        verbose_name=_("lowongan"),
+        help_text=_("Lowongan kerja yang menjadi target batch ini."),
+    )
+    name = models.CharField(
+        _("nama batch"),
+        max_length=100,
+        help_text=_("Nama identifikasi batch, misal: 'Batch Maret 2026'."),
+    )
+    notes = models.TextField(
+        _("catatan"),
+        blank=True,
+        help_text=_("Catatan internal admin mengenai batch ini."),
+    )
+
+    # --- Jadwal Pra-Seleksi ---
+    pra_seleksi_date = models.DateTimeField(
+        _("tanggal & jam pra-seleksi"),
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=_("Tanggal dan jam pelaksanaan tahap pra-seleksi."),
+    )
+    pra_seleksi_location = models.CharField(
+        _("lokasi pra-seleksi"),
+        max_length=255,
+        blank=True,
+        help_text=_("Lokasi atau link (online/offline) pelaksanaan pra-seleksi."),
+    )
+    pra_seleksi_notes = models.TextField(
+        _("info pra-seleksi"),
+        blank=True,
+        help_text=_("Instruksi atau informasi tambahan untuk pelamar mengenai pra-seleksi."),
+    )
+
+    # --- Jadwal Interview ---
+    interview_date = models.DateTimeField(
+        _("tanggal & jam interview"),
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=_("Tanggal dan jam pelaksanaan tahap interview."),
+    )
+    interview_location = models.CharField(
+        _("lokasi interview"),
+        max_length=255,
+        blank=True,
+        help_text=_("Lokasi atau link (online/offline) pelaksanaan interview."),
+    )
+    interview_notes = models.TextField(
+        _("info interview"),
+        blank=True,
+        help_text=_("Instruksi atau informasi tambahan untuk pelamar mengenai interview."),
+    )
+
+    # --- Actors ---
+    created_by = models.ForeignKey(
+        CustomUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="batches_created",
+        limit_choices_to={"role__in": [UserRole.ADMIN, UserRole.STAFF]},
+        verbose_name=_("dibuat oleh"),
+        help_text=_("Admin/Staf yang membuat batch ini."),
+    )
+    created_at = models.DateTimeField(_("dibuat pada"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("diperbarui pada"), auto_now=True)
+
+    class Meta:
+        verbose_name = _("batch lamaran")
+        verbose_name_plural = _("daftar batch lamaran")
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["job", "created_at"]),
+            models.Index(fields=["pra_seleksi_date"]),
+            models.Index(fields=["interview_date"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.name} — {self.job.title}"
+
+    @property
+    def applicant_count(self) -> int:
+        return self.applications.count()
+
+    @property
+    def confirmed_pra_seleksi_count(self) -> int:
+        return self.applications.filter(pra_seleksi_confirmed_at__isnull=False).count()
+
+    @property
+    def confirmed_interview_count(self) -> int:
+        return self.applications.filter(interview_confirmed_at__isnull=False).count()
+
+
+# ---------------------------------------------------------------------------
+# JobApplication — Individual application inside a batch
+# ---------------------------------------------------------------------------
 
 
 class JobApplication(models.Model):
     """
-    Lamaran kerja pelamar untuk lowongan tertentu.
+    Lamaran kerja individual pelamar dalam sebuah LamaranBatch.
 
-    Dua jalur inisiasi:
-    - SELF_APPLIED : pelamar melamar sendiri, mulai di status APPLIED.
-    - ADMIN_ASSIGN : admin langsung menempatkan pelamar, mulai di status OFFERED.
+    Setiap pelamar punya record sendiri sehingga tracking status,
+    konfirmasi, dan riwayat tetap granular per-individu.
 
-    Cooldown rule: setelah status = COMPLETED dan placement_end_date diisi,
-    pelamar harus menunggu 2 tahun sebelum dapat melamar kembali.
-    Aturan ini ditegakkan di main.services.ApplicationService.
+    Cooldown rule: setelah status = SELESAI dan placement_end_date diisi,
+    pelamar harus menunggu 2 tahun sebelum dapat dimasukkan ke batch baru.
+    Aturan ditegakkan di main.services.ApplicationService.
 
-    UniqueConstraint dihapus agar re-application setelah cooldown diizinkan.
-    Duplikat lamaran aktif dicegah oleh ACTIVE_STATUSES check di service layer.
+    Pelamar hanya bisa aktif di SATU lamaran pada satu waktu.
+    ACTIVE_STATUSES digunakan untuk mencegah duplikat lintas lowongan.
     """
 
-    # Statuses where an application is still "ongoing".
-    # Used by service layer to detect duplicate active applications per (applicant, job).
+    # Statuses that block an applicant from being assigned to a new batch/job.
     ACTIVE_STATUSES = [
-        ApplicationStatus.APPLIED,
-        ApplicationStatus.UNDER_REVIEW,
-        ApplicationStatus.SHORTLISTED,
-        ApplicationStatus.OFFERED,
-        ApplicationStatus.OFFER_ACCEPTED,
-        ApplicationStatus.OFFER_DECLINED,
-        ApplicationStatus.PLACED,
+        ApplicationStatus.PRA_SELEKSI,
+        ApplicationStatus.INTERVIEW,
+        ApplicationStatus.DITERIMA,
+        ApplicationStatus.BERANGKAT,
+    ]
+
+    # Terminal statuses — no further transitions possible.
+    TERMINAL_STATUSES = [
+        ApplicationStatus.DITOLAK,
+        ApplicationStatus.SELESAI,
     ]
 
     REAPPLY_COOLDOWN_YEARS = 2
@@ -360,40 +489,61 @@ class JobApplication(models.Model):
         on_delete=models.CASCADE,
         related_name="job_applications",
         verbose_name=_("pelamar"),
-        help_text=_("Pelamar yang melamar pekerjaan ini."),
+        help_text=_("Pelamar yang terdaftar dalam batch lamaran ini."),
     )
     job = models.ForeignKey(
         LowonganKerja,
         on_delete=models.CASCADE,
         related_name="applications",
         verbose_name=_("lowongan"),
-        help_text=_("Lowongan kerja yang dilamar."),
+        help_text=_("Lowongan kerja yang dilamar (denormalized dari batch untuk query efisien)."),
+    )
+    batch = models.ForeignKey(
+        LamaranBatch,
+        on_delete=models.CASCADE,
+        related_name="applications",
+        null=True,
+        blank=True,
+        verbose_name=_("batch"),
+        help_text=_("Batch lamaran tempat pelamar ini terdaftar."),
     )
 
-    # --- Status & source ---
+    # --- Status ---
     status = models.CharField(
         _("status"),
-        max_length=20,
+        max_length=15,
         choices=ApplicationStatus.choices,
-        default=ApplicationStatus.APPLIED,
+        default=ApplicationStatus.PRA_SELEKSI,
         db_index=True,
-        help_text=_("Status lamaran kerja saat ini."),
+        help_text=_("Status tahap lamaran saat ini."),
     )
-    source = models.CharField(
-        _("sumber lamaran"),
-        max_length=20,
-        choices=ApplicationSource.choices,
-        default=ApplicationSource.SELF_APPLIED,
-        db_index=True,
-        help_text=_("Apakah pelamar melamar sendiri atau ditugaskan oleh admin."),
+
+    # --- Konfirmasi kehadiran oleh pelamar ---
+    pra_seleksi_confirmed_at = models.DateTimeField(
+        _("konfirmasi pra-seleksi pada"),
+        null=True,
+        blank=True,
+        help_text=_(
+            "Waktu pelamar mengkonfirmasi kehadiran di tahap pra-seleksi. "
+            "Null berarti belum dikonfirmasi."
+        ),
+    )
+    interview_confirmed_at = models.DateTimeField(
+        _("konfirmasi interview pada"),
+        null=True,
+        blank=True,
+        help_text=_(
+            "Waktu pelamar mengkonfirmasi kehadiran di tahap interview. "
+            "Null berarti belum dikonfirmasi."
+        ),
     )
 
     # --- Timestamps ---
     applied_at = models.DateTimeField(
-        _("dilamar pada"),
+        _("ditugaskan pada"),
         auto_now_add=True,
         db_index=True,
-        help_text=_("Waktu pelamar mengajukan lamaran (atau admin membuat penugasan)."),
+        help_text=_("Waktu admin memasukkan pelamar ke batch ini."),
     )
     reviewed_at = models.DateTimeField(
         _("direview pada"),
@@ -407,8 +557,8 @@ class JobApplication(models.Model):
         blank=True,
         db_index=True,
         help_text=_(
-            "Tanggal pelamar selesai bekerja (kontrak berakhir). "
-            "Diisi saat status berubah ke COMPLETED. "
+            "Tanggal pelamar selesai bekerja. "
+            "Diisi saat status berubah ke SELESAI. "
             "Cooldown 2 tahun dihitung dari tanggal ini."
         ),
     )
@@ -432,10 +582,7 @@ class JobApplication(models.Model):
         related_name="assigned_applications",
         limit_choices_to={"role__in": [UserRole.ADMIN, UserRole.STAFF]},
         verbose_name=_("ditugaskan oleh"),
-        help_text=_(
-            "Admin atau Staff yang membuat penugasan ini. "
-            "Hanya terisi untuk source=ADMIN_ASSIGN."
-        ),
+        help_text=_("Admin atau Staff yang memasukkan pelamar ke batch ini."),
     )
 
     notes = models.TextField(
@@ -451,12 +598,26 @@ class JobApplication(models.Model):
         verbose_name_plural = _("daftar lamaran kerja")
         ordering = ["-applied_at"]
         indexes = [
+            # Primary lookup patterns
             models.Index(fields=["applicant", "status"]),
             models.Index(fields=["job", "status"]),
+            models.Index(fields=["batch", "status"]),
             models.Index(fields=["status", "applied_at"]),
-            models.Index(fields=["source", "status"]),
-            # Cooldown query: applicant + COMPLETED + placement_end_date
+            # Eligibility check: applicant active across any job
+            models.Index(fields=["applicant", "status", "job"]),
+            # Cooldown query: applicant + SELESAI + placement_end_date
             models.Index(fields=["applicant", "status", "placement_end_date"]),
+        ]
+        constraints = [
+            # One active application per applicant per job at a time.
+            # Enforced at service layer too, but DB constraint as final safety net.
+            models.UniqueConstraint(
+                fields=["applicant", "job"],
+                condition=models.Q(
+                    status__in=["PRA_SELEKSI", "INTERVIEW", "DITERIMA", "BERANGKAT"]
+                ),
+                name="unique_active_application_per_applicant_job",
+            ),
         ]
 
     def __str__(self) -> str:
@@ -464,8 +625,8 @@ class JobApplication(models.Model):
 
     @property
     def cooldown_eligible_date(self):
-        """Date from which this applicant may re-apply (placement_end_date + 2yr).
-        Returns None if the application has not yet reached COMPLETED."""
+        """Date from which this applicant may be re-assigned (placement_end_date + 2yr).
+        Returns None if the application has not yet reached SELESAI."""
         if not self.placement_end_date:
             return None
         from dateutil.relativedelta import relativedelta
@@ -492,13 +653,13 @@ class ApplicationStatusHistory(models.Model):
     )
     from_status = models.CharField(
         _("dari status"),
-        max_length=20,
+        max_length=15,
         blank=True,
         help_text=_("Status sebelum perubahan. Kosong jika ini entri awal pembuatan."),
     )
     to_status = models.CharField(
         _("ke status"),
-        max_length=20,
+        max_length=15,
         choices=ApplicationStatus.choices,
         help_text=_("Status setelah perubahan."),
     )
@@ -523,4 +684,59 @@ class ApplicationStatusHistory(models.Model):
 
     def __str__(self) -> str:
         return f"{self.application} | {self.from_status or '(baru)'} → {self.to_status}"
+
+
+# ---------------------------------------------------------------------------
+# BatchAnnouncement — broadcast pesan admin ke semua pelamar dalam satu batch
+# ---------------------------------------------------------------------------
+
+
+class BatchAnnouncement(models.Model):
+    """
+    Pengumuman/broadcast dari admin untuk semua pelamar dalam satu batch.
+
+    Digunakan pada tahap PRA_SELEKSI dan INTERVIEW sebagai pengganti
+    chat individual — satu pesan dari admin menjangkau semua pelamar dalam batch,
+    lebih efisien daripada ChatThread per-pelamar.
+
+    Pelamar membaca pengumuman ini via endpoint lamaran mereka.
+    """
+
+    batch = models.ForeignKey(
+        LamaranBatch,
+        on_delete=models.CASCADE,
+        related_name="announcements",
+        verbose_name=_("batch"),
+        help_text=_("Batch penerima pengumuman ini."),
+    )
+    title = models.CharField(
+        _("judul"),
+        max_length=200,
+        help_text=_("Judul singkat pengumuman, misal: 'Jadwal Pra-Seleksi Diperbarui'."),
+    )
+    body = models.TextField(
+        _("isi pesan"),
+        help_text=_("Isi lengkap pengumuman yang akan dibaca oleh pelamar."),
+    )
+    created_by = models.ForeignKey(
+        CustomUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="batch_announcements_created",
+        limit_choices_to={"role__in": [UserRole.ADMIN, UserRole.STAFF]},
+        verbose_name=_("dibuat oleh"),
+    )
+    created_at = models.DateTimeField(_("dibuat pada"), auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = _("pengumuman batch")
+        verbose_name_plural = _("daftar pengumuman batch")
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["batch", "created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"[{self.batch.name}] {self.title}"
 

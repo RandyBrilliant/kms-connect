@@ -408,7 +408,10 @@ export function AdminPelamarDetailPage() {
         </TabsContent>
 
         <TabsContent value="dokumen">
-          <ApplicantDocumentsTab applicantId={applicant.id} />
+          <ApplicantDocumentsTab
+            applicantId={applicant.id}
+            fullName={profile?.full_name || applicant.email}
+          />
         </TabsContent>
 
         <TabsContent value="lamaran">

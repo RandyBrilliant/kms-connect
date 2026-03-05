@@ -47,26 +47,18 @@ class ApplicationStatusHistory {
 
   String get toStatusDisplay {
     switch (toStatus) {
-      case 'APPLIED':
-        return 'Dilamar';
-      case 'UNDER_REVIEW':
-        return 'Dalam Review';
-      case 'SHORTLISTED':
-        return 'Shortlist';
-      case 'OFFERED':
-        return 'Ditawarkan';
-      case 'OFFER_ACCEPTED':
-        return 'Tawaran Diterima';
-      case 'OFFER_DECLINED':
-        return 'Tawaran Ditolak';
-      case 'PLACED':
-        return 'Ditempatkan';
-      case 'COMPLETED':
-        return 'Selesai Bekerja';
-      case 'REJECTED':
+      case 'PRA_SELEKSI':
+        return 'Pra-Seleksi';
+      case 'INTERVIEW':
+        return 'Interview';
+      case 'DITERIMA':
+        return 'Diterima';
+      case 'DITOLAK':
         return 'Ditolak';
-      case 'WITHDRAWN':
-        return 'Dicabut';
+      case 'BERANGKAT':
+        return 'Berangkat';
+      case 'SELESAI':
+        return 'Selesai';
       default:
         return toStatus;
     }

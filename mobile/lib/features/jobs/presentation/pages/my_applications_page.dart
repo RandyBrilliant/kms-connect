@@ -11,16 +11,12 @@ import '../../domain/models/job_application.dart';
 // Status filter options shown as horizontal chips
 const _kStatuses = <(String, String)>[
   ('', 'Semua'),
-  ('APPLIED', 'Dilamar'),
-  ('UNDER_REVIEW', 'Dalam Review'),
-  ('SHORTLISTED', 'Shortlist'),
-  ('OFFERED', 'Ditawarkan'),
-  ('OFFER_ACCEPTED', 'Tawaran Diterima'),
-  ('OFFER_DECLINED', 'Tawaran Ditolak'),
-  ('PLACED', 'Ditempatkan'),
-  ('COMPLETED', 'Selesai'),
-  ('REJECTED', 'Ditolak'),
-  ('WITHDRAWN', 'Dicabut'),
+  ('PRA_SELEKSI', 'Pra-Seleksi'),
+  ('INTERVIEW', 'Interview'),
+  ('DITERIMA', 'Diterima'),
+  ('DITOLAK', 'Ditolak'),
+  ('BERANGKAT', 'Berangkat'),
+  ('SELESAI', 'Selesai'),
 ];
 
 class MyApplicationsPage extends ConsumerStatefulWidget {
@@ -263,21 +259,21 @@ class _ApplicationCard extends StatelessWidget {
                       color: cs.onSurfaceVariant,
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Icon(
-                    application.source == 'ADMIN_ASSIGN'
-                        ? Icons.admin_panel_settings_outlined
-                        : Icons.person_outline_rounded,
-                    size: 13,
-                    color: cs.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    application.sourceDisplay,
-                    style: tt.labelSmall?.copyWith(
-                      color: cs.onSurfaceVariant,
+                  if (application.batchName != null) ...[
+                    const SizedBox(width: 12),
+                    Icon(Icons.group_outlined,
+                        size: 13, color: cs.onSurfaceVariant),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        application.batchName!,
+                        style: tt.labelSmall?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  ),
+                  ],
                   const Spacer(),
                   Icon(Icons.chevron_right_rounded,
                       size: 18, color: cs.onSurfaceVariant),

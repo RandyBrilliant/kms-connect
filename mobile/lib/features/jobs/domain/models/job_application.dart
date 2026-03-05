@@ -9,10 +9,12 @@ class JobApplication {
   final int job;
   final String? jobTitle;
   final String? companyName;
+  final int? batch;
+  final String? batchName;
   final String status;
-  final String source;
+  final DateTime? praSeleksiConfirmedAt;
+  final DateTime? interviewConfirmedAt;
   final DateTime appliedAt;
-  final DateTime? reviewedAt;
   final DateTime? placementEndDate;
   final DateTime? cooldownEligibleDate;
   final int? assignedBy;
@@ -30,10 +32,12 @@ class JobApplication {
     required this.job,
     this.jobTitle,
     this.companyName,
+    this.batch,
+    this.batchName,
     required this.status,
-    this.source = 'SELF_APPLIED',
+    this.praSeleksiConfirmedAt,
+    this.interviewConfirmedAt,
     required this.appliedAt,
-    this.reviewedAt,
     this.placementEndDate,
     this.cooldownEligibleDate,
     this.assignedBy,
@@ -76,12 +80,16 @@ class JobApplication {
       job: _safeInt(json['job']),
       jobTitle: json['job_title']?.toString(),
       companyName: json['company_name']?.toString(),
+      batch: _safeIntOrNull(json['batch']),
+      batchName: json['batch_name']?.toString(),
       status: (json['status'] ?? '') as String,
-      source: (json['source'] ?? 'SELF_APPLIED') as String,
-      appliedAt: DateTime.parse(json['applied_at'] as String),
-      reviewedAt: json['reviewed_at'] != null
-          ? DateTime.parse(json['reviewed_at'] as String)
+      praSeleksiConfirmedAt: json['pra_seleksi_confirmed_at'] != null
+          ? DateTime.parse(json['pra_seleksi_confirmed_at'] as String)
           : null,
+      interviewConfirmedAt: json['interview_confirmed_at'] != null
+          ? DateTime.parse(json['interview_confirmed_at'] as String)
+          : null,
+      appliedAt: DateTime.parse(json['applied_at'] as String),
       placementEndDate: json['placement_end_date'] != null
           ? DateTime.parse(json['placement_end_date'] as String)
           : null,
@@ -97,61 +105,58 @@ class JobApplication {
     );
   }
 
+  /// Human-readable label for the current status.
   String get statusDisplay {
     switch (status) {
-      case 'APPLIED':
-        return 'Dilamar';
-      case 'UNDER_REVIEW':
-        return 'Dalam Review';
-      case 'SHORTLISTED':
-        return 'Shortlist';
-      case 'OFFERED':
-        return 'Ditawarkan';
-      case 'OFFER_ACCEPTED':
-        return 'Tawaran Diterima';
-      case 'OFFER_DECLINED':
-        return 'Tawaran Ditolak';
-      case 'PLACED':
-        return 'Ditempatkan';
-      case 'COMPLETED':
-        return 'Selesai Bekerja';
-      case 'REJECTED':
+      case 'PRA_SELEKSI':
+        return 'Pra-Seleksi';
+      case 'INTERVIEW':
+        return 'Interview';
+      case 'DITERIMA':
+        return 'Diterima';
+      case 'DITOLAK':
         return 'Ditolak';
-      case 'WITHDRAWN':
-        return 'Dicabut';
+      case 'BERANGKAT':
+        return 'Berangkat';
+      case 'SELESAI':
+        return 'Selesai';
       default:
         return status;
     }
   }
 
-  String get sourceDisplay =>
-      source == 'ADMIN_ASSIGN' ? 'Penugasan Admin' : 'Mandiri';
-
   Color get statusColor {
     switch (status) {
-      case 'APPLIED':
-      case 'UNDER_REVIEW':
-      case 'SHORTLISTED':
-        return const Color(0xFF17A2B8); // info
-      case 'OFFERED':
-      case 'OFFER_ACCEPTED':
-      case 'PLACED':
-      case 'COMPLETED':
-        return const Color(0xFF28A745); // success
-      case 'OFFER_DECLINED':
-      case 'REJECTED':
-        return const Color(0xFFDC3545); // error
-      case 'WITHDRAWN':
-        return const Color(0xFF999999); // neutral
+      case 'PRA_SELEKSI':
+      case 'INTERVIEW':
+        return const Color(0xFF17A2B8); // info / blue
+      case 'DITERIMA':
+      case 'BERANGKAT':
+        return const Color(0xFF28A745); // success / green
+      case 'SELESAI':
+        return const Color(0xFF6C757D); // secondary / grey
+      case 'DITOLAK':
+        return const Color(0xFFDC3545); // error / red
       default:
         return const Color(0xFF666666);
     }
   }
 
-  /// Whether this is a terminal status — no further transitions by the applicant.
-  bool get isTerminal =>
-      status == 'COMPLETED' ||
-      status == 'REJECTED' ||
-      status == 'WITHDRAWN' ||
-      status == 'OFFER_DECLINED';
+  /// Terminal statuses — no applicant confirmation needed and no further transitions.
+  bool get isTerminal => status == 'DITOLAK' || status == 'SELESAI';
+
+  /// Whether the applicant can still confirm attendance at current stage.
+  bool get canConfirm {
+    if (status == 'PRA_SELEKSI') return praSeleksiConfirmedAt == null;
+    if (status == 'INTERVIEW') return interviewConfirmedAt == null;
+    return false;
+  }
+
+  /// Whether the current stage has been confirmed by the applicant.
+  bool get isConfirmed {
+    if (status == 'PRA_SELEKSI') return praSeleksiConfirmedAt != null;
+    if (status == 'INTERVIEW') return interviewConfirmedAt != null;
+    return false;
+  }
 }
+

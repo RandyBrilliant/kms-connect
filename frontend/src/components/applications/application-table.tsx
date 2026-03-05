@@ -44,7 +44,6 @@ import { ApplicationStatusBadge } from "@/components/applications/application-st
 import {
   APPLICATION_STATUS_LABELS,
   type ApplicationStatus,
-  type ApplicationSource,
   type ApplicationsListParams,
   type JobApplication,
 } from "@/types/job-applications"
@@ -52,22 +51,13 @@ import {
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
 
 const ALL_STATUSES: ApplicationStatus[] = [
-  "APPLIED",
-  "UNDER_REVIEW",
-  "SHORTLISTED",
-  "OFFERED",
-  "OFFER_ACCEPTED",
-  "OFFER_DECLINED",
-  "PLACED",
-  "COMPLETED",
-  "REJECTED",
-  "WITHDRAWN",
+  "PRA_SELEKSI",
+  "INTERVIEW",
+  "DITERIMA",
+  "DITOLAK",
+  "BERANGKAT",
+  "SELESAI",
 ]
-
-const SOURCE_LABELS: Record<ApplicationSource, string> = {
-  SELF_APPLIED: "Mandiri",
-  ADMIN_ASSIGN: "Ditugaskan Admin",
-}
 
 interface ApplicationTableProps {
   /** Base path used to build detail route, e.g. "/lamaran" */
@@ -154,9 +144,9 @@ export function ApplicationTable({ basePath, jobId }: ApplicationTableProps) {
         ),
       },
       {
-        accessorKey: "source",
-        header: "Sumber",
-        cell: ({ row }) => SOURCE_LABELS[row.original.source] ?? row.original.source,
+        accessorKey: "batch_name",
+        header: "Batch",
+        cell: ({ row }) => row.original.batch_name ?? "-",
       },
       {
         accessorKey: "applied_at",
@@ -264,30 +254,12 @@ export function ApplicationTable({ basePath, jobId }: ApplicationTableProps) {
                 ))}
               </SelectContent>
             </Select>
-            <Select
-              value={params.source ?? "ALL"}
-              onValueChange={(v) =>
-                handleFilterChange(
-                  "source",
-                  v === "ALL" ? undefined : (v as ApplicationSource)
-                )
-              }
-            >
-              <SelectTrigger className="w-[180px] cursor-pointer">
-                <SelectValue placeholder="Sumber" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">Semua sumber</SelectItem>
-                <SelectItem value="SELF_APPLIED">Mandiri</SelectItem>
-                <SelectItem value="ADMIN_ASSIGN">Ditugaskan Admin</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
         </div>
         <Button className="cursor-pointer shrink-0" asChild>
-          <Link to={`${basePath}/new`}>
+          <Link to="/batch">
             <IconUserPlus className="mr-2 size-4" />
-            Tugaskan Pelamar
+            Kelola Batch
           </Link>
         </Button>
       </div>
