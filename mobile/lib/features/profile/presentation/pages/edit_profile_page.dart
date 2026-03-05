@@ -585,6 +585,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
+    final bool isAccepted =
+        profile?.verificationStatus.toUpperCase() == 'ACCEPTED';
+
     // Loading skeleton
     if (profileState.isLoading && profile == null) {
       return Scaffold(
@@ -660,6 +663,43 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (isAccepted) ...[
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 20),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: cs.surfaceContainerHigh,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: cs.outlineVariant),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.lock_outline_rounded,
+                              size: 20,
+                              color: cs.primary,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'Profil Anda sudah diterima oleh admin. '
+                                'Data diri tidak dapat diubah lagi dari aplikasi.',
+                                style: tt.bodySmall?.copyWith(
+                                  color: cs.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    IgnorePointer(
+                      ignoring: isAccepted,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                     // ─── Data Pribadi ──────────────────────────────────
                     _SectionCard(
                       icon: Icons.person_outline_rounded,
@@ -1458,7 +1498,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                         ),
                       ],
                     ),
-
+                        ],
+                      ),
+                    ),
                     const SizedBox(height: 28),
 
                     // ─── Save button ───────────────────────────────────
@@ -1466,8 +1508,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                       width: double.infinity,
                       height: 52,
                       child: FilledButton(
-                        onPressed:
-                            profileState.isLoading ? null : _handleSave,
+                        onPressed: (profileState.isLoading || isAccepted)
+                            ? null
+                            : _handleSave,
                         style: FilledButton.styleFrom(
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),

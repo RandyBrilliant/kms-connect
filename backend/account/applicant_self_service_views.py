@@ -90,6 +90,17 @@ class ApplicantProfileSelfServiceViewSet(ApplicantSelfServiceMixin, viewsets.Mod
     def partial_update(self, request, *args, **kwargs):
         """Update profil sendiri. Beberapa field read-only (verification_status, dll)."""
         instance = self.get_object()
+
+        # Once profile has been ACCEPTED, pelamar tidak boleh mengubah data diri lagi
+        if instance.verification_status == ApplicantVerificationStatus.ACCEPTED:
+            return Response(
+                error_response(
+                    detail="Profil sudah diterima. Data diri tidak dapat diubah lagi.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         serializer = self.get_serializer(
             instance,
             data=request.data,

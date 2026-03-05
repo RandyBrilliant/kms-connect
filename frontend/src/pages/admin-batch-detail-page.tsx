@@ -53,6 +53,7 @@ import { BatchAssignDialog } from "@/components/batches/batch-assign-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { DatePicker } from "@/components/ui/date-picker"
 
 import { getBatch, scheduleBatchStage, getBatchAnnouncements, createBatchAnnouncement, exportBatchExcel } from "@/api/batches"
 import { getApplications, transitionApplication } from "@/api/applications"
@@ -91,8 +92,10 @@ function StageScheduleCard({
   currentNotes,
 }: StageScheduleCardProps) {
   const queryClient = useQueryClient()
-  const [date, setDate] = useState(
-    currentDate ? currentDate.slice(0, 16) : ""  // datetime-local format
+  const initialDate = currentDate ? new Date(currentDate) : null
+  const [selectedDate, setSelectedDate] = useState<Date | null>(initialDate)
+  const [time, setTime] = useState(
+    initialDate ? format(initialDate, "HH:mm") : ""
   )
   const [location, setLocation] = useState(currentLocation)
   const [notes, setNotes] = useState(currentNotes)
@@ -102,7 +105,15 @@ function StageScheduleCard({
     mutationFn: () =>
       scheduleBatchStage(batchId, {
         stage,
-        date: new Date(date).toISOString(),
+        date: (() => {
+          if (!selectedDate || !time) {
+            throw new Error("Tanggal dan waktu wajib diisi")
+          }
+          const [h, m] = time.split(":").map((v) => Number(v) || 0)
+          const combined = new Date(selectedDate)
+          combined.setHours(h, m, 0, 0)
+          return combined.toISOString()
+        })(),
         location,
         notes,
       }),
@@ -163,11 +174,18 @@ function StageScheduleCard({
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
             <Label>Tanggal & Waktu</Label>
-            <Input
-              type="datetime-local"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-            />
+            <div className="grid gap-2 sm:grid-cols-[2fr,1fr]">
+              <DatePicker
+                date={selectedDate}
+                onDateChange={setSelectedDate}
+                placeholder="Pilih tanggal"
+              />
+              <Input
+                type="time"
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+              />
+            </div>
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>Lokasi</Label>
@@ -191,7 +209,13 @@ function StageScheduleCard({
               <Button
                 variant="ghost"
                 className="cursor-pointer"
-                onClick={() => setEditing(false)}
+                onClick={() => {
+                  setSelectedDate(initialDate)
+                  setTime(initialDate ? format(initialDate, "HH:mm") : "")
+                  setLocation(currentLocation)
+                  setNotes(currentNotes)
+                  setEditing(false)
+                }}
               >
                 Batal
               </Button>
@@ -199,7 +223,7 @@ function StageScheduleCard({
             <Button
               className="cursor-pointer"
               onClick={() => mutate()}
-              disabled={!date || !location || isPending}
+              disabled={!selectedDate || !time || !location || isPending}
             >
               {isPending ? "Menyimpan..." : "Simpan Jadwal"}
             </Button>

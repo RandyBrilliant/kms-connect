@@ -21,6 +21,7 @@ import { adminUpdateSchema } from "@/schemas/admin"
 import { companyUpdateSchema } from "@/schemas/company"
 import { toast } from "@/lib/toast"
 import { usePageTitle } from "@/hooks/use-page-title"
+import { changePassword } from "@/api/auth"
 
 type Role = "ADMIN" | "STAFF" | "COMPANY" | "APPLICANT"
 
@@ -356,20 +357,179 @@ export function ProfilePage() {
 
   return (
     <div className="w-full px-6 py-6 md:px-8 md:py-8">
-      <div className="w-full max-w-2xl">
-        <div className="mb-6 flex flex-col gap-2">
+      <div className="w-full max-w-2xl space-y-6">
+        <div className="mb-2 flex flex-col gap-2">
           <BreadcrumbNav items={breadcrumbItems} />
           <h1 className="text-2xl font-bold">Profil Saya</h1>
           <p className="text-muted-foreground">
-            Kelola informasi dasar akun Anda.
+            Kelola informasi dasar akun dan keamanan password Anda.
           </p>
         </div>
 
         {role === "ADMIN" && <AdminProfileForm profile={data as AdminUser} />}
         {role === "STAFF" && <StaffProfileForm profile={data as StaffUser} />}
         {role === "COMPANY" && <CompanyProfileForm profile={data as CompanyUser} />}
+
+        <ChangePasswordSection />
       </div>
     </div>
+  )
+}
+
+function ChangePasswordSection() {
+  const [currentPassword, setCurrentPassword] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+  const [errors, setErrors] = useState<{
+    current?: string
+    new?: string
+    confirm?: string
+    global?: string
+  }>({})
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setErrors({})
+
+    if (!currentPassword) {
+      setErrors((prev) => ({ ...prev, current: "Password lama wajib diisi." }))
+      return
+    }
+    if (!newPassword) {
+      setErrors((prev) => ({ ...prev, new: "Password baru wajib diisi." }))
+      return
+    }
+    if (newPassword.length < 8) {
+      setErrors((prev) => ({ ...prev, new: "Password minimal 8 karakter." }))
+      return
+    }
+    if (newPassword === currentPassword) {
+      setErrors((prev) => ({
+        ...prev,
+        new: "Password baru tidak boleh sama dengan password lama.",
+      }))
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setErrors((prev) => ({ ...prev, confirm: "Konfirmasi password tidak sama." }))
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      await changePassword({
+        old_password: currentPassword,
+        new_password: newPassword,
+      })
+      toast.success("Password diperbarui", "Password akun Anda telah berhasil diubah.")
+      setCurrentPassword("")
+      setNewPassword("")
+      setConfirmPassword("")
+    } catch (err: any) {
+      const data = err?.response?.data
+      const fieldErrors = data?.errors as
+        | {
+            old_password?: string[] | string
+            new_password?: string[] | string
+          }
+        | undefined
+
+      const nextErrors: typeof errors = {}
+      if (fieldErrors?.old_password) {
+        const msgs = Array.isArray(fieldErrors.old_password)
+          ? fieldErrors.old_password
+          : [fieldErrors.old_password]
+        nextErrors.current = String(msgs[0])
+      }
+      if (fieldErrors?.new_password) {
+        const msgs = Array.isArray(fieldErrors.new_password)
+          ? fieldErrors.new_password
+          : [fieldErrors.new_password]
+        nextErrors.new = String(msgs[0])
+      }
+      if (!nextErrors.current && !nextErrors.new) {
+        nextErrors.global =
+          data?.detail ||
+          (err instanceof Error ? err.message : "Gagal mengubah password. Coba lagi nanti.")
+      }
+      setErrors(nextErrors)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Ubah Password</CardTitle>
+          <CardDescription>
+            Ganti password akun Anda secara berkala untuk menjaga keamanan.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {errors.global && (
+            <div className="mb-4 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+              {errors.global}
+            </div>
+          )}
+          <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor="current-password">
+                Password Lama <span className="text-destructive">*</span>
+              </FieldLabel>
+              <Input
+                id="current-password"
+                type="password"
+                autoComplete="current-password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                disabled={isSubmitting}
+              />
+              {errors.current && (
+                <FieldError errors={[{ message: errors.current }]} />
+              )}
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="new-password">
+                Password Baru <span className="text-destructive">*</span>
+              </FieldLabel>
+              <Input
+                id="new-password"
+                type="password"
+                autoComplete="new-password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                disabled={isSubmitting}
+              />
+              {errors.new && <FieldError errors={[{ message: errors.new }]} />}
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="confirm-new-password">
+                Konfirmasi Password Baru <span className="text-destructive">*</span>
+              </FieldLabel>
+              <Input
+                id="confirm-new-password"
+                type="password"
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                disabled={isSubmitting}
+              />
+              {errors.confirm && (
+                <FieldError errors={[{ message: errors.confirm }]} />
+              )}
+            </Field>
+          </FieldGroup>
+        </CardContent>
+      </Card>
+      <div>
+        <Button type="submit" disabled={isSubmitting} className="cursor-pointer">
+          {isSubmitting ? "Menyimpan..." : "Simpan Password Baru"}
+        </Button>
+      </div>
+    </form>
   )
 }
 

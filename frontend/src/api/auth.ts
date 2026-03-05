@@ -67,6 +67,14 @@ export async function confirmResetPassword(input: {
   return data
 }
 
+/** POST /api/auth/change-password/ - Change password for authenticated dashboard users. */
+export async function changePassword(input: {
+  old_password: string
+  new_password: string
+}): Promise<void> {
+  await api.post("/api/auth/change-password/", input)
+}
+
 /** GET /api/me/ - Current user (requires auth). Returns serialized user in data. */
 export async function getMe(): Promise<User> {
   const { data } = await api.get<ApiSuccessResponse<User>>("/api/me/")

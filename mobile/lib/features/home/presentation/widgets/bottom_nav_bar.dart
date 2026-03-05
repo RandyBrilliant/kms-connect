@@ -3,7 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../config/colors.dart';
-import '../../../chat/data/providers/chat_provider.dart';
+// Chat inbox provider removed from bottom nav; chat is now accessed
+// from each application detail instead of a dedicated tab.
 
 // Ordered list of destinations — index maps directly to the M3 NavigationBar.
 const _kDestinations = [
@@ -20,10 +21,10 @@ const _kDestinations = [
     label: 'Lowongan',
   ),
   _NavDestination(
-    route: '/chat',
-    icon: Icons.chat_bubble_outline_rounded,
-    activeIcon: Icons.chat_bubble_rounded,
-    label: 'Pesan',
+    route: '/jobs/my-applications',
+    icon: Icons.assignment_outlined,
+    activeIcon: Icons.assignment_rounded,
+    label: 'Lamaranku',
   ),
   _NavDestination(
     route: '/news',
@@ -59,9 +60,6 @@ class BottomNavBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
-    final chatUnread = ref.watch(
-      chatInboxProvider.select((s) => s.totalUnread),
-    );
 
     return NavigationBar(
       selectedIndex: _selectedIndex,
@@ -76,23 +74,9 @@ class BottomNavBar extends ConsumerWidget {
       destinations: [
         for (final d in _kDestinations)
           NavigationDestination(
-            icon: d.route == '/chat' && chatUnread > 0
-                ? Badge(
-                    label: Text(chatUnread > 99 ? '99+' : '$chatUnread'),
-                    backgroundColor: AppColors.primaryDarkGreen,
-                    textColor: Colors.white,
-                    child: Icon(d.icon),
-                  )
-                : Icon(d.icon),
-            selectedIcon: d.route == '/chat' && chatUnread > 0
-                ? Badge(
-                    label: Text(chatUnread > 99 ? '99+' : '$chatUnread'),
-                    backgroundColor: AppColors.primaryDarkGreen,
-                    textColor: Colors.white,
-                    child: Icon(d.activeIcon,
-                        color: AppColors.primaryDarkGreen),
-                  )
-                : Icon(d.activeIcon, color: AppColors.primaryDarkGreen),
+            icon: Icon(d.icon),
+            selectedIcon:
+                Icon(d.activeIcon, color: AppColors.primaryDarkGreen),
             label: d.label,
           ),
       ],

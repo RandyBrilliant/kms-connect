@@ -7,6 +7,7 @@ import '../../../../config/colors.dart';
 import '../../../../config/strings.dart';
 import '../../data/providers/job_provider.dart';
 import '../../domain/models/job_application.dart';
+import '../../../home/presentation/widgets/bottom_nav_bar.dart';
 
 // Status filter options shown as horizontal chips
 const _kStatuses = <(String, String)>[
@@ -174,6 +175,8 @@ class _MyApplicationsPageState extends ConsumerState<MyApplicationsPage> {
           ),
         ],
       ),
+      bottomNavigationBar:
+          const BottomNavBar(currentRoute: '/jobs/my-applications'),
     );
   }
 }

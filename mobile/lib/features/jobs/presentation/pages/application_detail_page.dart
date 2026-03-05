@@ -210,7 +210,7 @@ class _ApplicationDetailPageState
                 padding: const EdgeInsets.fromLTRB(20, 52, 20, 20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       application.jobTitle ?? 'Detail Lamaran',
@@ -287,6 +287,50 @@ class _InfoCard extends StatelessWidget {
                 label: 'Batch',
                 value: application.batchName!,
               ),
+            ],
+            // Jadwal Pra-Seleksi dari batch (jika sudah dijadwalkan)
+            if (application.praSeleksiDate != null &&
+                application.batchName != null) ...[
+              const Divider(height: 20),
+              _InfoRow(
+                icon: Icons.event_available_outlined,
+                label: 'Jadwal Pra-Seleksi',
+                value: fmtDt.format(application.praSeleksiDate!),
+              ),
+              if (application.praSeleksiLocation != null &&
+                  application.praSeleksiLocation!.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: _InfoRow(
+                    icon: Icons.location_on_outlined,
+                    label: 'Lokasi Pra-Seleksi',
+                    value: application.praSeleksiLocation!,
+                  ),
+                ),
+            ],
+            // Jadwal Interview dari batch (hanya setelah masuk tahap INTERVIEW ke atas)
+            if (application.interviewDate != null &&
+                application.batchName != null &&
+                (application.status == 'INTERVIEW' ||
+                    application.status == 'DITERIMA' ||
+                    application.status == 'BERANGKAT' ||
+                    application.status == 'SELESAI')) ...[
+              const Divider(height: 20),
+              _InfoRow(
+                icon: Icons.event_available_outlined,
+                label: 'Jadwal Interview',
+                value: fmtDt.format(application.interviewDate!),
+              ),
+              if (application.interviewLocation != null &&
+                  application.interviewLocation!.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: _InfoRow(
+                    icon: Icons.location_city_outlined,
+                    label: 'Lokasi Interview',
+                    value: application.interviewLocation!,
+                  ),
+                ),
             ],
             // Pra-Seleksi confirmation
             if (application.status == 'PRA_SELEKSI' ||
@@ -665,7 +709,6 @@ class _AnnouncementsSection extends ConsumerWidget {
             decoration: BoxDecoration(
               color: cs.surfaceContainerLow,
               borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: cs.outlineVariant),
               border: Border.all(color: cs.outlineVariant),
             ),
             child: Row(

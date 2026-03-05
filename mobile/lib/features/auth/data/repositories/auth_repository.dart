@@ -174,6 +174,8 @@ class AuthRepository {
     String? phoneNumber,
     int? birthPlaceId,
     String? birthDateIso,
+    bool? dataDeclarationConfirmed,
+    bool? zeroCostUnderstood,
   }) async {
     try {
       // Compress KTP image before uploading to save bandwidth.
@@ -194,6 +196,10 @@ class AuthRepository {
           'phone_number': phoneNumber.trim(),
         if (birthPlaceId != null) 'birth_place': birthPlaceId,
         if (birthDateIso != null) 'birth_date': birthDateIso,
+        if (dataDeclarationConfirmed != null)
+          'data_declaration_confirmed': dataDeclarationConfirmed,
+        if (zeroCostUnderstood != null)
+          'zero_cost_understood': zeroCostUnderstood,
       });
 
       final response = await _apiClient.dio.post(

@@ -238,6 +238,18 @@ class JobApplicationSerializer(serializers.ModelSerializer):
     company_name = serializers.SerializerMethodField(read_only=True)
     assigned_by_name = serializers.SerializerMethodField(read_only=True)
     batch_name = serializers.SerializerMethodField(read_only=True)
+    pra_seleksi_date = serializers.DateTimeField(
+        source="batch.pra_seleksi_date", read_only=True
+    )
+    pra_seleksi_location = serializers.CharField(
+        source="batch.pra_seleksi_location", read_only=True
+    )
+    interview_date = serializers.DateTimeField(
+        source="batch.interview_date", read_only=True
+    )
+    interview_location = serializers.CharField(
+        source="batch.interview_location", read_only=True
+    )
     cooldown_eligible_date = serializers.SerializerMethodField(read_only=True)
     status_history = ApplicationStatusHistorySerializer(many=True, read_only=True)
 
@@ -254,6 +266,10 @@ class JobApplicationSerializer(serializers.ModelSerializer):
             "batch",
             "batch_name",
             "status",
+            "pra_seleksi_date",
+            "pra_seleksi_location",
+            "interview_date",
+            "interview_location",
             "pra_seleksi_confirmed_at",
             "interview_confirmed_at",
             "applied_at",

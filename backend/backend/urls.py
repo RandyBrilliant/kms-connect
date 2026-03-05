@@ -30,6 +30,7 @@ from account.auth_cookie_views import (
     RequestPasswordResetView,
     ConfirmResetPasswordView,
     ResendVerificationEmailView,
+    ChangePasswordView,
 )
 from account.registration_views import (
     ApplicantRegistrationView,
@@ -50,6 +51,7 @@ urlpatterns = [
     path("api/auth/resend-verification-email/", ResendVerificationEmailView.as_view(), name="resend_verification_email"),
     path("api/auth/request-password-reset/", RequestPasswordResetView.as_view(), name="request_password_reset"),
     path("api/auth/confirm-reset-password/", ConfirmResetPasswordView.as_view(), name="confirm_reset_password"),
+    path("api/auth/change-password/", ChangePasswordView.as_view(), name="change_password"),
     path("api/auth/register/", ApplicantRegistrationView.as_view(), name="applicant_register"),
     path("api/auth/google/", GoogleOAuthView.as_view(), name="google_oauth"),
     path("api/auth/google-complete/", GoogleCompleteRegistrationView.as_view(), name="google_complete_registration"),

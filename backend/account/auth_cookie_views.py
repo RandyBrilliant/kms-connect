@@ -12,6 +12,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.settings import api_settings as jwt_api_settings
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 
@@ -510,6 +511,77 @@ class ConfirmResetPasswordView(APIView):
             )
         user.set_password(new_password)
         user.save(update_fields=["password"])
+        return Response(
+            success_response(
+                detail=ApiMessage.RESET_PASSWORD_SUCCESS,
+                code=ApiCode.RESET_PASSWORD_SUCCESS,
+            ),
+            status=status.HTTP_200_OK,
+        )
+
+
+class ChangePasswordView(APIView):
+    """
+    Authenticated endpoint for dashboard users to change their own password.
+    POST { "old_password": "...", "new_password": "..." }
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [AuthRateThrottle]
+
+    def post(self, request):
+        from django.contrib.auth.password_validation import validate_password
+        from django.core.exceptions import ValidationError
+
+        user = request.user
+        old_password = (request.data.get("old_password") or "").strip()
+        new_password = (request.data.get("new_password") or "").strip()
+
+        field_errors: dict[str, list[str]] = {}
+
+        if not old_password:
+            field_errors.setdefault("old_password", []).append("Password lama wajib diisi.")
+        if not new_password:
+            field_errors.setdefault("new_password", []).append("Password baru wajib diisi.")
+
+        if field_errors:
+            return Response(
+                error_response(
+                    detail=ApiMessage.VALIDATION_ERROR,
+                    code=ApiCode.VALIDATION_ERROR,
+                    errors=field_errors,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not user.check_password(old_password):
+            field_errors.setdefault("old_password", []).append("Password lama tidak sesuai.")
+            return Response(
+                error_response(
+                    detail=ApiMessage.VALIDATION_ERROR,
+                    code=ApiCode.VALIDATION_ERROR,
+                    errors=field_errors,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            validate_password(new_password, user)
+        except ValidationError as e:
+            msgs = list(e.messages) or ["Password tidak memenuhi syarat."]
+            field_errors.setdefault("new_password", []).extend(msgs)
+            return Response(
+                error_response(
+                    detail=msgs[0],
+                    code=ApiCode.VALIDATION_ERROR,
+                    errors=field_errors,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user.set_password(new_password)
+        user.save(update_fields=["password"])
+
         return Response(
             success_response(
                 detail=ApiMessage.RESET_PASSWORD_SUCCESS,

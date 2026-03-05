@@ -16,8 +16,9 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 
 from account.permissions import IsBackofficeAdmin, IsApplicant, IsCompany, IsStaff
 from account.api_responses import success_response, error_response, ApiCode
-from account.models import ApplicantProfile, ApplicantVerificationStatus
+from account.models import ApplicantProfile, ApplicantVerificationStatus, CustomUser, UserRole
 from account.pagination import StandardResultsSetPagination
+from account.services.export import generate_applicants_excel
 
 from .models import (
     ApplicationStatus,
@@ -508,195 +509,39 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
         GET /api/batches/{id}/export-excel/
 
         Returns an .xlsx file containing all applicant biodata for every
-        JobApplication in this batch.  Each row = one applicant.
+        JobApplication in this batch. Each row = one applicant.
 
-        Columns exported (aligned with FORM BIODATA PMI):
-          No, Nama, NIK, Email, No HP, TTL (Tempat/Tanggal Lahir),
-          Jenis Kelamin, Agama, Pendidikan, Status Perkawinan,
-          Alamat KTP, Provinsi, Kabupaten/Kota,
-          Tinggi (cm), Berat (kg),
-          Paspor, No Paspor, Tgl Terbit Paspor, Tgl Kadaluarsa Paspor,
-          No KK, No Ijazah, No BPJS,
-          Status Lamaran, Konfirmasi Pra-Seleksi, Konfirmasi Interview,
-          Tgl Masuk Batch
+        Kolom-kolom mengikuti format export pelamar global
+        (lihat account.services.export.EXPORT_COLUMNS) supaya konsisten.
         """
-        import io
         from django.http import HttpResponse
-        import openpyxl
-        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-        from openpyxl.utils import get_column_letter
 
         batch = self.get_object()
 
+        # Ambil semua user pelamar yang termasuk dalam batch ini
         applications = (
-            JobApplication.objects
-            .filter(batch=batch)
-            .select_related(
-                "applicant__user",
-                "applicant__birth_place",
-                "applicant__province",
-                "applicant__district",
-                "applicant__village",
-            )
+            JobApplication.objects.filter(batch=batch)
+            .select_related("applicant__user")
             .order_by("applicant__user__full_name")
         )
+        applicant_user_ids = (
+            applications.values_list("applicant__user_id", flat=True).distinct()
+        )
 
-        # ── Workbook setup ─────────────────────────────────────────────────
-        wb = openpyxl.Workbook()
-        ws = wb.active
+        applicants_qs = (
+            CustomUser.objects.filter(
+                id__in=applicant_user_ids,
+                role=UserRole.APPLICANT,
+            )
+            .prefetch_related(
+                "applicant_profile__work_experiences",
+                "applicant_profile__documents__document_type",
+                "applicant_profile__documents__reviewed_by",
+            )
+            .order_by("applicant_profile__created_at")
+        )
 
-        safe_title = "".join(
-            c for c in batch.name if c.isalnum() or c in (" ", "-", "_")
-        )[:31] or "Batch"
-        ws.title = safe_title
-
-        # ── Styles ─────────────────────────────────────────────────────────
-        header_font = Font(name="Calibri", bold=True, color="FFFFFF", size=11)
-        header_fill = PatternFill("solid", fgColor="1F5C3A")   # dark green
-        subheader_fill = PatternFill("solid", fgColor="2E7D52") # medium green
-        center = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        left = Alignment(horizontal="left", vertical="center", wrap_text=True)
-        thin = Side(style="thin", color="CCCCCC")
-        border = Border(left=thin, right=thin, top=thin, bottom=thin)
-
-        # ── Title row ──────────────────────────────────────────────────────
-        num_cols = 26
-        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=num_cols)
-        title_cell = ws.cell(row=1, column=1,
-                             value=f"DATA PELAMAR — {batch.name.upper()}")
-        title_cell.font = Font(name="Calibri", bold=True, size=13, color="FFFFFF")
-        title_cell.fill = header_fill
-        title_cell.alignment = center
-
-        ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=num_cols)
-        subtitle_cell = ws.cell(row=2, column=1,
-                                value=f"Lowongan: {batch.job.title}  |  Total Pelamar: {applications.count()}")
-        subtitle_cell.font = Font(name="Calibri", italic=True, size=10, color="FFFFFF")
-        subtitle_cell.fill = subheader_fill
-        subtitle_cell.alignment = center
-
-        # ── Column headers ─────────────────────────────────────────────────
-        HEADERS = [
-            "No", "Nama Lengkap", "NIK", "Email", "No. HP / WA",
-            "Tempat Lahir", "Tanggal Lahir", "Jenis Kelamin", "Agama",
-            "Pendidikan Terakhir", "Status Perkawinan",
-            "Alamat KTP", "Provinsi", "Kabupaten / Kota", "Kelurahan / Desa",
-            "Tinggi (cm)", "Berat (kg)",
-            "Memiliki Paspor", "No. Paspor", "Tgl. Terbit Paspor", "Tgl. Kadaluarsa Paspor",
-            "No. KK", "No. Ijazah", "No. BPJS",
-            "Status Lamaran", "Tgl. Masuk Batch",
-        ]
-
-        HEADER_ROW = 3
-        for col_idx, header in enumerate(HEADERS, 1):
-            cell = ws.cell(row=HEADER_ROW, column=col_idx, value=header)
-            cell.font = Font(name="Calibri", bold=True, size=10, color="FFFFFF")
-            cell.fill = PatternFill("solid", fgColor="2E7D52")
-            cell.alignment = center
-            cell.border = border
-
-        # Freeze panes at row 4
-        ws.freeze_panes = "A4"
-
-        # ── Data rows ──────────────────────────────────────────────────────
-        STATUS_LABELS = {
-            "PRA_SELEKSI": "Pra-Seleksi",
-            "INTERVIEW": "Interview",
-            "DITERIMA": "Diterima",
-            "BERANGKAT": "Berangkat",
-            "SELESAI": "Selesai",
-            "DITOLAK": "Ditolak",
-        }
-        GENDER_LABELS = {"M": "Laki-laki", "F": "Perempuan"}
-        YES_NO = {True: "Ya", False: "Tidak", None: "-"}
-
-        for row_num, app in enumerate(applications, 1):
-            profile = app.applicant
-            user = profile.user
-            row = HEADER_ROW + row_num
-
-            def fmt_date(d):
-                return d.strftime("%d/%m/%Y") if d else "-"
-
-            row_data = [
-                row_num,
-                user.full_name or "-",
-                profile.nik or "-",
-                user.email or "-",
-                profile.contact_phone or "-",
-                getattr(profile.birth_place, "name", "-") or "-",
-                fmt_date(profile.birth_date),
-                GENDER_LABELS.get(profile.gender, profile.gender or "-"),
-                profile.get_religion_display() if profile.religion else "-",
-                profile.get_education_level_display() if profile.education_level else "-",
-                profile.get_marital_status_display() if profile.marital_status else "-",
-                profile.address or "-",
-                getattr(profile.province, "name", "-") or "-",
-                getattr(profile.district, "name", "-") or "-",
-                getattr(profile.village, "name", "-") or "-",
-                profile.height_cm if profile.height_cm else "-",
-                profile.weight_kg if profile.weight_kg else "-",
-                YES_NO.get(profile.has_passport, "-"),
-                profile.passport_number or "-",
-                fmt_date(profile.passport_issue_date),
-                fmt_date(profile.passport_expiry_date),
-                profile.family_card_number or "-",
-                profile.diploma_number or "-",
-                profile.bpjs_number or "-",
-                STATUS_LABELS.get(app.status, app.status),
-                fmt_date(app.applied_at.date()),
-            ]
-
-            alt_fill = PatternFill("solid", fgColor="F0F7F4") if row_num % 2 == 0 else None
-
-            for col_idx, value in enumerate(row_data, 1):
-                cell = ws.cell(row=row, column=col_idx, value=value)
-                cell.font = Font(name="Calibri", size=10)
-                cell.alignment = center if col_idx == 1 else left
-                cell.border = border
-                if alt_fill:
-                    cell.fill = alt_fill
-
-        # ── Column widths ──────────────────────────────────────────────────
-        COL_WIDTHS = [
-            5,   # No
-            28,  # Nama
-            18,  # NIK
-            28,  # Email
-            18,  # No HP
-            16,  # Tempat Lahir
-            14,  # Tgl Lahir
-            14,  # Gender
-            14,  # Agama
-            20,  # Pendidikan
-            18,  # Status Kawin
-            32,  # Alamat
-            18,  # Provinsi
-            20,  # Kabupaten
-            20,  # Kelurahan
-            12,  # Tinggi
-            12,  # Berat
-            14,  # Has Paspor
-            16,  # No Paspor
-            16,  # Tgl Terbit
-            16,  # Tgl Kadaluarsa
-            16,  # No KK
-            16,  # No Ijazah
-            16,  # BPJS
-            16,  # Status Lamaran
-            16,  # Tgl Masuk
-        ]
-        for col_idx, width in enumerate(COL_WIDTHS, 1):
-            ws.column_dimensions[get_column_letter(col_idx)].width = width
-
-        ws.row_dimensions[1].height = 22
-        ws.row_dimensions[2].height = 18
-        ws.row_dimensions[HEADER_ROW].height = 30
-
-        # ── Build response ──────────────────────────────────────────────────
-        buffer = io.BytesIO()
-        wb.save(buffer)
-        buffer.seek(0)
+        excel_file = generate_applicants_excel(applicants_qs, request)
 
         safe_filename = "".join(
             c for c in batch.name if c.isalnum() or c in (" ", "-", "_")
@@ -704,11 +549,10 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
         filename = f"pelamar_{safe_filename}.xlsx"
 
         response = HttpResponse(
-            buffer.read(),
+            excel_file.read(),
             content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
-        response["Content-Transfer-Encoding"] = "binary"
         return response
 
 

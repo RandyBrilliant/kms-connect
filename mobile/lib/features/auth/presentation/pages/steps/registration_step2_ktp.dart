@@ -1,7 +1,8 @@
-﻿import 'dart:io';
+import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -55,6 +56,9 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
 
   bool _isPickingImage = false;
   bool _isRegistering = false;
+
+  bool _dataDeclarationChecked = false;
+  bool _zeroCostChecked = false;
 
   //  Lifecycle 
 
@@ -431,6 +435,16 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
   Future<void> _handleRegister() async {
     if (!_formKey.currentState!.validate()) return;
 
+    if (!_dataDeclarationChecked || !_zeroCostChecked) {
+      CustomToast.show(
+        context,
+        message:
+            'Anda harus menyetujui pernyataan data benar dan memahami skema zero cost sebelum melanjutkan.',
+        type: ToastType.error,
+      );
+      return;
+    }
+
     // Validasi usia: minimal 18 tahun, maksimal 45 tahun
     if (_selectedDate != null) {
       final now = DateTime.now();
@@ -471,6 +485,11 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
             '${_selectedDate!.day.toString().padLeft(2, '0')}'
           : null,
     );
+
+    ref.read(registrationProvider.notifier).setDeclarations(
+          dataDeclarationConfirmed: _dataDeclarationChecked,
+          zeroCostUnderstood: _zeroCostChecked,
+        );
 
     final isGoogleFlow = ref.read(registrationProvider).isGoogleFlow;
     final email = ref.read(registrationProvider).email;
@@ -639,9 +658,111 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
             validator: (_) =>
                 _selectedDate == null ? 'Tanggal lahir wajib dipilih' : null,
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
 
-          //  Register button 
+          //  Declarations (must agree before registering)
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: cs.outlineVariant),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Checkbox(
+                      value: _dataDeclarationChecked,
+                      onChanged: (v) {
+                        setState(() {
+                          _dataDeclarationChecked = v ?? false;
+                        });
+                      },
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text.rich(
+                        TextSpan(
+                          text:
+                              'Saya menyatakan bahwa seluruh data yang saya isi adalah benar, sesuai dokumen asli, dan dapat dipertanggungjawabkan, serta saya telah membaca dan menyetujui ',
+                          children: [
+                            TextSpan(
+                              text: 'Syarat & Ketentuan',
+                              style: tt.bodySmall?.copyWith(
+                                color: cs.primary,
+                                fontWeight: FontWeight.w600,
+                                decoration: TextDecoration.underline,
+                              ),
+                              recognizer: TapGestureRecognizer()
+                                ..onTap = () {
+                                  _showTermsAndPrivacyModal(context);
+                                },
+                            ),
+                            TextSpan(
+                              text: ' dan ',
+                              style: tt.bodySmall?.copyWith(
+                                color: cs.onSurface,
+                              ),
+                            ),
+                            TextSpan(
+                              text: 'Kebijakan Privasi',
+                              style: tt.bodySmall?.copyWith(
+                                color: cs.primary,
+                                fontWeight: FontWeight.w600,
+                                decoration: TextDecoration.underline,
+                              ),
+                              recognizer: TapGestureRecognizer()
+                                ..onTap = () {
+                                  _showTermsAndPrivacyModal(context);
+                                },
+                            ),
+                            TextSpan(
+                              text: '.',
+                              style: tt.bodySmall?.copyWith(
+                                color: cs.onSurface,
+                              ),
+                            ),
+                          ],
+                        ),
+                        style: tt.bodySmall?.copyWith(
+                          color: cs.onSurface,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Checkbox(
+                      value: _zeroCostChecked,
+                      onChanged: (v) {
+                        setState(() {
+                          _zeroCostChecked = v ?? false;
+                        });
+                      },
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        'Saya telah membaca dan memahami bahwa proses penempatan kerja menggunakan skema zero cost, '
+                        'di mana seluruh biaya proses resmi ditanggung oleh perusahaan sesuai ketentuan yang berlaku.',
+                        style: tt.bodySmall?.copyWith(
+                          color: cs.onSurface,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          //  Register button (after agreements)
           FilledButton(
             onPressed: (state.isProcessing || _isRegistering)
                 ? null
@@ -673,6 +794,129 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
       ),
     );
   }
+}
+
+void _showTermsAndPrivacyModal(BuildContext context) {
+  final cs = Theme.of(context).colorScheme;
+  final tt = Theme.of(context).textTheme;
+
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: cs.surface,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    ),
+    builder: (ctx) {
+      return SafeArea(
+        top: false,
+        child: DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.8,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          builder: (context, scrollController) {
+            return Column(
+              children: [
+                const SizedBox(height: 8),
+                Container(
+                  width: 32,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: cs.onSurfaceVariant.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Syarat & Ketentuan',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: cs.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Harap baca dengan saksama sebelum melanjutkan pendaftaran.',
+                        style: tt.bodySmall?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: SingleChildScrollView(
+                    controller: scrollController,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '1. Syarat & Ketentuan',
+                          style: tt.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: cs.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '• Data yang Anda isi harus sesuai dengan dokumen resmi (KTP, KK, ijazah, dan dokumen pendukung lainnya) dan dapat dipertanggungjawabkan.\n'
+                          '• Anda memberikan izin kepada perusahaan untuk menggunakan data ini dalam proses rekrutmen, pengolahan dokumen penempatan, dan pelaporan kepada instansi terkait.\n'
+                          '• Apabila di kemudian hari ditemukan ketidaksesuaian atau pemalsuan data, perusahaan berhak membatalkan proses penempatan dan/atau melakukan tindakan lain sesuai ketentuan yang berlaku.\n'
+                          '• Ketentuan lebih rinci mengenai proses penempatan kerja akan dijelaskan oleh petugas perusahaan dan/atau tercantum dalam dokumen perjanjian terpisah.',
+                          style: tt.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                            height: 1.4,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          '2. Kebijakan Privasi',
+                          style: tt.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: cs.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '• Data pribadi Anda akan disimpan dan diproses sesuai dengan ketentuan perlindungan data pribadi yang berlaku.\n'
+                          '• Data hanya akan digunakan untuk keperluan proses rekrutmen, penempatan kerja, pemenuhan kewajiban hukum, dan peningkatan layanan perusahaan.\n'
+                          '• Perusahaan tidak akan menjual atau membagikan data pribadi Anda kepada pihak ketiga yang tidak berkepentingan, kecuali diwajibkan oleh peraturan perundang-undangan atau dengan persetujuan Anda.\n'
+                          '• Anda berhak mengajukan permintaan koreksi, pembaruan, atau penghapusan data sesuai dengan prosedur internal perusahaan dan ketentuan hukum yang berlaku.',
+                          style: tt.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                            height: 1.4,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Dengan melanjutkan proses pendaftaran, Anda menyatakan telah membaca, memahami, dan menyetujui Syarat & Ketentuan serta Kebijakan Privasi ini.',
+                          style: tt.bodySmall?.copyWith(
+                            color: cs.onSurface,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+    },
+  );
 }
 
 //  KTP upload card 

@@ -27,6 +27,12 @@ class RegistrationState {
   /// Confirmed birth date in ISO format (yyyy-MM-dd).
   final String? birthDateIso;
 
+  /// Pernyataan data benar (form pernyataan CPMI).
+  final bool dataDeclarationConfirmed;
+
+  /// Paham zero cost (form RBA zero cost).
+  final bool zeroCostUnderstood;
+
   RegistrationState({
     this.currentStep = 0,
     this.email,
@@ -40,6 +46,8 @@ class RegistrationState {
     this.isGoogleFlow = false,
     this.birthPlaceId,
     this.birthDateIso,
+    this.dataDeclarationConfirmed = false,
+    this.zeroCostUnderstood = false,
   });
 
   RegistrationState copyWith({
@@ -55,6 +63,8 @@ class RegistrationState {
     bool? isGoogleFlow,
     int? birthPlaceId,
     String? birthDateIso,
+    bool? dataDeclarationConfirmed,
+    bool? zeroCostUnderstood,
   }) {
     return RegistrationState(
       currentStep: currentStep ?? this.currentStep,
@@ -69,6 +79,10 @@ class RegistrationState {
       isGoogleFlow: isGoogleFlow ?? this.isGoogleFlow,
       birthPlaceId: birthPlaceId ?? this.birthPlaceId,
       birthDateIso: birthDateIso ?? this.birthDateIso,
+      dataDeclarationConfirmed:
+          dataDeclarationConfirmed ?? this.dataDeclarationConfirmed,
+      zeroCostUnderstood:
+          zeroCostUnderstood ?? this.zeroCostUnderstood,
     );
   }
 }
@@ -114,6 +128,16 @@ class RegistrationNotifier extends StateNotifier<RegistrationState> {
     state = state.copyWith(
       birthPlaceId: birthPlaceId,
       birthDateIso: birthDateIso,
+    );
+  }
+
+  void setDeclarations({
+    required bool dataDeclarationConfirmed,
+    required bool zeroCostUnderstood,
+  }) {
+    state = state.copyWith(
+      dataDeclarationConfirmed: dataDeclarationConfirmed,
+      zeroCostUnderstood: zeroCostUnderstood,
     );
   }
 
@@ -170,6 +194,8 @@ class RegistrationNotifier extends StateNotifier<RegistrationState> {
         phoneNumber: state.phoneNumber,
         birthPlaceId: state.birthPlaceId,
         birthDateIso: state.birthDateIso,
+        dataDeclarationConfirmed: state.dataDeclarationConfirmed,
+        zeroCostUnderstood: state.zeroCostUnderstood,
       );
       state = state.copyWith(isProcessing: false);
       return authResponse;

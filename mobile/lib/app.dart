@@ -30,6 +30,8 @@ import 'features/news/presentation/pages/news_detail_page.dart';
 import 'features/notifications/presentation/pages/notifications_page.dart';
 import 'features/notifications/presentation/pages/notification_settings_page.dart';
 import 'features/auth/data/providers/auth_provider.dart';
+import 'features/profile/data/providers/profile_provider.dart';
+import 'features/documents/data/providers/document_provider.dart';
 import 'config/strings.dart';
 
 /// A [ChangeNotifier] that bridges Riverpod [AuthState] changes to GoRouter's
@@ -43,8 +45,34 @@ class _AuthRouterNotifier extends ChangeNotifier {
 final routerProvider = Provider<GoRouter>((ref) {
   final authNotifier = _AuthRouterNotifier();
 
-  // Listen to auth state changes and notify the router to re-evaluate redirect.
-  ref.listen<AuthState>(authStateProvider, (_, _) {
+  // Listen to auth state changes and:
+  // - notify the router so redirects are re-evaluated
+  // - clear user-scoped cached data when logging out, so a new login
+  //   never sees stale profile/documents from the previous account.
+  ref.listen<AuthState>(authStateProvider, (previous, next) {
+    final wasAuthenticated = previous?.isAuthenticated ?? false;
+    final isAuthenticated = next.isAuthenticated;
+
+    // When transitioning from logged-in → logged-out, clear all
+    // user-scoped providers so the next session starts clean.
+    if (wasAuthenticated && !isAuthenticated) {
+      ref.invalidate(profileNotifierProvider);
+      ref.invalidate(myDocumentsProvider);
+      ref.invalidate(documentChecklistProvider);
+      ref.invalidate(workExperienceNotifierProvider);
+    }
+
+    // When transitioning from logged-out → logged-in, eagerly load
+    // fresh data for the new user so no page ever sees stale data.
+    if (!wasAuthenticated && isAuthenticated) {
+      // Ensure a fresh provider instance, then force a reload.
+      ref.invalidate(profileNotifierProvider);
+      ref.invalidate(myDocumentsProvider);
+      ref.invalidate(documentChecklistProvider);
+      ref.invalidate(workExperienceNotifierProvider);
+      ref.read(profileNotifierProvider.notifier).loadProfile(force: true);
+    }
+
     authNotifier.notify();
   });
 

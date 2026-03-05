@@ -12,6 +12,10 @@ class JobApplication {
   final int? batch;
   final String? batchName;
   final String status;
+  final DateTime? praSeleksiDate;
+  final String? praSeleksiLocation;
+  final DateTime? interviewDate;
+  final String? interviewLocation;
   final DateTime? praSeleksiConfirmedAt;
   final DateTime? interviewConfirmedAt;
   final DateTime appliedAt;
@@ -35,6 +39,10 @@ class JobApplication {
     this.batch,
     this.batchName,
     required this.status,
+    this.praSeleksiDate,
+    this.praSeleksiLocation,
+    this.interviewDate,
+    this.interviewLocation,
     this.praSeleksiConfirmedAt,
     this.interviewConfirmedAt,
     required this.appliedAt,
@@ -83,6 +91,14 @@ class JobApplication {
       batch: _safeIntOrNull(json['batch']),
       batchName: json['batch_name']?.toString(),
       status: (json['status'] ?? '') as String,
+      praSeleksiDate: json['pra_seleksi_date'] != null
+          ? DateTime.parse(json['pra_seleksi_date'] as String)
+          : null,
+      praSeleksiLocation: json['pra_seleksi_location']?.toString(),
+      interviewDate: json['interview_date'] != null
+          ? DateTime.parse(json['interview_date'] as String)
+          : null,
+      interviewLocation: json['interview_location']?.toString(),
       praSeleksiConfirmedAt: json['pra_seleksi_confirmed_at'] != null
           ? DateTime.parse(json['pra_seleksi_confirmed_at'] as String)
           : null,

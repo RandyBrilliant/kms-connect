@@ -105,72 +105,94 @@ class _VerifyEmailPageState extends ConsumerState<VerifyEmailPage> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-          left: 24,
-          right: 24,
-          top: 24,
-          bottom: MediaQuery.viewInsetsOf(ctx).bottom + 24,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Kirim Ulang Email Verifikasi',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
+      builder: (ctx) {
+        final cs = Theme.of(ctx).colorScheme;
+        final tt = Theme.of(ctx).textTheme;
+
+        return SafeArea(
+          top: false,
+          child: LayoutBuilder(
+            builder: (context, constraints) => SingleChildScrollView(
+              padding: EdgeInsets.only(
+                left: 24,
+                right: 24,
+                top: 24,
+                bottom: MediaQuery.viewInsetsOf(ctx).bottom + 24,
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Masukkan alamat email yang didaftarkan untuk menerima tautan verifikasi baru.',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 13,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 20),
-            TextField(
-              controller: _resendEmailCtrl,
-              keyboardType: TextInputType.emailAddress,
-              autofocus: true,
-              textInputAction: TextInputAction.done,
-              decoration: InputDecoration(
-                labelText: 'Email',
-                hintText: 'contoh@email.com',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minWidth: 0,
+                  maxWidth: constraints.maxWidth,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Kirim Ulang Email Verifikasi',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: cs.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Masukkan alamat email yang didaftarkan untuk menerima tautan verifikasi baru.',
+                      style: tt.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    TextField(
+                      controller: _resendEmailCtrl,
+                      keyboardType: TextInputType.emailAddress,
+                      autofocus: true,
+                      textInputAction: TextInputAction.done,
+                      decoration: InputDecoration(
+                        labelText: 'Email',
+                        hintText: 'contoh@email.com',
+                        prefixIcon: const Icon(Icons.mail_outline_rounded),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: _resendLoading
+                            ? null
+                            : () async {
+                                Navigator.of(ctx).pop();
+                                await _handleResend(_resendEmailCtrl.text);
+                              },
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(50),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          textStyle: GoogleFonts.plusJakartaSans(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        child: Text(
+                          _resendLoading
+                              ? 'Mengirim...'
+                              : 'Kirim Email Verifikasi',
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: _resendLoading
-                    ? null
-                    : () async {
-                        Navigator.of(ctx).pop();
-                        await _handleResend(_resendEmailCtrl.text);
-                      },
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  textStyle: GoogleFonts.plusJakartaSans(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                child: const Text('Kirim Email Verifikasi'),
-              ),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
