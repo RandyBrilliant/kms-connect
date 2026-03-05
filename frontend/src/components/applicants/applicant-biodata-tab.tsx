@@ -81,6 +81,7 @@ type BiodataFormValues = {
   religion: string
   education_level: string
   education_major: string
+  diploma_number: string
   marital_status: string
   height_cm: string
   weight_kg: string
@@ -129,6 +130,7 @@ function toFormValues(p: ApplicantProfile): BiodataFormValues {
     religion: p.religion || "",
     education_level: p.education_level || "",
     education_major: p.education_major || "",
+    diploma_number: p.diploma_number || "",
     marital_status: p.marital_status || "",
     height_cm: p.height_cm != null ? String(p.height_cm) : "",
     weight_kg: p.weight_kg != null ? String(p.weight_kg) : "",
@@ -196,6 +198,7 @@ export function ApplicantBiodataTab({
         religion: value.religion || undefined,
         education_level: value.education_level || undefined,
         education_major: value.education_major || undefined,
+        diploma_number: value.diploma_number || undefined,
         marital_status: value.marital_status || undefined,
         height_cm: toNum(value.height_cm),
         weight_kg: toNum(value.weight_kg),
@@ -534,6 +537,21 @@ export function ApplicantBiodataTab({
                       onChange={(e) => field.handleChange(e.target.value)}
                       onBlur={field.handleBlur}
                       placeholder="Contoh: Teknik Informatika"
+                    />
+                  </Field>
+                )}
+              </form.Field>
+
+              <form.Field name="diploma_number">
+                {(field) => (
+                  <Field>
+                    <FieldLabel htmlFor={field.name}>Nomor Ijazah</FieldLabel>
+                    <Input
+                      id={field.name}
+                      value={field.state.value}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      onBlur={field.handleBlur}
+                      placeholder="Contoh: DN-01/1234567"
                     />
                   </Field>
                 )}

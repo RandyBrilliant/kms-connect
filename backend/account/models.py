@@ -756,6 +756,139 @@ class ApplicantProfile(models.Model):
         blank=True,
         help_text=_("Catatan tambahan (III. Keterangan)."),
     )
+    # ---- Admin-only process & finance fields (not editable by applicant) ----
+    tgl_medical = models.DateField(
+        _("tanggal medical"),
+        null=True,
+        blank=True,
+        help_text=_("Tanggal pemeriksaan medical."),
+    )
+    hasil_medical = models.CharField(
+        _("hasil medical"),
+        max_length=255,
+        blank=True,
+        help_text=_("Ringkasan hasil medical (FIT/UNFIT atau catatan singkat)."),
+    )
+    tgl_bayar_sml = models.DateField(
+        _("tanggal bayar SML"),
+        null=True,
+        blank=True,
+        help_text=_("Tanggal pembayaran ke SML."),
+    )
+    tgl_fwcm_psikotes = models.DateField(
+        _("tanggal FWCMS & psikotes"),
+        null=True,
+        blank=True,
+        help_text=_("Tanggal FWCMS dan psikotes dilakukan."),
+    )
+    tgl_bayar_psikotes = models.DateField(
+        _("tanggal bayar psikotes"),
+        null=True,
+        blank=True,
+        help_text=_("Tanggal pembayaran biaya psikotes."),
+    )
+    tgl_bayar_bpjs_pra = models.DateField(
+        _("tanggal bayar BPJS pra"),
+        null=True,
+        blank=True,
+        help_text=_("Tanggal pembayaran BPJS pra penempatan."),
+    )
+    tgl_bayar_bpjs_purna = models.DateField(
+        _("tanggal bayar BPJS purna"),
+        null=True,
+        blank=True,
+        help_text=_("Tanggal pembayaran BPJS purna."),
+    )
+    no_id_sisko = models.CharField(
+        _("nomor ID SISKO"),
+        max_length=100,
+        blank=True,
+        help_text=_("Nomor ID SISKO pelamar."),
+    )
+    disnaker = models.CharField(
+        _("disnaker"),
+        max_length=255,
+        blank=True,
+        help_text=_("Informasi Disnaker terkait pelamar (jika ada)."),
+    )
+    no_sip = models.CharField(
+        _("nomor SIP"),
+        max_length=100,
+        blank=True,
+        help_text=_("Nomor SIP."),
+    )
+    no_jo = models.CharField(
+        _("nomor JO"),
+        max_length=100,
+        blank=True,
+        help_text=_("Nomor JO."),
+    )
+    biaya_ready_paspor = models.DecimalField(
+        _("biaya ready paspor"),
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text=_("Biaya yang dikeluarkan untuk ready paspor (dalam Rupiah)."),
+    )
+    pengembalian_biaya = models.DecimalField(
+        _("pengembalian biaya"),
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text=_("Jumlah biaya yang dikembalikan (dalam Rupiah)."),
+    )
+    tgl_pengembalian = models.DateField(
+        _("tanggal pengembalian biaya"),
+        null=True,
+        blank=True,
+        help_text=_("Tanggal pengembalian biaya dilakukan."),
+    )
+    jlh_uang_transport = models.DecimalField(
+        _("jumlah uang transport"),
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text=_("Total uang transport (dalam Rupiah)."),
+    )
+    bank = models.CharField(
+        _("bank"),
+        max_length=100,
+        blank=True,
+        help_text=_("Nama bank tujuan pengembalian/transfer."),
+    )
+    no_rek = models.CharField(
+        _("nomor rekening"),
+        max_length=100,
+        blank=True,
+        help_text=_("Nomor rekening tujuan."),
+    )
+    tanggal_pengembalian = models.DateField(
+        _("tanggal pengembalian (transfer)"),
+        null=True,
+        blank=True,
+        help_text=_("Tanggal pengembalian dana ditransfer."),
+    )
+    tgl_kirim_bio_ke_mly = models.DateField(
+        _("tanggal kirim biodata ke Malaysia"),
+        null=True,
+        blank=True,
+        help_text=_("Tanggal biodata dikirim ke Malaysia."),
+    )
+    tgl_calling_visa = models.DateField(
+        _("tanggal calling visa"),
+        null=True,
+        blank=True,
+        help_text=_("Tanggal calling visa diterbitkan."),
+    )
+    no_calling_visa = models.CharField(
+        _("nomor calling visa"),
+        max_length=100,
+        blank=True,
+        help_text=_("Nomor calling visa."),
+    )
     # ---- Verifikasi / seleksi (admin memverifikasi data; status ditampilkan ke pelamar) ----
     verification_status = models.CharField(
         _("status verifikasi"),
@@ -1097,6 +1230,33 @@ class ApplicantProfile(models.Model):
         # Cache for 5 minutes
         cache.set(cache_key, rate, 300)
         return rate
+
+    @property
+    def score_breakdown(self) -> dict:
+        """
+        Structured, read-only explanation of the readiness score for this applicant.
+
+        This is used by the admin/frontend to quickly see which biodata fields and
+        required documents are still missing. It is intentionally *not* stored in
+        the database; instead it is computed on demand so we don't keep stale
+        cache-like data after the applicant is accepted.
+
+        For accepted applicants, an empty dict is returned so no "pending issues"
+        are shown.
+        """
+        # Once accepted, we no longer surface missing-data hints.
+        if self.is_accepted:
+            return {}
+
+        try:
+            from .services.scoring import explain_readiness_score
+        except Exception:
+            return {}
+
+        try:
+            return explain_readiness_score(self) or {}
+        except Exception:
+            return {}
     
     @property
     def has_complete_documents(self):

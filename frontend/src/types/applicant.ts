@@ -66,6 +66,14 @@ export interface RegionDisplay {
   village?: string
 }
 
+export interface ScoreBreakdown {
+  score: number
+  profile_completeness_ratio: number
+  document_ratio: number
+  profile_missing_fields: string[]
+  missing_required_document_codes: string[]
+}
+
 export interface ApplicantProfile {
   id: number
   register_number: string | null
@@ -126,6 +134,27 @@ export interface ApplicantProfile {
   family_card_number: string
   diploma_number: string
   bpjs_number: string
+  tgl_medical: string | null
+  hasil_medical: string
+  tgl_bayar_sml: string | null
+  tgl_fwcm_psikotes: string | null
+  tgl_bayar_psikotes: string | null
+  tgl_bayar_bpjs_pra: string | null
+  tgl_bayar_bpjs_purna: string | null
+  no_id_sisko: string
+  disnaker: string
+  no_sip: string
+  no_jo: string
+  biaya_ready_paspor: number | null
+  pengembalian_biaya: number | null
+  tgl_pengembalian: string | null
+  jlh_uang_transport: number | null
+  bank: string
+  no_rek: string
+  tanggal_pengembalian: string | null
+  tgl_kirim_bio_ke_mly: string | null
+  tgl_calling_visa: string | null
+  no_calling_visa: string
   shoe_size: string
   shirt_size: string
   photo: string | null
@@ -136,6 +165,7 @@ export interface ApplicantProfile {
   verified_by: number | null
   verification_notes: string
   score: number | null
+  score_breakdown?: ScoreBreakdown | null
   created_at: string
   updated_at: string
   age?: number

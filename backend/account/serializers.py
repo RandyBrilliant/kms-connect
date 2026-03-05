@@ -367,6 +367,7 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True,
     )
+    score_breakdown = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = ApplicantProfile
@@ -428,6 +429,27 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
             "family_card_number",
             "diploma_number",
             "bpjs_number",
+            "tgl_medical",
+            "hasil_medical",
+            "tgl_bayar_sml",
+            "tgl_fwcm_psikotes",
+            "tgl_bayar_psikotes",
+            "tgl_bayar_bpjs_pra",
+            "tgl_bayar_bpjs_purna",
+            "no_id_sisko",
+            "disnaker",
+            "no_sip",
+            "no_jo",
+            "biaya_ready_paspor",
+            "pengembalian_biaya",
+            "tgl_pengembalian",
+            "jlh_uang_transport",
+            "bank",
+            "no_rek",
+            "tanggal_pengembalian",
+            "tgl_kirim_bio_ke_mly",
+            "tgl_calling_visa",
+            "no_calling_visa",
             "register_number",
             "shoe_size",
             "shirt_size",
@@ -439,10 +461,11 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
             "verified_by",
             "verification_notes",
             "score",
+            "score_breakdown",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "score", "register_number", "created_at", "updated_at"]
+        read_only_fields = ["id", "score", "score_breakdown", "register_number", "created_at", "updated_at"]
 
     def get_heir_relationship_display(self, obj):
         if not obj.heir_relationship:
@@ -463,6 +486,28 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
                 "submitted_at",
                 "verified_at",
                 "verification_notes",
+                # Admin-only process & finance fields should not be editable by applicant
+                "tgl_medical",
+                "hasil_medical",
+                "tgl_bayar_sml",
+                "tgl_fwcm_psikotes",
+                "tgl_bayar_psikotes",
+                "tgl_bayar_bpjs_pra",
+                "tgl_bayar_bpjs_purna",
+                "no_id_sisko",
+                "disnaker",
+                "no_sip",
+                "no_jo",
+                "biaya_ready_paspor",
+                "pengembalian_biaya",
+                "tgl_pengembalian",
+                "jlh_uang_transport",
+                "bank",
+                "no_rek",
+                "tanggal_pengembalian",
+                "tgl_kirim_bio_ke_mly",
+                "tgl_calling_visa",
+                "no_calling_visa",
             ):
                 if f in self.fields:
                     self.fields[f].read_only = True
@@ -519,6 +564,17 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
             getattr(obj, "family_district", None) if obj.family_district_id else None,
             getattr(obj, "family_village", None) if obj.family_village_id else None,
         )
+
+    def get_score_breakdown(self, obj):
+        """
+        Expose the model's score_breakdown property as-is.
+
+        This keeps the serializer thin and lets the model/service decide what
+        to include. Safe to use for admin/frontend display only.
+        """
+        if not obj:
+            return None
+        return getattr(obj, "score_breakdown", {}) or {}
 
     def validate_nik(self, value):
         """Format 16 digit; uniqueness dicek di parent ApplicantUserSerializer (supaya punya akses profile instance)."""

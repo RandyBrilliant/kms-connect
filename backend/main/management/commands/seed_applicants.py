@@ -1,13 +1,11 @@
 """
-Seed ~100 random pelamar (CustomUser + ApplicantProfile + JobApplication).
+Seed random pelamar (CustomUser + ApplicantProfile) tanpa lamaran lowongan kerja.
 
-Distribusi status lamaran:
-  - 30% DITERIMA
-  - 20% BERANGKAT
-  - 15% SELESAI
-  - 10% INTERVIEW
-  - 15% PRA_SELEKSI
-  - 10% DITOLAK
+Distribusi status profil pelamar (verification_status):
+  - DRAFT
+  - SUBMITTED
+  - ACCEPTED
+  - REJECTED
 
 Idempoten: cek email sebelum membuat user.
 
@@ -24,12 +22,6 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from account.models import ApplicantProfile, ApplicantVerificationStatus, UserRole
-from main.models import (
-    ApplicationStatus,
-    ApplicationStatusHistory,
-    JobApplication,
-    LowonganKerja,
-)
 
 User = get_user_model()
 
@@ -53,18 +45,16 @@ LAST_NAMES = [
     "Gunawan", "Safitri", "Wahyudi", "Larasati", "Kusuma", "Astuti",
 ]
 
-# Weighted status distribution
-STATUS_WEIGHTS = [
-    (ApplicationStatus.PRA_SELEKSI, 15),
-    (ApplicationStatus.INTERVIEW,   10),
-    (ApplicationStatus.DITERIMA,    30),
-    (ApplicationStatus.BERANGKAT,   20),
-    (ApplicationStatus.SELESAI,     15),
-    (ApplicationStatus.DITOLAK,     10),
+# Weighted verification_status distribution for ApplicantProfile
+PROFILE_STATUS_WEIGHTS = [
+    (ApplicantVerificationStatus.DRAFT, 20),
+    (ApplicantVerificationStatus.SUBMITTED, 40),
+    (ApplicantVerificationStatus.ACCEPTED, 25),
+    (ApplicantVerificationStatus.REJECTED, 15),
 ]
 
 # Expand into a weighted pool
-_STATUS_POOL = [s for s, w in STATUS_WEIGHTS for _ in range(w)]
+_PROFILE_STATUS_POOL = [s for s, w in PROFILE_STATUS_WEIGHTS for _ in range(w)]
 
 
 def _random_name():
@@ -83,7 +73,7 @@ def _random_dob():
 
 
 class Command(BaseCommand):
-    help = "Seed ~100 pelamar random dengan lamaran ke lowongan yang tersedia."
+    help = "Seed pelamar random (CustomUser + ApplicantProfile) tanpa lamaran lowongan kerja."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -112,18 +102,7 @@ class Command(BaseCommand):
             deleted, _ = User.objects.filter(email__endswith="@seed.kms").delete()
             self.stdout.write(f"  Deleted {deleted} seed applicant users.\n")
 
-        # ── Require jobs ──────────────────────────────────────────────────
-        jobs = list(LowonganKerja.objects.filter(status="OPEN").select_related("company"))
-        if not jobs:
-            # Fall back to any job
-            jobs = list(LowonganKerja.objects.all().select_related("company"))
-        if not jobs:
-            self.stderr.write(
-                self.style.ERROR("Tidak ada lowongan kerja. Jalankan seed_jobs dulu.")
-            )
-            return
-
-        self.stdout.write(f"Seeding {count} pelamar…\n")
+        self.stdout.write(f"Seeding {count} pelamar (tanpa lamaran)…\n")
         now = timezone.now()
         created_count = 0
         skipped_count = 0
@@ -152,51 +131,49 @@ class Command(BaseCommand):
             # ── ApplicantProfile ──────────────────────────────────────────
             # NIK: unique=True, blank=False — generate a deterministic fake 16-digit value.
             fake_nik = f"3{i:015d}"
-            profile = ApplicantProfile.objects.create(
+
+            # Randomise verification status and related timestamps
+            verification_status = random.choice(_PROFILE_STATUS_POOL)
+            submitted_at = None
+            verified_at = None
+            verification_notes = ""
+
+            if verification_status in (
+                ApplicantVerificationStatus.SUBMITTED,
+                ApplicantVerificationStatus.ACCEPTED,
+                ApplicantVerificationStatus.REJECTED,
+            ):
+                # Submitted sometime in the last 90 days
+                submitted_at = now - timedelta(days=random.randint(1, 90))
+
+            if verification_status in (
+                ApplicantVerificationStatus.ACCEPTED,
+                ApplicantVerificationStatus.REJECTED,
+            ):
+                # Verified 0–14 days after submission
+                verified_at = submitted_at + timedelta(
+                    days=random.randint(0, 14)
+                ) if submitted_at else now
+
+            if verification_status == ApplicantVerificationStatus.REJECTED:
+                verification_notes = "Ditolak (data belum lengkap untuk verifikasi)."
+
+            ApplicantProfile.objects.create(
                 user=user,
                 nik=fake_nik,
                 registration_date=date.today(),
                 birth_date=_random_dob(),
                 contact_phone=_random_phone(),
                 address=f"Jl. Contoh No. {i}, Jakarta",
-                verification_status=ApplicantVerificationStatus.ACCEPTED,
-                submitted_at=now,
-                verified_at=now,
-            )
-
-            # ── JobApplication ────────────────────────────────────────────
-            job = random.choice(jobs)
-            status = random.choice(_STATUS_POOL)
-
-            # placement_end_date required for SELESAI
-            placement_end_date = None
-            if status == ApplicationStatus.SELESAI:
-                placement_end_date = (now - timedelta(days=random.randint(30, 365))).date()
-
-            applied_at = now - timedelta(days=random.randint(1, 120))
-
-            application = JobApplication.objects.create(
-                applicant=profile,
-                job=job,
-                batch=None,
-                status=status,
-                placement_end_date=placement_end_date,
-            )
-            # Back-date the applied_at timestamp (auto_now_add, must use update)
-            JobApplication.objects.filter(pk=application.pk).update(applied_at=applied_at)
-
-            ApplicationStatusHistory.objects.create(
-                application=application,
-                from_status="",
-                to_status=status,
-                changed_by=None,
-                note="Seeded by seed_applicants.",
+                verification_status=verification_status,
+                submitted_at=submitted_at,
+                verified_at=verified_at,
+                verification_notes=verification_notes,
             )
 
             created_count += 1
-            status_label = ApplicationStatus(status).label
             self.stdout.write(
-                f"  [{i:03d}] {full_name} → {job.title[:35]} [{status_label}]"
+                f"  [{i:03d}] {full_name} → status profil: {verification_status}"
             )
 
         self.stdout.write(

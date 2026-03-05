@@ -7,7 +7,15 @@
 import { Link, useParams } from "react-router-dom"
 import { format } from "date-fns"
 import { id as idLocale } from "date-fns/locale"
-import { IconArrowLeft, IconMail, IconKey, IconMessage, IconClipboardList, IconExternalLink } from "@tabler/icons-react"
+import {
+  IconArrowLeft,
+  IconMail,
+  IconKey,
+  IconMessage,
+  IconClipboardList,
+  IconExternalLink,
+  IconAlertCircle,
+} from "@tabler/icons-react"
 
 import { BreadcrumbNav } from "@/components/breadcrumb-nav"
 import { Button } from "@/components/ui/button"
@@ -16,9 +24,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ApplicantBiodataTab } from "@/components/applicants/applicant-biodata-tab"
 import { ApplicantWorkExperienceTab } from "@/components/applicants/applicant-work-experience-tab"
 import { ApplicantDocumentsTab } from "@/components/applicants/applicant-documents-tab"
-import { ApplicantMetadataTab } from "@/components/applicants/applicant-metadata-tab"
+import { ApplicantAdminProcessTab } from "../components/applicants/applicant-admin-process-tab"
 import { ApplicationStatusBadge } from "@/components/applications/application-status-badge"
 import { Badge } from "@/components/ui/badge"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   useApplicantQuery,
   useUpdateApplicantMutation,
@@ -29,7 +44,7 @@ import {
 } from "@/hooks/use-applicants-query"
 import { useApplicationsQuery } from "@/hooks/use-applications-query"
 import { toast } from "@/lib/toast"
-import type { ApplicantUser } from "@/types/applicant"
+import type { ApplicantUser, ApplicantVerificationStatus, ApplicantProfile } from "@/types/applicant"
 import { usePageTitle } from "@/hooks/use-page-title"
 
 const APPLICATIONS_BASE = "/lamaran"
@@ -41,6 +56,7 @@ function ApplicantSidebar({ applicant }: { applicant: ApplicantUser }) {
   const activateMutation = useActivateApplicantMutation()
   const sendVerificationMutation = useSendVerificationEmailMutation()
   const sendPasswordResetMutation = useSendPasswordResetMutation()
+  const updateMutation = useUpdateApplicantMutation(applicant.id)
 
   const handleToggleActive = async () => {
     try {
@@ -83,8 +99,211 @@ function ApplicantSidebar({ applicant }: { applicant: ApplicantUser }) {
     }
   }
 
+  const profile = applicant.applicant_profile
+  const scoreBreakdown = profile?.score_breakdown
+
+  const VERIFICATION_LABELS: Record<ApplicantVerificationStatus, string> = {
+    DRAFT: "Draf",
+    SUBMITTED: "Dikirim",
+    ACCEPTED: "Diterima",
+    REJECTED: "Ditolak",
+  }
+
+  const handleStatusChange = async (value: ApplicantVerificationStatus) => {
+    if (!profile || value === profile.verification_status) return
+
+    try {
+      await updateMutation.mutateAsync({
+        applicant_profile: {
+          verification_status: value,
+        },
+      })
+      toast.success("Status verifikasi diperbarui")
+    } catch (err: unknown) {
+      const res = err as {
+        response?: {
+          data?: {
+            errors?: Record<string, unknown>
+            detail?: string
+          }
+        }
+      }
+      const errors = res?.response?.data?.errors
+      const detail = res?.response?.data?.detail
+      if (errors) {
+        const msgs: string[] = []
+        Object.entries(errors).forEach(([key, value]) => {
+          if (
+            key === "applicant_profile" &&
+            value &&
+            typeof value === "object" &&
+            !Array.isArray(value)
+          ) {
+            Object.entries(value as Record<string, unknown>).forEach(
+              ([subKey, subVal]) => {
+                const arr = Array.isArray(subVal) ? subVal : [subVal]
+                arr.forEach((m) => msgs.push(`${subKey}: ${String(m)}`))
+              }
+            )
+          } else {
+            const arr = Array.isArray(value) ? value : [value]
+            arr.forEach((m) => msgs.push(`${key}: ${String(m)}`))
+          }
+        })
+        toast.error("Validasi gagal", msgs.join(". "))
+      } else {
+        toast.error("Gagal", detail ?? "Coba lagi nanti")
+      }
+    }
+  }
+
+  const prettyFieldLabels: Record<string, string> = {
+    "user.full_name": "Nama Lengkap",
+    nik: "NIK",
+    birth_date: "Tanggal Lahir",
+    gender: "Jenis Kelamin",
+    address: "Alamat",
+    contact_phone: "No. HP / WA",
+    province_id: "Provinsi (alamat KTP)",
+    district_id: "Kota / Kabupaten (alamat KTP)",
+    village_id: "Kelurahan / Desa (alamat KTP)",
+    education_level: "Pendidikan Terakhir",
+    marital_status: "Status Perkawinan",
+    // Data pribadi tambahan
+    registration_date: "Tanggal Pendaftaran",
+    destination_country: "Negara Tujuan",
+    sibling_count: "Jumlah Saudara",
+    birth_order: "Anak ke-",
+    religion: "Agama",
+    education_major: "Jurusan Pendidikan",
+    data_declaration_confirmed: "Pernyataan Data Benar",
+    zero_cost_understood: "Paham Zero Cost",
+    // Ciri fisik
+    height_cm: "Tinggi Badan (cm)",
+    weight_kg: "Berat Badan (kg)",
+    wears_glasses: "Memakai Kacamata",
+    writing_hand: "Tangan yang Digunakan untuk Menulis",
+    shoe_size: "Ukuran Sepatu",
+    shirt_size: "Ukuran Baju",
+    // Data paspor
+    passport_number: "Nomor Paspor",
+    passport_issue_date: "Tanggal Terbit Paspor",
+    passport_issue_place: "Tempat Terbit Paspor",
+    passport_expiry_date: "Tanggal Kadaluarsa Paspor",
+    // Informasi rujukan
+    referrer_id: "Informasi Rujukan (Perujuk)",
+    // Kelompok data
+    parent_info: "Data Orang Tua (Ayah/Ibu)",
+    heir_info: "Data Ahli Waris",
+  }
+
+  const prettyDocumentLabels: Record<string, string> = {
+    "ktp": "KTP",
+    "kartu-keluarga": "Kartu Keluarga",
+    "ijasah": "Ijazah",
+    "kartu-bpjs": "Kartu BPJS Kesehatan",
+    "paspor": "Paspor",
+    "photo-tki": "Photo TKI",
+  }
+
   return (
     <div className="flex flex-col gap-6">
+      {/* Skor kesiapan & data yang belum lengkap */}
+      {scoreBreakdown && Object.keys(scoreBreakdown).length > 0 && (
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between gap-2">
+                <CardTitle className="flex items-center gap-2 text-sm">
+                  <IconAlertCircle className="size-4 text-amber-500" />
+                  Ringkasan Kesiapan
+                </CardTitle>
+                <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                  Skor {Math.round(applicant.applicant_profile.score ?? scoreBreakdown.score ?? 0)} / 100
+                </span>
+              </div>
+              <CardDescription className="mt-1 text-xs">
+                Bidang biodata dan dokumen yang masih belum lengkap.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {scoreBreakdown.profile_missing_fields?.length ? (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-foreground">
+                    Biodata belum lengkap:
+                  </p>
+                  <ul className="list-disc space-y-0.5 pl-4 text-xs text-muted-foreground">
+                    {scoreBreakdown.profile_missing_fields.map((field) => {
+                      const label = prettyFieldLabels[field] ?? field
+                      return <li key={field}>{label}</li>
+                    })}
+                  </ul>
+                </div>
+              ) : null}
+
+              {scoreBreakdown.missing_required_document_codes?.length ? (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-foreground">
+                    Dokumen wajib belum lengkap:
+                  </p>
+                  <ul className="list-disc space-y-0.5 pl-4 text-xs text-muted-foreground">
+                    {scoreBreakdown.missing_required_document_codes.map((code) => {
+                      const label = prettyDocumentLabels[code] ?? code.toUpperCase()
+                      return <li key={code}>{label}</li>
+                    })}
+                  </ul>
+                </div>
+              ) : null}
+
+              {!scoreBreakdown.profile_missing_fields?.length &&
+              !scoreBreakdown.missing_required_document_codes?.length ? (
+                <p className="text-xs text-muted-foreground">
+                  Tidak ada kekurangan data yang terdeteksi untuk perhitungan skor.
+                </p>
+              ) : null}
+            </CardContent>
+          </Card>
+        )}
+
+      {/* Status verifikasi */}
+      {profile && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Status Verifikasi</CardTitle>
+            <CardDescription>
+              Ubah status verifikasi pelamar. Dikirim = menunggu verifikasi. Diterima/Ditolak = hasil verifikasi.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-3">
+              <span className="text-muted-foreground text-xs">Status saat ini:</span>
+              <Select
+                value={profile.verification_status}
+                onValueChange={(v) => handleStatusChange(v as ApplicantVerificationStatus)}
+                disabled={updateMutation.isPending}
+              >
+                <SelectTrigger
+                  className="w-[180px] cursor-pointer"
+                  disabled={updateMutation.isPending}
+                >
+                  <SelectValue>
+                    {updateMutation.isPending
+                      ? "Menyimpan..."
+                      : VERIFICATION_LABELS[profile.verification_status]}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(VERIFICATION_LABELS).map(([val, label]) => (
+                    <SelectItem key={val} value={val}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Status: Aktif / Nonaktif */}
       <Card>
         <CardHeader>
@@ -113,6 +332,60 @@ function ApplicantSidebar({ applicant }: { applicant: ApplicantUser }) {
           </Button>
         </CardContent>
       </Card>
+
+      {/* Metadata & audit info */}
+      {profile && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Metadata</CardTitle>
+            <CardDescription>Jejak waktu & aktivitas akun.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <dl className="space-y-3 text-xs">
+              <div className="flex items-center justify-between gap-2">
+                <dt className="text-muted-foreground">Profil dibuat</dt>
+                <dd className="font-medium">
+                  {profile.created_at
+                    ? format(new Date(profile.created_at), "dd MMM yyyy HH:mm", { locale: idLocale })
+                    : "-"}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <dt className="text-muted-foreground">Profil diperbarui</dt>
+                <dd className="font-medium">
+                  {profile.updated_at
+                    ? format(new Date(profile.updated_at), "dd MMM yyyy HH:mm", { locale: idLocale })
+                    : "-"}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <dt className="text-muted-foreground">User bergabung</dt>
+                <dd className="font-medium">
+                  {applicant.date_joined
+                    ? format(new Date(applicant.date_joined), "dd MMM yyyy HH:mm", { locale: idLocale })
+                    : "-"}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <dt className="text-muted-foreground">Dikirim untuk verifikasi</dt>
+                <dd className="font-medium">
+                  {profile.submitted_at
+                    ? format(new Date(profile.submitted_at), "dd MMM yyyy HH:mm", { locale: idLocale })
+                    : "-"}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <dt className="text-muted-foreground">Diverifikasi pada</dt>
+                <dd className="font-medium">
+                  {profile.verified_at
+                    ? format(new Date(profile.verified_at), "dd MMM yyyy HH:mm", { locale: idLocale })
+                    : "-"}
+                </dd>
+              </div>
+            </dl>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Send email verification */}
       <Card>
@@ -376,6 +649,9 @@ export function AdminPelamarDetailPage() {
           <TabsTrigger value="biodata" className="cursor-pointer">
             Biodata
           </TabsTrigger>
+          <TabsTrigger value="admin-data" className="cursor-pointer">
+            Data Proses
+          </TabsTrigger>
           <TabsTrigger value="pengalaman" className="cursor-pointer">
             Pengalaman Kerja
           </TabsTrigger>
@@ -398,9 +674,20 @@ export function AdminPelamarDetailPage() {
             </div>
             <div className="flex flex-col gap-6">
               <ApplicantSidebar applicant={applicant} />
-              <ApplicantMetadataTab applicant={applicant} />
             </div>
           </div>
+        </TabsContent>
+
+        <TabsContent value="admin-data">
+          <ApplicantAdminProcessTab
+            profile={profile}
+            onSubmit={async (data: Partial<ApplicantProfile>) => {
+              await updateMutation.mutateAsync({
+                applicant_profile: data,
+              })
+            }}
+            isSubmitting={updateMutation.isPending}
+          />
         </TabsContent>
 
         <TabsContent value="pengalaman">

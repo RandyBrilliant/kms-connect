@@ -26,7 +26,17 @@ DOCUMENT_WEIGHT: float = 0.4
 
 # Important biodata fields that count towards profile completeness.
 # We prefer *_id fields for FKs to avoid triggering extra DB fetches.
+#
+# Groups below roughly align with the applicant form sections:
+#   1. Data pribadi (basic identity + contact)
+#   2. Data pribadi tambahan
+#   3. Ciri fisik
+#   4. Data paspor
+#   5. Informasi rujukan
+#   6. Data orang tua (grouped: if either Ayah or Ibu is filled → full credit)
+#   7. Ahli waris (grouped: requires at least nama + kontak)
 PROFILE_COMPLETENESS_FIELDS: tuple[str, ...] = (
+    # --- Data pribadi (existing fields) ---
     "user.full_name",
     "nik",
     "birth_date",
@@ -38,6 +48,44 @@ PROFILE_COMPLETENESS_FIELDS: tuple[str, ...] = (
     "village_id",
     "education_level",
     "marital_status",
+    # --- Data pribadi tambahan ---
+    "registration_date",
+    "destination_country",
+    "sibling_count",
+    "birth_order",
+    "religion",
+    "education_major",
+    "data_declaration_confirmed",
+    "zero_cost_understood",
+    # --- Ciri fisik ---
+    "height_cm",
+    "weight_kg",
+    "wears_glasses",
+    "writing_hand",
+    "shoe_size",
+    "shirt_size",
+    # --- Data paspor ---
+    "passport_number",
+    "passport_issue_date",
+    "passport_issue_place",
+    "passport_expiry_date",
+    # --- Informasi rujukan ---
+    "referrer_id",
+)
+
+# Grouped completeness units. Each group contributes 1 "slot" to the
+# completeness ratio.
+PROFILE_COMPLETENESS_GROUPS: tuple[dict[str, Any], ...] = (
+    {
+        "name": "parent_info",
+        "fields": ("father_name", "mother_name"),
+        "mode": "any",  # either Ayah or Ibu data is sufficient
+    },
+    {
+        "name": "heir_info",
+        "fields": ("heir_name", "heir_contact_phone"),
+        "mode": "all",  # require at least name + contact
+    },
 )
 
 
@@ -82,17 +130,63 @@ def _is_filled(value: Any) -> bool:
 def profile_completeness_ratio(applicant_profile: Any) -> float:
     """
     Calculate ratio (0..1) of important biodata fields that are filled.
+
+    Includes both individual fields (PROFILE_COMPLETENESS_FIELDS) and grouped
+    units (PROFILE_COMPLETENESS_GROUPS).
     """
-    total = len(PROFILE_COMPLETENESS_FIELDS)
+    total = len(PROFILE_COMPLETENESS_FIELDS) + len(PROFILE_COMPLETENESS_GROUPS)
     if total == 0:
         return 0.0
 
     filled = 0
+    # Count individual fields
     for field in PROFILE_COMPLETENESS_FIELDS:
         if _is_filled(_get_nested_attr(applicant_profile, field)):
             filled += 1
 
+    # Count grouped fields
+    for group in PROFILE_COMPLETENESS_GROUPS:
+        fields: Iterable[str] = group.get("fields", ())
+        mode = group.get("mode", "any")
+        values = [_get_nested_attr(applicant_profile, f) for f in fields]
+        if mode == "all":
+            if all(_is_filled(v) for v in values):
+                filled += 1
+        else:  # "any"
+            if any(_is_filled(v) for v in values):
+                filled += 1
+
     return filled / float(total)
+
+
+def profile_missing_fields(applicant_profile: Any) -> list[str]:
+    """
+    Return list of important biodata field paths that are currently empty.
+
+    Field names use the same dotted paths as PROFILE_COMPLETENESS_FIELDS so
+    the frontend can either show them directly or map them to human labels.
+
+    Group entries use the synthetic names defined in PROFILE_COMPLETENESS_GROUPS
+    (e.g. "parent_info", "heir_info") so the frontend can treat them as a
+    single unit in the UI.
+    """
+    missing: list[str] = []
+    for field in PROFILE_COMPLETENESS_FIELDS:
+        if not _is_filled(_get_nested_attr(applicant_profile, field)):
+            missing.append(field)
+
+    for group in PROFILE_COMPLETENESS_GROUPS:
+        name = group.get("name") or ",".join(group.get("fields", ()))
+        fields: Iterable[str] = group.get("fields", ())
+        mode = group.get("mode", "any")
+        values = [_get_nested_attr(applicant_profile, f) for f in fields]
+        if mode == "all":
+            if not all(_is_filled(v) for v in values):
+                missing.append(str(name))
+        else:  # "any"
+            if not any(_is_filled(v) for v in values):
+                missing.append(str(name))
+    return missing
 
 
 def document_ratio(applicant_profile: Any) -> float:
@@ -151,6 +245,83 @@ def calculate_readiness_score(applicant_profile: Any) -> float:
 
     # Round for stable display/sorting
     return round(total, 1)
+
+
+def _missing_required_document_codes(applicant_profile: Any) -> list[str]:
+    """
+    Return list of document codes that are missing or not approved for scoring.
+
+    Only the following documents are included in the scoring model:
+      1. KTP (code: ktp)
+      2. Kartu Keluarga (code: kartu-keluarga)
+      3. Ijazah (code: ijasah)
+      4. Kartu BPJS Kesehatan (code: kartu-bpjs)
+      5. Paspor (code: paspor) – ONLY if applicant_profile.has_passport is truthy
+      6. Photo TKI (code: photo-tki)
+    """
+    try:
+        from account.models import ApplicantDocument  # type: ignore
+    except Exception:
+        # If models cannot be imported (e.g. during migration), fall back gracefully.
+        return []
+
+    profile_id = getattr(applicant_profile, "id", None)
+    if not profile_id:
+        return []
+
+    # Base codes always required for scoring
+    required_codes: list[str] = [
+        "ktp",
+        "kartu-keluarga",
+        "ijasah",
+        "kartu-bpjs",
+        "photo-tki",
+    ]
+
+    # Paspor only counted when applicant indicates they have a passport
+    has_passport = getattr(applicant_profile, "has_passport", None)
+    if has_passport:
+        required_codes.append("paspor")
+
+    # Codes of documents that are already approved for this applicant
+    approved_codes = set(
+        ApplicantDocument.objects.filter(
+            applicant_profile_id=profile_id,
+            document_type__code__in=required_codes,
+            review_status="APPROVED",
+        ).values_list("document_type__code", flat=True)
+    )
+
+    return [code for code in required_codes if code not in approved_codes]
+
+
+def explain_readiness_score(applicant_profile: Any) -> dict:
+    """
+    Return a structured explanation/breakdown of the readiness score.
+
+    This is intended for admin/frontend display so they can see exactly which
+    parts of the biodata/documents are still incomplete, without having to
+    recalculate anything on the client.
+
+    The structure is stable and safe to expose via API.
+    """
+    try:
+        pc_ratio = profile_completeness_ratio(applicant_profile)
+        doc_ratio_val = document_ratio(applicant_profile)
+        total = calculate_readiness_score(applicant_profile)
+        missing_profile = profile_missing_fields(applicant_profile)
+        missing_docs = _missing_required_document_codes(applicant_profile)
+    except Exception:
+        # Never let explanation errors break API responses.
+        return {}
+
+    return {
+        "score": total,
+        "profile_completeness_ratio": pc_ratio,
+        "document_ratio": doc_ratio_val,
+        "profile_missing_fields": missing_profile,
+        "missing_required_document_codes": missing_docs,
+    }
 
 
 def recalculate_and_persist_score(applicant_profile: Any) -> None:
