@@ -145,6 +145,7 @@ fcm_paths = [
 
 urlpatterns = [
     path("me/", views.MeView.as_view(), name="me"),
+    path("me/notification-preferences/", views.NotificationPreferenceView.as_view(), name="me-notification-preferences"),
     path("", include(public_document_types)),
     path("", include(dashboard_paths)),
     path("", include(report_paths)),

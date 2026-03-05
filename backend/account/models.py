@@ -761,7 +761,7 @@ class ApplicantProfile(models.Model):
         _("status verifikasi"),
         max_length=APPLICANT_STATUS_MAX_LENGTH,
         choices=ApplicantVerificationStatus.choices,
-        default=ApplicantVerificationStatus.DRAFT,
+        default=ApplicantVerificationStatus.SUBMITTED,
         db_index=True,
         help_text=_("Draf: mengisi data. Dikirim: menunggu admin. Diterima/Ditolak: setelah verifikasi."),
     )
@@ -769,6 +769,7 @@ class ApplicantProfile(models.Model):
         _("dikirim pada"),
         null=True,
         blank=True,
+        default=timezone.now,
         db_index=True,
         help_text=_("Waktu pelamar mengirim untuk verifikasi (status → Dikirim)."),
     )
@@ -1288,9 +1289,24 @@ class WorkExperience(models.Model):
 
 class DocumentType(models.Model):
     """
-    Tipe dokumen untuk persyaratan TKI (KTP, Ijasah, KK, dll.).
+    Tipe dokumen untuk persyaratan TKI (KTP, Ijazah, KK, dll.).
     Digunakan untuk unggah wajib dan validasi per pelamar.
+
+    phase:
+      INITIAL       – dokumen yang diunggah saat pendaftaran awal
+                      (KTP, Ijazah, Kartu Keluarga, Kartu BPJS Kesehatan, Paspor)
+      POST_INTERVIEW – dokumen yang diunggah setelah lulus interview
+                      (Surat Izin Keluarga, Surat Kes. Pemberi Izin, KTP Orangtua/Wali,
+                       Surat Kesehatan, Surat Ket. Status Perkawinan,
+                       Buku Nikah, Perjanjian Penempatan)
     """
+
+    PHASE_INITIAL = "INITIAL"
+    PHASE_POST_INTERVIEW = "POST_INTERVIEW"
+    PHASE_CHOICES = [
+        (PHASE_INITIAL, "Awal (saat pendaftaran)"),
+        (PHASE_POST_INTERVIEW, "Setelah Lulus Interview"),
+    ]
 
     code = models.SlugField(
         _("kode"),
@@ -1318,6 +1334,17 @@ class DocumentType(models.Model):
         max_length=500,
         blank=True,
         help_text=_("Petunjuk opsional (mis. Paspor bagi yang sudah ada)."),
+    )
+    phase = models.CharField(
+        _("fase unggah"),
+        max_length=20,
+        choices=PHASE_CHOICES,
+        default=PHASE_INITIAL,
+        db_index=True,
+        help_text=_(
+            "Kapan dokumen ini diunggah: INITIAL = saat daftar, "
+            "POST_INTERVIEW = setelah lulus interview."
+        ),
     )
     created_at = models.DateTimeField(_("dibuat pada"), auto_now_add=True)
 
@@ -1920,6 +1947,97 @@ class DeviceToken(models.Model):
 
 # ---------------------------------------------------------------------------
 # Email Verification Code (6-digit OTP)
+# ---------------------------------------------------------------------------
+# Notification Preferences (per-user opt-in/out)
+# ---------------------------------------------------------------------------
+
+class NotificationPreference(models.Model):
+    """
+    Per-user notification delivery preferences.
+    Auto-created (via signal) when a user is created.
+    All defaults are ON for transactional events; marketing flags default OFF.
+    """
+
+    user = models.OneToOneField(
+        CustomUser,
+        on_delete=models.CASCADE,
+        related_name="notification_preference",
+        verbose_name=_("pengguna"),
+    )
+
+    # ---- In-app preferences ----
+    inapp_enabled = models.BooleanField(
+        _("notifikasi in-app"),
+        default=True,
+        help_text=_("Tampilkan notifikasi di dalam aplikasi."),
+    )
+
+    # ---- Email preferences ----
+    email_account_updates = models.BooleanField(
+        _("email perubahan akun"),
+        default=True,
+        help_text=_("Email untuk perubahan kata sandi, keamanan akun."),
+    )
+    email_profile_updates = models.BooleanField(
+        _("email status verifikasi profil"),
+        default=True,
+        help_text=_("Email saat profil diterima atau ditolak oleh admin."),
+    )
+    email_application_updates = models.BooleanField(
+        _("email status lamaran"),
+        default=True,
+        help_text=_("Email saat status lamaran kerja berubah (Interview, Diterima, dll.)."),
+    )
+    email_job_deadline_reminder = models.BooleanField(
+        _("email pengingat deadline"),
+        default=True,
+        help_text=_("Email pengingat 3 hari sebelum deadline lowongan yang relevan."),
+    )
+    email_batch_departure_reminder = models.BooleanField(
+        _("email pengingat keberangkatan"),
+        default=True,
+        help_text=_("Email pengingat 7 hari dan 1 hari sebelum keberangkatan batch."),
+    )
+    email_job_alerts = models.BooleanField(
+        _("email lowongan baru"),
+        default=False,
+        help_text=_("Email saat ada lowongan baru yang dipublikasikan (opt-in)."),
+    )
+
+    # ---- Push preferences ----
+    push_enabled = models.BooleanField(
+        _("push notification"),
+        default=True,
+        help_text=_("Izinkan push notification ke perangkat."),
+    )
+    push_chat_messages = models.BooleanField(
+        _("push pesan chat"),
+        default=True,
+        help_text=_("Push notification untuk pesan chat baru."),
+    )
+    push_application_updates = models.BooleanField(
+        _("push status lamaran"),
+        default=True,
+        help_text=_("Push notification saat status lamaran berubah."),
+    )
+
+    created_at = models.DateTimeField(_("dibuat pada"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("diperbarui pada"), auto_now=True)
+
+    class Meta:
+        verbose_name = _("preferensi notifikasi")
+        verbose_name_plural = _("preferensi notifikasi")
+
+    def __str__(self) -> str:
+        return f"Preferensi notifikasi – {self.user.email}"
+
+    @classmethod
+    def get_or_create_for_user(cls, user: "CustomUser") -> "NotificationPreference":
+        """Get or create notification preferences for a user."""
+        pref, _ = cls.objects.get_or_create(user=user)
+        return pref
+
+
 # ---------------------------------------------------------------------------
 
 class EmailVerificationCode(models.Model):

@@ -249,7 +249,6 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
             r.applicant_id: r
             for r in ApplicationService.bulk_check_eligibility(
                 applicant_profiles=profiles_on_page,
-                job=batch.job,
             )
         }
 
@@ -261,7 +260,7 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
                 "nik": profile.nik or "",
                 "full_name": profile.user.full_name if profile.user else "",
                 "email": profile.user.email if profile.user else "",
-                "phone": profile.user.phone_number if profile.user else "",
+                "phone": profile.contact_phone or "",
                 "domicile": ", ".join(filter(None, [
                     getattr(profile, "domicile_kelurahan", None),
                     getattr(profile, "domicile_kecamatan", None),
@@ -271,8 +270,7 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
                 "ineligible_reason": result.reason if result and not result.eligible else None,
             })
 
-        serializer = ApplicantSearchSerializer(rows, many=True)
-        return paginator.get_paginated_response(serializer.data)
+        return paginator.get_paginated_response(rows)
 
     @action(detail=True, methods=["post"], url_path="check-eligibility")
     def check_eligibility(self, request, pk=None):

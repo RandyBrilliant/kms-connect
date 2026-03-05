@@ -211,6 +211,8 @@ export interface WorkExperienceCreateInput {
   sort_order?: number
 }
 
+export type DocumentPhase = "INITIAL" | "POST_INTERVIEW"
+
 export interface DocumentType {
   id: number
   code: string
@@ -218,6 +220,7 @@ export interface DocumentType {
   is_required: boolean
   sort_order: number
   description: string
+  phase: DocumentPhase
 }
 
 export type DocumentReviewStatus = "PENDING" | "APPROVED" | "REJECTED"

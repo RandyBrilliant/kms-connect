@@ -34,13 +34,17 @@ function formatDate(value: string | null | undefined) {
 
 function applicationStatusLabel(status: ApplicationStatus) {
   switch (status) {
-    case "APPLIED":
-      return "Dilamar"
-    case "UNDER_REVIEW":
-      return "Dalam Review"
-    case "OFFER_ACCEPTED":
+    case "PRA_SELEKSI":
+      return "Pra Seleksi"
+    case "INTERVIEW":
+      return "Interview"
+    case "DITERIMA":
       return "Diterima"
-    case "REJECTED":
+    case "BERANGKAT":
+      return "Berangkat"
+    case "SELESAI":
+      return "Selesai"
+    case "DITOLAK":
       return "Ditolak"
     default:
       return status
@@ -49,13 +53,15 @@ function applicationStatusLabel(status: ApplicationStatus) {
 
 function applicationStatusVariant(status: ApplicationStatus) {
   switch (status) {
-    case "APPLIED":
+    case "PRA_SELEKSI":
       return "secondary"
-    case "UNDER_REVIEW":
+    case "INTERVIEW":
       return "default"
-    case "OFFER_ACCEPTED":
+    case "DITERIMA":
+    case "BERANGKAT":
+    case "SELESAI":
       return "default"
-    case "REJECTED":
+    case "DITOLAK":
       return "destructive"
     default:
       return "outline"
@@ -155,27 +161,27 @@ export function CompanyDashboardHomePage() {
         <CardContent>
           <div className="grid grid-cols-2 gap-4 @xl/main:grid-cols-4">
             <div className="space-y-1">
-              <p className="text-muted-foreground text-sm">Dilamar</p>
+              <p className="text-muted-foreground text-sm">Pra Seleksi</p>
               <p className="text-2xl font-bold">
-                {stats.status_breakdown.APPLIED || 0}
+                {stats.status_breakdown.PRA_SELEKSI || 0}
               </p>
             </div>
             <div className="space-y-1">
-              <p className="text-muted-foreground text-sm">Dalam Review</p>
+              <p className="text-muted-foreground text-sm">Interview</p>
               <p className="text-2xl font-bold">
-                {stats.status_breakdown.UNDER_REVIEW || 0}
+                {stats.status_breakdown.INTERVIEW || 0}
               </p>
             </div>
             <div className="space-y-1">
               <p className="text-muted-foreground text-sm">Diterima</p>
               <p className="text-2xl font-bold text-green-600">
-                {stats.status_breakdown.OFFER_ACCEPTED || 0}
+                {stats.status_breakdown.DITERIMA || 0}
               </p>
             </div>
             <div className="space-y-1">
               <p className="text-muted-foreground text-sm">Ditolak</p>
               <p className="text-2xl font-bold text-red-600">
-                {stats.status_breakdown.REJECTED || 0}
+                {stats.status_breakdown.DITOLAK || 0}
               </p>
             </div>
           </div>

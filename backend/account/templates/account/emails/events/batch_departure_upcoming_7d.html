@@ -1,0 +1,17 @@
+{% extends "account/emails/base_email.html" %}
+{% block title %}7 Hari Menuju Keberangkatan – {{ company_name }}{% endblock %}
+{% block content %}
+<p>Halo <strong>{{ user.full_name|default:user.email }}</strong>,</p>
+<p>⏰ Keberangkatan Anda tinggal <strong>7 hari lagi!</strong></p>
+<div style="background:#eff6ff;border-radius:8px;padding:16px 20px;margin:16px 0;">
+  {% if batch_name %}<p style="margin:0;font-weight:700;color:#1e40af;">{{ batch_name }}</p>{% endif %}
+  {% if job_title %}<p style="margin:4px 0 0;color:#3b82f6;">{{ job_title }}</p>{% endif %}
+</div>
+<p>Hal-hal yang perlu dipersiapkan:</p>
+<ul>
+  <li>Pastikan semua dokumen perjalanan sudah siap (paspor, izin kerja, dll.)</li>
+  <li>Periksa kembali jadwal dan lokasi keberangkatan</li>
+  <li>Hubungi tim kami jika ada pertanyaan</li>
+</ul>
+<p><a href="{{ action_url }}" class="btn">Lihat Detail Keberangkatan</a></p>
+{% endblock %}

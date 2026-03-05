@@ -47,6 +47,8 @@ interface JobFormProps {
     status: JobStatus
     posted_at?: string | null
     deadline?: string | null
+    start_date?: string | null
+    quota?: number | null
   }) => Promise<void>
   isSubmitting?: boolean
 }
@@ -66,6 +68,8 @@ type JobFormValues = {
   status: JobStatus
   posted_at: Date | null
   deadline: Date | null
+  start_date: Date | null
+  quota: string
 }
 
 function formatDateTime(value: string | null) {
@@ -122,6 +126,8 @@ export function JobForm({
       status: job?.status ?? "DRAFT",
       posted_at: job?.posted_at ? new Date(job.posted_at) : null,
       deadline: job?.deadline ? new Date(job.deadline) : null,
+      start_date: job?.start_date ? new Date(job.start_date) : null,
+      quota: job?.quota != null ? String(job.quota) : "",
     },
     onSubmit: async ({ value }) => {
       setErrors({})
@@ -158,6 +164,8 @@ export function JobForm({
         status: value.status,
         posted_at: value.posted_at ? value.posted_at.toISOString() : null,
         deadline: value.deadline ? value.deadline.toISOString() : null,
+        start_date: value.start_date ? format(value.start_date, "yyyy-MM-dd") : null,
+        quota: value.quota.trim() ? Number(value.quota) : null,
       })
     },
   })
@@ -473,6 +481,43 @@ export function JobForm({
                     <FieldError
                       errors={errors.deadline ? [{ message: errors.deadline }] : []}
                     />
+                  </Field>
+                )}
+              </form.Field>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <form.Field name="start_date">
+                {(field) => (
+                  <Field>
+                    <FieldLabel htmlFor={field.name}>Tanggal Mulai Kerja</FieldLabel>
+                    <DatePicker
+                      date={field.state.value}
+                      onDateChange={(d) => field.handleChange(d)}
+                      placeholder="Pilih tanggal mulai kerja"
+                    />
+                    <p className="text-muted-foreground mt-1 text-xs">
+                      Opsional. Target tanggal pelamar mulai bekerja.
+                    </p>
+                  </Field>
+                )}
+              </form.Field>
+
+              <form.Field name="quota">
+                {(field) => (
+                  <Field>
+                    <FieldLabel htmlFor={field.name}>Kuota Pelamar</FieldLabel>
+                    <Input
+                      id={field.name}
+                      type="number"
+                      min={1}
+                      placeholder="Kosongkan jika tidak ada batasan"
+                      value={field.state.value}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                    />
+                    <p className="text-muted-foreground mt-1 text-xs">
+                      Jumlah maksimum pelamar yang diterima untuk lowongan ini.
+                    </p>
                   </Field>
                 )}
               </form.Field>

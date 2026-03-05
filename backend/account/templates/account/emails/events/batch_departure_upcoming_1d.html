@@ -1,0 +1,15 @@
+{% extends "account/emails/base_email.html" %}
+{% block title %}BESOK Keberangkatan! – {{ company_name }}{% endblock %}
+{% block content %}
+<p>Halo <strong>{{ user.full_name|default:user.email }}</strong>,</p>
+<div style="background:#fef2f2;border:2px solid #ef4444;border-radius:8px;padding:16px 20px;margin:16px 0;text-align:center;">
+  <p style="margin:0;font-size:22px;font-weight:800;color:#991b1b;">🚨 BESOK KEBERANGKATAN!</p>
+</div>
+<div style="background:#f0fdf4;border-radius:8px;padding:16px 20px;margin:16px 0;">
+  {% if batch_name %}<p style="margin:0;font-weight:700;color:#15803d;">{{ batch_name }}</p>{% endif %}
+  {% if job_title %}<p style="margin:4px 0 0;color:#16a34a;">{{ job_title }}</p>{% endif %}
+</div>
+<p>Pastikan semua persiapan sudah selesai. Kami menghubungi Anda untuk memastikan kesiapan keberangkatan.</p>
+<p>Jika ada kendala atau hal yang perlu dikonfirmasi, <strong>segera hubungi tim kami sekarang</strong>.</p>
+<p><a href="{{ action_url }}" class="btn">Lihat Detail</a></p>
+{% endblock %}

@@ -1,0 +1,26 @@
+{% extends "account/emails/base_email.html" %}
+{% block title %}Undangan Interview – {{ company_name }}{% endblock %}
+{% block content %}
+<p>Halo <strong>{{ user.full_name|default:user.email }}</strong>,</p>
+<p>🎉 <strong>Selamat!</strong> Anda telah lolos ke tahap <strong>Interview</strong> untuk posisi:</p>
+<div style="background:#eff6ff;border-radius:8px;padding:16px 20px;margin:16px 0;">
+  <p style="margin:0;font-size:18px;font-weight:700;color:#1e40af;">{{ job_title }}</p>
+  {% if company_name %}<p style="margin:4px 0 0;color:#3b82f6;">{{ company_name }}</p>{% endif %}
+</div>
+{% if interview_date_str %}
+<table style="width:100%;border-collapse:collapse;margin:16px 0;">
+  <tr>
+    <td style="padding:8px 12px;background:#f9fafb;border:1px solid #e5e7eb;font-weight:600;width:120px;">Jadwal</td>
+    <td style="padding:8px 12px;border:1px solid #e5e7eb;">{{ interview_date_str }}</td>
+  </tr>
+  {% if interview_location %}
+  <tr>
+    <td style="padding:8px 12px;background:#f9fafb;border:1px solid #e5e7eb;font-weight:600;">Lokasi</td>
+    <td style="padding:8px 12px;border:1px solid #e5e7eb;">{{ interview_location }}</td>
+  </tr>
+  {% endif %}
+</table>
+{% endif %}
+<p>Segera konfirmasi kehadiran Anda melalui aplikasi.</p>
+<p><a href="{{ action_url }}" class="btn">Konfirmasi Kehadiran</a></p>
+{% endblock %}

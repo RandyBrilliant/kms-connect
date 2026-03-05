@@ -1,15 +1,28 @@
 """
 Signals for account app.
-Queue OCR when an ApplicantDocument is created or when its file is replaced.
-Queue image optimization when an image doc is uploaded and size > 500 KB.
-Auto-generate referral codes for new staff/admin users.
-Send FCM push notification whenever a new Notification record is created.
+
+- Queue OCR when an ApplicantDocument is created or its file is replaced.
+- Queue image optimization for large image documents.
+- Auto-generate referral codes for new staff/admin users.
+- Auto-create NotificationPreference for every new user.
+- Fire notification events when ApplicantProfile verification status changes.
+- Fire notification event when a document is rejected.
+- Send FCM push notification whenever a new Notification record is created.
 """
 from django.db.models.signals import pre_save, post_save, post_delete
 from django.dispatch import receiver
 
 from .document_specs import MAX_IMAGE_BYTES, is_image_type
-from .models import ApplicantDocument, ApplicantProfile, CustomUser, UserRole, Notification
+from .models import (
+    ApplicantDocument,
+    ApplicantProfile,
+    ApplicantVerificationStatus,
+    CustomUser,
+    DocumentReviewStatus,
+    NotificationPreference,
+    UserRole,
+    Notification,
+)
 from .tasks import process_document_ocr, optimize_document_image
 from django.core.cache import cache
 
@@ -97,6 +110,9 @@ def send_push_on_notification_created(sender, instance: Notification, created: b
     record is created — regardless of how it was created (Django admin,
     broadcast delivery, API, signals, etc.).
 
+    Respects the ``_skip_push`` flag set by notification_dispatcher.dispatch()
+    when the user's push preference is disabled.
+
     Runs in a daemon thread so it is non-blocking and does NOT depend on the
     Celery worker being available. This guarantees real-time delivery even in
     development environments where Celery may not be running.
@@ -104,8 +120,10 @@ def send_push_on_notification_created(sender, instance: Notification, created: b
     if not created:
         return
 
-    # Capture all values before entering the thread (instance will be stale
-    # if accessed from a different thread after the Django ORM session ends).
+    # Dispatcher can tag the instance to skip push for this notification
+    if getattr(instance, "_skip_push", False):
+        return
+
     notification_id = instance.pk
     user = instance.user
     title = instance.title
@@ -137,7 +155,6 @@ def send_push_on_notification_created(sender, instance: Notification, created: b
                     priority=fcm_priority,
                 )
             finally:
-                # Close thread-local DB connections to prevent connection leaks.
                 django.db.close_old_connections()
         except Exception as exc:
             import logging
@@ -147,3 +164,137 @@ def send_push_on_notification_created(sender, instance: Notification, created: b
 
     thread = threading.Thread(target=_send_push, daemon=True)
     thread.start()
+
+
+# ---------------------------------------------------------------------------
+# Auto-create NotificationPreference when a new user is created
+# ---------------------------------------------------------------------------
+
+@receiver(post_save, sender=CustomUser)
+def auto_create_notification_preference(sender, instance: CustomUser, created: bool, **kwargs):
+    """Create a NotificationPreference record for every new user."""
+    if created:
+        NotificationPreference.objects.get_or_create(user=instance)
+
+
+# ---------------------------------------------------------------------------
+# Profile verification status change → dispatch notifications
+# ---------------------------------------------------------------------------
+
+@receiver(pre_save, sender=ApplicantProfile)
+def _store_previous_verification_status(sender, instance: ApplicantProfile, **kwargs):
+    """Cache the old verification_status before save so we can detect changes."""
+    if instance.pk:
+        try:
+            old = ApplicantProfile.objects.only("verification_status").get(pk=instance.pk)
+            instance._previous_verification_status = old.verification_status
+        except ApplicantProfile.DoesNotExist:
+            instance._previous_verification_status = None
+    else:
+        instance._previous_verification_status = None
+
+
+@receiver(post_save, sender=ApplicantProfile)
+def notify_on_verification_status_change(
+    sender, instance: ApplicantProfile, created: bool, **kwargs
+):
+    """
+    Dispatch in-app + email + push notifications when a profile's verification
+    status changes to ACCEPTED or REJECTED.
+
+    Also notifies Admin/Staff when a new SUBMITTED profile arrives.
+    """
+    from .services.notification_dispatcher import dispatch, build_profile_context
+    from .services.notification_events import NotificationEvent
+
+    new_status = instance.verification_status
+    old_status = getattr(instance, "_previous_verification_status", None)
+
+    # Skip if status hasn't changed (or it's a new record not yet SUBMITTED)
+    if new_status == old_status:
+        return
+
+    ctx = build_profile_context(instance)
+
+    if new_status == ApplicantVerificationStatus.ACCEPTED:
+        dispatch(
+            event=NotificationEvent.PROFILE_ACCEPTED,
+            user=instance.user,
+            context=ctx,
+            action_url="/profil",
+            action_label="Lihat Profil",
+        )
+
+    elif new_status == ApplicantVerificationStatus.REJECTED:
+        dispatch(
+            event=NotificationEvent.PROFILE_REJECTED,
+            user=instance.user,
+            context=ctx,
+            action_url="/profil",
+            action_label="Perbaiki Profil",
+        )
+
+    elif new_status == ApplicantVerificationStatus.SUBMITTED:
+        # Notify all Admin and Staff users about the new submission
+        admins_staff = list(
+            CustomUser.objects.filter(
+                role__in=[UserRole.ADMIN, UserRole.STAFF],
+                is_active=True,
+            ).select_related("notification_preference")
+        )
+        for admin_user in admins_staff:
+            dispatch(
+                event=NotificationEvent.PROFILE_SUBMITTED,
+                user=admin_user,
+                context=ctx,
+                action_url=f"/pelamar/{instance.pk}",
+                action_label="Review Profil",
+                deduplicate=True,
+            )
+
+
+# ---------------------------------------------------------------------------
+# Document rejected → dispatch notification to applicant
+# ---------------------------------------------------------------------------
+
+@receiver(pre_save, sender=ApplicantDocument)
+def _store_previous_review_status(sender, instance: ApplicantDocument, **kwargs):
+    """Cache old review_status before save."""
+    if instance.pk:
+        try:
+            old = ApplicantDocument.objects.only("review_status").get(pk=instance.pk)
+            instance._previous_review_status = old.review_status
+        except ApplicantDocument.DoesNotExist:
+            instance._previous_review_status = None
+    else:
+        instance._previous_review_status = None
+
+
+@receiver(post_save, sender=ApplicantDocument)
+def notify_on_document_rejected(sender, instance: ApplicantDocument, created: bool, **kwargs):
+    """Notify applicant when a specific document is rejected by admin."""
+    from .services.notification_dispatcher import dispatch
+    from .services.notification_events import NotificationEvent
+
+    if created:
+        return
+
+    old_status = getattr(instance, "_previous_review_status", None)
+    if (
+        instance.review_status == DocumentReviewStatus.REJECTED
+        and old_status != DocumentReviewStatus.REJECTED
+    ):
+        try:
+            user = instance.applicant_profile.user
+            doc_name = instance.document_type.name if instance.document_type_id else "Dokumen"
+            reason = getattr(instance, "review_notes", "") or ""
+        except Exception:
+            return
+
+        dispatch(
+            event=NotificationEvent.DOCUMENT_REJECTED,
+            user=user,
+            context={"document_name": doc_name, "rejection_reason": reason},
+            action_url="/dokumen",
+            action_label="Unggah Ulang",
+        )

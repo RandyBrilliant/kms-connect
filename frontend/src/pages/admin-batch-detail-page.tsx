@@ -24,6 +24,7 @@ import {
   IconSend,
   IconUserPlus,
   IconUsers,
+  IconX,
 } from "@tabler/icons-react"
 import { toast } from "@/lib/toast"
 
@@ -40,13 +41,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import {
   Table,
   TableBody,
   TableCell,
@@ -55,14 +49,17 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
-import { ApplicationStatusBadge } from "@/components/applications/application-status-badge"
 import { BatchAssignDialog } from "@/components/batches/batch-assign-dialog"
+import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
-import { getBatch, scheduleBatchStage, bulkTransitionBatch, getBatchAnnouncements, createBatchAnnouncement, exportBatchExcel } from "@/api/batches"
-import { getApplications } from "@/api/applications"
+import { getBatch, scheduleBatchStage, getBatchAnnouncements, createBatchAnnouncement, exportBatchExcel } from "@/api/batches"
+import { getApplications, transitionApplication } from "@/api/applications"
 import {
   APPLICATION_STATUS_LABELS,
   type ApplicationStatus,
+  type JobApplication,
 } from "@/types/job-applications"
 import type { BatchAnnouncement, BatchStage } from "@/types/lamaran-batch"
 import { usePageTitle } from "@/hooks/use-page-title"
@@ -214,25 +211,257 @@ function StageScheduleCard({
 }
 
 // ---------------------------------------------------------------------------
-// Main page
+// Helpers / constants
 // ---------------------------------------------------------------------------
 
-const NEXT_STATUS_OPTIONS: Record<string, ApplicationStatus[]> = {
-  PRA_SELEKSI: ["INTERVIEW", "DITOLAK"],
-  INTERVIEW: ["DITERIMA", "DITOLAK"],
-  DITERIMA: ["BERANGKAT", "DITOLAK"],
-  BERANGKAT: ["SELESAI"],
+const NEXT_FORWARD: Partial<Record<ApplicationStatus, ApplicationStatus>> = {
+  PRA_SELEKSI: "INTERVIEW",
+  INTERVIEW:   "DITERIMA",
+  DITERIMA:    "BERANGKAT",
+  BERANGKAT:   "SELESAI",
 }
+const CAN_REJECT: ApplicationStatus[] = ["PRA_SELEKSI", "INTERVIEW", "DITERIMA"]
+
+const STATUS_TABS: { value: ApplicationStatus; label: string }[] = [
+  { value: "PRA_SELEKSI", label: "Pra-Seleksi" },
+  { value: "INTERVIEW",   label: "Interview" },
+  { value: "DITERIMA",    label: "Diterima" },
+  { value: "BERANGKAT",   label: "Berangkat" },
+  { value: "SELESAI",     label: "Selesai" },
+  { value: "DITOLAK",     label: "Ditolak" },
+]
+
+// ---------------------------------------------------------------------------
+// Sub-component: per-status tab with checkboxes + transition actions
+// ---------------------------------------------------------------------------
+
+function BatchStatusTab({
+  batchId,
+  status,
+  apps,
+}: {
+  batchId: number
+  status: ApplicationStatus
+  apps: JobApplication[]
+}) {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [note, setNote] = useState("")
+  const [placementDate, setPlacementDate] = useState("")
+  const [loading, setLoading] = useState(false)
+
+  const nextStatus = NEXT_FORWARD[status]
+  const canReject  = CAN_REJECT.includes(status)
+  const needsPlacementDate = nextStatus === "SELESAI"
+
+  const pageIds = apps.map((a) => a.id)
+  const allSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id))
+
+  const toggleAll = () => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (allSelected) pageIds.forEach((id) => next.delete(id))
+      else pageIds.forEach((id) => next.add(id))
+      return next
+    })
+  }
+
+  const toggleOne = (id: number) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const runTransition = async (targetStatus: ApplicationStatus) => {
+    const ids = Array.from(selected)
+    if (!ids.length) return
+    if (targetStatus === "SELESAI" && !placementDate) {
+      toast.error("Masukkan tanggal selesai kerja terlebih dahulu.")
+      return
+    }
+    setLoading(true)
+    let ok = 0, fail = 0
+    await Promise.allSettled(
+      ids.map((id) =>
+        transitionApplication(id, {
+          status: targetStatus,
+          note: note.trim() || undefined,
+          ...(targetStatus === "SELESAI" ? { placement_end_date: placementDate } : {}),
+        }).then(() => ok++).catch(() => fail++)
+      )
+    )
+    await queryClient.invalidateQueries({ queryKey: ["applications"] })
+    await queryClient.invalidateQueries({ queryKey: ["batch", batchId] })
+    setSelected(new Set())
+    setNote("")
+    setPlacementDate("")
+    setLoading(false)
+    if (ok > 0) toast.success(`${ok} pelamar dipindahkan ke ${APPLICATION_STATUS_LABELS[targetStatus]}.`)
+    if (fail > 0) toast.error(`${fail} pelamar gagal dipindahkan.`)
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Action bar — only shown when there are selectable apps */}
+      {apps.length > 0 && (nextStatus || canReject) && (
+        <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-muted/30 p-3">
+          <div className="flex flex-col gap-1 flex-1 min-w-[160px]">
+            <Label className="text-xs">Catatan transisi <span className="text-muted-foreground">(opsional)</span></Label>
+            <Input
+              placeholder="Catatan..."
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              className="h-8 text-sm"
+            />
+          </div>
+          {needsPlacementDate && (
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs">Tanggal Selesai Kerja</Label>
+              <Input
+                type="date"
+                value={placementDate}
+                onChange={(e) => setPlacementDate(e.target.value)}
+                className="h-8 text-sm w-[160px]"
+              />
+            </div>
+          )}
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            {selected.size > 0 ? (
+              <span className="font-medium text-foreground">{selected.size} dipilih</span>
+            ) : (
+              <span>Pilih pelamar dulu</span>
+            )}
+          </div>
+          {nextStatus && (
+            <Button
+              size="sm"
+              className="cursor-pointer"
+              disabled={selected.size === 0 || loading}
+              onClick={() => runTransition(nextStatus)}
+            >
+              <IconChevronRight className="mr-1 size-4" />
+              {loading ? "Memproses..." : `Transisi ke ${APPLICATION_STATUS_LABELS[nextStatus]}`}
+            </Button>
+          )}
+          {canReject && (
+            <Button
+              size="sm"
+              variant="destructive"
+              className="cursor-pointer"
+              disabled={selected.size === 0 || loading}
+              onClick={() => runTransition("DITOLAK")}
+            >
+              <IconX className="mr-1 size-4" />
+              {loading ? "Memproses..." : "Tolak Terpilih"}
+            </Button>
+          )}
+        </div>
+      )}
+
+      {/* Table */}
+      <div className="overflow-hidden rounded-lg border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              {apps.length > 0 && (nextStatus || canReject) && (
+                <TableHead className="w-10">
+                  <Checkbox
+                    checked={allSelected}
+                    onCheckedChange={toggleAll}
+                    aria-label="Pilih semua"
+                  />
+                </TableHead>
+              )}
+              <TableHead>Pelamar</TableHead>
+              <TableHead>Konfirmasi Pra-Sel.</TableHead>
+              <TableHead>Konfirmasi Interview</TableHead>
+              <TableHead>Tanggal Ditambahkan</TableHead>
+              <TableHead />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {apps.length ? (
+              apps.map((app) => (
+                <TableRow
+                  key={app.id}
+                  className="hover:bg-muted/50 cursor-pointer"
+                  onClick={() => toggleOne(app.id)}
+                >
+                  {(nextStatus || canReject) && (
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={selected.has(app.id)}
+                        onCheckedChange={() => toggleOne(app.id)}
+                        aria-label={`Pilih ${app.applicant_name}`}
+                      />
+                    </TableCell>
+                  )}
+                  <TableCell>
+                    <div className="flex flex-col">
+                      <span className="font-medium">{app.applicant_name}</span>
+                      <span className="text-xs text-muted-foreground">{app.applicant_email}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {app.pra_seleksi_confirmed_at ? (
+                      <span className="text-green-600">{formatDate(app.pra_seleksi_confirmed_at)}</span>
+                    ) : (
+                      <span className="text-muted-foreground">Belum</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {app.interview_confirmed_at ? (
+                      <span className="text-green-600">{formatDate(app.interview_confirmed_at)}</span>
+                    ) : (
+                      <span className="text-muted-foreground">Belum</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {formatDate(app.applied_at)}
+                  </TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="cursor-pointer"
+                      onClick={() => navigate(`/lamaran/${app.id}`)}
+                    >
+                      Detail
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell
+                  colSpan={6}
+                  className="h-20 text-center text-muted-foreground"
+                >
+                  Tidak ada pelamar dengan status ini.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Main page
+// ---------------------------------------------------------------------------
 
 export function AdminBatchDetailPage() {
   const { id } = useParams<{ id: string }>()
   const batchId = Number(id)
-  const navigate = useNavigate()
   const queryClient = useQueryClient()
 
   const [assignOpen, setAssignOpen] = useState(false)
-  const [bulkStatus, setBulkStatus] = useState<ApplicationStatus | "">("")
-  const [bulkNote, setBulkNote] = useState("")
   const [annoTitle, setAnnoTitle] = useState("")
   const [annoBody, setAnnoBody] = useState("")
   const [isExporting, setIsExporting] = useState(false)
@@ -261,14 +490,12 @@ export function AdminBatchDetailPage() {
     enabled: !!batch,
   })
 
-  const { data: announcements = [], isLoading: annoLoading } = useQuery({
-    queryKey: ["batch-announcements", batchId],
+  const { data: announcements = [], isLoading: annoLoading } = useQuery({    queryKey: ["batch-announcements", batchId],
     queryFn: () => getBatchAnnouncements(batchId),
     enabled: !!batch,
   })
 
-  const createAnno = useMutation({
-    mutationFn: () =>
+  const createAnno = useMutation({    mutationFn: () =>
       createBatchAnnouncement(batchId, { title: annoTitle.trim(), body: annoBody.trim() }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["batch-announcements", batchId] })
@@ -280,30 +507,25 @@ export function AdminBatchDetailPage() {
   })
 
   const bulkTransition = useMutation({
-    mutationFn: () =>
-      bulkTransitionBatch(batchId, {
-        status: bulkStatus as ApplicationStatus,
-        note: bulkNote.trim(),
-      }),
-    onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ["applications"] })
-      queryClient.invalidateQueries({ queryKey: ["batch", batchId] })
-      toast.success(`${result.updated_count} lamaran berhasil dipindahkan.`)
-      setBulkStatus("")
-      setBulkNote("")
-    },
-    onError: () => toast.error("Gagal memindahkan status batch."),
+    mutationFn: () => Promise.resolve({ updated_count: 0 }),
+    onSuccess: () => {},
   })
 
   const apps = appsPage?.results ?? []
 
-  // Infer current dominant status from applications
+  // Group by status for tabs
+  const appsByStatus = STATUS_TABS.reduce(
+    (acc, t) => ({ ...acc, [t.value]: apps.filter((a) => a.status === t.value) }),
+    {} as Record<ApplicationStatus, typeof apps>
+  )
+
+  // Infer dominant status (for legacy use if needed)
   const statusFreq = apps.reduce(
     (acc, a) => ({ ...acc, [a.status]: (acc[a.status] ?? 0) + 1 }),
     {} as Record<string, number>
   )
-  const dominantStatus = Object.entries(statusFreq).sort((a, b) => b[1] - a[1])[0]?.[0] ?? ""
-  const nextOptions: ApplicationStatus[] = NEXT_STATUS_OPTIONS[dominantStatus] ?? []
+  void statusFreq
+  void bulkTransition
 
   usePageTitle(batch ? `Batch: ${batch.name}` : "Detail Batch")
 
@@ -320,7 +542,7 @@ export function AdminBatchDetailPage() {
       <div className="p-6">
         <p className="text-destructive">Batch tidak ditemukan.</p>
         <Button asChild variant="outline" className="mt-4 cursor-pointer">
-          <Link to="/batch">
+          <Link to="/lowongan-kerja">
             <IconArrowLeft className="mr-2 size-4" />
             Kembali
           </Link>
@@ -333,7 +555,8 @@ export function AdminBatchDetailPage() {
     <div className="flex flex-col gap-6 px-6 py-6 md:px-8 md:py-8">
       <BreadcrumbNav
         items={[
-          { label: "Batch Lamaran", href: "/batch" },
+          { label: "Lowongan Kerja", href: "/lowongan-kerja" },
+          { label: batch.job_title, href: `/lowongan-kerja/${batch.job}` },
           { label: batch.name },
         ]}
       />
@@ -347,7 +570,7 @@ export function AdminBatchDetailPage() {
             size="icon"
             className="cursor-pointer"
           >
-            <Link to="/batch">
+            <Link to={`/lowongan-kerja/${batch.job}`}>
               <IconArrowLeft className="size-5" />
             </Link>
           </Button>
@@ -498,137 +721,30 @@ export function AdminBatchDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Bulk transition */}
-      {nextOptions.length > 0 && apps.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Transisi Status Batch</CardTitle>
-            <CardDescription>
-              Pindahkan seluruh pelamar dalam batch ini ke status berikutnya sekaligus.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="flex flex-col gap-1.5">
-                <Label>Status Baru</Label>
-                <Select
-                  value={bulkStatus}
-                  onValueChange={(v) => setBulkStatus(v as ApplicationStatus)}
-                >
-                  <SelectTrigger className="w-[200px] cursor-pointer">
-                    <SelectValue placeholder="Pilih status..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {nextOptions.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {APPLICATION_STATUS_LABELS[s]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
-                <Label>Catatan <span className="text-muted-foreground text-xs">(opsional)</span></Label>
-                <Input
-                  placeholder="Catatan transisi..."
-                  value={bulkNote}
-                  onChange={(e) => setBulkNote(e.target.value)}
-                />
-              </div>
-              <Button
-                className="cursor-pointer"
-                onClick={() => bulkTransition.mutate()}
-                disabled={!bulkStatus || bulkTransition.isPending}
-              >
-                <IconChevronRight className="mr-2 size-4" />
-                {bulkTransition.isPending ? "Memproses..." : "Jalankan Transisi"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Applications table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">
-            Daftar Pelamar ({apps.length})
-          </CardTitle>
-          <CardDescription>
-            Semua pelamar yang sudah ditambahkan ke batch ini.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Pelamar</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Konfirmasi Pra-Sel.</TableHead>
-                <TableHead>Konfirmasi Interview</TableHead>
-                <TableHead>Ditugaskan</TableHead>
-                <TableHead />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {apps.length ? (
-                apps.map((app) => (
-                  <TableRow key={app.id} className="hover:bg-muted/50">
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <span className="font-medium">{app.applicant_name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {app.applicant_email}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <ApplicationStatusBadge status={app.status} />
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {app.pra_seleksi_confirmed_at ? (
-                        <span className="text-green-600">
-                          {formatDate(app.pra_seleksi_confirmed_at)}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">Belum</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {app.interview_confirmed_at ? (
-                        <span className="text-green-600">
-                          {formatDate(app.interview_confirmed_at)}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">Belum</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {formatDate(app.applied_at)}
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="cursor-pointer"
-                        onClick={() => navigate(`/lamaran/${app.id}`)}
-                      >
-                        Detail
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={6} className="h-20 text-center text-muted-foreground">
-                    Belum ada pelamar di batch ini. Klik "Tambah Pelamar" untuk memulai.
-                  </TableCell>
-                </TableRow>
+      {/* Status tabs — replace flat table + bulk transition */}
+      <Tabs defaultValue="PRA_SELEKSI">
+        <TabsList className="h-auto flex-wrap gap-1">
+          {STATUS_TABS.map((t) => (
+            <TabsTrigger key={t.value} value={t.value}>
+              {t.label}
+              {appsByStatus[t.value].length > 0 && (
+                <Badge variant="secondary" className="ml-1.5 rounded-full px-1.5 py-0 text-xs">
+                  {appsByStatus[t.value].length}
+                </Badge>
               )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        {STATUS_TABS.map((t) => (
+          <TabsContent key={t.value} value={t.value} className="mt-4">
+            <BatchStatusTab
+              batchId={batchId}
+              status={t.value}
+              apps={appsByStatus[t.value]}
+            />
+          </TabsContent>
+        ))}
+      </Tabs>
 
       <BatchAssignDialog
         batchId={batchId}

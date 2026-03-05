@@ -2,7 +2,6 @@ import * as React from "react"
 import {
   IconBriefcase,
   IconBuilding,
-  IconClipboardList,
   IconDashboard,
   IconInnerShadowTop,
   IconMessage,
@@ -60,10 +59,10 @@ function getNavItems(basePath: string, role?: string) {
       title: "Lowongan Kerja",
       url: `${basePath}/lowongan-kerja`,
       icon: IconBriefcase,
+      matchPaths: [`${basePath}/batch`, `${basePath}/lamaran`],
     },
     { title: "Berita", url: `${basePath}/berita`, icon: IconNews },
     { title: "Kirim Broadcast", url: `${basePath}/broadcasts`, icon: IconSend },
-    { title: "Lamaran", url: `${basePath}/lamaran`, icon: IconClipboardList },
     { title: "Chat", url: `${basePath}/chat`, icon: IconMessage },
     { title: "Laporan", url: `${basePath}/laporan`, icon: IconChartBar },
   ]

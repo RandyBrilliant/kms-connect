@@ -3,6 +3,7 @@ Public registration and Google OAuth views for mobile app.
 Separate file to keep account/views.py focused on admin CRUD.
 """
 from django.conf import settings as django_settings
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -232,7 +233,8 @@ class ApplicantRegistrationView(APIView):
             applicant_profile = ApplicantProfile.objects.create(
                 user=user,
                 nik=nik,
-                verification_status=ApplicantVerificationStatus.DRAFT,
+                verification_status=ApplicantVerificationStatus.SUBMITTED,
+                submitted_at=timezone.now(),
                 referrer=referrer_user,
                 contact_phone=phone_number if phone_number else "",
                 birth_place=birth_place,
@@ -442,7 +444,8 @@ class GoogleOAuthView(APIView):
                 ApplicantProfile.objects.create(
                     user=user,
                     nik=f"G{user.pk:015d}",  # Placeholder Google OAuth; wajib diganti NIK asli dari KTP
-                    verification_status=ApplicantVerificationStatus.DRAFT,
+                    verification_status=ApplicantVerificationStatus.SUBMITTED,
+                    submitted_at=timezone.now(),
                 )
 
         # Generate JWT tokens
@@ -593,7 +596,8 @@ class GoogleCompleteRegistrationView(APIView):
                 user=user,
                 defaults={
                     "nik": nik,
-                    "verification_status": ApplicantVerificationStatus.DRAFT,
+                    "verification_status": ApplicantVerificationStatus.SUBMITTED,
+                    "submitted_at": timezone.now(),
                     "referrer": referrer_user,
                     "contact_phone": phone_number,
                     "birth_place": birth_place,

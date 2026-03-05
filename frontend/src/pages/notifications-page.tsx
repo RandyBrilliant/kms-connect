@@ -13,6 +13,7 @@ import {
 } from "@/api/notifications"
 import type { Notification } from "@/types/notification"
 import { Button } from "@/components/ui/button"
+import { Link } from "react-router-dom"
 import {
   IconBell,
   IconBellOff,
@@ -24,6 +25,7 @@ import {
   IconAlertTriangle,
   IconCircleX,
   IconTrash,
+  IconSettings,
 } from "@tabler/icons-react"
 import { formatDistanceToNow } from "date-fns"
 import { id as idLocale } from "date-fns/locale"
@@ -141,12 +143,19 @@ export function NotificationsPage() {
             Kelola notifikasi dan pengumuman Anda
           </p>
         </div>
-        {unreadCount > 0 && (
-          <Button onClick={handleMarkAllAsRead} variant="outline" size="sm">
-            <IconBellOff className="mr-2 size-4" />
-            Tandai Semua Dibaca
+        <div className="flex items-center gap-2">
+          {unreadCount > 0 && (
+            <Button onClick={handleMarkAllAsRead} variant="outline" size="sm">
+              <IconBellOff className="mr-2 size-4" />
+              Tandai Semua Dibaca
+            </Button>
+          )}
+          <Button asChild variant="ghost" size="icon" title="Preferensi notifikasi">
+            <Link to="preferensi">
+              <IconSettings className="size-4" />
+            </Link>
           </Button>
-        )}
+        </div>
       </div>
 
       {/* Filters */}

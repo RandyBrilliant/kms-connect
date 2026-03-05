@@ -1,21 +1,23 @@
 """
 Spesifikasi dokumen TKI: format (PDF/JPG), ukuran maks, dan validasi.
 
-PDF ≤ 2MB:
-  1. Ijasah
-  2. Sertifikat keterampilan (jika ada)
-  3. Ijin Keluarga
-  4. Surat Keterangan Pemberi Ijin
-  5. Surat Kesehatan
-  6. Surat Keterangan Status Perkawinan
-  7. Perjanjian Penempatan
-
-JPG ≤ 500KB:
-  1. Photo TKI
-  2. KTP
+Fase INITIAL (diunggah saat pendaftaran):
+  1. KTP
+  2. Ijazah
   3. Kartu Keluarga
-  4. Kartu BPJS
+  4. Kartu BPJS Kesehatan
   5. Paspor
+  6. Photo TKI
+  7. Sertifikat Keterampilan (opsional)
+
+Fase POST_INTERVIEW (diunggah setelah lulus interview):
+  1. Surat Izin Keluarga (Form Biru)
+  2. Surat Keterangan Pemberi Izin
+  3. KTP Orangtua / Wali
+  4. Surat Kesehatan
+  5. Surat Keterangan Status Perkawinan
+  6. Buku Nikah (opsional – bagi yang sudah menikah)
+  7. Perjanjian Penempatan
 """
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
@@ -31,20 +33,22 @@ IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png")  # PNG often from phones; we normal
 
 # Document type code -> spec
 DOCUMENT_SPECS = {
-    # PDF, max 2MB
-    "ijasah": {"format": "pdf", "extensions": PDF_EXTENSIONS, "max_bytes": MAX_PDF_BYTES},
-    "sertifikat-keterampilan": {"format": "pdf", "extensions": PDF_EXTENSIONS, "max_bytes": MAX_PDF_BYTES},
-    "ijin-keluarga": {"format": "pdf", "extensions": PDF_EXTENSIONS, "max_bytes": MAX_PDF_BYTES},
-    "surat-keterangan-pemberi-ijin": {"format": "pdf", "extensions": PDF_EXTENSIONS, "max_bytes": MAX_PDF_BYTES},
-    "surat-kesehatan": {"format": "pdf", "extensions": PDF_EXTENSIONS, "max_bytes": MAX_PDF_BYTES},
+    # ── INITIAL ──────────────────────────────────────────────────────────────
+    "ktp":                    {"format": "image", "extensions": IMAGE_EXTENSIONS, "max_bytes": MAX_IMAGE_BYTES},
+    "ijasah":                 {"format": "image", "extensions": IMAGE_EXTENSIONS, "max_bytes": MAX_IMAGE_BYTES},
+    "kartu-keluarga":         {"format": "image", "extensions": IMAGE_EXTENSIONS, "max_bytes": MAX_IMAGE_BYTES},
+    "kartu-bpjs":             {"format": "image", "extensions": IMAGE_EXTENSIONS, "max_bytes": MAX_IMAGE_BYTES},
+    "paspor":                 {"format": "image", "extensions": IMAGE_EXTENSIONS, "max_bytes": MAX_IMAGE_BYTES},
+    "photo-tki":              {"format": "image", "extensions": IMAGE_EXTENSIONS, "max_bytes": MAX_IMAGE_BYTES},
+    "sertifikat-keterampilan":{"format": "pdf",   "extensions": PDF_EXTENSIONS,   "max_bytes": MAX_PDF_BYTES},
+    # ── POST_INTERVIEW ───────────────────────────────────────────────────────
+    "ijin-keluarga":                  {"format": "pdf", "extensions": PDF_EXTENSIONS, "max_bytes": MAX_PDF_BYTES},
+    "surat-keterangan-pemberi-ijin":  {"format": "pdf", "extensions": PDF_EXTENSIONS, "max_bytes": MAX_PDF_BYTES},
+    "ktp-orangtua-wali":              {"format": "image", "extensions": IMAGE_EXTENSIONS, "max_bytes": MAX_IMAGE_BYTES},
+    "surat-kesehatan":                {"format": "pdf", "extensions": PDF_EXTENSIONS, "max_bytes": MAX_PDF_BYTES},
     "surat-keterangan-status-perkawinan": {"format": "pdf", "extensions": PDF_EXTENSIONS, "max_bytes": MAX_PDF_BYTES},
-    "perjanjian-penempatan": {"format": "pdf", "extensions": PDF_EXTENSIONS, "max_bytes": MAX_PDF_BYTES},
-    # Image (JPG), max 500KB
-    "photo-tki": {"format": "image", "extensions": IMAGE_EXTENSIONS, "max_bytes": MAX_IMAGE_BYTES},
-    "ktp": {"format": "image", "extensions": IMAGE_EXTENSIONS, "max_bytes": MAX_IMAGE_BYTES},
-    "kartu-keluarga": {"format": "image", "extensions": IMAGE_EXTENSIONS, "max_bytes": MAX_IMAGE_BYTES},
-    "kartu-bpjs": {"format": "image", "extensions": IMAGE_EXTENSIONS, "max_bytes": MAX_IMAGE_BYTES},
-    "paspor": {"format": "image", "extensions": IMAGE_EXTENSIONS, "max_bytes": MAX_IMAGE_BYTES},
+    "buku-nikah":                     {"format": "image", "extensions": IMAGE_EXTENSIONS, "max_bytes": MAX_IMAGE_BYTES},
+    "perjanjian-penempatan":          {"format": "pdf", "extensions": PDF_EXTENSIONS, "max_bytes": MAX_PDF_BYTES},
 }
 
 

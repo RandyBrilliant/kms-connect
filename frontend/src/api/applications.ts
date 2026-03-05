@@ -10,6 +10,7 @@ import type { PaginatedResponse } from "@/types/admin"
 import type {
   JobApplication,
   ApplicationsListParams,
+  AssignApplicationInput,
   TransitionApplicationInput,
 } from "@/types/job-applications"
 import type { BatchAnnouncement } from "@/types/lamaran-batch"
@@ -41,6 +42,18 @@ export async function getApplications(
 /** GET /api/applications/:id/ — admin gets single application */
 export async function getApplication(id: number): Promise<JobApplication> {
   const { data } = await api.get<JobApplication>(`/api/applications/${id}/`)
+  return data
+}
+
+/** POST /api/applications/ — admin assigns an applicant to a job */
+export async function assignApplication(
+  input: AssignApplicationInput
+): Promise<JobApplication> {
+  const { data } = await api.post<JobApplication>("/api/applications/", {
+    job: input.job,
+    applicant: input.applicant,
+    notes: input.note ?? "",
+  })
   return data
 }
 

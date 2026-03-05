@@ -1,0 +1,13 @@
+{% extends "account/emails/base_email.html" %}
+{% block title %}{{ title }} – {{ company_name }}{% endblock %}
+{% block content %}
+<p>Halo{% if user %} <strong>{{ user.full_name|default:user.email }}</strong>{% endif %},</p>
+<p>{{ message }}</p>
+{% if action_url %}
+<p><a href="{{ action_url }}" class="btn">{{ action_label|default:"Buka Aplikasi" }}</a></p>
+{% endif %}
+{% endblock %}
+{% block footer %}
+<p>Email ini dikirim secara otomatis oleh <strong>{{ company_name }}</strong>.</p>
+<p>Jika Anda tidak mengharapkan email ini, abaikan pesan ini.</p>
+{% endblock %}

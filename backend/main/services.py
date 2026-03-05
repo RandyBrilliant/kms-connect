@@ -473,6 +473,21 @@ class ApplicationService:
                 f"'{ApplicationStatus(new_status).label}' tidak diizinkan."
             )
 
+        # ── Quota enforcement (only when moving to DITERIMA) ──────────────
+        if new_status == ApplicationStatus.DITERIMA:
+            job = application.job
+            if job.quota is not None:
+                accepted_count = JobApplication.objects.filter(
+                    job=job,
+                    status__in=[ApplicationStatus.DITERIMA, ApplicationStatus.BERANGKAT],
+                ).exclude(pk=application.pk).count()
+                if accepted_count >= job.quota:
+                    raise TransitionError(
+                        f"Kuota penerimaan lowongan '{job.title}' sudah penuh "
+                        f"({job.quota} pelamar diterima)."
+                    )
+        # ─────────────────────────────────────────────────────────────────
+
         old_status = application.status
         update_fields = ["status", "reviewed_by", "reviewed_at", "updated_at"]
 
@@ -538,6 +553,24 @@ class ApplicationService:
             batch.applications.filter(status__in=valid_froms)
             .select_related("applicant__user")
         )
+
+        # ── Quota enforcement for bulk DITERIMA ───────────────────────────
+        if new_status == ApplicationStatus.DITERIMA:
+            job = batch.job
+            if job.quota is not None:
+                already_accepted = JobApplication.objects.filter(
+                    job=job,
+                    status__in=[ApplicationStatus.DITERIMA, ApplicationStatus.BERANGKAT],
+                ).exclude(pk__in=[a.pk for a in apps]).count()
+                remaining_slots = job.quota - already_accepted
+                if remaining_slots <= 0:
+                    raise TransitionError(
+                        f"Kuota penerimaan lowongan '{job.title}' sudah penuh "
+                        f"({job.quota} pelamar diterima)."
+                    )
+                # Cap: only transition apps that fit within remaining quota
+                apps = apps[:remaining_slots]
+        # ─────────────────────────────────────────────────────────────────
         if not apps:
             return []
 

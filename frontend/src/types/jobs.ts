@@ -22,6 +22,8 @@ export interface JobItem {
   status: JobStatus
   posted_at: string | null
   deadline: string | null
+  start_date: string | null
+  quota: number | null
   created_by: number | null
   created_by_name?: string | null
   created_at: string

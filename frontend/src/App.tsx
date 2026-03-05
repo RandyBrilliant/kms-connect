@@ -41,13 +41,15 @@ const AdminPelamarFormPage = lazy(() => import("@/pages/admin-pelamar-form-page"
 const AdminPelamarDetailPage = lazy(() => import("@/pages/admin-pelamar-detail-page").then(m => ({ default: m.AdminPelamarDetailPage })))
 const ProfilePage = lazy(() => import("@/pages/profile-page").then(m => ({ default: m.ProfilePage })))
 const NotificationsPage = lazy(() => import("@/pages/notifications-page").then(m => ({ default: m.NotificationsPage })))
+const NotificationPreferencesPage = lazy(() => import("@/pages/notification-preferences-page").then(m => ({ default: m.NotificationPreferencesPage })))
 const AdminBroadcastListPage = lazy(() => import("@/pages/admin-broadcast-list-page").then(m => ({ default: m.AdminBroadcastListPage })))
 const AdminBroadcastFormPage = lazy(() => import("@/pages/admin-broadcast-form-page").then(m => ({ default: m.AdminBroadcastFormPage })))
 const AdminLaporanPage = lazy(() => import("@/pages/admin-laporan-page").then(m => ({ default: m.AdminLaporanPage })))
-const AdminApplicationsPage = lazy(() => import("@/pages/admin-applications-page").then(m => ({ default: m.AdminApplicationsPage })))
 const AdminApplicationDetailPage = lazy(() => import("@/pages/admin-application-detail-page").then(m => ({ default: m.AdminApplicationDetailPage })))
 const AdminBatchListPage = lazy(() => import("@/pages/admin-batch-list-page").then(m => ({ default: m.AdminBatchListPage })))
 const AdminBatchDetailPage = lazy(() => import("@/pages/admin-batch-detail-page").then(m => ({ default: m.AdminBatchDetailPage })))
+const AdminJobDetailPage = lazy(() => import("@/pages/admin-job-detail-page").then(m => ({ default: m.AdminJobDetailPage })))
+const AdminBatchFormPage = lazy(() => import("@/pages/admin-batch-form-page").then(m => ({ default: m.AdminBatchFormPage })))
 const AdminChatPage = lazy(() => import("@/pages/admin-chat-page").then(m => ({ default: m.AdminChatPage })))
 
 // Loading fallback component
@@ -129,7 +131,9 @@ function AppRoutes() {
         <Route path="berita/:id/edit" element={<AdminNewsFormPage />} />
         <Route path="lowongan-kerja" element={<AdminJobListPage />} />
         <Route path="lowongan-kerja/new" element={<AdminJobFormPage />} />
-        <Route path="lowongan-kerja/:id/edit" element={<AdminJobFormPage />} />
+        <Route path="lowongan-kerja/:id" element={<AdminJobDetailPage />} />
+        <Route path="lowongan-kerja/:id/edit" element={<AdminJobDetailPage />} />
+        <Route path="lowongan-kerja/:id/batch/new" element={<AdminBatchFormPage />} />
         <Route path="pelamar" element={<AdminPelamarListPage />} />
         <Route path="pelamar/new" element={<AdminPelamarFormPage />} />
         <Route path="pelamar/:id" element={<AdminPelamarDetailPage />} />
@@ -143,12 +147,12 @@ function AppRoutes() {
         <Route path="broadcasts/new" element={<AdminBroadcastFormPage />} />
         <Route path="broadcasts/:id/edit" element={<AdminBroadcastFormPage />} />
         <Route path="laporan" element={<AdminLaporanPage />} />
-        <Route path="lamaran" element={<AdminApplicationsPage />} />
         <Route path="lamaran/:id" element={<AdminApplicationDetailPage />} />
         <Route path="batch" element={<AdminBatchListPage />} />
         <Route path="batch/:id" element={<AdminBatchDetailPage />} />
         <Route path="chat" element={<AdminChatPage />} />
         <Route path="notifikasi" element={<NotificationsPage />} />
+        <Route path="notifikasi/preferensi" element={<NotificationPreferencesPage />} />
         <Route path="profil" element={<ProfilePage />} />
       </Route>
       <Route
@@ -166,6 +170,7 @@ function AppRoutes() {
         <Route path="laporan" element={<StaffLaporanPage />} />
         <Route path="profil" element={<ProfilePage />} />
         <Route path="notifikasi" element={<NotificationsPage />} />
+        <Route path="notifikasi/preferensi" element={<NotificationPreferencesPage />} />
       </Route>
       <Route
         path="/company"
@@ -181,6 +186,7 @@ function AppRoutes() {
         <Route path="pelamar/:id" element={<CompanyApplicantDetailPage />} />
         <Route path="profil" element={<ProfilePage />} />
         <Route path="notifikasi" element={<NotificationsPage />} />
+        <Route path="notifikasi/preferensi" element={<NotificationPreferencesPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>

@@ -1,0 +1,14 @@
+{% extends "account/emails/base_email.html" %}
+{% block title %}Dokumen Ditolak – {{ company_name }}{% endblock %}
+{% block content %}
+<p>Halo <strong>{{ user.full_name|default:user.email }}</strong>,</p>
+<p>Dokumen Anda <strong>«{{ document_name }}»</strong> telah ditinjau dan <strong>ditolak</strong>.</p>
+{% if rejection_reason %}
+<div style="background:#fef2f2;border-left:4px solid #ef4444;padding:12px 16px;margin:16px 0;border-radius:4px;">
+  <p style="margin:0;font-weight:600;color:#991b1b;">Alasan penolakan:</p>
+  <p style="margin:8px 0 0;color:#7f1d1d;">{{ rejection_reason }}</p>
+</div>
+{% endif %}
+<p>Harap unggah ulang dokumen yang sesuai dengan ketentuan yang berlaku.</p>
+<p><a href="{{ action_url }}" class="btn">Unggah Ulang Dokumen</a></p>
+{% endblock %}

@@ -371,16 +371,29 @@ CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes max per task
 CELERY_BEAT_SCHEDULE = {
-    # Tutup lowongan kerja yang sudah melewati deadline.
-    # Jalan tiap tengah malam; sesuaikan di env jika perlu.
+    # ---- Existing ----
+    # Close job listings that have passed their deadline (midnight daily).
     "close-expired-jobs-every-midnight": {
         "task": "main.tasks.close_expired_jobs",
         "schedule": crontab(minute=0, hour=0),
     },
-    # "close-expired-jobs-every-15-min": {
-    #     "task": "main.tasks.close_expired_jobs",
-    #     "schedule": crontab(minute="*/15"),
-    # },
+
+    # ---- Notification schedules ----
+    # Admin daily digest: pending profiles + new applicants (07:30 WIB).
+    "admin-daily-digest": {
+        "task": "account.tasks.send_admin_daily_digest",
+        "schedule": crontab(minute=30, hour=7),
+    },
+    # Job deadline reminders: notify applicants when deadline is 3 days away (09:00 WIB).
+    "job-deadline-reminders-daily": {
+        "task": "account.tasks.send_job_deadline_reminders",
+        "schedule": crontab(minute=0, hour=9),
+    },
+    # Batch departure reminders: 7-day and 1-day alerts (08:00 WIB).
+    "batch-departure-reminders-daily": {
+        "task": "account.tasks.send_batch_departure_reminders",
+        "schedule": crontab(minute=0, hour=8),
+    },
 }
 
 # -----------------------------------------------------------------------------

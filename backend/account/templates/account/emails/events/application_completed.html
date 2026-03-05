@@ -1,0 +1,9 @@
+{% extends "account/emails/base_email.html" %}
+{% block title %}Masa Kerja Selesai – {{ company_name }}{% endblock %}
+{% block content %}
+<p>Halo <strong>{{ user.full_name|default:user.email }}</strong>,</p>
+<p>Masa kerja Anda untuk posisi <strong>{{ job_title }}</strong> telah <strong>selesai</strong>.</p>
+<p>Terima kasih atas dedikasi dan kerja keras Anda. Pengalaman ini tentunya menjadi bekal berharga untuk karir Anda ke depan.</p>
+<p>Anda dapat mendaftar kembali setelah masa cooldown 2 tahun berakhir.</p>
+<p><a href="{{ action_url }}" class="btn">Lihat Riwayat Lamaran</a></p>
+{% endblock %}

@@ -1,0 +1,15 @@
+{% extends "account/emails/base_email.html" %}
+{% block title %}Hasil Seleksi Lamaran – {{ company_name }}{% endblock %}
+{% block content %}
+<p>Halo <strong>{{ user.full_name|default:user.email }}</strong>,</p>
+<p>Terima kasih atas minat Anda melamar posisi <strong>{{ job_title }}</strong>{% if company_name %} di {{ company_name }}{% endif %}.</p>
+<p>Setelah melalui proses seleksi, kami menyampaikan bahwa lamaran Anda <strong>tidak dapat kami lanjutkan</strong> pada saat ini.</p>
+{% if notes %}
+<div style="background:#fff7ed;border-left:4px solid #f97316;padding:12px 16px;margin:16px 0;border-radius:4px;">
+  <p style="margin:0;font-weight:600;color:#9a3412;">Catatan:</p>
+  <p style="margin:8px 0 0;color:#7c2d12;">{{ notes }}</p>
+</div>
+{% endif %}
+<p>Tetap semangat! Anda masih dapat mendaftar ke lowongan lain yang tersedia.</p>
+<p><a href="/lowongan" class="btn">Lihat Lowongan Lain</a></p>
+{% endblock %}

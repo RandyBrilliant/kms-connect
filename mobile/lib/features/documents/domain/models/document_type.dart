@@ -5,6 +5,8 @@ class DocumentType {
   final bool isRequired;
   final int sortOrder;
   final String description;
+  /// 'INITIAL' or 'POST_INTERVIEW' — matches backend DocumentType.phase
+  final String phase;
 
   const DocumentType({
     required this.id,
@@ -13,6 +15,7 @@ class DocumentType {
     required this.isRequired,
     required this.sortOrder,
     this.description = '',
+    this.phase = 'INITIAL',
   });
 
   factory DocumentType.fromJson(Map<String, dynamic> json) {
@@ -27,6 +30,10 @@ class DocumentType {
           ? json['sort_order'] as int
           : int.tryParse(json['sort_order']?.toString() ?? '') ?? 0,
       description: (json['description'] ?? '') as String,
+      phase: (json['phase'] ?? 'INITIAL') as String,
     );
   }
+
+  bool get isInitialPhase => phase == 'INITIAL';
+  bool get isPostInterviewPhase => phase == 'POST_INTERVIEW';
 }

@@ -5,7 +5,7 @@
  */
 
 import { useState } from "react"
-import { Link, useNavigate } from "react-router-dom"
+import { useNavigate } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import { format } from "date-fns"
 import { id as idLocale } from "date-fns/locale"
@@ -47,7 +47,7 @@ export function AdminBatchListPage() {
   const [searchInput, setSearchInput] = useState("")
   const [createOpen, setCreateOpen] = useState(false)
 
-  const { data, isLoading, isError, refetch } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ["batches", params],
     queryFn: () => getBatches(params),
   })

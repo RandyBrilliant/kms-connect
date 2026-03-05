@@ -1,0 +1,12 @@
+{% extends "account/emails/base_email.html" %}
+{% block title %}Pengingat: Deadline Lowongan Dalam {{ days_remaining }} Hari – {{ company_name }}{% endblock %}
+{% block content %}
+<p>Halo <strong>{{ user.full_name|default:user.email }}</strong>,</p>
+<p>Pengingat: Lowongan berikut akan <strong>ditutup dalam {{ days_remaining }} hari</strong>:</p>
+<div style="background:#fff7ed;border:2px solid #f97316;border-radius:8px;padding:16px 20px;margin:16px 0;">
+  <p style="margin:0;font-size:18px;font-weight:700;color:#c2410c;">{{ job_title }}</p>
+  {% if company_name %}<p style="margin:4px 0 0;color:#ea580c;">{{ company_name }}</p>{% endif %}
+</div>
+<p>Pastikan profil Anda lengkap dan terverifikasi agar dapat dipertimbangkan untuk posisi ini.</p>
+<p><a href="{{ action_url }}" class="btn">Lihat Lowongan</a></p>
+{% endblock %}

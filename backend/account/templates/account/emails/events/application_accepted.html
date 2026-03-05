@@ -1,0 +1,12 @@
+{% extends "account/emails/base_email.html" %}
+{% block title %}Lamaran Anda Diterima! – {{ company_name }}{% endblock %}
+{% block content %}
+<p>Halo <strong>{{ user.full_name|default:user.email }}</strong>,</p>
+<p>🎊 <strong>Selamat!</strong> Lamaran Anda telah resmi <strong>DITERIMA</strong> untuk posisi:</p>
+<div style="background:#f0fdf4;border:2px solid #22c55e;border-radius:8px;padding:16px 20px;margin:16px 0;">
+  <p style="margin:0;font-size:18px;font-weight:700;color:#15803d;">{{ job_title }}</p>
+  {% if company_name %}<p style="margin:4px 0 0;color:#16a34a;">{{ company_name }}</p>{% endif %}
+</div>
+<p>Tim kami akan segera menghubungi Anda mengenai langkah-langkah selanjutnya. Pastikan informasi kontak Anda selalu aktif.</p>
+<p><a href="{{ action_url }}" class="btn">Lihat Detail Lamaran</a></p>
+{% endblock %}

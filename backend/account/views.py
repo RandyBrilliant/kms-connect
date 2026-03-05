@@ -32,6 +32,7 @@ from .models import (
     ApplicantVerificationStatus,
     Broadcast,
     Notification,
+    NotificationPreference,
 )
 from .permissions import IsBackofficeAdmin, IsApplicant
 from .throttles import AuthPublicRateThrottle
@@ -51,6 +52,7 @@ from .serializers import (
     DocumentTypeSerializer,
     NotificationSerializer,
     BroadcastSerializer,
+    NotificationPreferenceSerializer,
 )
 from .api_responses import (
     ApiCode,
@@ -200,6 +202,40 @@ class DeactivateActivateMixin:
             ),
             status=status.HTTP_200_OK,
         )
+
+
+# ---------------------------------------------------------------------------
+# Notification Preferences (own preferences: GET + PATCH)
+# ---------------------------------------------------------------------------
+
+class NotificationPreferenceView(APIView):
+    """
+    Retrieve and update the current user's notification preferences.
+
+    GET  /api/me/notification-preferences/  → returns own preferences
+    PATCH /api/me/notification-preferences/ → partial update (any subset of fields)
+
+    Auto-creates the preference record if it doesn't exist yet (idempotent).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def _get_or_create_pref(self, user):
+        pref, _ = NotificationPreference.objects.get_or_create(user=user)
+        return pref
+
+    def get(self, request):
+        pref = self._get_or_create_pref(request.user)
+        serializer = NotificationPreferenceSerializer(pref)
+        return success_response(serializer.data)
+
+    def patch(self, request):
+        pref = self._get_or_create_pref(request.user)
+        serializer = NotificationPreferenceSerializer(pref, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return success_response(serializer.data)
+        return error_response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 # ---------------------------------------------------------------------------

@@ -80,6 +80,13 @@ export interface ApplicationsListParams {
   ordering?: string
 }
 
+/** POST /api/applications/ — admin assigns an applicant to a job */
+export interface AssignApplicationInput {
+  job: number
+  applicant: number
+  note?: string
+}
+
 /** PATCH /api/applications/{id}/transition/ */
 export interface TransitionApplicationInput {
   status: ApplicationStatus

@@ -28,7 +28,7 @@ import { useApplicationQuery } from "@/hooks/use-applications-query"
 import { useChatThreadsQuery } from "@/hooks/use-chat-query"
 import { useAuth } from "@/hooks/use-auth"
 
-const BASE_PATH = "/lamaran"
+const BASE_PATH = "/lowongan-kerja"
 
 const CHAT_ALLOWED_STATUSES = new Set(["DITERIMA", "BERANGKAT", "SELESAI"])
 
@@ -88,7 +88,8 @@ export function AdminApplicationDetailPage() {
     <div className="flex flex-col gap-6 p-6">
       <BreadcrumbNav
         items={[
-          { label: "Lamaran", href: BASE_PATH },
+          { label: "Lowongan Kerja", href: BASE_PATH },
+          { label: application.job_title, href: `${BASE_PATH}/${application.job}` },
           { label: application.applicant_name },
         ]}
       />
@@ -97,7 +98,7 @@ export function AdminApplicationDetailPage() {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
           <Button asChild variant="ghost" size="icon" className="cursor-pointer">
-            <Link to={BASE_PATH}>
+            <Link to={`${BASE_PATH}/${application.job}`}>
               <IconArrowLeft className="size-5" />
               <span className="sr-only">Kembali</span>
             </Link>

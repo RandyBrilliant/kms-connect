@@ -219,7 +219,7 @@ function ApplicantApplicationsTab({ profileId }: { profileId?: number }) {
               <div className="flex items-center gap-2 flex-wrap">
                 <ApplicationStatusBadge status={app.status} />
                 <Badge variant="outline" className="text-xs">
-                  {app.source === "ADMIN_ASSIGN" ? "Ditugaskan Admin" : "Mandiri"}
+                  {app.assigned_by != null ? "Ditugaskan Admin" : "Mandiri"}
                 </Badge>
                 <span className="text-xs text-muted-foreground">
                   {app.applied_at

@@ -50,16 +50,18 @@ export function AdminJobFormPage() {
     status: JobStatus
     posted_at?: string | null
     deadline?: string | null
+    start_date?: string | null
+    quota?: number | null
   }) => {
     try {
       if (isEdit && jobId) {
         await updateMutation.mutateAsync(values)
         toast.success("Lowongan diperbarui", "Perubahan berhasil disimpan")
-        navigate(BASE_PATH)
+        navigate(`${BASE_PATH}/${jobId}`)
       } else {
-        await createMutation.mutateAsync(values)
+        const created = await createMutation.mutateAsync(values)
         toast.success("Lowongan ditambahkan", "Lowongan baru berhasil dibuat")
-        navigate(BASE_PATH)
+        navigate(`${BASE_PATH}/${created.id}`)
       }
     } catch (err: unknown) {
       const res = err as {

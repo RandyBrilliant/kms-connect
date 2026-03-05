@@ -1,0 +1,12 @@
+{% extends "account/emails/base_email.html" %}
+{% block title %}Status Berangkat – {{ company_name }}{% endblock %}
+{% block content %}
+<p>Halo <strong>{{ user.full_name|default:user.email }}</strong>,</p>
+<p>🚀 <strong>Selamat!</strong> Anda telah resmi dinyatakan <strong>BERANGKAT</strong> untuk posisi:</p>
+<div style="background:#eff6ff;border-radius:8px;padding:16px 20px;margin:16px 0;">
+  <p style="margin:0;font-size:18px;font-weight:700;color:#1e40af;">{{ job_title }}</p>
+  {% if company_name %}<p style="margin:4px 0 0;color:#3b82f6;">{{ company_name }}</p>{% endif %}
+</div>
+<p>Selamat menjalani masa kerja dan semoga sukses! Tim kami selalu siap membantu jika Anda membutuhkan sesuatu.</p>
+<p><a href="{{ action_url }}" class="btn">Lihat Detail</a></p>
+{% endblock %}

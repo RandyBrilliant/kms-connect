@@ -89,7 +89,32 @@ export interface BroadcastsListParams {
 
 export interface PaginatedResponse<T> {
   count: number
-  next: string | null
-  previous: string | null
+  next?: string | null
+  previous?: string | null
   results: T[]
 }
+
+// ---------------------------------------------------------------------------
+// Notification Preferences
+// ---------------------------------------------------------------------------
+
+export interface NotificationPreference {
+  id: number
+  // In-app
+  inapp_enabled: boolean
+  // Email
+  email_account_updates: boolean
+  email_profile_updates: boolean
+  email_application_updates: boolean
+  email_job_deadline_reminder: boolean
+  email_batch_departure_reminder: boolean
+  email_job_alerts: boolean
+  // Push
+  push_enabled: boolean
+  push_chat_messages: boolean
+  push_application_updates: boolean
+  // Timestamps
+  updated_at: string
+}
+
+export type NotificationPreferenceUpdate = Partial<Omit<NotificationPreference, "id" | "updated_at">>

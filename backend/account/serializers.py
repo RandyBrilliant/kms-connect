@@ -24,6 +24,7 @@ from .models import (
     DocumentReviewStatus,
     Broadcast,
     Notification,
+    NotificationPreference,
     NotificationType,
     NotificationPriority,
 )
@@ -686,9 +687,15 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
         user.save(update_fields=["password"])
         if profile_data:
             profile_data.pop("user", None)  # avoid duplicate with explicit user=user
+            profile_data.setdefault("verification_status", ApplicantVerificationStatus.SUBMITTED)
+            profile_data.setdefault("submitted_at", timezone.now())
             ApplicantProfile.objects.create(user=user, **profile_data)
         else:
-            ApplicantProfile.objects.create(user=user)
+            ApplicantProfile.objects.create(
+                user=user,
+                verification_status=ApplicantVerificationStatus.SUBMITTED,
+                submitted_at=timezone.now(),
+            )
         return user
 
     def update(self, instance, validated_data):
@@ -974,8 +981,8 @@ class DocumentTypeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = DocumentType
-        fields = ["id", "code", "name", "is_required", "sort_order", "description", "created_at"]
-        read_only_fields = ["id", "code", "name", "is_required", "sort_order", "description", "created_at"]
+        fields = ["id", "code", "name", "is_required", "sort_order", "description", "phase", "created_at"]
+        read_only_fields = ["id", "code", "name", "is_required", "sort_order", "description", "phase", "created_at"]
 
 
 # ---------------------------------------------------------------------------
@@ -1084,3 +1091,40 @@ class BroadcastCreateSerializer(BroadcastSerializer):
         recipient_config = self.validated_data.get("recipient_config", {})
         from .services.notification_recipients import get_recipient_count
         return get_recipient_count(recipient_config)
+
+
+# ---------------------------------------------------------------------------
+# Notification Preference Serializer
+# ---------------------------------------------------------------------------
+
+class NotificationPreferenceSerializer(serializers.ModelSerializer):
+    """
+    Read/update per-user notification preferences.
+    Only the preference flags are writable; ``user`` and timestamps are read-only.
+
+    Used by:
+      GET  /api/me/notification-preferences/  → retrieve own preferences
+      PATCH /api/me/notification-preferences/ → partial update
+    """
+
+    class Meta:
+        model = NotificationPreference
+        fields = [
+            "id",
+            # In-app
+            "inapp_enabled",
+            # Email
+            "email_account_updates",
+            "email_profile_updates",
+            "email_application_updates",
+            "email_job_deadline_reminder",
+            "email_batch_departure_reminder",
+            "email_job_alerts",
+            # Push
+            "push_enabled",
+            "push_chat_messages",
+            "push_application_updates",
+            # Timestamps (read-only)
+            "updated_at",
+        ]
+        read_only_fields = ["id", "updated_at"]

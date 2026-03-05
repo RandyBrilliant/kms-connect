@@ -13,6 +13,8 @@ import type {
   BroadcastsListParams,
   PaginatedResponse,
   RecipientConfig,
+  NotificationPreference,
+  NotificationPreferenceUpdate,
 } from "@/types/notification"
 
 function buildNotificationsQueryString(params: NotificationsListParams): string {
@@ -164,5 +166,34 @@ export async function registerFcmToken(
 /** POST /api/fcm/unregister/ - Unregister FCM token */
 export async function unregisterFcmToken(token: string): Promise<void> {
   await api.post(`/api/fcm/unregister/`, { token })
+}
+
+
+// ---------------------------------------------------------------------------
+// Notification Preferences (per-user settings)
+// ---------------------------------------------------------------------------
+
+/** GET /api/me/notification-preferences/ - Get own notification preferences */
+export async function getNotificationPreferences(): Promise<NotificationPreference> {
+  const { data } = await api.get<NotificationPreference>(`/api/me/notification-preferences/`)
+  // Unwrap api_responses envelope if present
+  if (data && typeof data === "object" && "data" in data) {
+    return (data as { data: NotificationPreference }).data
+  }
+  return data
+}
+
+/** PATCH /api/me/notification-preferences/ - Update own notification preferences (partial) */
+export async function updateNotificationPreferences(
+  updates: NotificationPreferenceUpdate
+): Promise<NotificationPreference> {
+  const { data } = await api.patch<NotificationPreference>(
+    `/api/me/notification-preferences/`,
+    updates
+  )
+  if (data && typeof data === "object" && "data" in data) {
+    return (data as { data: NotificationPreference }).data
+  }
+  return data
 }
 

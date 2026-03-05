@@ -1,0 +1,13 @@
+{% extends "account/emails/base_email.html" %}
+{% block title %}Anda Ditambahkan ke Lamaran Baru – {{ company_name }}{% endblock %}
+{% block content %}
+<p>Halo <strong>{{ user.full_name|default:user.email }}</strong>,</p>
+<p>Anda telah ditambahkan ke tahap <strong>Pra-Seleksi</strong> untuk posisi:</p>
+<div style="background:#eff6ff;border-radius:8px;padding:16px 20px;margin:16px 0;">
+  <p style="margin:0;font-size:18px;font-weight:700;color:#1e40af;">{{ job_title }}</p>
+  {% if company_name %}<p style="margin:4px 0 0;color:#3b82f6;">{{ company_name }}</p>{% endif %}
+  {% if batch_name %}<p style="margin:4px 0 0;font-size:13px;color:#6b7280;">{{ batch_name }}</p>{% endif %}
+</div>
+<p>Pantau terus perkembangan lamaran Anda melalui aplikasi.</p>
+<p><a href="{{ action_url }}" class="btn">Lihat Detail Lamaran</a></p>
+{% endblock %}

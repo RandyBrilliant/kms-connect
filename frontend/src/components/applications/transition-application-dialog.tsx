@@ -43,17 +43,14 @@ import { toast } from "@/lib/toast"
 
 // Mirrors backend services.py TRANSITIONS — role = "admin"
 const ADMIN_TRANSITIONS: Partial<Record<ApplicationStatus, ApplicationStatus[]>> = {
-  APPLIED: ["UNDER_REVIEW", "REJECTED"],
-  UNDER_REVIEW: ["SHORTLISTED", "REJECTED"],
-  SHORTLISTED: ["OFFERED", "REJECTED"],
-  OFFERED: ["OFFER_ACCEPTED", "OFFER_DECLINED", "REJECTED"],
-  OFFER_ACCEPTED: ["PLACED", "REJECTED"],
-  PLACED: ["COMPLETED", "REJECTED"],
-  OFFER_DECLINED: ["REJECTED", "SHORTLISTED"],
+  PRA_SELEKSI: ["INTERVIEW", "DITOLAK"],
+  INTERVIEW: ["DITERIMA", "DITOLAK"],
+  DITERIMA: ["BERANGKAT", "DITOLAK"],
+  BERANGKAT: ["SELESAI"],
 }
 
-// Date is required only when transitioning to COMPLETED
-const STATUSES_REQUIRING_DATE: ApplicationStatus[] = ["COMPLETED"]
+// Date is required only when transitioning to SELESAI
+const STATUSES_REQUIRING_DATE: ApplicationStatus[] = ["SELESAI"]
 
 const formSchema = z
   .object({

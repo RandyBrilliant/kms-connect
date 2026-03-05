@@ -341,9 +341,13 @@ export function JobTable({ basePath }: JobTableProps) {
             <TableBody>
               {table.getRowModel().rows?.length ? (
                 table.getRowModel().rows.map((row) => (
-                  <TableRow key={row.id}>
+                  <TableRow
+                    key={row.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => navigate(`${basePath}/${row.original.id}`)}
+                  >
                     {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id}>
+                      <TableCell key={cell.id} onClick={cell.column.id === "actions" ? (e) => e.stopPropagation() : undefined}>
                         {flexRender(
                           cell.column.columnDef.cell,
                           cell.getContext()

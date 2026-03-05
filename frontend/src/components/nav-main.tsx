@@ -14,11 +14,12 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 
-function isItemActive(pathname: string, itemUrl: string): boolean {
+function isItemActive(pathname: string, itemUrl: string, matchPaths?: string[]): boolean {
   if (itemUrl === "/") {
     return pathname === "/"
   }
-  return pathname === itemUrl || pathname.startsWith(itemUrl + "/")
+  if (pathname === itemUrl || pathname.startsWith(itemUrl + "/")) return true
+  return matchPaths?.some(p => pathname === p || pathname.startsWith(p + "/")) ?? false
 }
 
 export function NavMain({
@@ -29,6 +30,7 @@ export function NavMain({
     title: string
     url: string
     icon?: Icon
+    matchPaths?: string[]
   }[]
   showQuickActions?: boolean
 }) {
@@ -64,7 +66,7 @@ export function NavMain({
               <SidebarMenuButton
                 asChild
                 tooltip={item.title}
-                isActive={isItemActive(pathname, item.url)}
+                isActive={isItemActive(pathname, item.url, item.matchPaths)}
               >
                 <Link to={item.url}>
                   {item.icon && <item.icon />}

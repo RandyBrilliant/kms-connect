@@ -291,19 +291,15 @@ def send_notification_push_task(self, notification_id: int):
     notification = Notification.objects.filter(pk=notification_id).select_related("user").first()
     if not notification or not notification.user:
         return
-    
-    # Prepare data payload
+
     data = {
         "notification_id": str(notification.id),
         "action_url": notification.action_url or "",
         "action_label": notification.action_label or "",
     }
-    
-    # Determine priority
     priority = "high" if notification.priority in ["HIGH", "URGENT"] else "normal"
-    
-    # Send push notification
-    sent = send_fcm_to_user(
+
+    send_fcm_to_user(
         user=notification.user,
         title=notification.title,
         body=notification.message,
@@ -311,11 +307,286 @@ def send_notification_push_task(self, notification_id: int):
         notification_type=notification.notification_type,
         priority=priority,
     )
-    
-    if sent:
-        # Optionally track push sent status (you can add these fields to Notification model)
-        # notification.push_sent = True
-        # notification.push_sent_at = timezone.now()
-        # notification.save(update_fields=["push_sent", "push_sent_at"])
-        pass
+
+
+# ---------------------------------------------------------------------------
+# Event-driven email task (dispatched by notification_dispatcher.dispatch())
+# ---------------------------------------------------------------------------
+
+@shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=3)
+def send_event_email_task(
+    self,
+    user_id: int,
+    event_value: str,
+    context: dict,
+    action_url: str = "",
+):
+    """
+    Send a transactional email for a specific notification event.
+
+    Uses per-event HTML templates when available, falls back to the generic
+    notification_email.html template.
+
+    Template lookup order:
+      1. account/emails/events/<event_snake>.html  (per-event template)
+      2. account/emails/notification_email.html    (generic fallback)
+    """
+    import re
+    from django.conf import settings
+    from django.core.mail import send_mail
+    from django.template.loader import get_template
+    from django.template.exceptions import TemplateDoesNotExist
+
+    from .models import CustomUser
+    from .email_utils import render_email, COMPANY_NAME
+    from .services.notification_events import NotificationEvent, render_event_message
+
+    user = CustomUser.objects.filter(pk=user_id, is_active=True).first()
+    if not user or not user.email:
+        return
+
+    try:
+        event = NotificationEvent(event_value)
+    except ValueError:
+        return
+
+    title, message = render_event_message(event, context)
+    frontend_url = getattr(settings, "FRONTEND_URL", "").rstrip("/")
+    full_action_url = (frontend_url + action_url) if action_url and not action_url.startswith("http") else action_url
+
+    # Build template context
+    ctx = {
+        "user": user,
+        "title": title,
+        "message": message,
+        "action_url": full_action_url,
+        "action_label": context.get("action_label", "Buka Aplikasi"),
+        "logo_url": getattr(settings, "LOGO_URL", ""),
+        "subject": f"{title} – {COMPANY_NAME}",
+        "body_text": f"{message}\n\n{COMPANY_NAME}",
+        **context,
+    }
+
+    # Per-event template slug: e.g. "account.password_changed" → "account_password_changed"
+    event_slug = re.sub(r"[^a-z0-9]", "_", event.value.lower())
+    per_event_template = f"account/emails/events/{event_slug}.html"
+    fallback_template = "account/emails/notification_email.html"
+
+    try:
+        get_template(per_event_template)  # Raises if not found
+        template_name = per_event_template
+    except TemplateDoesNotExist:
+        template_name = fallback_template
+
+    html, plain = render_email(template_name, ctx)
+
+    send_mail(
+        subject=ctx["subject"],
+        message=plain,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[user.email],
+        html_message=html,
+        fail_silently=False,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Scheduled: Admin daily digest
+# ---------------------------------------------------------------------------
+
+@shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=2)
+def send_admin_daily_digest(self):
+    """
+    Send a daily digest email to all Admin and Staff users summarising:
+    - Number of applicant profiles pending verification
+    - Number of new applicants registered today
+
+    Scheduled via CELERY_BEAT_SCHEDULE (see backend/settings.py).
+    """
+    from django.conf import settings
+    from django.core.mail import send_mail
+    from django.utils import timezone
+    from django.db.utils import ProgrammingError
+
+    from .models import CustomUser, UserRole, ApplicantProfile, ApplicantVerificationStatus
+    from .email_utils import render_email, COMPANY_NAME
+
+    try:
+        now = timezone.now()
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        pending_profiles = ApplicantProfile.objects.filter(
+            verification_status=ApplicantVerificationStatus.SUBMITTED
+        ).count()
+        new_today = ApplicantProfile.objects.filter(created_at__gte=today_start).count()
+
+        if pending_profiles == 0 and new_today == 0:
+            return  # Skip empty digest
+
+        recipients = list(
+            CustomUser.objects.filter(
+                role__in=[UserRole.ADMIN, UserRole.STAFF],
+                is_active=True,
+            ).values_list("email", flat=True)
+        )
+        if not recipients:
+            return
+
+        ctx = {
+            "pending_profiles": pending_profiles,
+            "new_today": new_today,
+            "date": now.strftime("%d %B %Y"),
+            "logo_url": getattr(settings, "LOGO_URL", ""),
+            "subject": f"Ringkasan Harian Admin – {COMPANY_NAME}",
+            "body_text": (
+                f"Ringkasan {now.strftime('%d %B %Y')}:\n"
+                f"- {pending_profiles} profil menunggu verifikasi\n"
+                f"- {new_today} pelamar baru hari ini\n\n{COMPANY_NAME}"
+            ),
+        }
+        html, plain = render_email("account/emails/events/admin_daily_digest.html", ctx)
+
+        send_mail(
+            subject=ctx["subject"],
+            message=plain,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=recipients,
+            html_message=html,
+            fail_silently=False,
+        )
+
+    except ProgrammingError as e:
+        if "does not exist" in str(e):
+            return  # Tables not created yet (fresh DB)
+        raise
+
+
+# ---------------------------------------------------------------------------
+# Scheduled: Job deadline reminders
+# ---------------------------------------------------------------------------
+
+@shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=2)
+def send_job_deadline_reminders(self):
+    """
+    Notify verified applicants when a job they're eligible for has a
+    deadline in exactly 3 days.
+
+    Scheduled via CELERY_BEAT_SCHEDULE (daily at 9 AM WIB).
+    """
+    from django.utils import timezone
+    from django.db.utils import ProgrammingError
+
+    try:
+        from datetime import timedelta
+        from .models import ApplicantProfile, ApplicantVerificationStatus
+        from .services.notification_dispatcher import dispatch
+        from .services.notification_events import NotificationEvent
+
+        now = timezone.now()
+        target_date = (now + timedelta(days=3)).date()
+
+        # Import here to avoid circular at module level
+        from main.models import LowonganKerja, JobStatus  # type: ignore[import]
+
+        jobs = LowonganKerja.objects.filter(
+            status=JobStatus.OPEN,
+            deadline__date=target_date,
+        ).select_related("company")
+
+        if not jobs.exists():
+            return
+
+        # Notify all ACCEPTED applicants
+        applicants = (
+            ApplicantProfile.objects.filter(
+                verification_status=ApplicantVerificationStatus.ACCEPTED,
+                user__is_active=True,
+            )
+            .select_related("user", "user__notification_preference")
+        )
+
+        for job in jobs:
+            ctx = {
+                "job_title": job.title,
+                "company_name": getattr(job.company, "company_name", ""),
+                "days_remaining": 3,
+            }
+            for profile in applicants:
+                dispatch(
+                    event=NotificationEvent.JOB_DEADLINE_APPROACHING,
+                    user=profile.user,
+                    context=ctx,
+                    action_url=f"/lowongan/{job.pk}",
+                    action_label="Lihat Lowongan",
+                    deduplicate=True,
+                )
+
+    except ProgrammingError as e:
+        if "does not exist" in str(e):
+            return
+        raise
+
+
+# ---------------------------------------------------------------------------
+# Scheduled: Batch departure reminders
+# ---------------------------------------------------------------------------
+
+@shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=2)
+def send_batch_departure_reminders(self):
+    """
+    Notify applicants in BERANGKAT-status batches:
+    - 7 days before departure
+    - 1 day before departure
+
+    Scheduled via CELERY_BEAT_SCHEDULE (daily at 8 AM WIB).
+    Departure date is derived from LamaranBatch.interview_date as a proxy
+    (adjust to a dedicated departure_date field if/when added).
+    """
+    from django.utils import timezone
+    from django.db.utils import ProgrammingError
+
+    try:
+        from datetime import timedelta
+        from main.models import LamaranBatch, ApplicationStatus  # type: ignore[import]
+        from .services.notification_dispatcher import dispatch
+        from .services.notification_events import NotificationEvent
+
+        now = timezone.now()
+
+        for days, event in [
+            (7, NotificationEvent.BATCH_DEPARTURE_UPCOMING_7D),
+            (1, NotificationEvent.BATCH_DEPARTURE_UPCOMING_1D),
+        ]:
+            target_date = (now + timedelta(days=days)).date()
+
+            batches = LamaranBatch.objects.filter(
+                pra_seleksi_date__date=target_date,
+            ).select_related("job", "job__company").prefetch_related(
+                "applications__applicant__user",
+                "applications__applicant__user__notification_preference",
+            )
+
+            for batch in batches:
+                ctx = {
+                    "batch_name": batch.name,
+                    "job_title": batch.job.title,
+                    "company_name": getattr(batch.job.company, "company_name", ""),
+                    "days_remaining": days,
+                }
+                for application in batch.applications.filter(
+                    status=ApplicationStatus.BERANGKAT
+                ):
+                    dispatch(
+                        event=event,
+                        user=application.applicant.user,
+                        context=ctx,
+                        action_url=f"/lamaran/{application.pk}",
+                        action_label="Lihat Detail",
+                        deduplicate=True,
+                    )
+
+    except ProgrammingError as e:
+        if "does not exist" in str(e):
+            return
+        raise
 

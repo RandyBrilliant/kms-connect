@@ -1,0 +1,16 @@
+{% extends "account/emails/base_email.html" %}
+{% block title %}Pemberitahuan Verifikasi Profil – {{ company_name }}{% endblock %}
+{% block content %}
+<p>Halo <strong>{{ user.full_name|default:user.email }}</strong>,</p>
+<p>Kami telah meninjau profil Anda dan mohon maaf, profil Anda <strong>belum dapat kami terima</strong> saat ini.</p>
+{% if verification_notes %}
+<div style="background:#fef2f2;border-left:4px solid #ef4444;padding:12px 16px;margin:16px 0;border-radius:4px;">
+  <p style="margin:0;font-weight:600;color:#991b1b;">Catatan dari Admin:</p>
+  <p style="margin:8px 0 0;color:#7f1d1d;">{{ verification_notes }}</p>
+</div>
+{% endif %}
+<p>Harap perbaiki data yang diminta dan kirimkan kembali profil Anda untuk ditinjau ulang.</p>
+<p><a href="{{ action_url }}" class="btn">Perbaiki Profil</a></p>
+<hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;">
+<p style="font-size:13px;color:#6b7280;">Membutuhkan bantuan? Hubungi tim kami untuk informasi lebih lanjut.</p>
+{% endblock %}

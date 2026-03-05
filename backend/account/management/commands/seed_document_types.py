@@ -1,5 +1,5 @@
 """
-Seed 12 tipe dokumen TKI sesuai spesifikasi: PDF ≤2MB (7) dan JPG ≤500KB (5).
+Seed tipe dokumen TKI sesuai spesifikasi klien.
 Kode harus sama dengan account.document_specs.DOCUMENT_SPECS.
 """
 from django.core.management.base import BaseCommand
@@ -7,31 +7,37 @@ from django.core.management.base import BaseCommand
 from account.document_specs import DOCUMENT_SPECS
 from account.models import DocumentType
 
+INITIAL = DocumentType.PHASE_INITIAL
+POST = DocumentType.PHASE_POST_INTERVIEW
 
-# code -> (name, is_required, sort_order, description)
+# code -> (name, is_required, sort_order, description, phase)
 DOCUMENT_NAMES = {
-    "ijasah": ("Ijasah", True, 1, "PDF, maks. 2 MB."),
-    "sertifikat-keterampilan": ("Sertifikat Keterampilan", False, 2, "Jika ada. PDF, maks. 2 MB."),
-    "ijin-keluarga": ("Ijin Keluarga", True, 3, "PDF, maks. 2 MB."),
-    "surat-keterangan-pemberi-ijin": ("Surat Keterangan Pemberi Ijin", True, 4, "PDF, maks. 2 MB."),
-    "surat-kesehatan": ("Surat Kesehatan", True, 5, "PDF, maks. 2 MB."),
-    "surat-keterangan-status-perkawinan": ("Surat Keterangan Status Perkawinan", True, 6, "PDF, maks. 2 MB."),
-    "perjanjian-penempatan": ("Perjanjian Penempatan", True, 7, "PDF, maks. 2 MB."),
-    "photo-tki": ("Photo TKI", True, 8, "JPG/PNG, maks. 500 KB."),
-    "ktp": ("KTP", True, 9, "JPG/PNG, maks. 500 KB."),
-    "kartu-keluarga": ("Kartu Keluarga", True, 10, "JPG/PNG, maks. 500 KB."),
-    "kartu-bpjs": ("Kartu BPJS", True, 11, "JPG/PNG, maks. 500 KB."),
-    "paspor": ("Paspor", True, 12, "JPG/PNG, maks. 500 KB."),
+    # ── INITIAL ──────────────────────────────────────────────────────────────
+    "ktp":                            ("KTP",                               True,  1,  "JPG/PNG, maks. 500 KB.", INITIAL),
+    "ijasah":                         ("Ijazah",                            True,  2,  "JPG/PNG, maks. 500 KB.", INITIAL),
+    "kartu-keluarga":                 ("Kartu Keluarga",                    True,  3,  "JPG/PNG, maks. 500 KB.", INITIAL),
+    "kartu-bpjs":                     ("Kartu BPJS Kesehatan",              True,  4,  "JPG/PNG, maks. 500 KB.", INITIAL),
+    "paspor":                         ("Paspor",                            True,  5,  "JPG/PNG, maks. 500 KB.", INITIAL),
+    "photo-tki":                      ("Photo TKI",                         True,  6,  "JPG/PNG, maks. 500 KB.", INITIAL),
+    "sertifikat-keterampilan":        ("Sertifikat Keterampilan",           False, 7,  "Jika ada. PDF, maks. 2 MB.", INITIAL),
+    # ── POST_INTERVIEW ───────────────────────────────────────────────────────
+    "ijin-keluarga":                  ("Surat Izin Keluarga (Form Biru)",   True,  8,  "PDF, maks. 2 MB.", POST),
+    "surat-keterangan-pemberi-ijin":  ("Surat Keterangan Pemberi Izin",     True,  9,  "PDF, maks. 2 MB.", POST),
+    "ktp-orangtua-wali":              ("KTP Orangtua / Wali",               True,  10, "JPG/PNG, maks. 500 KB.", POST),
+    "surat-kesehatan":                ("Surat Kesehatan",                   True,  11, "PDF, maks. 2 MB.", POST),
+    "surat-keterangan-status-perkawinan": ("Surat Keterangan Status Perkawinan", True, 12, "PDF, maks. 2 MB.", POST),
+    "buku-nikah":                     ("Buku Nikah",                        False, 13, "Bagi yang sudah menikah. JPG/PNG, maks. 500 KB.", POST),
+    "perjanjian-penempatan":          ("Perjanjian Penempatan",             True,  14, "PDF, maks. 2 MB.", POST),
 }
 
 
 class Command(BaseCommand):
-    help = "Buat/update 12 tipe dokumen TKI (PDF ≤2MB dan JPG ≤500KB)."
+    help = "Buat/update tipe dokumen TKI (7 INITIAL + 7 POST_INTERVIEW)."
 
     def handle(self, *args, **options):
         for code in DOCUMENT_SPECS:
-            name, is_required, sort_order, description = DOCUMENT_NAMES.get(
-                code, (code.replace("-", " ").title(), True, 99, "")
+            name, is_required, sort_order, description, phase = DOCUMENT_NAMES.get(
+                code, (code.replace("-", " ").title(), True, 99, "", INITIAL)
             )
             obj, created = DocumentType.objects.update_or_create(
                 code=code,
@@ -40,9 +46,11 @@ class Command(BaseCommand):
                     "is_required": is_required,
                     "sort_order": sort_order,
                     "description": description,
+                    "phase": phase,
                 },
             )
             action = "Created" if created else "Updated"
-            self.stdout.write(f"  {action}: {obj.code} – {obj.name}")
+            self.stdout.write(f"  {action}: [{obj.phase}] {obj.code} – {obj.name}")
 
-        self.stdout.write(self.style.SUCCESS("Done. 12 document types ready."))
+        self.stdout.write(self.style.SUCCESS("Done. 14 document types ready."))
+

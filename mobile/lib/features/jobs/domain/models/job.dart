@@ -15,6 +15,8 @@ class Job {
   final String status;
   final DateTime? postedAt;
   final DateTime? deadline;
+  final DateTime? startDate;
+  final int? quota;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -35,6 +37,8 @@ class Job {
     required this.status,
     this.postedAt,
     this.deadline,
+    this.startDate,
+    this.quota,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -76,6 +80,10 @@ class Job {
       deadline: json['deadline'] != null
           ? DateTime.parse(json['deadline'] as String)
           : null,
+      startDate: json['start_date'] != null
+          ? DateTime.parse(json['start_date'] as String)
+          : null,
+      quota: _safeIntOrNull(json['quota']),
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
     );
