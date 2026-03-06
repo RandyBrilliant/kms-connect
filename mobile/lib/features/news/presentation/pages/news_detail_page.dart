@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -185,8 +186,9 @@ class _ImageHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenH = MediaQuery.sizeOf(context).height;
     return SizedBox(
-      height: 260 + topPad,
+      height: math.min(260.0, screenH * 0.38) + topPad,
       child: Stack(
         fit: StackFit.expand,
         children: [

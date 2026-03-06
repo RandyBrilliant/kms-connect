@@ -80,7 +80,8 @@ class _JobDetailPageState extends ConsumerState<JobDetailPage>
   Widget _buildContent(BuildContext context, Job job) {
     final size = MediaQuery.sizeOf(context);
     final topPad = MediaQuery.paddingOf(context).top;
-    final headerH = math.max(size.height * 0.30, 240.0);
+    final isCompact = size.height < 740;
+    final headerH = math.max(size.height * 0.30, isCompact ? 200.0 : 240.0);
 
     return Stack(
       children: [

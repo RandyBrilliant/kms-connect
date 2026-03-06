@@ -5,6 +5,7 @@
  */
 
 import { Link, useParams } from "react-router-dom"
+import { useState } from "react"
 import { format } from "date-fns"
 import { id as idLocale } from "date-fns/locale"
 import {
@@ -15,6 +16,7 @@ import {
   IconClipboardList,
   IconExternalLink,
   IconAlertCircle,
+  IconFileTypePdf,
 } from "@tabler/icons-react"
 
 import { BreadcrumbNav } from "@/components/breadcrumb-nav"
@@ -44,6 +46,7 @@ import {
 } from "@/hooks/use-applicants-query"
 import { useApplicationsQuery } from "@/hooks/use-applications-query"
 import { toast } from "@/lib/toast"
+import { viewBiodataPdf } from "@/api/applicants"
 import type { ApplicantUser, ApplicantVerificationStatus, ApplicantProfile } from "@/types/applicant"
 import { usePageTitle } from "@/hooks/use-page-title"
 
@@ -57,6 +60,19 @@ function ApplicantSidebar({ applicant }: { applicant: ApplicantUser }) {
   const sendVerificationMutation = useSendVerificationEmailMutation()
   const sendPasswordResetMutation = useSendPasswordResetMutation()
   const updateMutation = useUpdateApplicantMutation(applicant.id)
+
+  const [isViewingPdf, setIsViewingPdf] = useState(false)
+
+  const handleViewBiodataPdf = async () => {
+    setIsViewingPdf(true)
+    try {
+      await viewBiodataPdf(applicant.id)
+    } catch {
+      toast.error("Gagal membuka PDF", "Coba lagi nanti")
+    } finally {
+      setIsViewingPdf(false)
+    }
+  }
 
   const handleToggleActive = async () => {
     try {
@@ -203,7 +219,7 @@ function ApplicantSidebar({ applicant }: { applicant: ApplicantUser }) {
     "ijasah": "Ijazah",
     "kartu-bpjs": "Kartu BPJS Kesehatan",
     "paspor": "Paspor",
-    "photo-tki": "Photo TKI",
+    "photo-tki": "Photo PMI",
   }
 
   return (
@@ -433,6 +449,29 @@ function ApplicantSidebar({ applicant }: { applicant: ApplicantUser }) {
           >
             <IconKey className="mr-2 size-4" />
             Kirim Email Reset Password
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Download Biodata PDF */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Biodata PDF</CardTitle>
+          <CardDescription>
+            Buka formulir biodata CPMI yang sudah terisi dalam tab baru.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="cursor-pointer"
+            onClick={handleViewBiodataPdf}
+            disabled={isViewingPdf}
+          >
+            <IconFileTypePdf className="mr-2 size-4" />
+            {isViewingPdf ? "Memproses..." : "Lihat Biodata PDF"}
           </Button>
         </CardContent>
       </Card>

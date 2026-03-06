@@ -206,7 +206,7 @@ class _SplashPageState extends ConsumerState<SplashPage>
                   FadeTransition(
                     opacity: _taglineOpacity,
                     child: Text(
-                      'Platform Rekrutmen TKI',
+                      'Platform Rekrutmen PMI',
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 15,
                         fontWeight: FontWeight.w500,

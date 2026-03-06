@@ -100,7 +100,7 @@ class _RegistrationStep1CredentialsState
         mainAxisSize: MainAxisSize.min,
         children: [
           //  Section label 
-          const SizedBox(height: 20),
+          SizedBox(height: MediaQuery.sizeOf(context).height < 740 ? 12 : 20),
           Text(
             'Informasi Akun',
             style: GoogleFonts.plusJakartaSans(
@@ -115,7 +115,7 @@ class _RegistrationStep1CredentialsState
             'Langkah 1 dari 2  Masukkan email dan kata sandi',
             style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
           ),
-          const SizedBox(height: 28),
+          SizedBox(height: MediaQuery.sizeOf(context).height < 740 ? 16 : 28),
 
           //  Email 
           M3TextField(
@@ -187,7 +187,7 @@ class _RegistrationStep1CredentialsState
             hint: '81234567890',
             textInputAction: TextInputAction.done,
           ),
-          const SizedBox(height: 28),
+          SizedBox(height: MediaQuery.sizeOf(context).height < 740 ? 16 : 28),
 
           //  Next button 
           FilledButton(
@@ -206,7 +206,7 @@ class _RegistrationStep1CredentialsState
               ),
             ),
           ),
-          const SizedBox(height: 28),
+          SizedBox(height: MediaQuery.sizeOf(context).height < 740 ? 16 : 28),
 
           //  OR divider 
           Row(
@@ -265,7 +265,7 @@ class _RegistrationStep1CredentialsState
                   borderRadius: BorderRadius.circular(14)),
             ),
           ),
-          const SizedBox(height: 28),
+          SizedBox(height: MediaQuery.sizeOf(context).height < 740 ? 16 : 28),
 
           //  Login link 
           Row(

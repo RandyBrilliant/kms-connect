@@ -61,6 +61,7 @@ from .api_responses import (
     success_response,
 )
 from .services.export import generate_applicants_excel
+from .services.biodata_pdf import generate_biodata_pdf
 from .services.notification_delivery import send_broadcast
 from .services.notification_recipients import get_recipient_count, validate_recipient_config
 
@@ -1280,6 +1281,50 @@ class AdminReportView(APIView):
         }
         
         return Response(data, status=status.HTTP_200_OK)
+
+
+# ---------------------------------------------------------------------------
+# Biodata PDF
+# ---------------------------------------------------------------------------
+
+class AdminBiodataPdfView(APIView):
+    """
+    Generate and download a Biodata CPMI PDF for a single applicant.
+    GET /api/applicants/<pk>/biodata-pdf/
+    """
+
+    permission_classes = [IsBackofficeAdmin]
+
+    def get(self, request, pk):
+        applicant = get_object_or_404(
+            ApplicantProfile.objects.select_related(
+                "user",
+                "birth_place",
+                "province",
+                "district",
+                "village",
+                "family_province",
+                "family_district",
+                "family_village",
+            ).prefetch_related("work_experiences"),
+            user__id=pk,
+        )
+        try:
+            pdf_bytes = generate_biodata_pdf(applicant)
+        except Exception as e:
+            return Response(
+                error_response(
+                    detail=f"Gagal membuat PDF: {str(e)}",
+                    code=ApiCode.INTERNAL_ERROR,
+                ),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        safe_name = (applicant.user.full_name or "biodata").replace(" ", "_")
+        filename = f"Biodata_{safe_name}.pdf"
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'inline; filename="{filename}"'
+        return response
 
 
 # ---------------------------------------------------------------------------

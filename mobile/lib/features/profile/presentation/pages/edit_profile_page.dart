@@ -1765,7 +1765,7 @@ class _DropdownField<T> extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return DropdownButtonFormField<T>(
-      value: value,
+      initialValue: value,
       decoration: InputDecoration(
         labelText: label,
         floatingLabelBehavior: FloatingLabelBehavior.always,
@@ -1878,7 +1878,7 @@ class _HeirRelationshipSelector extends StatelessWidget {
                   ?.copyWith(color: cs.onSurfaceVariant)),
         ),
         DropdownButtonFormField<String>(
-          value: selected,
+          initialValue: selected,
           decoration: InputDecoration(
             prefixIcon: const Icon(Icons.family_restroom_outlined, size: 20),
             filled: true,

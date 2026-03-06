@@ -6,7 +6,6 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../config/colors.dart';
-import '../../../../core/providers/app_lifecycle_provider.dart';
 import '../../../../core/services/chat_websocket_service.dart';
 import '../../../../core/widgets/custom_toast.dart';
 import '../../data/providers/chat_provider.dart';

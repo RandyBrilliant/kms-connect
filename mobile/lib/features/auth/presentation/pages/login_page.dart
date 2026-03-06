@@ -159,7 +159,11 @@ class _LoginPageState extends ConsumerState<LoginPage>
     final colorScheme = Theme.of(context).colorScheme;
     final size = MediaQuery.sizeOf(context);
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
-    final headerHeight = math.max(size.height * 0.34, 240.0);
+    final isCompact = size.height < 740;
+    final headerHeight = math.max(
+      size.height * (isCompact ? 0.28 : 0.34),
+      isCompact ? 200.0 : 240.0,
+    );
 
     return Scaffold(
       // Scaffold does NOT resize — we handle insets manually so the header
@@ -195,12 +199,12 @@ class _LoginPageState extends ConsumerState<LoginPage>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  SizedBox(height: headerHeight * 0.22),
+                  SizedBox(height: headerHeight * (isCompact ? 0.10 : 0.22)),
                   FadeTransition(
                     opacity: _headerOpacity,
                     child: ScaleTransition(
                       scale: _headerScale,
-                      child: _HeaderContent(),
+                      child: _HeaderContent(isCompact: isCompact),
                     ),
                   ),
                   SlideTransition(
@@ -221,7 +225,8 @@ class _LoginPageState extends ConsumerState<LoginPage>
                             onLogin: _handleLogin,
                             onGoogleLogin: _handleGoogleLogin,                              unverifiedEmail: _unverifiedEmail,
                               isResendLoading: _resendLoading,
-                              onResend: _handleResendVerification,                          ),
+                              onResend: _handleResendVerification,
+                              isCompact: isCompact,                          ),
                         ),
                       ),
                   ],
@@ -237,6 +242,9 @@ class _LoginPageState extends ConsumerState<LoginPage>
 //  Header Content -----------------------------------------------------------
 
 class _HeaderContent extends StatelessWidget {
+  final bool isCompact;
+  const _HeaderContent({this.isCompact = false});
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -279,14 +287,14 @@ class _HeaderContent extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          'Platform Rekrutmen TKI',
+          'Platform Rekrutmen PMI',
           style: GoogleFonts.plusJakartaSans(
             fontSize: 13,
             fontWeight: FontWeight.w500,
             color: Colors.white.withValues(alpha: 0.75),
           ),
         ),
-        const SizedBox(height: 32),
+        SizedBox(height: isCompact ? 16 : 32),
       ],
     );
   }
@@ -308,6 +316,7 @@ class _FormPanel extends StatelessWidget {
   final String? unverifiedEmail;
   final bool isResendLoading;
   final Future<void> Function() onResend;
+  final bool isCompact;
 
   const _FormPanel({
     required this.formKey,
@@ -323,6 +332,7 @@ class _FormPanel extends StatelessWidget {
     required this.unverifiedEmail,
     required this.isResendLoading,
     required this.onResend,
+    this.isCompact = false,
   });
 
   @override
@@ -332,7 +342,7 @@ class _FormPanel extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(color: colorScheme.surface),
-      padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+      padding: EdgeInsets.fromLTRB(24, isCompact ? 8 : 12, 24, 24),
       child: Form(
         key: formKey,
         child: Column(
@@ -355,7 +365,7 @@ class _FormPanel extends StatelessWidget {
                 color: colorScheme.onSurfaceVariant,
               ),
             ),
-            const SizedBox(height: 28),
+            SizedBox(height: isCompact ? 16 : 28),
 
             // Email
             M3TextField(
@@ -525,7 +535,7 @@ class _FormPanel extends StatelessWidget {
               ),
             ],
 
-            const SizedBox(height: 28),
+            SizedBox(height: isCompact ? 16 : 28),
 
             // Divider
             Row(
@@ -576,7 +586,7 @@ class _FormPanel extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 32),
+            SizedBox(height: isCompact ? 20 : 32),
 
             // Register link
             Row(

@@ -90,7 +90,8 @@ class _GoogleCompleteRegistrationPageState
     final cs = Theme.of(context).colorScheme;
     final size = MediaQuery.sizeOf(context);
     final safePad = MediaQuery.paddingOf(context);
-    final headerH = math.max(size.height * 0.30, 220.0);
+    final isCompact = size.height < 740;
+    final headerH = math.max(size.height * 0.30, isCompact ? 185.0 : 220.0);
 
     return Scaffold(
       resizeToAvoidBottomInset: false,

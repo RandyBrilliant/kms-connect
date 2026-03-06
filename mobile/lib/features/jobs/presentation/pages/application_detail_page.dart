@@ -140,7 +140,7 @@ class _ApplicationDetailPageState
             child: FadeTransition(
               opacity: _animCtrl,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 20, 16, 100),
+                padding: const EdgeInsets.fromLTRB(16, 20, 16, 80),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [

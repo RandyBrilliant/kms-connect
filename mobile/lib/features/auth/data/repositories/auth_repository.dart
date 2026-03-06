@@ -194,12 +194,10 @@ class AuthRepository {
           'full_name': fullName.trim(),
         if (phoneNumber != null && phoneNumber.trim().isNotEmpty)
           'phone_number': phoneNumber.trim(),
-        if (birthPlaceId != null) 'birth_place': birthPlaceId,
-        if (birthDateIso != null) 'birth_date': birthDateIso,
-        if (dataDeclarationConfirmed != null)
-          'data_declaration_confirmed': dataDeclarationConfirmed,
-        if (zeroCostUnderstood != null)
-          'zero_cost_understood': zeroCostUnderstood,
+        'birth_place': ?birthPlaceId,
+        'birth_date': ?birthDateIso,
+        'data_declaration_confirmed': ?dataDeclarationConfirmed,
+        'zero_cost_understood': ?zeroCostUnderstood,
       });
 
       final response = await _apiClient.dio.post(
@@ -315,8 +313,8 @@ class AuthRepository {
           'phone_number': phoneNumber.trim(),
         if (fullName != null && fullName.trim().isNotEmpty)
           'full_name': fullName.trim(),
-        if (birthPlaceId != null) 'birth_place': birthPlaceId,
-        if (birthDateIso != null) 'birth_date': birthDateIso,
+        'birth_place': ?birthPlaceId,
+        'birth_date': ?birthDateIso,
       });
 
       final response = await _apiClient.dio.post(

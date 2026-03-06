@@ -9,6 +9,8 @@ from rest_framework.routers import DefaultRouter
 
 from . import views
 from . import applicant_self_service_views
+from .views import AdminBiodataPdfView
+from .applicant_self_service_views import ApplicantBiodataPdfView
 
 app_name = "account"
 
@@ -107,6 +109,11 @@ applicant_self_service_paths = [
         applicant_self_service_views.ApplicantChangePasswordView.as_view(),
         name="applicant-me-change-password",
     ),
+    path(
+        "applicants/me/biodata-pdf/",
+        ApplicantBiodataPdfView.as_view(),
+        name="applicant-me-biodata-pdf",
+    ),
 ]
 
 # Admin dashboard (applicants overview)
@@ -134,6 +141,11 @@ report_paths = [
         "reports/applicants/",
         views.AdminReportView.as_view(),
         name="reports-applicants",
+    ),
+    path(
+        "applicants/<int:pk>/biodata-pdf/",
+        AdminBiodataPdfView.as_view(),
+        name="applicant-biodata-pdf",
     ),
 ]
 

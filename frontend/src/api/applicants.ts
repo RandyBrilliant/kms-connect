@@ -305,6 +305,27 @@ export async function downloadApplicantDocuments(
   URL.revokeObjectURL(url)
 }
 
+/**
+ * GET /api/applicants/:id/biodata-pdf/
+ * Fetches the Biodata CPMI PDF and opens it in a new browser tab for viewing.
+ */
+export async function viewBiodataPdf(applicantId: number): Promise<void> {
+  const response = await api.get(
+    `/api/applicants/${applicantId}/biodata-pdf/`,
+    { responseType: "blob" }
+  )
+  const blob = new Blob([response.data as BlobPart], { type: "application/pdf" })
+  const url = URL.createObjectURL(blob)
+  const tab = window.open(url, "_blank")
+  // Revoke after the tab has had time to load the blob
+  if (tab) {
+    tab.addEventListener("load", () => URL.revokeObjectURL(url), { once: true })
+  } else {
+    // Fallback: revoke after a short delay if window.open was blocked
+    setTimeout(() => URL.revokeObjectURL(url), 10_000)
+  }
+}
+
 /** DELETE /api/applicants/:applicantId/documents/:id/ */
 export async function deleteApplicantDocument(
   applicantId: number,
