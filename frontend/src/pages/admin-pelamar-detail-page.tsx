@@ -46,7 +46,7 @@ import {
 } from "@/hooks/use-applicants-query"
 import { useApplicationsQuery } from "@/hooks/use-applications-query"
 import { toast } from "@/lib/toast"
-import { viewBiodataPdf } from "@/api/applicants"
+import { viewBiodataPdf, viewInbondPdf } from "@/api/applicants"
 import type { ApplicantUser, ApplicantVerificationStatus, ApplicantProfile } from "@/types/applicant"
 import { usePageTitle } from "@/hooks/use-page-title"
 
@@ -62,6 +62,7 @@ function ApplicantSidebar({ applicant }: { applicant: ApplicantUser }) {
   const updateMutation = useUpdateApplicantMutation(applicant.id)
 
   const [isViewingPdf, setIsViewingPdf] = useState(false)
+  const [isViewingInbond, setIsViewingInbond] = useState(false)
 
   const handleViewBiodataPdf = async () => {
     setIsViewingPdf(true)
@@ -71,6 +72,17 @@ function ApplicantSidebar({ applicant }: { applicant: ApplicantUser }) {
       toast.error("Gagal membuka PDF", "Coba lagi nanti")
     } finally {
       setIsViewingPdf(false)
+    }
+  }
+
+  const handleViewInbondPdf = async () => {
+    setIsViewingInbond(true)
+    try {
+      await viewInbondPdf(applicant.id)
+    } catch {
+      toast.error("Gagal membuka PDF Inbond Cost", "Coba lagi nanti")
+    } finally {
+      setIsViewingInbond(false)
     }
   }
 
@@ -472,6 +484,29 @@ function ApplicantSidebar({ applicant }: { applicant: ApplicantUser }) {
           >
             <IconFileTypePdf className="mr-2 size-4" />
             {isViewingPdf ? "Memproses..." : "Lihat Biodata PDF"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Inbond Cost PDF */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Inbond Cost PDF</CardTitle>
+          <CardDescription>
+            Tanda terima pengembalian biaya transportasi CPMI.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="cursor-pointer"
+            onClick={handleViewInbondPdf}
+            disabled={isViewingInbond}
+          >
+            <IconFileTypePdf className="mr-2 size-4" />
+            {isViewingInbond ? "Memproses..." : "Lihat Inbond Cost PDF"}
           </Button>
         </CardContent>
       </Card>

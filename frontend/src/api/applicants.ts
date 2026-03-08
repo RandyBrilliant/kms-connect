@@ -317,11 +317,29 @@ export async function viewBiodataPdf(applicantId: number): Promise<void> {
   const blob = new Blob([response.data as BlobPart], { type: "application/pdf" })
   const url = URL.createObjectURL(blob)
   const tab = window.open(url, "_blank")
-  // Revoke after the tab has had time to load the blob
   if (tab) {
     tab.addEventListener("load", () => URL.revokeObjectURL(url), { once: true })
   } else {
-    // Fallback: revoke after a short delay if window.open was blocked
+    setTimeout(() => URL.revokeObjectURL(url), 10_000)
+  }
+}
+
+/**
+ * GET /api/applicants/:id/inbond-pdf/
+ * Fetches the Tanda Terima Pengembalian Biaya Transportasi (Inbond Cost) PDF
+ * and opens it in a new browser tab. Admin-only.
+ */
+export async function viewInbondPdf(applicantId: number): Promise<void> {
+  const response = await api.get(
+    `/api/applicants/${applicantId}/inbond-pdf/`,
+    { responseType: "blob" }
+  )
+  const blob = new Blob([response.data as BlobPart], { type: "application/pdf" })
+  const url = URL.createObjectURL(blob)
+  const tab = window.open(url, "_blank")
+  if (tab) {
+    tab.addEventListener("load", () => URL.revokeObjectURL(url), { once: true })
+  } else {
     setTimeout(() => URL.revokeObjectURL(url), 10_000)
   }
 }

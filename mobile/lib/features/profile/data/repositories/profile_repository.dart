@@ -1,4 +1,8 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../../../../core/api/api_client.dart';
 import '../../../../core/api/endpoints.dart';
@@ -167,6 +171,29 @@ class ProfileRepository {
       await _apiClient.dio.delete('${ApiEndpoints.myWorkExperiences}$id/');
     } on DioException catch (e) {
       throw _handleError(e);
+    }
+  }
+
+  /// Downloads the applicant's biodata PDF from the server, saves it to the
+  /// device's temp directory, and opens it with the system PDF viewer.
+  Future<void> downloadAndOpenBiodataPdf() async {
+    final response = await _apiClient.dio.get<List<int>>(
+      ApiEndpoints.myBiodataPdf,
+      options: Options(responseType: ResponseType.bytes),
+    );
+
+    final bytes = response.data;
+    if (bytes == null || bytes.isEmpty) {
+      throw Exception('Server mengembalikan file kosong.');
+    }
+
+    final tmpDir = await getTemporaryDirectory();
+    final file = File('${tmpDir.path}/biodata_cpmi.pdf');
+    await file.writeAsBytes(bytes, flush: true);
+
+    final result = await OpenFilex.open(file.path, type: 'application/pdf');
+    if (result.type != ResultType.done) {
+      throw Exception('Tidak dapat membuka PDF: ${result.message}');
     }
   }
 

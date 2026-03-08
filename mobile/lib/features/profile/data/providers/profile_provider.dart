@@ -128,6 +128,45 @@ class WorkExperienceNotifier extends StateNotifier<WorkExperienceState> {
   }
 }
 
+// ─── Biodata PDF ─────────────────────────────────────────────────────────────
+
+class BiodataPdfState {
+  final bool isLoading;
+  final String? error;
+  const BiodataPdfState({this.isLoading = false, this.error});
+  BiodataPdfState copyWith({bool? isLoading, String? error}) {
+    return BiodataPdfState(
+      isLoading: isLoading ?? this.isLoading,
+      error: error,
+    );
+  }
+}
+
+class BiodataPdfNotifier extends StateNotifier<BiodataPdfState> {
+  final ProfileRepository _repository;
+  BiodataPdfNotifier(this._repository) : super(const BiodataPdfState());
+
+  Future<bool> open() async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      await _repository.downloadAndOpenBiodataPdf();
+      state = state.copyWith(isLoading: false);
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: e.toString().replaceAll('Exception: ', ''),
+      );
+      return false;
+    }
+  }
+}
+
+final biodataPdfProvider =
+    StateNotifierProvider<BiodataPdfNotifier, BiodataPdfState>((ref) {
+  return BiodataPdfNotifier(ref.read(profileRepositoryProvider));
+});
+
 final profileNotifierProvider = StateNotifierProvider<ProfileNotifier, ProfileState>((ref) {
   return ProfileNotifier(ref.read(profileRepositoryProvider));
 });

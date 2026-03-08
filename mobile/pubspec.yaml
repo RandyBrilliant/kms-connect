@@ -85,6 +85,9 @@ dependencies:
   # Native splash screen
   flutter_native_splash: ^2.4.3
 
+  # File opening (PDF viewer, etc.)
+  open_filex: ^4.7.0
+
   # WebSocket for real-time chat
   web_socket_channel: ^3.0.1
 

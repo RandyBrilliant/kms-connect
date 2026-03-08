@@ -67,11 +67,11 @@ _FX_RIGHT  = 0.958   # right edge of input boxes
 # Section I
 _F_NAMA_PERUSAHAAN = _frac(0.479, 0.190)
 _F_NAMA_CPMI       = _frac(0.479, 0.211)
-_F_TTL             = _frac(0.479, 0.232)
+_F_TTL             = _frac(0.479, 0.233)
 _F_ALAMAT_KTP      = _frac(0.479, 0.257)
 _F_KOTA_KTP        = _frac(0.479, 0.279)
-_F_NOHP            = _frac(0.479, 0.301)
-_F_EMAIL           = _frac(0.479, 0.322)
+_F_NOHP            = _frac(0.479, 0.300)
+_F_EMAIL           = _frac(0.479, 0.323)
 
 # Jumlah Saudara — value before "Orang" and value after "Anak ke"
 _F_SAUDARA_VAL = _frac(0.479, 0.345)
@@ -79,7 +79,7 @@ _F_ANAK_VAL    = _frac(0.730, 0.345)
 
 # Pengalaman Kerja (number prefix is pre-printed; text starts slightly right)
 _F_PENGALAMAN_1 = _frac(0.497, 0.368)
-_F_PENGALAMAN_2 = _frac(0.497, 0.389)
+_F_PENGALAMAN_2 = _frac(0.497, 0.390)
 
 # Section II — parents / spouse
 # "Umur" blank is between the pre-printed "Umur :" and "Tahun" labels.
@@ -87,10 +87,10 @@ _F_PENGALAMAN_2 = _frac(0.497, 0.389)
 _FX_UMUR   = 0.789
 _F_AYAH_NAME = _frac(0.479, 0.414)
 _F_AYAH_AGE  = _frac(_FX_UMUR, 0.414)   # age value in "Umur :" blank
-_F_PKJ_AYAH  = _frac(0.479, 0.436)
-_F_IBU_NAME  = _frac(0.479, 0.458)
-_F_IBU_AGE   = _frac(_FX_UMUR, 0.458)   # age value in "Umur :" blank
-_F_PKJ_IBU   = _frac(0.479, 0.479)
+_F_PKJ_AYAH  = _frac(0.479, 0.437)
+_F_IBU_NAME  = _frac(0.479, 0.459)
+_F_IBU_AGE   = _frac(_FX_UMUR, 0.459)   # age value in "Umur :" blank
+_F_PKJ_IBU   = _frac(0.479, 0.481)
 _F_ALAMAT_KEL = _frac(0.479, 0.504)
 _F_KOTA_KEL   = _frac(0.479, 0.525)
 _F_NOHP_KEL   = _frac(0.479, 0.547)
@@ -143,6 +143,38 @@ def _work_exp_summary(exp) -> str:
     if period:
         parts.append(f"({period})")
     return "  ·  ".join(parts)
+
+
+def _read_field_file_bytes(field_file) -> bytes | None:
+    """
+    Read raw bytes from a Django FieldFile, working for both storage backends:
+
+    • Local FileSystemStorage (development): resolves field_file.path to an
+      absolute disk path and uses plain Python open() — no storage-layer
+      abstraction, reliably reads the file.
+
+    • Remote storage (DigitalOcean Spaces / S3 in production): field_file.path
+      raises NotImplementedError, so we fall back to the Django storage API
+      (field_file.open / read / close).
+    """
+    # ── Local storage: use the absolute filesystem path directly ────────────
+    try:
+        abs_path = field_file.path   # NotImplementedError on S3/Spaces
+        with open(abs_path, "rb") as f:
+            return f.read()
+    except NotImplementedError:
+        pass   # remote storage — try the storage API below
+    except OSError:
+        return None   # path resolved but file missing on disk
+
+    # ── Remote storage (S3 / DigitalOcean Spaces) ───────────────────────────
+    try:
+        field_file.open("rb")
+        data = field_file.read()
+        field_file.close()
+        return data
+    except Exception:
+        return None
 
 
 def _draw_debug_grid(c: canvas.Canvas, fields: dict):
@@ -288,9 +320,8 @@ def generate_biodata_pdf(profile) -> bytes:
 
     # ── 5. Photo ──────────────────────────────────────────────────────────────
     if profile.photo and profile.photo.name:
-        try:
-            with profile.photo.open("rb") as photo_file:
-                photo_data = photo_file.read()
+        photo_data = _read_field_file_bytes(profile.photo)
+        if photo_data:
             photo_bytes    = io.BytesIO(photo_data)
             photo_x        = _FX_PHOTO * PAGE_W
             photo_y_bottom = (1.0 - _FY_PHOTO) * PAGE_H - PHOTO_H_PT
@@ -303,8 +334,6 @@ def generate_biodata_pdf(profile) -> bytes:
                 preserveAspectRatio=True,
                 anchor="nw",
             )
-        except Exception:
-            pass
 
     # ── 6. Debug grid ─────────────────────────────────────────────────────────
     if DEBUG_GRID:

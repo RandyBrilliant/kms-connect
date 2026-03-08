@@ -62,6 +62,7 @@ from .api_responses import (
 )
 from .services.export import generate_applicants_excel
 from .services.biodata_pdf import generate_biodata_pdf
+from .services.inbond_pdf import generate_inbond_pdf
 from .services.notification_delivery import send_broadcast
 from .services.notification_recipients import get_recipient_count, validate_recipient_config
 
@@ -1322,6 +1323,46 @@ class AdminBiodataPdfView(APIView):
 
         safe_name = (applicant.user.full_name or "biodata").replace(" ", "_")
         filename = f"Biodata_{safe_name}.pdf"
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'inline; filename="{filename}"'
+        return response
+
+
+# ---------------------------------------------------------------------------
+# Inbond Cost PDF
+# ---------------------------------------------------------------------------
+
+class AdminInbondPdfView(APIView):
+    """
+    Generate the Tanda Terima Pengembalian Biaya Transportasi CPMI (Inbond Cost) PDF.
+    Admin-only.
+    GET /api/applicants/<pk>/inbond-pdf/
+    """
+
+    permission_classes = [IsBackofficeAdmin]
+
+    def get(self, request, pk):
+        applicant = get_object_or_404(
+            ApplicantProfile.objects.select_related(
+                "user",
+                "birth_place",
+                "district",
+            ).prefetch_related("job_applications__job__company"),
+            user__id=pk,
+        )
+        try:
+            pdf_bytes = generate_inbond_pdf(applicant)
+        except Exception as e:
+            return Response(
+                error_response(
+                    detail=f"Gagal membuat PDF: {str(e)}",
+                    code=ApiCode.INTERNAL_ERROR,
+                ),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        safe_name = (applicant.user.full_name or "cpmi").replace(" ", "_")
+        filename = f"InbondCost_{safe_name}.pdf"
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
         response["Content-Disposition"] = f'inline; filename="{filename}"'
         return response

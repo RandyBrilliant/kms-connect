@@ -13,7 +13,6 @@ import '../../../notifications/data/providers/notification_provider.dart';
 import '../../../notifications/data/providers/notification_settings_provider.dart';
 import '../../data/providers/profile_provider.dart';
 import '../../domain/models/applicant_profile.dart';
-
 // 
 // Page
 // 
@@ -101,6 +100,19 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
     if (mounted) context.go('/login');
   }
 
+  Future<void> _handleViewBiodataPdf() async {
+    final ok = await ref.read(biodataPdfProvider.notifier).open();
+    if (!ok && mounted) {
+      final err = ref.read(biodataPdfProvider).error ?? 'Gagal membuka PDF.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(err),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
@@ -108,6 +120,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
     final docsAsync = ref.watch(myDocumentsProvider);
     final notifState = ref.watch(notificationProvider);
     final workExpState = ref.watch(workExperienceNotifierProvider);
+    final pdfState = ref.watch(biodataPdfProvider);
     final cs = Theme.of(context).colorScheme;
     final size = MediaQuery.sizeOf(context);
 
@@ -229,6 +242,27 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                 ),
 
                 const SliverToBoxAdapter(child: SizedBox(height: 8)),
+
+                //  PDF Biodata (only visible when application accepted)
+                if (profile?.verificationStatus == 'ACCEPTED')
+                  SliverToBoxAdapter(
+                    child: _animated(
+                      _MenuSection(
+                        label: 'Dokumen Saya',
+                        items: [
+                          _BiodataPdfItem(
+                            isLoading: pdfState.isLoading,
+                            onTap: _handleViewBiodataPdf,
+                          ),
+                        ],
+                      ),
+                      0.50,
+                      0.78,
+                    ),
+                  ),
+
+                if (profile?.verificationStatus == 'ACCEPTED')
+                  const SliverToBoxAdapter(child: SizedBox(height: 8)),
 
                 //  Akun 
                 SliverToBoxAdapter(
@@ -762,8 +796,7 @@ class _CircleIconBtn extends StatelessWidget {
   }
 }
 
-class _VerificationBadge extends StatelessWidget {
-  const _VerificationBadge({required this.status, required this.label});
+class _VerificationBadge extends StatelessWidget {  const _VerificationBadge({required this.status, required this.label});
 
   final String status;
   final String label;
@@ -813,6 +846,71 @@ class _VerificationBadge extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// 
+// _BiodataPdfItem — PDF download row, only shown when status == ACCEPTED
+// 
+
+class _BiodataPdfItem extends StatelessWidget {
+  const _BiodataPdfItem({required this.isLoading, required this.onTap});
+
+  final bool isLoading;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: isLoading ? null : onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: const Color(0xFFD1FAE5),
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: isLoading
+                  ? const Padding(
+                      padding: EdgeInsets.all(10),
+                      child: CircularProgressIndicator(strokeWidth: 2.5),
+                    )
+                  : const Icon(
+                      Icons.picture_as_pdf_outlined,
+                      color: Color(0xFF065F46),
+                      size: 20,
+                    ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Biodata PDF',
+                    style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  Text(
+                    isLoading ? 'Mengunduh…' : 'Lihat biodata CPMI kamu',
+                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+            if (!isLoading)
+              Icon(Icons.chevron_right_rounded,
+                  size: 20, color: cs.onSurfaceVariant),
+          ],
+        ),
       ),
     );
   }
