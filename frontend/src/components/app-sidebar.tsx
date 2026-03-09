@@ -11,6 +11,7 @@ import {
   IconUsersGroup,
   IconSend,
   IconChartBar,
+  IconTrash,
 } from "@tabler/icons-react"
 
 import { useAuth } from "@/hooks/use-auth"
@@ -65,6 +66,7 @@ function getNavItems(basePath: string, role?: string) {
     { title: "Kirim Broadcast", url: `${basePath}/broadcasts`, icon: IconSend },
     { title: "Chat", url: `${basePath}/chat`, icon: IconMessage },
     { title: "Laporan", url: `${basePath}/laporan`, icon: IconChartBar },
+    { title: "Hapus Akun", url: `${basePath}/hapus-akun`, icon: IconTrash },
   ]
 }
 

@@ -27,6 +27,7 @@ from .models import (
     NotificationPreference,
     NotificationType,
     NotificationPriority,
+    AccountDeletionRequest,
 )
 from .api_responses import (
     ApiMessage,
@@ -1184,3 +1185,57 @@ class NotificationPreferenceSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "updated_at"]
+
+
+# ---------------------------------------------------------------------------
+# Account Deletion Request
+# ---------------------------------------------------------------------------
+
+class AccountDeletionRequestSerializer(serializers.ModelSerializer):
+    """
+    Serializer for AccountDeletionRequest.
+
+    - Applicants: create (POST) and read their own request; can cancel via action.
+    - Admins: read list, retrieve, approve/reject with admin_notes.
+    """
+
+    user_email = serializers.EmailField(source="user.email", read_only=True)
+    user_full_name = serializers.CharField(source="user.full_name", read_only=True)
+    user_role = serializers.CharField(source="user.role", read_only=True)
+    reviewed_by_email = serializers.EmailField(source="reviewed_by.email", read_only=True, default=None)
+
+    class Meta:
+        model = AccountDeletionRequest
+        fields = [
+            "id",
+            "user",
+            "user_email",
+            "user_full_name",
+            "user_role",
+            "reason",
+            "status",
+            "requested_at",
+            "reviewed_at",
+            "reviewed_by",
+            "reviewed_by_email",
+            "admin_notes",
+        ]
+        read_only_fields = [
+            "id",
+            "user",
+            "user_email",
+            "user_full_name",
+            "user_role",
+            "status",
+            "requested_at",
+            "reviewed_at",
+            "reviewed_by",
+            "reviewed_by_email",
+        ]
+
+    def validate(self, attrs):
+        # Admin-only fields must not be set by applicants
+        request = self.context.get("request")
+        if request and request.user.role != UserRole.ADMIN:
+            attrs.pop("admin_notes", None)
+        return attrs

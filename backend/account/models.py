@@ -2321,3 +2321,75 @@ class EmailVerificationCode(models.Model):
             user.save(update_fields=["email_verified", "email_verified_at"])
 
         return user
+
+
+# ---------------------------------------------------------------------------
+# Account Deletion Requests
+# ---------------------------------------------------------------------------
+
+class AccountDeletionRequest(models.Model):
+    """
+    Permintaan penghapusan akun yang diajukan oleh pengguna.
+    Admin harus menyetujui sebelum akun benar-benar dihapus.
+    """
+
+    class DeletionStatus(models.TextChoices):
+        PENDING = "PENDING", _("Menunggu Konfirmasi")
+        APPROVED = "APPROVED", _("Disetujui")
+        REJECTED = "REJECTED", _("Ditolak")
+        CANCELLED = "CANCELLED", _("Dibatalkan")
+
+    DELETION_STATUS_MAX_LENGTH = 9  # CANCELLED
+
+    user = models.OneToOneField(
+        CustomUser,
+        on_delete=models.CASCADE,
+        related_name="deletion_request",
+        verbose_name=_("pengguna"),
+        help_text=_("Pengguna yang mengajukan penghapusan akun."),
+    )
+    reason = models.TextField(
+        _("alasan"),
+        blank=True,
+        help_text=_("Alasan penghapusan akun (opsional, diisi oleh pengguna)."),
+    )
+    status = models.CharField(
+        _("status"),
+        max_length=DELETION_STATUS_MAX_LENGTH,
+        choices=DeletionStatus.choices,
+        default=DeletionStatus.PENDING,
+        db_index=True,
+    )
+    requested_at = models.DateTimeField(_("diminta pada"), auto_now_add=True, db_index=True)
+    reviewed_at = models.DateTimeField(
+        _("ditinjau pada"),
+        null=True,
+        blank=True,
+        help_text=_("Waktu admin meninjau permintaan ini."),
+    )
+    reviewed_by = models.ForeignKey(
+        CustomUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reviewed_deletion_requests",
+        limit_choices_to={"role": UserRole.ADMIN},
+        verbose_name=_("ditinjau oleh"),
+        help_text=_("Admin yang menyetujui atau menolak permintaan."),
+    )
+    admin_notes = models.TextField(
+        _("catatan admin"),
+        blank=True,
+        help_text=_("Catatan internal admin (alasan penolakan, catatan khusus)."),
+    )
+
+    class Meta:
+        verbose_name = _("permintaan penghapusan akun")
+        verbose_name_plural = _("permintaan penghapusan akun")
+        ordering = ["-requested_at"]
+        indexes = [
+            models.Index(fields=["status", "requested_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user.email} – {self.get_status_display()} ({self.requested_at:%Y-%m-%d})"

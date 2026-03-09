@@ -52,6 +52,8 @@ const AdminJobDetailPage = lazy(() => import("@/pages/admin-job-detail-page").th
 const AdminBatchFormPage = lazy(() => import("@/pages/admin-batch-form-page").then(m => ({ default: m.AdminBatchFormPage })))
 const AdminChatPage = lazy(() => import("@/pages/admin-chat-page").then(m => ({ default: m.AdminChatPage })))
 const PrivacyPolicyPage = lazy(() => import("@/pages/privacy-policy-page").then(m => ({ default: m.PrivacyPolicyPage })))
+const AccountDeletionPage = lazy(() => import("@/pages/account-deletion-page").then(m => ({ default: m.AccountDeletionPage })))
+const AdminDeletionRequestsPage = lazy(() => import("@/pages/admin-deletion-requests-page").then(m => ({ default: m.AdminDeletionRequestsPage })))
 
 // Loading fallback component
 function PageLoader() {
@@ -116,6 +118,7 @@ function AppRoutes() {
           <Route path="/verify-email" element={<VerifyEmailPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/privacy" element={<PrivacyPolicyPage />} />
+          <Route path="/delete-account" element={<AccountDeletionPage />} />
       <Route
         path="/"
         element={
@@ -155,6 +158,7 @@ function AppRoutes() {
         <Route path="chat" element={<AdminChatPage />} />
         <Route path="notifikasi" element={<NotificationsPage />} />
         <Route path="notifikasi/preferensi" element={<NotificationPreferencesPage />} />
+        <Route path="hapus-akun" element={<AdminDeletionRequestsPage />} />
         <Route path="profil" element={<ProfilePage />} />
       </Route>
       <Route

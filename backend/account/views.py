@@ -33,6 +33,7 @@ from .models import (
     Broadcast,
     Notification,
     NotificationPreference,
+    AccountDeletionRequest,
 )
 from .permissions import IsBackofficeAdmin, IsApplicant
 from .throttles import AuthPublicRateThrottle
@@ -53,6 +54,7 @@ from .serializers import (
     NotificationSerializer,
     BroadcastSerializer,
     NotificationPreferenceSerializer,
+    AccountDeletionRequestSerializer,
 )
 from .api_responses import (
     ApiCode,
@@ -1686,5 +1688,192 @@ def unregister_fcm_token(request):
                 status_code=status.HTTP_404_NOT_FOUND,
             ),
             status=status.HTTP_404_NOT_FOUND
+        )
+
+
+# ---------------------------------------------------------------------------
+# Account Deletion Requests
+# ---------------------------------------------------------------------------
+
+class AccountDeletionRequestViewSet(viewsets.GenericViewSet):
+    """
+    Admin CRUD + applicant self-service for account deletion requests.
+
+    Admin endpoints (require IsBackofficeAdmin):
+      GET    /api/deletion-requests/          – list all requests (filterable by status)
+      GET    /api/deletion-requests/<id>/     – retrieve one request
+      POST   /api/deletion-requests/<id>/approve/ – approve (triggers user deactivation)
+      POST   /api/deletion-requests/<id>/reject/  – reject with notes
+
+    Applicant self-service (require IsAuthenticated + IsApplicant):
+      POST   /api/deletion-requests/              – submit own request
+      GET    /api/deletion-requests/my/           – view own request
+      POST   /api/deletion-requests/my/cancel/    – cancel own pending request
+    """
+
+    serializer_class = AccountDeletionRequestSerializer
+
+    def get_permissions(self):
+        if self.action in ("my_request", "submit", "cancel"):
+            return [IsAuthenticated(), IsApplicant()]
+        return [IsBackofficeAdmin()]
+
+    # ------------------------------------------------------------------ admin
+
+    def list(self, request):
+        """GET /api/deletion-requests/ — admin list, filterable by ?status=PENDING"""
+        qs = (
+            AccountDeletionRequest.objects
+            .select_related("user", "reviewed_by")
+            .order_by("-requested_at")
+        )
+        status_filter = request.query_params.get("status")
+        if status_filter:
+            qs = qs.filter(status=status_filter.upper())
+        search = request.query_params.get("search")
+        if search:
+            qs = qs.filter(
+                Q(user__email__icontains=search) | Q(user__full_name__icontains=search)
+            )
+        serializer = self.get_serializer(qs, many=True)
+        return Response(success_response(data=serializer.data), status=status.HTTP_200_OK)
+
+    def retrieve(self, request, pk=None):
+        """GET /api/deletion-requests/<id>/ — admin retrieve"""
+        obj = get_object_or_404(
+            AccountDeletionRequest.objects.select_related("user", "reviewed_by"), pk=pk
+        )
+        return Response(success_response(data=self.get_serializer(obj).data))
+
+    @action(detail=True, methods=["post"], url_path="approve")
+    def approve(self, request, pk=None):
+        """POST /api/deletion-requests/<id>/approve/ — admin approves → deactivates user"""
+        obj = get_object_or_404(AccountDeletionRequest, pk=pk)
+        if obj.status != AccountDeletionRequest.DeletionStatus.PENDING:
+            return Response(
+                error_response(
+                    detail=ApiMessage.DELETION_REQUEST_NOT_PENDING,
+                    code=ApiCode.DELETION_REQUEST_NOT_PENDING,
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        admin_notes = request.data.get("admin_notes", "")
+        obj.status = AccountDeletionRequest.DeletionStatus.APPROVED
+        obj.reviewed_by = request.user
+        obj.reviewed_at = timezone.now()
+        obj.admin_notes = admin_notes
+        obj.save(update_fields=["status", "reviewed_by", "reviewed_at", "admin_notes"])
+
+        # Deactivate the account immediately; actual data deletion follows
+        # after retention period (handled manually or via scheduled task).
+        user = obj.user
+        user.is_active = False
+        user.save(update_fields=["is_active"])
+
+        return Response(
+            success_response(
+                data=self.get_serializer(obj).data,
+                detail=ApiMessage.DELETION_REQUEST_APPROVED,
+                code=ApiCode.DELETION_REQUEST_APPROVED,
+            ),
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["post"], url_path="reject")
+    def reject(self, request, pk=None):
+        """POST /api/deletion-requests/<id>/reject/ — admin rejects"""
+        obj = get_object_or_404(AccountDeletionRequest, pk=pk)
+        if obj.status != AccountDeletionRequest.DeletionStatus.PENDING:
+            return Response(
+                error_response(
+                    detail=ApiMessage.DELETION_REQUEST_NOT_PENDING,
+                    code=ApiCode.DELETION_REQUEST_NOT_PENDING,
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        admin_notes = request.data.get("admin_notes", "")
+        obj.status = AccountDeletionRequest.DeletionStatus.REJECTED
+        obj.reviewed_by = request.user
+        obj.reviewed_at = timezone.now()
+        obj.admin_notes = admin_notes
+        obj.save(update_fields=["status", "reviewed_by", "reviewed_at", "admin_notes"])
+        return Response(
+            success_response(
+                data=self.get_serializer(obj).data,
+                detail=ApiMessage.DELETION_REQUEST_REJECTED,
+                code=ApiCode.DELETION_REQUEST_REJECTED,
+            ),
+            status=status.HTTP_200_OK,
+        )
+
+    # -------------------------------------------------------- applicant self-service
+
+    @action(detail=False, methods=["post"], url_path="submit")
+    def submit(self, request):
+        """POST /api/deletion-requests/submit/ — applicant submits own request"""
+        if AccountDeletionRequest.objects.filter(
+            user=request.user,
+            status=AccountDeletionRequest.DeletionStatus.PENDING,
+        ).exists():
+            return Response(
+                error_response(
+                    detail=ApiMessage.DELETION_REQUEST_ALREADY_PENDING,
+                    code=ApiCode.DELETION_REQUEST_ALREADY_PENDING,
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        # Replace any previous non-pending request
+        AccountDeletionRequest.objects.filter(user=request.user).delete()
+        obj = AccountDeletionRequest.objects.create(
+            user=request.user,
+            reason=request.data.get("reason", ""),
+        )
+        return Response(
+            success_response(
+                data=self.get_serializer(obj).data,
+                detail=ApiMessage.DELETION_REQUEST_SUBMITTED,
+                code=ApiCode.DELETION_REQUEST_SUBMITTED,
+            ),
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=False, methods=["get"], url_path="my")
+    def my_request(self, request):
+        """GET /api/deletion-requests/my/ — applicant views own request"""
+        try:
+            obj = AccountDeletionRequest.objects.get(user=request.user)
+        except AccountDeletionRequest.DoesNotExist:
+            return Response(success_response(data=None), status=status.HTTP_200_OK)
+        return Response(success_response(data=self.get_serializer(obj).data))
+
+    @action(detail=False, methods=["post"], url_path="my/cancel")
+    def cancel(self, request):
+        """POST /api/deletion-requests/my/cancel/ — applicant cancels own pending request"""
+        try:
+            obj = AccountDeletionRequest.objects.get(
+                user=request.user,
+                status=AccountDeletionRequest.DeletionStatus.PENDING,
+            )
+        except AccountDeletionRequest.DoesNotExist:
+            return Response(
+                error_response(
+                    detail=ApiMessage.DELETION_REQUEST_NOT_FOUND,
+                    code=ApiCode.DELETION_REQUEST_NOT_FOUND,
+                    status_code=status.HTTP_404_NOT_FOUND,
+                ),
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        obj.status = AccountDeletionRequest.DeletionStatus.CANCELLED
+        obj.save(update_fields=["status"])
+        return Response(
+            success_response(
+                data=self.get_serializer(obj).data,
+                detail=ApiMessage.DELETION_REQUEST_CANCELLED,
+                code=ApiCode.DELETION_REQUEST_CANCELLED,
+            ),
+            status=status.HTTP_200_OK,
         )
 

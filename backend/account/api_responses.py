@@ -42,6 +42,15 @@ class ApiCode:
     NIK_TAKEN = "nik_taken"
     NIK_INVALID = "nik_invalid"
 
+    # Account deletion
+    DELETION_REQUEST_SUBMITTED = "deletion_request_submitted"
+    DELETION_REQUEST_CANCELLED = "deletion_request_cancelled"
+    DELETION_REQUEST_APPROVED = "deletion_request_approved"
+    DELETION_REQUEST_REJECTED = "deletion_request_rejected"
+    DELETION_REQUEST_ALREADY_PENDING = "deletion_request_already_pending"
+    DELETION_REQUEST_NOT_FOUND = "deletion_request_not_found"
+    DELETION_REQUEST_NOT_PENDING = "deletion_request_not_pending"
+
 
 # ---------------------------------------------------------------------------
 # Pesan (Indonesian) – satu sumber kebenaran
@@ -78,6 +87,15 @@ class ApiMessage:
     NIK_TAKEN = "NIK ini sudah terdaftar untuk pelamar lain."
     NIK_INVALID = "NIK harus 16 digit angka."
     WORK_EXPERIENCE_LIMIT = "Pelamar hanya dapat memiliki maksimal 2 pengalaman kerja."
+
+    # Account deletion
+    DELETION_REQUEST_SUBMITTED = "Permintaan penghapusan akun berhasil diajukan. Admin akan meninjau dalam 7 hari kerja."
+    DELETION_REQUEST_CANCELLED = "Permintaan penghapusan akun berhasil dibatalkan."
+    DELETION_REQUEST_APPROVED = "Permintaan penghapusan akun disetujui. Akun dan data terkait akan dihapus."
+    DELETION_REQUEST_REJECTED = "Permintaan penghapusan akun ditolak."
+    DELETION_REQUEST_ALREADY_PENDING = "Anda sudah memiliki permintaan penghapusan akun yang sedang menunggu konfirmasi."
+    DELETION_REQUEST_NOT_FOUND = "Permintaan penghapusan akun tidak ditemukan."
+    DELETION_REQUEST_NOT_PENDING = "Permintaan ini tidak dalam status menunggu konfirmasi."
 
 
 # ---------------------------------------------------------------------------
