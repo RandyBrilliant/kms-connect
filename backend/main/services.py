@@ -397,6 +397,40 @@ class ApplicationService:
             for app in created_applications
         ])
 
+        # bulk_create does NOT fire post_save signals, so we dispatch
+        # APPLICATION_ASSIGNED notifications manually for each new applicant.
+        try:
+            from account.services.notification_dispatcher import dispatch, build_application_context
+            from account.services.notification_events import NotificationEvent
+
+            # Reload with all related objects needed for context in one query
+            loaded_apps = (
+                JobApplication.objects
+                .filter(pk__in=[app.pk for app in created_applications])
+                .select_related("job__company", "batch", "applicant__user",
+                                "applicant__user__notification_preference")
+            )
+            for app in loaded_apps:
+                user = app.applicant.user
+                if not user or not user.is_active:
+                    continue
+                ctx = build_application_context(app)
+                ctx["user_name"] = user.full_name or user.email
+                dispatch(
+                    event=NotificationEvent.APPLICATION_ASSIGNED,
+                    user=user,
+                    context=ctx,
+                    action_url=f"/lamaran/{app.pk}",
+                    action_label="Lihat Detail",
+                    deduplicate=False,
+                )
+        except Exception:
+            # Notification failure must never break the assignment transaction
+            import logging
+            logging.getLogger(__name__).exception(
+                "Failed to send APPLICATION_ASSIGNED notifications for batch %s", batch.pk
+            )
+
         return BatchAssignResult(assigned=list(created_applications), skipped=skipped)
 
     @classmethod

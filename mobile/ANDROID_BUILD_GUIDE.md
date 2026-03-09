@@ -14,6 +14,19 @@ Panduan lengkap untuk membuat APK Android dari aplikasi KMS Connect untuk keperl
 6. [Distribusi APK ke Klien](#6-distribusi-apk-ke-klien)
 7. [Instruksi untuk Klien](#7-instruksi-untuk-klien)
 8. [Troubleshooting](#8-troubleshooting)
+9. [Deploy ke Google Play Store](#9-deploy-ke-google-play-store)
+   - [9.1 Prasyarat Play Store](#91-prasyarat-play-store)
+   - [9.2 Build Android App Bundle (AAB)](#92-build-android-app-bundle-aab--format-wajib-play-store)
+   - [9.3 Tambahkan SHA-1 Release ke Firebase](#93-tambahkan-sha-1-release-ke-firebase)
+   - [9.4 Persiapan Aset Play Store](#94-persiapan-aset-play-store)
+   - [9.5 Membuat Aplikasi di Play Console](#95-membuat-aplikasi-di-play-console)
+   - [9.6 Mengisi Store Listing](#96-mengisi-store-listing)
+   - [9.7 Melengkapi Informasi Wajib](#97-melengkapi-informasi-wajib)
+   - [9.8 Upload AAB ke Internal Testing](#98-upload-aab-ke-internal-testing-direkomendasikan-sebagai-langkah-pertama)
+   - [9.9 Promosi ke Production](#99-promosi-ke-production)
+   - [9.10 App Signing by Google Play](#910-app-signing-by-google-play-opsional-tapi-direkomendasikan)
+   - [9.11 Update Aplikasi](#911-update-aplikasi-rilis-selanjutnya)
+   - [9.12 Checklist Sebelum Submit](#912-checklist-sebelum-submit-ke-play-store)
 
 ---
 
@@ -373,4 +386,250 @@ flutter build apk --release --split-per-abi
 
 # 4. APK siap di:
 # build\app\outputs\flutter-apk\app-arm64-v8a-release.apk
+```
+
+---
+
+## 9. Deploy ke Google Play Store
+
+Bagian ini memandu proses lengkap dari persiapan hingga aplikasi live di Play Store.
+
+---
+
+### 9.1 Prasyarat Play Store
+
+| Kebutuhan | Keterangan |
+|---|---|
+| Google Play Developer Account | Biaya pendaftaran satu kali **USD 25** |
+| Keystore Release (`.jks`) | Sudah dibuat di [section 4.1](#41-buat-keystore-satu-kali-saja) |
+| App Icon 512×512 px | PNG, tanpa transparansi |
+| Screenshot perangkat | Min. 2 screenshot per form factor (phone wajib) |
+| Koneksi ke backend production | `API_BASE_URL` harus URL production, bukan localhost |
+
+Daftar Google Play Developer Account di: https://play.google.com/console/signup
+
+---
+
+### 9.2 Build Android App Bundle (AAB) — Format Wajib Play Store
+
+Play Store **tidak menerima APK biasa** untuk aplikasi baru sejak Agustus 2021. Format yang diperlukan adalah **AAB (Android App Bundle)**.
+
+Pastikan keystore release sudah dikonfigurasi ([section 4.2](#42-buat-file-keyproperties) & [4.3](#43-update-androidappbuildgradlekts)), lalu:
+
+```powershell
+cd C:\Users\randy\Documents\programming\kms-connect\mobile
+
+# Bersihkan build sebelumnya
+flutter clean
+flutter pub get
+
+# Build AAB release
+flutter build appbundle --release
+```
+
+Output: `build\app\outputs\bundle\release\app-release.aab`
+
+> ✅ File `.aab` inilah yang diupload ke Play Console, bukan `.apk`.
+
+---
+
+### 9.3 Tambahkan SHA-1 Release ke Firebase
+
+Google Sign-In di production memerlukan SHA-1 dari **release keystore** (bukan debug keystore).
+
+```powershell
+keytool -list -v `
+  -keystore C:\Users\randy\kmsconnect-release.jks `
+  -alias kmsconnect `
+  -storepass PASSWORD_KEYSTORE_ANDA
+```
+
+Copy nilai **SHA-1** dari output, lalu:
+
+1. Buka [Firebase Console](https://console.firebase.google.com) → Project KMS Connect
+2. **Project Settings** → tab **Your apps** → pilih Android app (`id.kmsconnect.app`)
+3. Klik **Add fingerprint** → paste SHA-1 release → Save
+4. Download ulang `google-services.json` → ganti file di `android/app/google-services.json`
+5. Rebuild AAB
+
+---
+
+### 9.4 Persiapan Aset Play Store
+
+Siapkan aset berikut sebelum membuat listing:
+
+#### App Icon
+- Ukuran: **512 × 512 px**, format PNG, background tidak transparan
+- Bisa export dari Figma atau tools desain lainnya
+
+#### Screenshots (wajib untuk Phone)
+- Ukuran: min. 320 px, maks. 3840 px per sisi; rasio 16:9 atau 9:16
+- Minimal **2 screenshot**, maksimal 8 per perangkat
+- Kategori perangkat: **Phone** (wajib), Tablet, Chromebook (opsional)
+
+#### Feature Graphic (opsional, namun direkomendasikan)
+- Ukuran: **1024 × 500 px**, format PNG atau JPG
+
+#### Cara cepat ambil screenshot dari emulator:
+```powershell
+# Jalankan app di emulator lalu screenshot via adb
+adb exec-out screencap -p > screenshot1.png
+```
+
+---
+
+### 9.5 Membuat Aplikasi di Play Console
+
+1. Buka [Google Play Console](https://play.google.com/console)
+2. Klik **Create app**
+3. Isi form:
+   - **App name**: KMS Connect
+   - **Default language**: Indonesian
+   - **App or game**: App
+   - **Free or paid**: sesuaikan
+4. Centang semua pernyataan Developer Program Policy → **Create app**
+
+---
+
+### 9.6 Mengisi Store Listing
+
+Navigasi ke: **Play Console → App → Store presence → Main store listing**
+
+| Field | Isi |
+|---|---|
+| App name | KMS Connect |
+| Short description | Maks. 80 karakter — ringkasan singkat aplikasi |
+| Full description | Maks. 4000 karakter — deskripsi lengkap fitur |
+| App icon | Upload PNG 512×512 |
+| Feature graphic | Upload PNG 1024×500 (jika ada) |
+| Phone screenshots | Upload min. 2 screenshot |
+
+Klik **Save**.
+
+---
+
+### 9.7 Melengkapi Informasi Wajib
+
+Sebelum bisa publish, Play Console meminta beberapa informasi tambahan:
+
+#### a) App content → Privacy Policy
+- URL ke halaman Privacy Policy wajib diisi
+- Jika belum punya, buat halaman statis sederhana di backend atau Notion dan masukkan URL-nya
+
+#### b) App content → Target audience
+- Tentukan target usia pengguna
+- Jika **bukan** untuk anak-anak, pilih **13 and over** atau **18 and over**
+
+#### c) App content → Content rating
+1. Play Console → **App content** → **Content ratings**
+2. Klik **Start questionnaire**
+3. Masukkan email kontak → pilih kategori app → jawab kuesioner
+4. Submit → rating akan otomatis diberikan (biasanya **Everyone** atau **Teen**)
+
+#### d) App access
+- Jika app memerlukan login, beri tahu Google cara mengakses:
+  - **App access** → **All or most functionality is restricted** → tambahkan instruksi login dan akun demo jika ada
+
+---
+
+### 9.8 Upload AAB ke Internal Testing (Direkomendasikan sebagai Langkah Pertama)
+
+Mulai dari **Internal Testing** sebelum langsung ke Production — lebih cepat diproses (biasanya menit, bukan hari).
+
+1. Play Console → **Testing** → **Internal testing** → **Create new release**
+2. Klik **Upload** → pilih `build\app\outputs\bundle\release\app-release.aab`
+3. Isi **Release name** (contoh: `1.0.0`) dan **Release notes**:
+   ```
+   - Rilis perdana KMS Connect
+   - Fitur: login, dashboard, notifikasi push
+   ```
+4. Klik **Save** → **Review release** → **Start rollout to Internal testing**
+
+#### Tambahkan tester internal:
+- **Internal testing** → tab **Testers** → **Create email list**
+- Tambahkan email tester (akun Google)
+- Bagikan link opt-in ke tester
+
+---
+
+### 9.9 Promosi ke Production
+
+Setelah testing di internal/closed testing selesai dan tidak ada bug kritis:
+
+1. Play Console → **Production** → **Create new release**
+2. Pilih AAB yang sudah pernah diupload (dari internal testing) atau upload ulang
+3. Isi release notes (ini yang dilihat pengguna di Play Store)
+4. **Review release** → **Start rollout to production**
+
+> ⏳ Review Google memakan waktu **beberapa jam hingga 3 hari kerja** untuk rilis pertama. Setelah approved, app akan live di Play Store.
+
+---
+
+### 9.10 App Signing by Google Play (Opsional tapi Direkomendasikan)
+
+Google Play menawarkan fitur **Play App Signing** di mana Google menyimpan signing key utama dan menandatangani ulang APK yang dikirimkan ke pengguna.
+
+**Keuntungan:**
+- Jika keystore lokal hilang, app masih bisa diupdate
+- Ukuran APK yang diterima pengguna bisa lebih kecil
+
+**Cara mengaktifkan:**
+- Saat pertama kali membuat release, Play Console akan menawarkan untuk ikut di App Signing
+- Pilih **Use Google Play's app signing key** → ikuti wizard
+
+> 🔑 Jika mengaktifkan Play App Signing, SHA-1 yang perlu didaftarkan di Firebase adalah **SHA-1 dari Google Play App Signing certificate**, bukan dari keystore lokal.  
+> Dapatkan dari: Play Console → **Setup** → **App signing** → salin SHA-1 di bagian *App signing key certificate*.
+
+---
+
+### 9.11 Update Aplikasi (Rilis Selanjutnya)
+
+Setiap kali merilis update:
+
+1. **Naikkan versionCode** di `mobile/pubspec.yaml` (wajib, harus lebih besar dari versi sebelumnya):
+   ```yaml
+   version: 1.0.1+2   # versionName+versionCode
+   ```
+
+2. Build AAB baru:
+   ```powershell
+   flutter clean
+   flutter pub get
+   flutter build appbundle --release
+   ```
+
+3. Upload ke Play Console → buat release baru di track yang diinginkan
+
+---
+
+### 9.12 Checklist Sebelum Submit ke Play Store
+
+```
+[ ] versionCode di pubspec.yaml sudah dinaikkan
+[ ] API_BASE_URL di .env mengarah ke backend production
+[ ] google-services.json sudah berisi SHA-1 dari release keystore
+[ ] App icon 512×512 sudah disiapkan
+[ ] Minimal 2 screenshot phone sudah disiapkan
+[ ] Privacy Policy URL sudah tersedia
+[ ] Content rating questionnaire sudah diisi
+[ ] AAB sudah berhasil di-build (flutter build appbundle --release)
+[ ] Tested di internal testing track sebelum ke production
+```
+
+---
+
+### Ringkasan Quick Deploy ke Play Store
+
+```powershell
+# 1. Naikkan versionCode di pubspec.yaml (misal: 1.0.0+1 → 1.0.1+2)
+# 2. Pastikan .env → API_BASE_URL ke production
+# 3. Build AAB
+cd C:\Users\randy\Documents\programming\kms-connect\mobile
+flutter clean ; flutter pub get
+flutter build appbundle --release
+
+# 4. AAB siap di:
+# build\app\outputs\bundle\release\app-release.aab
+
+# 5. Upload ke Google Play Console → buat release baru
 ```
