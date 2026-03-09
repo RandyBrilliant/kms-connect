@@ -117,13 +117,15 @@ Gunakan ini jika ingin distribusi yang lebih profesional atau jika rencana ke Pl
 ### 4.1 Buat Keystore (satu kali saja)
 
 ```powershell
-keytool -genkey -v `
+& "C:\Program Files\Android\Android Studio\jbr\bin\keytool.exe" -genkey -v `
   -keystore C:\Users\randy\kmsconnect-release.jks `
   -keyalg RSA `
   -keysize 2048 `
   -validity 10000 `
   -alias kmsconnect
 ```
+
+> ℹ️ `keytool` tidak ada di PATH secara default. Gunakan path lengkap ke JRE bawaan Android Studio di atas.
 
 Isi pertanyaan yang muncul:
 - `What is your first and last name?` → nama Anda / nama perusahaan
@@ -367,7 +369,10 @@ flutter build apk --release
 
 ```powershell
 # SHA-1 untuk debug keystore
-keytool -list -v -keystore "$env:USERPROFILE\.android\debug.keystore" -alias androiddebugkey -storepass android -keypass android
+& "C:\Program Files\Android\Android Studio\jbr\bin\keytool.exe" -list -v `
+  -keystore "$env:USERPROFILE\.android\debug.keystore" `
+  -alias androiddebugkey `
+  -storepass android -keypass android
 ```
 
 Copy SHA-1 → Firebase Console → Project Settings → Android app → Add fingerprint.
@@ -438,7 +443,7 @@ Output: `build\app\outputs\bundle\release\app-release.aab`
 Google Sign-In di production memerlukan SHA-1 dari **release keystore** (bukan debug keystore).
 
 ```powershell
-keytool -list -v `
+& "C:\Program Files\Android\Android Studio\jbr\bin\keytool.exe" -list -v `
   -keystore C:\Users\randy\kmsconnect-release.jks `
   -alias kmsconnect `
   -storepass PASSWORD_KEYSTORE_ANDA
@@ -514,7 +519,8 @@ Sebelum bisa publish, Play Console meminta beberapa informasi tambahan:
 
 #### a) App content → Privacy Policy
 - URL ke halaman Privacy Policy wajib diisi
-- Jika belum punya, buat halaman statis sederhana di backend atau Notion dan masukkan URL-nya
+- Halaman sudah tersedia di frontend: `https://kms-connect.com/privacy`
+- Masukkan URL tersebut di kolom Privacy Policy URL di Play Console
 
 #### b) App content → Target audience
 - Tentukan target usia pengguna

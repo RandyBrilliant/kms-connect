@@ -51,6 +51,7 @@ const AdminBatchDetailPage = lazy(() => import("@/pages/admin-batch-detail-page"
 const AdminJobDetailPage = lazy(() => import("@/pages/admin-job-detail-page").then(m => ({ default: m.AdminJobDetailPage })))
 const AdminBatchFormPage = lazy(() => import("@/pages/admin-batch-form-page").then(m => ({ default: m.AdminBatchFormPage })))
 const AdminChatPage = lazy(() => import("@/pages/admin-chat-page").then(m => ({ default: m.AdminChatPage })))
+const PrivacyPolicyPage = lazy(() => import("@/pages/privacy-policy-page").then(m => ({ default: m.PrivacyPolicyPage })))
 
 // Loading fallback component
 function PageLoader() {
@@ -114,6 +115,7 @@ function AppRoutes() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/verify-email" element={<VerifyEmailPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/privacy" element={<PrivacyPolicyPage />} />
       <Route
         path="/"
         element={
