@@ -53,6 +53,7 @@ const AdminBatchFormPage = lazy(() => import("@/pages/admin-batch-form-page").th
 const AdminChatPage = lazy(() => import("@/pages/admin-chat-page").then(m => ({ default: m.AdminChatPage })))
 const PrivacyPolicyPage = lazy(() => import("@/pages/privacy-policy-page").then(m => ({ default: m.PrivacyPolicyPage })))
 const AccountDeletionPage = lazy(() => import("@/pages/account-deletion-page").then(m => ({ default: m.AccountDeletionPage })))
+const DownloadAppPage = lazy(() => import("@/pages/download-app-page").then(m => ({ default: m.DownloadAppPage })))
 const AdminDeletionRequestsPage = lazy(() => import("@/pages/admin-deletion-requests-page").then(m => ({ default: m.AdminDeletionRequestsPage })))
 
 // Loading fallback component
@@ -119,6 +120,7 @@ function AppRoutes() {
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/privacy" element={<PrivacyPolicyPage />} />
           <Route path="/delete-account" element={<AccountDeletionPage />} />
+          <Route path="/download" element={<DownloadAppPage />} />
       <Route
         path="/"
         element={
