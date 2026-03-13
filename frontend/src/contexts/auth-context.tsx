@@ -4,7 +4,7 @@ import {
   useEffect,
   type ReactNode,
 } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useLocation } from "react-router-dom"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "@/lib/toast"
 import { login as loginApi, logout as logoutApi } from "@/api/auth"
@@ -32,8 +32,11 @@ export interface AuthContextValue extends AuthState {
 
 export const AuthContext = createContext<AuthContextValue | null>(null)
 
+const PUBLIC_PATHS = ["/login", "/verify-email", "/reset-password", "/privacy", "/delete-account", "/download"]
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate()
+  const location = useLocation()
   const queryClient = useQueryClient()
 
   // Use TanStack Query for user session management
@@ -91,9 +94,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     markSessionExpired()
     await queryClient.cancelQueries()
     queryClient.clear()
-    navigate("/login")
-    toast.error("Sesi berakhir", "Silakan login kembali")
-  }, [navigate, queryClient])
+    // Don't redirect if already on a public page (no session required)
+    if (!PUBLIC_PATHS.some(path => location.pathname.startsWith(path))) {
+      navigate("/login")
+      toast.error("Sesi berakhir", "Silakan login kembali")
+    }
+  }, [navigate, queryClient, location.pathname])
 
   // Register unauthorized callback for API interceptor
   useEffect(() => {
