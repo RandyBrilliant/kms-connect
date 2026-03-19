@@ -182,7 +182,7 @@ class _ApplicationDetailPageState
     final tt = Theme.of(context).textTheme;
 
     return SliverAppBar(
-      expandedHeight: 200,
+      expandedHeight: 220,
       pinned: true,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),

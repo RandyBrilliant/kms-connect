@@ -8,7 +8,6 @@ import 'core/widgets/custom_toast.dart';
 import 'features/auth/presentation/pages/splash_page.dart';
 import 'features/auth/presentation/pages/login_page.dart';
 import 'features/auth/presentation/pages/registration_page_new.dart';
-import 'features/auth/presentation/pages/google_complete_registration_page.dart';
 import 'features/auth/presentation/pages/email_verification_page.dart';
 import 'features/auth/presentation/pages/forgot_password_page.dart';
 import 'features/auth/presentation/pages/reset_password_page.dart';
@@ -91,21 +90,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       // Read current auth state at redirect-evaluation time.
       final authState = ref.read(authStateProvider);
       final isAuthenticated = authState.isAuthenticated;
-      final needsGoogleCompletion = authState.needsGoogleCompletion;
 
       // Pre-auth routes: login, register, and email verification.
       final isPreAuthRoute = loc == '/login' || loc == '/register' || loc.startsWith('/email-verification');
-      // The Google-completion page is special: authenticated but not yet done.
-      final isGoogleCompletionRoute = loc == '/google-complete';
 
       if (!isAuthenticated) {
-        // Unauthenticated users can only access pre-auth and completion routes.
-        return (isPreAuthRoute || isGoogleCompletionRoute) ? null : '/login';
-      }
-
-      // Authenticated user still needs to complete Google registration.
-      if (needsGoogleCompletion) {
-        return isGoogleCompletionRoute ? null : '/google-complete';
+        // Unauthenticated users can only access pre-auth routes.
+        return isPreAuthRoute ? null : '/login';
       }
 
       // Authenticated but email not verified — must verify before accessing app.
@@ -118,7 +109,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
 
       // Authenticated & complete — send away from pre-auth routes.
-      if (isPreAuthRoute || isGoogleCompletionRoute) {
+      if (isPreAuthRoute) {
         return '/home';
       }
 
@@ -156,11 +147,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/register',
         name: 'register',
         builder: (context, state) => const RegistrationPageNew(),
-      ),
-      GoRoute(
-        path: '/google-complete',
-        name: 'google-complete',
-        builder: (context, state) => const GoogleCompleteRegistrationPage(),
       ),
       GoRoute(
         path: '/email-verification',

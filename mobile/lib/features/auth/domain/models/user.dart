@@ -18,13 +18,21 @@ class User {
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
+    final idRaw = json['id'];
+    final id = idRaw is int
+        ? idRaw
+        : idRaw is num
+            ? idRaw.toInt()
+            : (int.tryParse(idRaw?.toString() ?? '') ?? 0);
+    final emailRaw = json['email'];
+    final email = emailRaw is String ? emailRaw : (emailRaw?.toString() ?? '');
     return User(
-      id: json['id'] as int,
-      email: json['email'] as String,
+      id: id,
+      email: email,
       fullName: json['full_name'] as String?,
-      role: json['role'] as String,
-      isActive: json['is_active'] as bool,
-      emailVerified: json['email_verified'] as bool,
+      role: json['role'] as String? ?? 'applicant',
+      isActive: json['is_active'] as bool? ?? true,
+      emailVerified: json['email_verified'] as bool? ?? false,
       googleId: json['google_id'] as String?,
     );
   }
@@ -39,5 +47,25 @@ class User {
       'email_verified': emailVerified,
       'google_id': googleId,
     };
+  }
+
+  User copyWith({
+    int? id,
+    String? email,
+    String? fullName,
+    String? role,
+    bool? isActive,
+    bool? emailVerified,
+    String? googleId,
+  }) {
+    return User(
+      id: id ?? this.id,
+      email: email ?? this.email,
+      fullName: fullName ?? this.fullName,
+      role: role ?? this.role,
+      isActive: isActive ?? this.isActive,
+      emailVerified: emailVerified ?? this.emailVerified,
+      googleId: googleId ?? this.googleId,
+    );
   }
 }

@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/models/user.dart';
 import '../repositories/auth_repository.dart';
 import '../../../../core/api/interceptors.dart';
-import '../../../../core/services/google_sign_in_service.dart';
 import '../../../../core/widgets/custom_toast.dart';
 import '../../../notifications/data/services/notification_service.dart';
 
@@ -34,17 +33,12 @@ class AuthState {
   final String? error;
   final String? errorCode;
 
-  /// True after Google Sign-In for a brand-new account that still needs
-  /// KTP upload, NIK, referral code, and phone to complete registration.
-  final bool needsGoogleCompletion;
-
   const AuthState({
     this.user,
     this.isLoading = false,
     this.initialized = false,
     this.error,
     this.errorCode,
-    this.needsGoogleCompletion = false,
   });
 
   AuthState copyWith({
@@ -53,7 +47,6 @@ class AuthState {
     bool? initialized,
     String? error,
     String? errorCode,
-    bool? needsGoogleCompletion,
   }) {
     return AuthState(
       user: user ?? this.user,
@@ -61,7 +54,6 @@ class AuthState {
       initialized: initialized ?? this.initialized,
       error: error,
       errorCode: errorCode,
-      needsGoogleCompletion: needsGoogleCompletion ?? this.needsGoogleCompletion,
     );
   }
 
@@ -99,11 +91,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
     if (e is DioException) {
       final msg = e.message;
       if (msg != null && msg.isNotEmpty) return msg;
-      // Fallback: read detail directly from response body
       final data = e.response?.data;
       if (data is Map<String, dynamic>) {
         return (data['detail'] as String?) ?? fallback;
       }
+    }
+    if (const bool.fromEnvironment('dart.vm.product') == false) {
+      print('NON-DIO EXCEPTION in auth: ${e.runtimeType}: $e');
     }
     return fallback;
   }
@@ -168,86 +162,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  Future<bool> googleAuth(String idToken) async {
-    state = state.copyWith(isLoading: true, error: null);
-    try {
-      final authResponse = await _repository.googleAuth(idToken);
-      state = state.copyWith(
-        user: authResponse.user,
-        isLoading: false,
-      );
-      NotificationService().registerToken();
-      return true;
-    } catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        error: _extractErrorMessage(e, 'Autentikasi gagal'),
-      );
-      return false;
-    }
-  }
-
-  /// Full Google Sign-In flow: triggers the native Google account picker,
-  /// then sends the ID token to the backend.
-  ///
-  /// Returns a [GoogleSignInResult]:
-  /// - [GoogleSignInSuccess] — existing user authenticated, go to /home.
-  /// - [GoogleSignInNeedsCompletion] — new account created, must visit /google-complete.
-  /// - [GoogleSignInCancelled] — user dismissed the picker, no state changed.
-  /// - [GoogleSignInError] — error message from SDK or backend.
-  Future<GoogleAuthOutcome> signInWithGoogle() async {
-    state = state.copyWith(isLoading: true, error: null);
-
-    // 1. Get ID token from the native Google Sign-In SDK.
-    final tokenResult = await GoogleSignInService.getIdToken();
-    if (tokenResult is GoogleSignInCancelled) {
-      state = state.copyWith(isLoading: false);
-      return const GoogleAuthOutcomeCancelled();
-    }
-    if (tokenResult is GoogleSignInError) {
-      final errorResult = tokenResult;
-      state = state.copyWith(
-        isLoading: false,
-        error: errorResult.message,
-      );
-      return GoogleAuthOutcomeError(errorResult.message);
-    }
-
-    // 2. Verify token with backend.
-    try {
-      final idToken = (tokenResult as GoogleSignInTokenObtained).idToken;
-      final authResponse = await _repository.googleAuth(idToken);
-
-      final needsCompletion = authResponse.isNewGoogleUser;
-      state = state.copyWith(
-        user: authResponse.user,
-        isLoading: false,
-        needsGoogleCompletion: needsCompletion,
-      );
-
-      if (!needsCompletion) {
-        NotificationService().registerToken();
-        return GoogleAuthOutcomeSuccess(authResponse.user);
-      }
-      return GoogleAuthOutcomeNeedsCompletion(authResponse.user);
-    } catch (e) {
-      final msg = _extractErrorMessage(e, 'Google Sign-In gagal');
-      state = state.copyWith(isLoading: false, error: msg);
-      return GoogleAuthOutcomeError(msg);
-    }
-  }
-
-  /// Called after [GoogleCompleteRegistrationPage] successfully submits.
-  /// Clears the completion flag and registers the FCM token.
-  void markGoogleCompletionDone(User updatedUser) {
-    state = state.copyWith(
-      user: updatedUser,
-      needsGoogleCompletion: false,
-      isLoading: false,
-    );
-    NotificationService().registerToken();
-  }
-
   /// Called after successful registration to set the authenticated user
   /// directly from the registration response (avoids a redundant network call).
   void setAuthenticatedUser(User user) {
@@ -275,8 +189,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
     try {
       final user = await _repository.getCurrentUser();
       state = state.copyWith(user: user);
-    } catch (e) {
-      state = state.copyWith(user: null);
+    } catch (_) {
+      // Keep existing user state on failure — do not log out the user
+      // just because a background refresh failed (e.g. momentary network issue).
+    }
+  }
+
+  /// After successful OTP email verification, mark the current user's email
+  /// as verified directly in state. This guarantees the router redirects to
+  /// /home even if a subsequent refreshUser() returns stale data.
+  void markEmailVerified() {
+    final user = state.user;
+    if (user != null) {
+      state = state.copyWith(user: user.copyWith(emailVerified: true));
     }
   }
 
@@ -289,36 +214,4 @@ class AuthNotifier extends StateNotifier<AuthState> {
       return false;
     }
   }
-}
-
-// ---------------------------------------------------------------------------
-// Outcome types for signInWithGoogle()
-// ---------------------------------------------------------------------------
-
-sealed class GoogleAuthOutcome {
-  const GoogleAuthOutcome();
-}
-
-/// Google Sign-In succeeded and the user already has a complete profile.
-final class GoogleAuthOutcomeSuccess extends GoogleAuthOutcome {
-  final User? user;
-  const GoogleAuthOutcomeSuccess(this.user);
-}
-
-/// Google Sign-In succeeded but the user needs to finish registration
-/// (new account — must provide NIK, KTP, referral code, phone).
-final class GoogleAuthOutcomeNeedsCompletion extends GoogleAuthOutcome {
-  final User? user;
-  const GoogleAuthOutcomeNeedsCompletion(this.user);
-}
-
-/// The user cancelled the Google account picker — no state was changed.
-final class GoogleAuthOutcomeCancelled extends GoogleAuthOutcome {
-  const GoogleAuthOutcomeCancelled();
-}
-
-/// An error occurred (network, backend error, etc.).
-final class GoogleAuthOutcomeError extends GoogleAuthOutcome {
-  final String message;
-  const GoogleAuthOutcomeError(this.message);
 }

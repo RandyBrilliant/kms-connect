@@ -17,10 +17,6 @@ class RegistrationState {
   final bool isProcessing;
   final String? error;
 
-  /// True when the user arrived via Google Sign-In and needs to complete
-  /// their profile (NIK + KTP + referral code / phone) before accessing the app.
-  final bool isGoogleFlow;
-
   /// Confirmed birth place region ID (FK → regions.Regency).
   final int? birthPlaceId;
 
@@ -43,7 +39,6 @@ class RegistrationState {
     this.ktpData,
     this.isProcessing = false,
     this.error,
-    this.isGoogleFlow = false,
     this.birthPlaceId,
     this.birthDateIso,
     this.dataDeclarationConfirmed = false,
@@ -60,7 +55,6 @@ class RegistrationState {
     KtpData? ktpData,
     bool? isProcessing,
     String? error,
-    bool? isGoogleFlow,
     int? birthPlaceId,
     String? birthDateIso,
     bool? dataDeclarationConfirmed,
@@ -76,7 +70,6 @@ class RegistrationState {
       ktpData: ktpData ?? this.ktpData,
       isProcessing: isProcessing ?? this.isProcessing,
       error: error,
-      isGoogleFlow: isGoogleFlow ?? this.isGoogleFlow,
       birthPlaceId: birthPlaceId ?? this.birthPlaceId,
       birthDateIso: birthDateIso ?? this.birthDateIso,
       dataDeclarationConfirmed:
@@ -204,51 +197,6 @@ class RegistrationNotifier extends StateNotifier<RegistrationState> {
         isProcessing: false,
         error: e.toString(),
       );
-      rethrow;
-    }
-  }
-
-  /// Called from [GoogleCompleteRegistrationPage] to set Google-flow context.
-  ///
-  /// email/password are not required for this path — the account was already
-  /// created by [GoogleOAuthView], and the Dio interceptor supplies the token.
-  void setGoogleFlowData({
-    String? referralCode,
-    String? phoneNumber,
-  }) {
-    state = state.copyWith(
-      isGoogleFlow: true,
-      referralCode: referralCode,
-      phoneNumber: phoneNumber,
-    );
-  }
-
-  /// Submit completion data for a Google-flow user.
-  ///
-  /// Requires that [setGoogleFlowData] has already been called (step 1) and
-  /// that [ktpData] and [ktpImage] have been populated (step 2 OCR).
-  Future<AuthResponse> completeGoogleRegistration() async {
-    if (state.ktpData?.nik == null || state.ktpImage == null) {
-      state = state.copyWith(error: 'Data KTP tidak lengkap');
-      throw Exception('Data KTP tidak lengkap');
-    }
-
-    state = state.copyWith(isProcessing: true, error: null);
-
-    try {
-      final authResponse = await _authRepository.googleCompleteRegistration(
-        nik: state.ktpData!.nik!,
-        ktpFile: state.ktpImage!,
-        referralCode: state.referralCode,
-        phoneNumber: state.phoneNumber,
-        fullName: state.ktpData?.name,
-        birthPlaceId: state.birthPlaceId,
-        birthDateIso: state.birthDateIso,
-      );
-      state = state.copyWith(isProcessing: false);
-      return authResponse;
-    } catch (e) {
-      state = state.copyWith(isProcessing: false, error: e.toString());
       rethrow;
     }
   }

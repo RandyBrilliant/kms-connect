@@ -17,8 +17,15 @@ class AuthResponse {
   });
 
   factory AuthResponse.fromJson(Map<String, dynamic> json) {
+    final userData = json['user'];
+    if (userData == null || userData is! Map<String, dynamic>) {
+      throw FormatException(
+        'Invalid auth response: missing or invalid user data. '
+        'Your account may have been created; please try logging in.',
+      );
+    }
     return AuthResponse(
-      user: User.fromJson(json['user'] as Map<String, dynamic>),
+      user: User.fromJson(userData),
       accessToken: json['access'] as String? ?? '',
       refreshToken: json['refresh'] as String? ?? '',
       isNewGoogleUser: json['needs_registration'] == true,

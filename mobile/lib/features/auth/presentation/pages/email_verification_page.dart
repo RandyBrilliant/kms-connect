@@ -221,6 +221,11 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
         });
         _successCtrl.forward();
 
+        // Immediately mark email as verified in auth state so the router
+        // redirects to /home as soon as the state update fires.
+        ref.read(authStateProvider.notifier).markEmailVerified();
+
+        // Also refresh from server to get the latest user data.
         await ref.read(authStateProvider.notifier).refreshUser();
         await Future.delayed(_kSuccessDelay);
         if (!mounted) return;
@@ -289,6 +294,16 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
 
     return Scaffold(
       backgroundColor: cs.surface,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_rounded, color: cs.onSurface),
+          onPressed: () => context.go('/login'),
+          tooltip: 'Kembali',
+        ),
+      ),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(

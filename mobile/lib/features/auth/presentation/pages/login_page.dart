@@ -6,7 +6,6 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/widgets/auth_wave_header.dart';
 import '../../../../core/widgets/custom_toast.dart';
-import '../../../../core/widgets/google_logo_icon.dart';
 import '../../../../core/widgets/m3_text_field.dart';
 import '../../data/providers/auth_provider.dart';
 
@@ -139,26 +138,13 @@ class _LoginPageState extends ConsumerState<LoginPage>
     }
   }
 
-  void _handleGoogleLogin() async {
-    final outcome =
-        await ref.read(authStateProvider.notifier).signInWithGoogle();
-    if (!mounted) return;
-    switch (outcome) {
-      case GoogleAuthOutcomeError(:final message):
-        CustomToast.show(context, message: message, type: ToastType.error);
-      case GoogleAuthOutcomeCancelled():
-        break; // user dismissed picker — nothing to do
-      case GoogleAuthOutcomeSuccess() || GoogleAuthOutcomeNeedsCompletion():
-        break; // router handles navigation via needsGoogleCompletion flag
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final isLoading = ref.watch(authStateProvider).isLoading;
     final colorScheme = Theme.of(context).colorScheme;
     final size = MediaQuery.sizeOf(context);
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final navBarPad = MediaQuery.paddingOf(context).bottom;
     final isCompact = size.height < 740;
     final headerHeight = math.max(
       size.height * (isCompact ? 0.28 : 0.34),
@@ -195,7 +181,7 @@ class _LoginPageState extends ConsumerState<LoginPage>
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             physics: const ClampingScrollPhysics(),
             child: Padding(
-              padding: EdgeInsets.only(bottom: bottomInset),
+              padding: EdgeInsets.only(bottom: bottomInset + navBarPad),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -212,23 +198,24 @@ class _LoginPageState extends ConsumerState<LoginPage>
                     child: FadeTransition(
                       opacity: _panelOpacity,
                       child: _FormPanel(
-                            formKey: _formKey,
-                            emailCtrl: _emailCtrl,
-                            passwordCtrl: _passwordCtrl,
-                            emailFocus: _emailFocus,
-                            passwordFocus: _passwordFocus,
-                            obscurePassword: _obscurePassword,
-                            isLoading: isLoading,
-                            onToggleObscure: () => setState(
-                              () => _obscurePassword = !_obscurePassword,
-                            ),
-                            onLogin: _handleLogin,
-                            onGoogleLogin: _handleGoogleLogin,                              unverifiedEmail: _unverifiedEmail,
-                              isResendLoading: _resendLoading,
-                              onResend: _handleResendVerification,
-                              isCompact: isCompact,                          ),
+                        formKey: _formKey,
+                        emailCtrl: _emailCtrl,
+                        passwordCtrl: _passwordCtrl,
+                        emailFocus: _emailFocus,
+                        passwordFocus: _passwordFocus,
+                        obscurePassword: _obscurePassword,
+                        isLoading: isLoading,
+                        onToggleObscure: () => setState(
+                          () => _obscurePassword = !_obscurePassword,
                         ),
+                        onLogin: _handleLogin,
+                        unverifiedEmail: _unverifiedEmail,
+                        isResendLoading: _resendLoading,
+                        onResend: _handleResendVerification,
+                        isCompact: isCompact,
                       ),
+                    ),
+                  ),
                   ],
                 ),
               ),
@@ -312,7 +299,6 @@ class _FormPanel extends StatelessWidget {
   final bool isLoading;
   final VoidCallback onToggleObscure;
   final Future<void> Function() onLogin;
-  final VoidCallback onGoogleLogin;
   final String? unverifiedEmail;
   final bool isResendLoading;
   final Future<void> Function() onResend;
@@ -328,7 +314,6 @@ class _FormPanel extends StatelessWidget {
     required this.isLoading,
     required this.onToggleObscure,
     required this.onLogin,
-    required this.onGoogleLogin,
     required this.unverifiedEmail,
     required this.isResendLoading,
     required this.onResend,
@@ -535,57 +520,6 @@ class _FormPanel extends StatelessWidget {
               ),
             ],
 
-            SizedBox(height: isCompact ? 16 : 28),
-
-            // Divider
-            Row(
-              children: [
-                Expanded(
-                  child: Divider(
-                      color: colorScheme.outlineVariant, thickness: 1),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  child: Text(
-                    'ATAU',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: colorScheme.onSurfaceVariant,
-                      letterSpacing: 1.5,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: Divider(
-                      color: colorScheme.outlineVariant, thickness: 1),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-
-            // Google button
-            OutlinedButton.icon(
-              onPressed: isLoading ? null : onGoogleLogin,
-              icon: const GoogleLogoIcon(),
-              label: Text(
-                'Lanjutkan dengan Google',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: colorScheme.onSurface,
-                ),
-              ),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: colorScheme.onSurface,
-                backgroundColor: colorScheme.surface,
-                side: BorderSide(color: colorScheme.outlineVariant),
-                minimumSize: const Size(double.infinity, 52),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-            ),
             SizedBox(height: isCompact ? 20 : 32),
 
             // Register link

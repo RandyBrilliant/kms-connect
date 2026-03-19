@@ -1,9 +1,11 @@
 import 'package:dio/dio.dart';
 import 'package:dio_cache_interceptor/dio_cache_interceptor.dart';
 import 'package:dio_cache_interceptor_hive_store/dio_cache_interceptor_hive_store.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../config/env.dart';
 import 'interceptors.dart';
@@ -23,9 +25,26 @@ class ApiClient {
   static const String _accessTokenKey = 'access_token';
   static const String _refreshTokenKey = 'refresh_token';
 
+  /// Falls back to SharedPreferences when iOS Keychain is unavailable
+  /// (e.g. simulator with CODE_SIGNING_ALLOWED=NO strips entitlements).
+  bool _useSharedPrefsFallback = false;
+
   Dio get dio => _dio;
 
   Future<void> initialize() async {
+    // Probe Keychain availability — write+read a test value.
+    try {
+      await _secureStorage.write(key: '__probe__', value: 'ok');
+      final v = await _secureStorage.read(key: '__probe__');
+      if (v != 'ok') throw Exception('read-back mismatch');
+      await _secureStorage.delete(key: '__probe__');
+    } catch (e) {
+      _useSharedPrefsFallback = true;
+      if (kDebugMode) {
+        debugPrint('Keychain unavailable, using SharedPreferences fallback: $e');
+      }
+    }
+
     _dio = Dio(
       BaseOptions(
         baseUrl: Env.apiBaseUrl,
@@ -39,12 +58,10 @@ class ApiClient {
       ),
     );
 
-    // Setup cache interceptor
     await _setupCache();
 
-    // Add interceptors
     _dio.interceptors.addAll([
-      AuthInterceptor(_secureStorage, _dio),
+      AuthInterceptor(this, _dio),
       LoggingInterceptor(),
       ErrorInterceptor(),
     ]);
@@ -58,9 +75,6 @@ class ApiClient {
 
       final cacheOptions = CacheOptions(
         store: cacheStore,
-        // Always fetch from network; only serve cached data on network errors
-        // (offline fallback). CachePolicy.request would serve a stale empty
-        // response from a previous run, making endpoints appear "not hit".
         policy: CachePolicy.refresh,
         hitCacheOnErrorExcept: [401, 403],
         maxStale: const Duration(hours: 1),
@@ -72,29 +86,49 @@ class ApiClient {
 
       _dio.interceptors.add(DioCacheInterceptor(options: cacheOptions));
     } catch (e) {
-      // Cache setup failed, continue without cache
-      if (const bool.fromEnvironment('dart.vm.product') == false) {
-        // ignore: avoid_print
-        print('Cache setup failed: $e');
-      }
+      if (kDebugMode) debugPrint('Cache setup failed: $e');
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Token storage — Keychain with SharedPreferences fallback
+  // ---------------------------------------------------------------------------
+
   Future<void> setTokens(String accessToken, String refreshToken) async {
-    await _secureStorage.write(key: _accessTokenKey, value: accessToken);
-    await _secureStorage.write(key: _refreshTokenKey, value: refreshToken);
+    if (_useSharedPrefsFallback) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_accessTokenKey, accessToken);
+      await prefs.setString(_refreshTokenKey, refreshToken);
+    } else {
+      await _secureStorage.write(key: _accessTokenKey, value: accessToken);
+      await _secureStorage.write(key: _refreshTokenKey, value: refreshToken);
+    }
   }
 
   Future<void> clearTokens() async {
-    await _secureStorage.delete(key: _accessTokenKey);
-    await _secureStorage.delete(key: _refreshTokenKey);
+    if (_useSharedPrefsFallback) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_accessTokenKey);
+      await prefs.remove(_refreshTokenKey);
+    } else {
+      await _secureStorage.delete(key: _accessTokenKey);
+      await _secureStorage.delete(key: _refreshTokenKey);
+    }
   }
 
   Future<String?> getAccessToken() async {
+    if (_useSharedPrefsFallback) {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(_accessTokenKey);
+    }
     return await _secureStorage.read(key: _accessTokenKey);
   }
 
   Future<String?> getRefreshToken() async {
+    if (_useSharedPrefsFallback) {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(_refreshTokenKey);
+    }
     return await _secureStorage.read(key: _refreshTokenKey);
   }
 }

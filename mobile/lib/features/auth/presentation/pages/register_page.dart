@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -184,14 +184,6 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
     }
   }
 
-  Future<void> _handleGoogleRegister() async {
-    CustomToast.show(
-      context,
-      message: 'Google Sign-In akan segera tersedia',
-      type: ToastType.info,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final isLoading = ref.watch(authStateProvider).isLoading;
@@ -224,10 +216,6 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     _buildHeader(),
-                    const SizedBox(height: 40),
-                    _buildSocialLogin(isLoading),
-                    const SizedBox(height: 32),
-                    _buildDivider(),
                     const SizedBox(height: 32),
                     _buildTextField(
                       controller: _emailController,
@@ -574,59 +562,6 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                 letterSpacing: 0.5,
               ),
             ),
-    );
-  }
-
-  Widget _buildDivider() {
-    return Row(
-      children: [
-        const Expanded(child: Divider(color: AppColors.divider, thickness: 1)),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text(
-            'ATAU DAFTAR DENGAN EMAIL',
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textLight,
-              letterSpacing: 1.2,
-            ),
-          ),
-        ),
-        const Expanded(child: Divider(color: AppColors.divider, thickness: 1)),
-      ],
-    );
-  }
-
-  Widget _buildSocialLogin(bool isLoading) {
-    return OutlinedButton(
-      onPressed: isLoading ? null : _handleGoogleRegister,
-      style: OutlinedButton.styleFrom(
-        backgroundColor: AppColors.white,
-        foregroundColor: AppColors.textDark,
-        side: BorderSide(color: AppColors.divider.withOpacity(0.8)),
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        elevation: 0,
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(
-            Icons.g_mobiledata_rounded,
-            size: 28,
-            color: AppColors.textDark,
-          ),
-          const SizedBox(width: 12),
-          Text(
-            'Daftar dengan Google',
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
     );
   }
 

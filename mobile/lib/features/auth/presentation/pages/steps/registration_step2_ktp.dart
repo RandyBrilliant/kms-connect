@@ -14,7 +14,6 @@ import '../../../../../core/models/region.dart';
 import '../../../../../core/widgets/custom_toast.dart';
 import '../../../../../core/widgets/ktp_camera_screen.dart';
 import '../../../../../core/widgets/m3_text_field.dart';
-import '../../../data/providers/auth_provider.dart';
 import '../../../data/providers/regions_provider.dart';
 import '../../../domain/models/ktp_data.dart';
 import '../../providers/registration_provider.dart';
@@ -491,35 +490,23 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
           zeroCostUnderstood: _zeroCostChecked,
         );
 
-    final isGoogleFlow = ref.read(registrationProvider).isGoogleFlow;
     final email = ref.read(registrationProvider).email;
 
     try {
       setState(() => _isRegistering = true);
 
-      final authResponse = isGoogleFlow
-          ? await ref
-              .read(registrationProvider.notifier)
-              .completeGoogleRegistration()
-          : await ref
-              .read(registrationProvider.notifier)
-              .completeRegistration();
+      await ref
+          .read(registrationProvider.notifier)
+          .completeRegistration();
 
       if (!mounted) return;
 
       ref.read(registrationProvider.notifier).reset();
 
-      if (isGoogleFlow) {
-        // Google flow — email is already verified by Google
-        ref
-            .read(authStateProvider.notifier)
-            .markGoogleCompletionDone(authResponse.user);
-      } else {
-        // Email registration — do NOT set authenticated user yet.
-        // Auth tokens are stored; the user must verify email first.
-        if (mounted && email != null) {
-          context.go('/email-verification?email=${Uri.encodeComponent(email)}');
-        }
+      // Email registration — do NOT set authenticated user yet.
+      // Auth tokens are stored; the user must verify email first.
+      if (mounted && email != null) {
+        context.go('/email-verification?email=${Uri.encodeComponent(email)}');
       }
     } catch (e) {
       if (!mounted) return;

@@ -38,18 +38,36 @@ class AuthRepository {
       }
 
       final authData = apiResponse.data!;
-      final authResponse = AuthResponse.fromJson(authData);
+      AuthResponse authResponse;
+      try {
+        authResponse = AuthResponse.fromJson(authData);
+      } catch (e) {
+        throw DioException(
+          requestOptions: response.requestOptions,
+          response: response,
+          type: DioExceptionType.badResponse,
+          message: 'Login berhasil di server, tetapi data respons tidak valid. Coba lagi.',
+        );
+      }
 
-      // Store tokens
-      await _apiClient.setTokens(
-        authResponse.accessToken,
-        authResponse.refreshToken,
-      );
-
-      // Debug: Verify tokens were stored
-      if (const bool.fromEnvironment('dart.vm.product') == false) {
-        final storedAccess = await _apiClient.getAccessToken();
-        print('TOKEN STORED (login): ${storedAccess != null && storedAccess.isNotEmpty}');
+      // Store tokens — wrap in try/catch so Keychain/SecureStorage failures
+      // don't mask as "wrong password".
+      try {
+        await _apiClient.setTokens(
+          authResponse.accessToken,
+          authResponse.refreshToken,
+        );
+      } catch (storageErr) {
+        if (const bool.fromEnvironment('dart.vm.product') == false) {
+          print('TOKEN STORAGE FAILED: $storageErr');
+        }
+        throw DioException(
+          requestOptions: response.requestOptions,
+          response: response,
+          type: DioExceptionType.unknown,
+          message: 'Login berhasil, tetapi gagal menyimpan sesi. '
+              'Pastikan Keychain/storage tersedia dan coba lagi.',
+        );
       }
 
       return authResponse;
@@ -101,18 +119,35 @@ class AuthRepository {
       }
 
       final authData = apiResponse.data!;
-      final authResponse = AuthResponse.fromJson(authData);
+      AuthResponse authResponse;
+      try {
+        authResponse = AuthResponse.fromJson(authData);
+      } catch (e) {
+        throw DioException(
+          requestOptions: response.requestOptions,
+          response: response,
+          type: DioExceptionType.badResponse,
+          message: e is FormatException
+              ? e.message
+              : 'Registrasi berhasil, tetapi data respons tidak valid. Silakan coba masuk dengan email dan kata sandi Anda.',
+        );
+      }
 
-      // Store tokens
-      await _apiClient.setTokens(
-        authResponse.accessToken,
-        authResponse.refreshToken,
-      );
-
-      // Debug: Verify tokens were stored
-      if (const bool.fromEnvironment('dart.vm.product') == false) {
-        final storedAccess = await _apiClient.getAccessToken();
-        print('TOKEN STORED (register): ${storedAccess != null && storedAccess.isNotEmpty}');
+      try {
+        await _apiClient.setTokens(
+          authResponse.accessToken,
+          authResponse.refreshToken,
+        );
+      } catch (storageErr) {
+        if (const bool.fromEnvironment('dart.vm.product') == false) {
+          print('TOKEN STORAGE FAILED (register): $storageErr');
+        }
+        throw DioException(
+          requestOptions: response.requestOptions,
+          response: response,
+          type: DioExceptionType.unknown,
+          message: 'Registrasi berhasil, tetapi gagal menyimpan sesi. Coba login.',
+        );
       }
 
       return authResponse;
@@ -225,119 +260,38 @@ class AuthRepository {
       }
 
       final authData = apiResponse.data!;
-      final authResponse = AuthResponse.fromJson(authData);
-
-      // Store tokens
-      await _apiClient.setTokens(
-        authResponse.accessToken,
-        authResponse.refreshToken,
-      );
-
-      // Debug: Verify tokens were stored
-      if (const bool.fromEnvironment('dart.vm.product') == false) {
-        final storedAccess = await _apiClient.getAccessToken();
-        print('TOKEN STORED (registerComplete): ${storedAccess != null && storedAccess.isNotEmpty}');
-      }
-
-      return authResponse;
-    } on DioException catch (e) {
-      throw _handleError(e);
-    }
-  }
-  Future<AuthResponse> googleAuth(String idToken) async {
-    try {
-      final response = await _apiClient.dio.post(
-        ApiEndpoints.googleAuth,
-        data: {
-          'id_token': idToken,
-        },
-      );
-
-      final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
-        response.data,
-        (data) => data as Map<String, dynamic>,
-      );
-
-      if (!apiResponse.isSuccess) {
+      AuthResponse authResponse;
+      try {
+        authResponse = AuthResponse.fromJson(authData);
+      } catch (e) {
         throw DioException(
           requestOptions: response.requestOptions,
           response: response,
           type: DioExceptionType.badResponse,
-          message: apiResponse.detail ?? 'Google Sign-In gagal',
+          message: e is FormatException
+              ? e.message
+              : 'Registrasi berhasil, tetapi data respons tidak valid. Silakan coba masuk dengan email dan kata sandi Anda.',
         );
       }
 
-      final authData = apiResponse.data!;
-      final authResponse = AuthResponse.fromJson(authData);
-
-      // Store tokens
-      await _apiClient.setTokens(
-        authResponse.accessToken,
-        authResponse.refreshToken,
-      );
-
-      return authResponse;
-    } on DioException catch (e) {
-      throw _handleError(e);
-    }
-  }
-
-  /// Complete registration for a Google-authenticated user.
-  ///
-  /// Called from [GoogleCompleteRegistrationPage] after Google Sign-In creates
-  /// a placeholder account. The user must supply their NIK, KTP photo,
-  /// referral code, and optionally phone/full_name.
-  ///
-  /// The endpoint is authenticated — the access token stored during
-  /// [googleAuth] is attached automatically by the Dio interceptor.
-  Future<AuthResponse> googleCompleteRegistration({
-    required String nik,
-    required File ktpFile,
-    String? referralCode,
-    String? phoneNumber,
-    String? fullName,
-    int? birthPlaceId,
-    String? birthDateIso,
-  }) async {
-    try {
-      final compressed = await ImageCompressor.compressDocument(ktpFile);
-      final formData = FormData.fromMap({
-        'nik': nik.trim(),
-        'ktp': await MultipartFile.fromFile(
-          compressed.path,
-          filename: 'ktp.jpg',
-        ),
-        if (referralCode != null && referralCode.isNotEmpty)
-          'referral_code': referralCode.trim().toUpperCase(),
-        if (phoneNumber != null && phoneNumber.trim().isNotEmpty)
-          'phone_number': phoneNumber.trim(),
-        if (fullName != null && fullName.trim().isNotEmpty)
-          'full_name': fullName.trim(),
-        'birth_place': ?birthPlaceId,
-        'birth_date': ?birthDateIso,
-      });
-
-      final response = await _apiClient.dio.post(
-        ApiEndpoints.googleComplete,
-        data: formData,
-        options: Options(headers: {'Content-Type': 'multipart/form-data'}),
-      );
-
-      final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
-        response.data,
-        (data) => data as Map<String, dynamic>,
-      );
-
-      if (!apiResponse.isSuccess) {
+      try {
+        await _apiClient.setTokens(
+          authResponse.accessToken,
+          authResponse.refreshToken,
+        );
+      } catch (storageErr) {
+        if (const bool.fromEnvironment('dart.vm.product') == false) {
+          print('TOKEN STORAGE FAILED (registerComplete): $storageErr');
+        }
         throw DioException(
           requestOptions: response.requestOptions,
           response: response,
-          type: DioExceptionType.badResponse,
-          message: apiResponse.detail ?? 'Pendaftaran gagal',
+          type: DioExceptionType.unknown,
+          message: 'Registrasi berhasil, tetapi gagal menyimpan sesi. Coba login.',
         );
       }
 
-      return AuthResponse.fromJson(apiResponse.data!);
+      return authResponse;
     } on DioException catch (e) {
       throw _handleError(e);
     }

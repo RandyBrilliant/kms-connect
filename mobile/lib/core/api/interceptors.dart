@@ -1,10 +1,10 @@
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'api_client.dart';
 import 'endpoints.dart';
 
 /// Authentication interceptor - adds JWT token to requests and handles refresh
 class AuthInterceptor extends Interceptor {
-  final FlutterSecureStorage _secureStorage;
+  final ApiClient _apiClient;
   final Dio _dio;
   bool _isRefreshing = false;
   final List<({RequestOptions options, ErrorInterceptorHandler handler})> _pendingRequests = [];
@@ -13,7 +13,7 @@ class AuthInterceptor extends Interceptor {
   /// interceptor invalidates tokens it can force GoRouter to redirect to login.
   static void Function()? onForceLogout;
 
-  AuthInterceptor(this._secureStorage, this._dio);
+  AuthInterceptor(this._apiClient, this._dio);
 
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) async {
@@ -26,7 +26,7 @@ class AuthInterceptor extends Interceptor {
       return;
     }
 
-    final token = await _secureStorage.read(key: 'access_token');
+    final token = await _apiClient.getAccessToken();
     if (token != null) {
       options.headers['Authorization'] = 'Bearer $token';
       if (const bool.fromEnvironment('dart.vm.product') == false) {
@@ -51,10 +51,8 @@ class AuthInterceptor extends Interceptor {
     }
   }
 
-  /// Clears auth tokens from storage and notifies the app to redirect to login.
   Future<void> _dispatchForceLogout() async {
-    await _secureStorage.delete(key: 'access_token');
-    await _secureStorage.delete(key: 'refresh_token');
+    await _apiClient.clearTokens();
     onForceLogout?.call();
   }
 
@@ -84,7 +82,7 @@ class AuthInterceptor extends Interceptor {
       _isRefreshing = true;
 
       try {
-        final refreshToken = await _secureStorage.read(key: 'refresh_token');
+        final refreshToken = await _apiClient.getRefreshToken();
         if (refreshToken == null) {
           _isRefreshing = false;
           await _dispatchForceLogout();
@@ -108,11 +106,10 @@ class AuthInterceptor extends Interceptor {
           final newRefreshToken = inner?['refresh'] as String?;
 
           if (newAccessToken != null) {
-            await _secureStorage.write(key: 'access_token', value: newAccessToken);
-            // Persist the rotated refresh token so the next refresh works.
-            if (newRefreshToken != null) {
-              await _secureStorage.write(key: 'refresh_token', value: newRefreshToken);
-            }
+            await _apiClient.setTokens(
+              newAccessToken,
+              newRefreshToken ?? refreshToken!,
+            );
 
             // Mark as retry so a second 401 on the retry doesn't wipe tokens
             final opts = err.requestOptions;

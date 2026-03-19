@@ -12,8 +12,6 @@ class AppStrings {
   static const String forgotPassword = 'Lupa Password?';
   static const String noAccount = 'Belum punya akun? Daftar';
   static const String hasAccount = 'Sudah punya akun? Masuk';
-  static const String loginWithGoogle = 'Masuk dengan Google';
-  static const String registerWithGoogle = 'Daftar dengan Google';
   static const String registerWithEmail = 'Daftar dengan Email';
 
   // Registration

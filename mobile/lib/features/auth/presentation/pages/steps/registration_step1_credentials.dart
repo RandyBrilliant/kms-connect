@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../../core/widgets/custom_toast.dart';
-import '../../../../../core/widgets/google_logo_icon.dart';
 import '../../../../../core/widgets/m3_text_field.dart';
 import '../../../../../core/widgets/phone_input_field.dart';
 import '../../../data/providers/auth_provider.dart';
@@ -208,63 +207,6 @@ class _RegistrationStep1CredentialsState
           ),
           SizedBox(height: MediaQuery.sizeOf(context).height < 740 ? 16 : 28),
 
-          //  OR divider 
-          Row(
-            children: [
-              Expanded(child: Divider(color: cs.outlineVariant)),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: Text(
-                  'ATAU',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: cs.onSurfaceVariant,
-                    letterSpacing: 1.5,
-                  ),
-                ),
-              ),
-              Expanded(child: Divider(color: cs.outlineVariant)),
-            ],
-          ),
-          const SizedBox(height: 20),
-
-          //  Google sign-up 
-          OutlinedButton.icon(
-            onPressed: () async {
-              final outcome = await ref
-                  .read(authStateProvider.notifier)
-                  .signInWithGoogle();
-              if (!context.mounted) return;
-              switch (outcome) {
-                case GoogleAuthOutcomeError(:final message):
-                  CustomToast.show(context,
-                      message: message, type: ToastType.error);
-                case GoogleAuthOutcomeCancelled():
-                  break;
-                case GoogleAuthOutcomeSuccess() ||
-                      GoogleAuthOutcomeNeedsCompletion():
-                  break; // router handles navigation
-              }
-            },
-            icon: const GoogleLogoIcon(),
-            label: Text(
-              'Daftar dengan Google',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: cs.onSurface,
-              ),
-            ),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: cs.onSurface,
-              backgroundColor: cs.surface,
-              side: BorderSide(color: cs.outlineVariant),
-              minimumSize: const Size(double.infinity, 52),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
-            ),
-          ),
           SizedBox(height: MediaQuery.sizeOf(context).height < 740 ? 16 : 28),
 
           //  Login link 
