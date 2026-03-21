@@ -25,6 +25,11 @@ static const String ocrPreview = '$baseUrl/auth/ocr-preview/';
   static const String changePassword = '$baseUrl/applicants/me/change-password/';
   static const String myBiodataPdf = '$baseUrl/applicants/me/biodata-pdf/';
 
+  // Account Deletion
+  static const String myDeletionRequest = '$baseUrl/deletion-requests/my/';
+  static const String submitDeletionRequest = '$baseUrl/deletion-requests/submit/';
+  static const String cancelDeletionRequest = '$baseUrl/deletion-requests/my/cancel/';
+
   // Public
   static const String publicJobs = '$baseUrl/jobs/public/';
   static const String publicNews = '$baseUrl/news/public/';

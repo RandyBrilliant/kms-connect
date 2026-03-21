@@ -49,3 +49,36 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 key.properties
+
+# Gradle
+.gradle/
+.kotlin/
+android/.gradle/
+android/.kotlin/
+
+# iOS build artifacts
+ios/build/
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/App.framework
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/Podfile.lock
+
+# macOS build artifacts
+macos/build/
+macos/Pods/
+
+# Flutter plugins
+.flutter-plugins-dependencies 2
+.flutter-plugins-dependencies 3
+.flutter-plugins-dependencies 4
+*.backup
+
+# Build artifacts that shouldn't be tracked
+**/build/
+.cxx/
+
+# Duplicate/backup files
+build 2
+build 3

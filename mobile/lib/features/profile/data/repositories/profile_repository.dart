@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../../../core/api/api_client.dart';
 import '../../../../core/api/endpoints.dart';
 import '../../../../core/models/api_response.dart';
+import '../../domain/models/account_deletion_request.dart';
 import '../../domain/models/applicant_profile.dart';
 import '../../domain/models/work_experience.dart';
 
@@ -194,6 +195,82 @@ class ProfileRepository {
     final result = await OpenFilex.open(file.path, type: 'application/pdf');
     if (result.type != ResultType.done) {
       throw Exception('Tidak dapat membuka PDF: ${result.message}');
+    }
+  }
+
+  /// Get the current user's deletion request (if any)
+  Future<AccountDeletionRequest?> getMyDeletionRequest() async {
+    try {
+      final response = await _apiClient.dio.get(ApiEndpoints.myDeletionRequest);
+      final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
+        response.data,
+        (data) => data as Map<String, dynamic>,
+      );
+
+      if (!apiResponse.isSuccess || apiResponse.data == null) {
+        return null; // No request exists
+      }
+
+      return AccountDeletionRequest.fromJson(apiResponse.data!);
+    } on DioException catch (e) {
+      // 404 means no request exists - not an error
+      if (e.response?.statusCode == 404) {
+        return null;
+      }
+      throw _handleError(e);
+    }
+  }
+
+  /// Submit a new account deletion request
+  Future<AccountDeletionRequest> submitDeletionRequest({String? reason}) async {
+    try {
+      final response = await _apiClient.dio.post(
+        ApiEndpoints.submitDeletionRequest,
+        data: {
+          if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
+        },
+      );
+      final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
+        response.data,
+        (data) => data as Map<String, dynamic>,
+      );
+
+      if (!apiResponse.isSuccess || apiResponse.data == null) {
+        throw DioException(
+          requestOptions: response.requestOptions,
+          response: response,
+          type: DioExceptionType.badResponse,
+          message: apiResponse.detail ?? 'Gagal mengajukan permintaan penghapusan akun',
+        );
+      }
+
+      return AccountDeletionRequest.fromJson(apiResponse.data!);
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  /// Cancel a pending deletion request
+  Future<void> cancelDeletionRequest() async {
+    try {
+      final response = await _apiClient.dio.post(
+        ApiEndpoints.cancelDeletionRequest,
+      );
+      final apiResponse = ApiResponse<void>.fromJson(
+        response.data,
+        null,
+      );
+
+      if (!apiResponse.isSuccess) {
+        throw DioException(
+          requestOptions: response.requestOptions,
+          response: response,
+          type: DioExceptionType.badResponse,
+          message: apiResponse.detail ?? 'Gagal membatalkan permintaan',
+        );
+      }
+    } on DioException catch (e) {
+      throw _handleError(e);
     }
   }
 

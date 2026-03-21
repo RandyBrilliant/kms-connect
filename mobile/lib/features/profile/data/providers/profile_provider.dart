@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../domain/models/account_deletion_request.dart';
 import '../../domain/models/applicant_profile.dart';
 import '../../domain/models/work_experience.dart';
 import '../repositories/profile_repository.dart';
@@ -284,3 +285,98 @@ class ProfileNotifier extends StateNotifier<ProfileState> {
     }
   }
 }
+
+// ─── Account Deletion Request ─────────────────────────────────────────────────
+
+class AccountDeletionRequestState {
+  final AccountDeletionRequest? request;
+  final bool isLoading;
+  final String? error;
+
+  const AccountDeletionRequestState({
+    this.request,
+    this.isLoading = false,
+    this.error,
+  });
+
+  AccountDeletionRequestState copyWith({
+    AccountDeletionRequest? request,
+    bool? isLoading,
+    String? error,
+    bool clearRequest = false,
+  }) {
+    return AccountDeletionRequestState(
+      request: clearRequest ? null : (request ?? this.request),
+      isLoading: isLoading ?? this.isLoading,
+      error: error,
+    );
+  }
+
+  bool get hasRequest => request != null;
+  bool get hasPendingRequest => request?.isPending ?? false;
+}
+
+class AccountDeletionRequestNotifier extends StateNotifier<AccountDeletionRequestState> {
+  final ProfileRepository _repository;
+
+  AccountDeletionRequestNotifier(this._repository)
+      : super(const AccountDeletionRequestState());
+
+  /// Load the current deletion request (if any)
+  Future<void> loadRequest() async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final request = await _repository.getMyDeletionRequest();
+      state = state.copyWith(
+        request: request,
+        isLoading: false,
+        clearRequest: request == null,
+      );
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: e.toString().replaceAll('DioException: ', ''),
+      );
+    }
+  }
+
+  /// Submit a new deletion request
+  Future<bool> submitRequest({String? reason}) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final request = await _repository.submitDeletionRequest(reason: reason);
+      state = state.copyWith(request: request, isLoading: false);
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: e.toString().replaceAll('DioException: ', ''),
+      );
+      return false;
+    }
+  }
+
+  /// Cancel the pending deletion request
+  Future<bool> cancelRequest() async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      await _repository.cancelDeletionRequest();
+      state = state.copyWith(
+        isLoading: false,
+        clearRequest: true,
+      );
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: e.toString().replaceAll('DioException: ', ''),
+      );
+      return false;
+    }
+  }
+}
+
+final accountDeletionRequestProvider =
+    StateNotifierProvider<AccountDeletionRequestNotifier, AccountDeletionRequestState>((ref) {
+  return AccountDeletionRequestNotifier(ref.read(profileRepositoryProvider));
+});

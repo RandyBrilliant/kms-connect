@@ -264,7 +264,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                 if (profile?.verificationStatus == 'ACCEPTED')
                   const SliverToBoxAdapter(child: SizedBox(height: 8)),
 
-                //  Akun 
+                //  Akun
                 SliverToBoxAdapter(
                   child: _animated(
                     _MenuSection(
@@ -277,6 +277,15 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                           title: 'Ganti Password',
                           subtitle: 'Ubah password akun kamu',
                           onTap: () => context.push('/profile/change-password'),
+                        ),
+                        _MenuItem(
+                          icon: Icons.delete_outline_rounded,
+                          color: AppColors.error,
+                          bg: const Color(0xFFFFE4E6),
+                          title: 'Hapus Akun',
+                          subtitle: 'Ajukan permintaan penghapusan akun',
+                          onTap: () => context.push('/profile/account-deletion'),
+                          isDestructive: true,
                         ),
                         _MenuItem(
                           icon: Icons.logout_rounded,

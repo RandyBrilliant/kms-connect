@@ -16,6 +16,7 @@ import 'features/profile/presentation/pages/profile_page.dart';
 import 'features/profile/presentation/pages/edit_profile_page.dart';
 import 'features/profile/presentation/pages/work_experiences_page.dart';
 import 'features/profile/presentation/pages/change_password_page.dart';
+import 'features/profile/presentation/pages/account_deletion_request_page.dart';
 import 'features/documents/presentation/pages/documents_page.dart';
 import 'features/documents/presentation/pages/upload_document_page.dart';
 import 'features/jobs/presentation/pages/jobs_list_page.dart';
@@ -204,6 +205,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/profile/change-password',
         name: 'change-password',
         builder: (context, state) => const ChangePasswordPage(),
+      ),
+      GoRoute(
+        path: '/profile/account-deletion',
+        name: 'account-deletion',
+        builder: (context, state) => const AccountDeletionRequestPage(),
       ),
       GoRoute(
         path: '/documents',
