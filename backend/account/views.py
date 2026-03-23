@@ -3,6 +3,8 @@ API views untuk account (admin-side CRUD: Admin, Staff, Company).
 Endpoint terpisah per role; partial update didukung; hanya deactivate (no hard delete).
 Pesan dan response format konsisten via api_responses (frontend-friendly).
 """
+import logging
+
 from rest_framework import status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
@@ -66,7 +68,12 @@ from .services.export import generate_applicants_excel
 from .services.biodata_pdf import generate_biodata_pdf
 from .services.inbond_pdf import generate_inbond_pdf
 from .services.notification_delivery import send_broadcast
+from .services.notification_dispatcher import dispatch
+from .services.notification_events import NotificationEvent
 from .services.notification_recipients import get_recipient_count, validate_recipient_config
+from .tasks import send_event_email_task
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -1747,7 +1754,7 @@ class AccountDeletionRequestViewSet(viewsets.GenericViewSet):
 
     @action(detail=True, methods=["post"], url_path="approve")
     def approve(self, request, pk=None):
-        """POST /api/deletion-requests/<id>/approve/ — admin approves → deactivates user"""
+        """POST /api/deletion-requests/<id>/approve/ — admin approves → email user, then delete account."""
         obj = get_object_or_404(AccountDeletionRequest, pk=pk)
         if obj.status != AccountDeletionRequest.DeletionStatus.PENDING:
             return Response(
@@ -1765,15 +1772,33 @@ class AccountDeletionRequestViewSet(viewsets.GenericViewSet):
         obj.admin_notes = admin_notes
         obj.save(update_fields=["status", "reviewed_by", "reviewed_at", "admin_notes"])
 
-        # Deactivate the account immediately; actual data deletion follows
-        # after retention period (handled manually or via scheduled task).
+        # Snapshot response before deleting user (CASCADE removes this request row).
+        payload_data = self.get_serializer(obj).data
         user = obj.user
-        user.is_active = False
-        user.save(update_fields=["is_active"])
+        # Email must run synchronously while the user row still exists (async Celery would run after delete).
+        email_ctx = {
+            "user_name": (user.full_name or "").strip() or user.email.split("@")[0],
+            "admin_notes": admin_notes or "",
+        }
+        try:
+            send_event_email_task.apply(
+                args=[
+                    user.pk,
+                    NotificationEvent.ACCOUNT_DELETION_APPROVED.value,
+                    email_ctx,
+                    "",
+                ],
+            )
+        except Exception:
+            logger.exception(
+                "Failed to send account deletion approval email user_id=%s", user.pk
+            )
+
+        user.delete()
 
         return Response(
             success_response(
-                data=self.get_serializer(obj).data,
+                data=payload_data,
                 detail=ApiMessage.DELETION_REQUEST_APPROVED,
                 code=ApiCode.DELETION_REQUEST_APPROVED,
             ),
@@ -1799,6 +1824,26 @@ class AccountDeletionRequestViewSet(viewsets.GenericViewSet):
         obj.reviewed_at = timezone.now()
         obj.admin_notes = admin_notes
         obj.save(update_fields=["status", "reviewed_by", "reviewed_at", "admin_notes"])
+
+        recipient = obj.user
+        try:
+            dispatch(
+                NotificationEvent.ACCOUNT_DELETION_REJECTED,
+                recipient,
+                context={
+                    "user_name": (recipient.full_name or "").strip()
+                    or recipient.email.split("@")[0],
+                    "admin_notes": admin_notes or "",
+                },
+                force_email=True,
+                deduplicate=False,
+            )
+        except Exception:
+            logger.exception(
+                "Failed to dispatch account deletion rejection notification user_id=%s",
+                recipient.pk,
+            )
+
         return Response(
             success_response(
                 data=self.get_serializer(obj).data,

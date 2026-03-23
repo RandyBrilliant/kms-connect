@@ -53,6 +53,13 @@
 	<string>Aplikasi memerlukan akses mikrofon untuk fitur kamera</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Gunakan Face ID untuk mengamankan akun Anda</string>
+	<!-- Physical device: allow Flutter to attach the debugger (Dart VM Service) over the local network -->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Aplikasi memerlukan akses jaringan lokal untuk debugging dan hot reload saat pengembangan.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_dartVmService._tcp</string>
+	</array>
 
 	<!-- Deep linking: custom URL scheme -->
 	<key>CFBundleURLTypes</key>

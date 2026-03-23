@@ -76,7 +76,10 @@ export function AdminDeletionRequestsPage() {
     const approveMutation = useMutation({
         mutationFn: (id: number) => approveDeletionRequest(id, { admin_notes: adminNotes }),
         onSuccess: () => {
-            toast.success("Permintaan disetujui", "Akun pengguna telah dinonaktifkan.")
+            toast.success(
+                "Permintaan disetujui",
+                "Akun telah dihapus dan email konfirmasi dikirim ke alamat pengguna (jika email aktif).",
+            )
             queryClient.invalidateQueries({ queryKey: ["deletion-requests"] })
             closeDialog()
         },
@@ -85,7 +88,10 @@ export function AdminDeletionRequestsPage() {
     const rejectMutation = useMutation({
         mutationFn: (id: number) => rejectDeletionRequest(id, { admin_notes: adminNotes }),
         onSuccess: () => {
-            toast.success("Permintaan ditolak", "Permintaan penghapusan akun telah ditolak.")
+            toast.success(
+                "Permintaan ditolak",
+                "Pengguna akan menerima email dan notifikasi di aplikasi.",
+            )
             queryClient.invalidateQueries({ queryKey: ["deletion-requests"] })
             closeDialog()
         },
@@ -254,8 +260,8 @@ export function AdminDeletionRequestsPage() {
                             {action === "approve" ? (
                                 <>
                                     Akun <strong>{selectedRequest?.user_email}</strong> akan{" "}
-                                    <strong>dinonaktifkan segera</strong>. Data akan dihapus dalam 30 hari
-                                    sesuai kebijakan retensi. Tindakan ini tidak dapat dibatalkan.
+                                    <strong>dihapus secara permanen</strong>. Email pemberitahuan dikirim ke
+                                    pengguna sebelum penghapusan. Tindakan ini tidak dapat dibatalkan.
                                 </>
                             ) : (
                                 <>
@@ -296,7 +302,7 @@ export function AdminDeletionRequestsPage() {
                             {isPending
                                 ? "Memproses..."
                                 : action === "approve"
-                                    ? "Ya, Setujui & Nonaktifkan"
+                                    ? "Ya, Setujui & Hapus Akun"
                                     : "Tolak Permintaan"}
                         </Button>
                     </DialogFooter>

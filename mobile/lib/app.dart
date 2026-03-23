@@ -60,6 +60,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ref.invalidate(myDocumentsProvider);
       ref.invalidate(documentChecklistProvider);
       ref.invalidate(workExperienceNotifierProvider);
+      ref.invalidate(accountDeletionRequestProvider);
     }
 
     // When transitioning from logged-out → logged-in, eagerly load
@@ -70,6 +71,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ref.invalidate(myDocumentsProvider);
       ref.invalidate(documentChecklistProvider);
       ref.invalidate(workExperienceNotifierProvider);
+      ref.invalidate(accountDeletionRequestProvider);
       ref.read(profileNotifierProvider.notifier).loadProfile(force: true);
     }
 

@@ -299,16 +299,43 @@ class JobApplicationSerializer(serializers.ModelSerializer):
         ]
 
     def get_applicant_name(self, obj) -> str:
-        return obj.applicant.user.full_name if obj.applicant and obj.applicant.user else ""
+        applicant = getattr(obj, "applicant", None)
+        if not applicant:
+            return ""
+        try:
+            user = applicant.user
+        except Exception:
+            return ""
+        if not user:
+            return ""
+        return user.full_name or ""
 
     def get_applicant_email(self, obj) -> str:
-        return obj.applicant.user.email if obj.applicant and obj.applicant.user else ""
+        applicant = getattr(obj, "applicant", None)
+        if not applicant:
+            return ""
+        try:
+            user = applicant.user
+        except Exception:
+            return ""
+        if not user:
+            return ""
+        return user.email or ""
 
     def get_job_title(self, obj) -> str:
-        return obj.job.title if obj.job else ""
+        job = getattr(obj, "job", None)
+        if not job:
+            return ""
+        return getattr(job, "title", "") or ""
 
     def get_company_name(self, obj) -> str:
-        return obj.job.company.company_name if obj.job and obj.job.company else ""
+        job = getattr(obj, "job", None)
+        if not job:
+            return ""
+        company = getattr(job, "company", None)
+        if not company:
+            return ""
+        return getattr(company, "company_name", "") or ""
 
     def get_assigned_by_name(self, obj) -> str | None:
         if not obj.assigned_by:
@@ -316,7 +343,10 @@ class JobApplicationSerializer(serializers.ModelSerializer):
         return obj.assigned_by.full_name or obj.assigned_by.email
 
     def get_batch_name(self, obj) -> str | None:
-        return obj.batch.name if obj.batch else None
+        batch = getattr(obj, "batch", None)
+        if not batch:
+            return None
+        return getattr(batch, "name", None)
 
     def get_cooldown_eligible_date(self, obj):
         """Serializable version of the model property."""

@@ -8,6 +8,8 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     port: 3000,
+    // Allow iPhone / other devices on LAN to load the dev server (same Wi‑Fi as your Mac).
+    host: true,
   },
   preview: {
     port: 3001,

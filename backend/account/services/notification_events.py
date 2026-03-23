@@ -31,6 +31,8 @@ class NotificationEvent(str, Enum):
 
     # ---- Account ----
     PASSWORD_CHANGED = "account.password_changed"
+    ACCOUNT_DELETION_APPROVED = "account.deletion_approved"   # → Applicant (email before account removed)
+    ACCOUNT_DELETION_REJECTED = "account.deletion_rejected" # → Applicant
 
     # ---- Profile verification ----
     PROFILE_SUBMITTED = "profile.submitted"         # → Admin/Staff
@@ -108,6 +110,22 @@ _EVENT_CONFIG: dict[NotificationEvent, EventConfig] = {
         send_email=True,
         send_push=False,
         email_pref_field="email_account_updates",
+    ),
+    NotificationEvent.ACCOUNT_DELETION_APPROVED: EventConfig(
+        notification_type=NotificationType.WARNING,
+        priority=NotificationPriority.HIGH,
+        send_email=True,
+        send_push=False,
+        send_inapp=False,
+        email_pref_field="email_account_updates",
+    ),
+    NotificationEvent.ACCOUNT_DELETION_REJECTED: EventConfig(
+        notification_type=NotificationType.INFO,
+        priority=NotificationPriority.HIGH,
+        send_email=True,
+        send_push=True,
+        email_pref_field="email_account_updates",
+        push_pref_field="push_application_updates",
     ),
 
     # Profile verification
@@ -281,6 +299,32 @@ def _tmpl_password_changed(ctx: dict) -> tuple[str, str]:
         f"Halo {name}, kata sandi akun Anda baru saja diubah. "
         "Jika Anda tidak melakukan perubahan ini, segera hubungi kami.",
     )
+
+
+@_t(NotificationEvent.ACCOUNT_DELETION_APPROVED)
+def _tmpl_account_deletion_approved(ctx: dict) -> tuple[str, str]:
+    name = ctx.get("user_name", "Anda")
+    notes = ctx.get("admin_notes", "")
+    body = (
+        f"Halo {name}, permintaan penghapusan akun Anda telah disetujui. "
+        "Akun Anda dan data terkait akan dihapus dari sistem sesuai kebijakan kami."
+    )
+    if notes:
+        body += f" Catatan dari admin: {notes}"
+    return ("Permintaan Penghapusan Akun Disetujui", body)
+
+
+@_t(NotificationEvent.ACCOUNT_DELETION_REJECTED)
+def _tmpl_account_deletion_rejected(ctx: dict) -> tuple[str, str]:
+    name = ctx.get("user_name", "Anda")
+    notes = ctx.get("admin_notes", "")
+    body = (
+        f"Halo {name}, permintaan penghapusan akun Anda tidak disetujui. "
+        "Akun Anda tetap aktif dan Anda dapat terus menggunakan layanan."
+    )
+    if notes:
+        body += f" Catatan: {notes}"
+    return ("Permintaan Penghapusan Akun Ditolak", body)
 
 
 @_t(NotificationEvent.PROFILE_SUBMITTED)

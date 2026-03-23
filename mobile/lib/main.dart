@@ -89,6 +89,9 @@ void main() async {
   // Load environment variables
   await dotenv.load(fileName: '.env');
 
+  // Initialize API client before Firebase / notifications — FCM registration calls Dio.
+  await ApiClient().initialize();
+
   // Initialize Firebase
   try {
     await Firebase.initializeApp(
@@ -102,9 +105,6 @@ void main() async {
     if (kDebugMode) debugPrint('Firebase initialization failed: $e');
     // Continue without Firebase if initialization fails
   }
-
-  // Initialize API client
-  await ApiClient().initialize();
 
   // All heavy init is done — remove the native splash.
   FlutterNativeSplash.remove();

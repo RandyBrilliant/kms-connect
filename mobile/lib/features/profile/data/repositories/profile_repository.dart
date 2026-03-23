@@ -14,6 +14,13 @@ import '../../domain/models/work_experience.dart';
 class ProfileRepository {
   final ApiClient _apiClient = ApiClient();
 
+  /// Backend uses dedicated codes (`deletion_request_submitted`, etc.) instead of `success`.
+  static bool _isDeletionFlowSuccess(ApiResponse<dynamic> r) {
+    return r.isSuccess ||
+        r.code == 'deletion_request_submitted' ||
+        r.code == 'deletion_request_cancelled';
+  }
+
   /// Get current user's profile
   Future<ApplicantProfile> getProfile() async {
     try {
@@ -235,7 +242,7 @@ class ProfileRepository {
         (data) => data as Map<String, dynamic>,
       );
 
-      if (!apiResponse.isSuccess || apiResponse.data == null) {
+      if (!_isDeletionFlowSuccess(apiResponse) || apiResponse.data == null) {
         throw DioException(
           requestOptions: response.requestOptions,
           response: response,
@@ -256,12 +263,12 @@ class ProfileRepository {
       final response = await _apiClient.dio.post(
         ApiEndpoints.cancelDeletionRequest,
       );
-      final apiResponse = ApiResponse<void>.fromJson(
+      final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
         response.data,
-        null,
+        (data) => data as Map<String, dynamic>,
       );
 
-      if (!apiResponse.isSuccess) {
+      if (!_isDeletionFlowSuccess(apiResponse) || apiResponse.data == null) {
         throw DioException(
           requestOptions: response.requestOptions,
           response: response,
