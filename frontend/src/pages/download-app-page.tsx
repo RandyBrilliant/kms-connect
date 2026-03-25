@@ -11,13 +11,14 @@ import {
   IconChevronRight,
   IconDeviceMobile,
   IconCheck,
+  IconBrandApple,
 } from "@tabler/icons-react"
 import { usePageTitle } from "@/hooks/use-page-title"
 import logo from "@/img/logo.png"
 
 // ─── Configuration ────────────────────────────────────────────────────────────
-// Replace this with the real APK download URL once it's available.
-const APK_DOWNLOAD_URL: string | null = "https://drive.google.com/file/d/1ub7IxPPsLOHOi6C6j9uJ8UT3lWyH4n8O/view?usp=sharing"
+const APK_DOWNLOAD_URL: string | null = "https://drive.google.com/drive/folders/1_MYWuuqusSMrAAIT2qYNdRIZdiXbh2tS?usp=sharing"
+const APPLE_STORE_URL: string | null = "https://apps.apple.com/id/app/kms-connect/id6760560231"
 const APP_VERSION = "1.0.0"
 const APK_SIZE = "28 MB"
 const MIN_ANDROID = "Android 8.0 (Oreo)"
@@ -73,11 +74,13 @@ export function DownloadAppPage() {
 
   const handleDownload = () => {
     if (APK_DOWNLOAD_URL) {
-      const link = document.createElement("a")
-      link.href = APK_DOWNLOAD_URL
-      link.rel = "noopener noreferrer"
-      link.download = `KMS-Connect-v${APP_VERSION}.apk`
-      link.click()
+      window.open(APK_DOWNLOAD_URL, "_blank", "noopener,noreferrer")
+    }
+  }
+
+  const handleAppleStoreDownload = () => {
+    if (APPLE_STORE_URL) {
+      window.open(APPLE_STORE_URL, "_blank", "noopener,noreferrer")
     }
   }
 
@@ -123,6 +126,9 @@ export function DownloadAppPage() {
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-400">
               <IconBrandAndroid className="size-4" />
               <span>Tersedia untuk Android</span>
+              <span className="text-white/30">•</span>
+              <IconBrandApple className="size-4" />
+              <span>iOS</span>
             </div>
 
             <h1 className="text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl">
@@ -159,8 +165,8 @@ export function DownloadAppPage() {
                   onClick={handleDownload}
                   className="group flex items-center gap-3 rounded-2xl bg-linear-to-r from-emerald-500 to-teal-500 px-7 py-4 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 transition-all duration-200 hover:shadow-emerald-500/50 hover:scale-[1.02] active:scale-[0.98]"
                 >
-                  <IconDownload className="size-5 transition-transform duration-200 group-hover:-translate-y-0.5" />
-                  Download APK ({APK_SIZE})
+                  <IconBrandAndroid className="size-5 transition-transform duration-200 group-hover:-translate-y-0.5" />
+                  Download Android
                   <IconChevronRight className="size-4 opacity-60" />
                 </button>
               ) : (
@@ -181,6 +187,16 @@ export function DownloadAppPage() {
                     </span>
                   </div>
                 </div>
+              )}
+              {APPLE_STORE_URL && (
+                <button
+                  onClick={handleAppleStoreDownload}
+                  className="group flex items-center gap-3 rounded-2xl bg-linear-to-r from-gray-700 to-gray-800 px-7 py-4 text-sm font-semibold text-white shadow-lg shadow-gray-700/30 transition-all duration-200 hover:shadow-gray-700/50 hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  <IconBrandApple className="size-5 transition-transform duration-200 group-hover:-translate-y-0.5" />
+                  Download iOS
+                  <IconChevronRight className="size-4 opacity-60" />
+                </button>
               )}
             </div>
 
@@ -328,24 +344,42 @@ export function DownloadAppPage() {
               <RequirementRow label="Ukuran File" value={APK_SIZE} />
               <RequirementRow label="Versi Aplikasi" value={`v${APP_VERSION}`} />
               <RequirementRow label="Koneksi Internet" value="Diperlukan" />
-              <RequirementRow label="Platform" value="Android" />
-              <RequirementRow label="iOS (iPhone)" value="Segera Hadir" />
+              <RequirementRow label="Platform" value="Android & iOS" />
+              <RequirementRow label="iOS (iPhone)" value="Tersedia di App Store" />
             </div>
 
-            {/* Coming soon Play Store */}
-            <div className="mt-6 flex items-center gap-4 rounded-xl border border-white/10 bg-white/5 p-4">
-              <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-white/10">
-                <IconBrandAndroid className="size-6 text-emerald-400" />
+            {/* Store Status */}
+            <div className="mt-6 flex flex-col gap-3">
+              <div className="flex items-center gap-4 rounded-xl border border-white/10 bg-white/5 p-4">
+                <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-white/10">
+                  <IconBrandAndroid className="size-6 text-emerald-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-white">Google Play Store</p>
+                  <p className="mt-0.5 text-xs text-white/50">
+                    Dalam proses review — segera tersedia
+                  </p>
+                </div>
+                <div className="ml-auto rounded-full border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 text-[11px] font-medium text-amber-400">
+                  Pending
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-semibold text-white">Google Play Store</p>
-                <p className="mt-0.5 text-xs text-white/50">
-                  Dalam proses review — segera tersedia
-                </p>
-              </div>
-              <div className="ml-auto rounded-full border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 text-[11px] font-medium text-amber-400">
-                Pending
-              </div>
+              {APPLE_STORE_URL && (
+                <div className="flex items-center gap-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+                  <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-white/10">
+                    <IconBrandApple className="size-6 text-emerald-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-white">Apple App Store</p>
+                    <p className="mt-0.5 text-xs text-white/50">
+                      Tersedia sekarang — download gratis
+                    </p>
+                  </div>
+                  <div className="ml-auto rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 text-[11px] font-medium text-emerald-400">
+                    Live
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -365,20 +399,29 @@ export function DownloadAppPage() {
             Download aplikasi KMS Connect dan pantau perjalanan rekrutmen Anda
             dari mana saja.
           </p>
-          <div className="mt-8">
+          <div className="mt-8 flex flex-col gap-3 items-center sm:flex-row sm:justify-center">
             {APK_DOWNLOAD_URL ? (
               <button
                 onClick={handleDownload}
                 className="inline-flex items-center gap-3 rounded-2xl bg-linear-to-r from-emerald-500 to-teal-500 px-8 py-4 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 transition-all duration-200 hover:scale-[1.02] hover:shadow-emerald-500/50 active:scale-[0.98]"
               >
-                <IconDownload className="size-5" />
-                Download APK Gratis
+                <IconBrandAndroid className="size-5" />
+                Download Android
               </button>
             ) : (
               <div className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-sm text-white/50">
                 <IconClockHour4 className="size-4" />
                 Link download akan segera tersedia
               </div>
+            )}
+            {APPLE_STORE_URL && (
+              <button
+                onClick={handleAppleStoreDownload}
+                className="inline-flex items-center gap-3 rounded-2xl bg-linear-to-r from-gray-700 to-gray-800 px-8 py-4 text-sm font-semibold text-white shadow-lg shadow-gray-700/30 transition-all duration-200 hover:scale-[1.02] hover:shadow-gray-700/50 active:scale-[0.98]"
+              >
+                <IconBrandApple className="size-5" />
+                Download iOS
+              </button>
             )}
           </div>
         </div>
