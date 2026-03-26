@@ -5,11 +5,13 @@
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
     
-    <!-- Storage permissions for image cropper -->
+    <!-- Storage permissions for image cropper (Android 12 and below only) -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" tools:replace="android:maxSdkVersion"/>
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
-    <!-- Explicitly remove video/audio media permissions merged in by file_picker — not needed -->
+
+    <!-- Photo picker is used on Android 13+ (no permissions needed) -->
+    <!-- Explicitly remove media permissions to comply with Google Play policy -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" tools:node="remove"/>
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" tools:node="remove"/>
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" tools:node="remove"/>
     
