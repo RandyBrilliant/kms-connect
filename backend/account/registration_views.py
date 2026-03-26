@@ -674,6 +674,9 @@ class KTPOcrPreviewView(APIView):
     Public endpoint untuk OCR preview KTP sebelum registrasi.
     Menerima file KTP, menjalankan OCR, mengembalikan data parsed.
     Tidak membuat user/profile, hanya untuk preview data.
+    
+    Uses bounding box extraction for improved accuracy.
+    Returns birth_place_regency with matched regency info if found.
     """
 
     permission_classes = [AllowAny]
@@ -683,7 +686,7 @@ class KTPOcrPreviewView(APIView):
     def post(self, request):
         import tempfile
         import os
-        from .ocr import extract_text_from_image, parse_ktp_text
+        from .ocr import extract_text_with_blocks, parse_ktp_text_with_regency_match
 
         ktp_file = request.FILES.get("ktp")
 
@@ -715,8 +718,10 @@ class KTPOcrPreviewView(APIView):
                     tmp_file.write(chunk)
                 tmp_file_path = tmp_file.name
 
-            # Extract text using Google Cloud Vision
-            ocr_text = extract_text_from_image(tmp_file_path)
+            # Extract text with bounding boxes using Google Cloud Vision
+            ocr_result = extract_text_with_blocks(tmp_file_path)
+            ocr_text = ocr_result["text"]
+            blocks = ocr_result["blocks"]
 
             # Clean up temp file
             os.unlink(tmp_file_path)
@@ -730,8 +735,8 @@ class KTPOcrPreviewView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            # Parse KTP text
-            parsed_data = parse_ktp_text(ocr_text)
+            # Parse KTP text with spatial extraction and regency matching
+            parsed_data = parse_ktp_text_with_regency_match(ocr_text, blocks)
 
             if not parsed_data or not parsed_data.get("nik"):
                 return Response(

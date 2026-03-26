@@ -226,13 +226,37 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
       if (data.name != null) _nameCtrl.text = data.name!.toUpperCase();
       if (data.birthPlace != null) {
         _ocrBirthPlace = data.birthPlace;
-        _tryMatchCity(data.birthPlace!);
+        // If backend already matched a regency, use it directly
+        if (data.birthPlaceRegency != null) {
+          _setRegencyFromBackend(data.birthPlaceRegency!);
+        } else {
+          // Fallback to client-side matching
+          _tryMatchCity(data.birthPlace!);
+        }
       }
       if (data.birthDate != null) _parseAndSetDate(data.birthDate!);
     });
   }
 
-  //  City matching helpers (unchanged logic) 
+  /// Set the city dropdown from backend-matched regency.
+  void _setRegencyFromBackend(BirthPlaceRegency regency) {
+    ref.read(regenciesProvider).whenData((cities) {
+      final match = cities.where((c) => c.id == regency.id).firstOrNull;
+      if (match != null && mounted) {
+        setState(() {
+          _selectedCity = match;
+          _birthPlaceCtrl.text = match.name;
+        });
+      } else {
+        // Regency not found in local list, try client-side matching
+        if (_ocrBirthPlace != null) {
+          _tryMatchCity(_ocrBirthPlace!);
+        }
+      }
+    });
+  }
+
+  //  City matching helpers (unchanged logic)
 
   String _normalizePlace(String s) {
     return s

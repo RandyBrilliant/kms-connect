@@ -10,13 +10,15 @@ def process_document_ocr(self, document_id: int):
     """
     Jalankan OCR pada ApplicantDocument via Google Cloud Vision.
     Simpan full text ke ocr_text; untuk KTP parse ke ocr_data (nik, name, dll.).
+    
+    Uses bounding box extraction for improved KTP field accuracy.
     Panggil setelah upload: process_document_ocr.delay(doc.pk)
     """
     from django.conf import settings
     from django.utils import timezone
 
     from .models import ApplicantDocument
-    from .ocr import parse_ktp_text
+    from .ocr import parse_ktp_text, _extract_text_blocks
 
     doc = ApplicantDocument.objects.filter(pk=document_id).first()
     if not doc or not doc.file:
@@ -46,7 +48,9 @@ def process_document_ocr(self, document_id: int):
     doc.ocr_processed_at = timezone.now()
 
     if doc.document_type and doc.document_type.code == "ktp" and full_text:
-        doc.ocr_data = parse_ktp_text(full_text)
+        # Extract text blocks with bounding boxes for spatial parsing
+        blocks = _extract_text_blocks(response)
+        doc.ocr_data = parse_ktp_text(full_text, blocks)
     else:
         doc.ocr_data = doc.ocr_data or {}
 
