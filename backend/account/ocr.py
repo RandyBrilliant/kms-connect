@@ -168,12 +168,22 @@ _LABEL_TTL = re.compile(
 _LABEL_TEMPAT = re.compile(r"^tempat\s*[:.]?\s*", re.I)
 _DATE_PATTERN = re.compile(r"(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})")
 _NIK_PATTERN = re.compile(r"\b(\d{16})\b")
-# Words that indicate a KTP field label, not a person's name
+
+# Words/phrases that indicate a KTP field label, not a person's name
+# Uses word boundary at start but allows partial matches at end
 _KTP_LABEL_WORDS = re.compile(
     r"^(?:tempat|tanggal|tgl|ttl|t\.t\.l|berlaku|hingga|s[/.]d|agama|"
     r"jenis|kelamin|status|perkawinan|pekerjaan|alamat|rt[/]?rw|kecamatan|"
     r"kelurahan|desa|golongan|darah|kewarganegaraan|provinsi|kabupaten|kota|"
-    r"nik|nama|negara|republika)\b",
+    r"nik|nama|negara|republika|lahir|gol|warga)",
+    re.I,
+)
+
+# Additional patterns that look like KTP labels or fragments
+_KTP_LABEL_FRAGMENTS = re.compile(
+    r"(?:tempat\s*[/.,]?\s*tan|tgl\s*lahir|tanggal\s*lahir|"
+    r"jenis\s*kelamin|status\s*perk|gol\s*darah|"
+    r"rt\s*/\s*rw|berlaku\s*hingga|kewarga\s*negaraan)",
     re.I,
 )
 
@@ -210,7 +220,17 @@ def _is_valid_name_candidate(text: str) -> bool:
         return False
     if re.match(r"^\d", text):  # starts with a digit (e.g. date or NIK fragment)
         return False
+    # Check if text starts with a known KTP label word
     if _KTP_LABEL_WORDS.match(text):
+        return False
+    # Check for label fragments like "TEMPAT TAN", "TGL LAHIR", etc.
+    if _KTP_LABEL_FRAGMENTS.search(text):
+        return False
+    # Check for common label patterns (colon usually indicates a label)
+    if re.match(r"^[A-Z\s]{2,}\s*:", text, re.I):
+        return False
+    # Indonesian names typically don't contain these patterns
+    if re.search(r"\b(RT|RW|NIK|KTP|SIM|NPWP)\b", text, re.I):
         return False
     return True
 
@@ -304,29 +324,62 @@ def parse_ktp_with_blocks(blocks: list[TextBlock]) -> dict:
             result["nik"] = nik_match.group(1)
 
     # ── Name extraction using spatial position ──
-    name_label_pattern = re.compile(r"^nama\b", re.I)
+    name_label_pattern = re.compile(r"\bnama\b", re.I)
     name_range = _KTP_LAYOUT["name"]["y_range"]
 
-    # First try: find blocks near "Nama" label
-    name_blocks = _find_blocks_near_label(blocks, name_label_pattern)
-    for block in name_blocks:
-        cleaned = _clean_label(block.text, _LABEL_NAMA)
-        if _is_valid_name_candidate(cleaned):
-            result["name"] = cleaned
-            break
+    # Find the "Nama" label block first
+    nama_label_block = None
+    for block in blocks:
+        if name_label_pattern.search(block.text):
+            # Make sure this is the label, not part of other text
+            text_upper = block.text.upper().strip()
+            if text_upper.startswith("NAMA") or text_upper == "NAMA":
+                nama_label_block = block
+                break
 
-    # Second try: look for name in expected Y range
+    if nama_label_block:
+        # Look for text blocks to the RIGHT of the Nama label (same row)
+        # or the first valid block BELOW it
+        candidates = []
+        for block in blocks:
+            if block == nama_label_block:
+                continue
+            # Same row, to the right
+            same_row = abs(block.center_y - nama_label_block.center_y) < 25
+            to_right = block.x_min > nama_label_block.x_max - 10
+            # Just below
+            below = (
+                block.y_min > nama_label_block.y_min
+                and block.y_min < nama_label_block.y_max + 40
+            )
+            if same_row and to_right:
+                candidates.append((0, block))  # Priority 0: same row
+            elif below:
+                candidates.append((1, block))  # Priority 1: below
+
+        # Sort by priority, then by position
+        candidates.sort(key=lambda x: (x[0], x[1].y_min, x[1].x_min))
+
+        for _, block in candidates:
+            cleaned = _clean_label(block.text, _LABEL_NAMA)
+            if _is_valid_name_candidate(cleaned):
+                result["name"] = cleaned
+                break
+
+    # Fallback: look for name in expected Y range
     if not result["name"]:
         for block in norm_blocks:
             if name_range[0] <= block.center_y <= name_range[1]:
-                # Check if this block contains the name value (not just label)
-                if _LABEL_NAMA.match(block.text):
+                # Skip if this looks like a label
+                text_upper = block.text.upper().strip()
+                if text_upper.startswith(("NAMA", "NIK", "TEMPAT", "TANGGAL", "TGL")):
+                    # Try to extract value after the label
                     cleaned = _clean_label(block.text, _LABEL_NAMA)
-                    if _is_valid_name_candidate(cleaned):
+                    if cleaned and _is_valid_name_candidate(cleaned):
                         result["name"] = cleaned
                         break
-                elif _is_valid_name_candidate(block.text):
-                    # This might be the name value itself
+                    continue
+                if _is_valid_name_candidate(block.text):
                     result["name"] = block.text
                     break
 
