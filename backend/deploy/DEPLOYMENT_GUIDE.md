@@ -250,6 +250,28 @@ docker compose -f docker-compose.prod.yml restart nginx
 
 ---
 
+## ⚠️ Important: Migration Best Practices
+
+**NEVER run `makemigrations` directly in production!**
+
+Migrations should always be:
+1. Created locally via `python manage.py makemigrations`
+2. Committed to git with your code changes
+3. Deployed to production (migrations auto-apply via entrypoint.sh)
+
+Running `makemigrations` in production creates "ghost migrations" that can corrupt your database schema if the migration files are lost.
+
+**If you need to check migration status in production:**
+```bash
+# Check which migrations are applied
+docker compose -f docker-compose.prod.yml exec api python manage.py showmigrations
+
+# Check pending migrations
+docker compose -f docker-compose.prod.yml exec api python manage.py showmigrations --plan
+```
+
+---
+
 ## 🛠️ Troubleshooting
 
 ### Services Won't Start

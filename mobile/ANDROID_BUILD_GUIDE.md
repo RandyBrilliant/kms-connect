@@ -10,6 +10,7 @@ Panduan lengkap untuk membuat APK Android dari aplikasi KMS Connect untuk keperl
 2. [Konfigurasi Sebelum Build](#2-konfigurasi-sebelum-build)
 3. [Option A — Debug-Signed APK (Cepat, untuk testing awal)](#3-option-a--debug-signed-apk-cepat-untuk-testing-awal)
 4. [Option B — Release APK dengan Keystore Sendiri (Direkomendasikan)](#4-option-b--release-apk-dengan-keystore-sendiri-direkomendasikan)
+   - [4.4 Pakai keystore yang sama di Windows dan MacBook](#44-pakai-keystore-yang-sama-di-windows-dan-macbook)
 5. [Menjalankan Build](#5-menjalankan-build)
 6. [Distribusi APK ke Klien](#6-distribusi-apk-ke-klien)
 7. [Instruksi untuk Klien](#7-instruksi-untuk-klien)
@@ -218,6 +219,99 @@ dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
 }
 ```
+
+### 4.4 Pakai keystore yang sama di Windows dan MacBook
+
+Tujuan section ini: build dari Windows dan Mac tetap memakai **keystore yang sama** agar update aplikasi tetap valid (signature tidak berubah).
+
+#### Langkah 1 - Pastikan data keystore yang wajib disimpan
+
+Catat dan simpan data berikut dari mesin Windows:
+
+- File `.jks` (contoh: `kmsconnect-release.jks`)
+- `keyAlias`
+- `storePassword`
+- `keyPassword`
+
+> Jika salah satu berbeda di Mac, proses signing release akan gagal atau menghasilkan signature berbeda.
+
+#### Langkah 2 - Transfer file `.jks` ke Mac secara aman
+
+Metode yang aman:
+
+- AirDrop
+- USB terenkripsi
+- Password manager yang mendukung secure file attachment
+
+Hindari mengirim file keystore lewat chat biasa tanpa enkripsi.
+
+#### Langkah 3 - Simpan keystore di path khusus di Mac
+
+Di Mac:
+
+```bash
+mkdir -p ~/keystores
+```
+
+Lalu letakkan file keystore di:
+
+`/Users/<username>/keystores/kmsconnect-release.jks`
+
+#### Langkah 4 - Buat `android/key.properties` khusus Mac
+
+File: `mobile/android/key.properties`
+
+```properties
+storePassword=PASSWORD_KEYSTORE_ANDA
+keyPassword=PASSWORD_KEY_ANDA
+keyAlias=kmsconnect
+storeFile=/Users/<username>/keystores/kmsconnect-release.jks
+```
+
+Catatan penting:
+- Di macOS gunakan slash biasa `/`, bukan `\\`.
+- Nilai password dan alias harus sama persis dengan yang dipakai di Windows.
+
+#### Langkah 5 - Verifikasi fingerprint SHA-1 di kedua mesin
+
+Di Windows (PowerShell):
+
+```powershell
+& "C:\Program Files\Android\Android Studio\jbr\bin\keytool.exe" -list -v `
+  -keystore C:\Users\randy\kmsconnect-release.jks `
+  -alias kmsconnect `
+  -storepass PASSWORD_KEYSTORE_ANDA
+```
+
+Di Mac (Terminal):
+
+```bash
+keytool -list -v \
+  -keystore /Users/<username>/keystores/kmsconnect-release.jks \
+  -alias kmsconnect \
+  -storepass PASSWORD_KEYSTORE_ANDA
+```
+
+Bandingkan nilai `SHA1` dari output keduanya. Harus identik.
+
+#### Langkah 6 - Build release di Mac
+
+Dari folder `mobile/`:
+
+```bash
+flutter clean
+flutter pub get
+flutter build apk --release --split-per-abi
+```
+
+Jika build sukses, berarti Mac sudah menggunakan keystore yang sama.
+
+#### Checklist cepat (Windows + Mac sinkron)
+
+- [ ] File `.jks` yang sama dipakai di dua mesin
+- [ ] `keyAlias`, `storePassword`, `keyPassword` sama persis
+- [ ] `SHA1` hasil `keytool -list -v` identik
+- [ ] `android/key.properties` sudah pakai path yang sesuai OS
 
 ---
 
