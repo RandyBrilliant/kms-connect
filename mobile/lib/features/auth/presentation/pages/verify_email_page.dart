@@ -4,13 +4,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../../config/colors.dart';
 import '../../../../core/api/api_client.dart';
 import '../../../../core/api/endpoints.dart';
 import '../../../../core/models/api_response.dart';
 import '../../../../core/widgets/custom_toast.dart';
+import '../../../../core/widgets/professional/professional_gradient_background.dart';
+import '../../../../core/widgets/professional/professional_card.dart';
+import '../../../../core/widgets/professional/professional_button.dart';
+import '../../../../core/widgets/professional_text_field.dart';
 import '../../data/providers/auth_provider.dart';
 
 enum _VerifyStatus { loading, success, error }
+
+const _kSuccessColor = Color(0xFF16A34A);
+const _kErrorColor = Color(0xFFDC2626);
 
 class VerifyEmailPage extends ConsumerStatefulWidget {
   final String token;
@@ -21,19 +29,41 @@ class VerifyEmailPage extends ConsumerStatefulWidget {
   ConsumerState<VerifyEmailPage> createState() => _VerifyEmailPageState();
 }
 
-class _VerifyEmailPageState extends ConsumerState<VerifyEmailPage> {
+class _VerifyEmailPageState extends ConsumerState<VerifyEmailPage>
+    with SingleTickerProviderStateMixin {
   _VerifyStatus _status = _VerifyStatus.loading;
   String _message = '';
   String? _verifiedEmail;
   bool _resendLoading = false;
   final _resendEmailCtrl = TextEditingController();
 
+  late final AnimationController _animCtrl;
+  late final Animation<double> _fadeIn;
+  late final Animation<double> _slideUp;
+  late final Animation<double> _scaleIn;
+
   @override
   void initState() {
     super.initState();
+
+    _animCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    );
+    _fadeIn = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(parent: _animCtrl, curve: const Interval(0, 0.6, curve: Curves.easeOut)),
+    );
+    _slideUp = Tween<double>(begin: 40, end: 0).animate(
+      CurvedAnimation(parent: _animCtrl, curve: const Interval(0.2, 1, curve: Curves.easeOutCubic)),
+    );
+    _scaleIn = Tween<double>(begin: 0.8, end: 1).animate(
+      CurvedAnimation(parent: _animCtrl, curve: const Interval(0, 0.8, curve: Curves.elasticOut)),
+    );
+
     if (widget.token.isEmpty) {
       _status = _VerifyStatus.error;
       _message = 'Token verifikasi tidak ditemukan.';
+      WidgetsBinding.instance.addPostFrameCallback((_) => _animCtrl.forward());
     } else {
       _verifyToken();
     }
@@ -41,6 +71,7 @@ class _VerifyEmailPageState extends ConsumerState<VerifyEmailPage> {
 
   @override
   void dispose() {
+    _animCtrl.dispose();
     _resendEmailCtrl.dispose();
     super.dispose();
   }
@@ -61,6 +92,7 @@ class _VerifyEmailPageState extends ConsumerState<VerifyEmailPage> {
         _message = apiResponse.detail ?? 'Email berhasil diverifikasi.';
         _verifiedEmail = apiResponse.data?['email'] as String?;
       });
+      _animCtrl.forward();
     } on DioException catch (e) {
       final data = e.response?.data;
       final detail = (data is Map<String, dynamic> ? data['detail'] : null) as String?;
@@ -68,11 +100,13 @@ class _VerifyEmailPageState extends ConsumerState<VerifyEmailPage> {
         _status = _VerifyStatus.error;
         _message = detail ?? 'Token tidak valid atau kedaluwarsa.';
       });
+      _animCtrl.forward();
     } catch (_) {
       setState(() {
         _status = _VerifyStatus.error;
         _message = 'Verifikasi email gagal. Silakan coba lagi.';
       });
+      _animCtrl.forward();
     }
   }
 
@@ -101,94 +135,78 @@ class _VerifyEmailPageState extends ConsumerState<VerifyEmailPage> {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) {
-        final cs = Theme.of(ctx).colorScheme;
-        final tt = Theme.of(ctx).textTheme;
-
         return SafeArea(
           top: false,
-          child: LayoutBuilder(
-            builder: (context, constraints) => SingleChildScrollView(
-              padding: EdgeInsets.only(
-                left: 24,
-                right: 24,
-                top: 24,
-                bottom: MediaQuery.viewInsetsOf(ctx).bottom + 24,
-              ),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minWidth: 0,
-                  maxWidth: constraints.maxWidth,
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: 24,
+              right: 24,
+              top: 32,
+              bottom: MediaQuery.viewInsetsOf(ctx).bottom + 24,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Handle bar
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 24),
+                    decoration: BoxDecoration(
+                      color: AppColors.divider,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Kirim Ulang Email Verifikasi',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: cs.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Masukkan alamat email yang didaftarkan untuk menerima tautan verifikasi baru.',
-                      style: tt.bodySmall?.copyWith(
-                        color: cs.onSurfaceVariant,
-                        height: 1.4,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    TextField(
-                      controller: _resendEmailCtrl,
-                      keyboardType: TextInputType.emailAddress,
-                      autofocus: true,
-                      textInputAction: TextInputAction.done,
-                      decoration: InputDecoration(
-                        labelText: 'Email',
-                        hintText: 'contoh@email.com',
-                        prefixIcon: const Icon(Icons.mail_outline_rounded),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        onPressed: _resendLoading
-                            ? null
-                            : () async {
-                                Navigator.of(ctx).pop();
-                                await _handleResend(_resendEmailCtrl.text);
-                              },
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size.fromHeight(50),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          textStyle: GoogleFonts.plusJakartaSans(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        child: Text(
-                          _resendLoading
-                              ? 'Mengirim...'
-                              : 'Kirim Email Verifikasi',
-                        ),
-                      ),
-                    ),
-                  ],
+                
+                Text(
+                  'Kirim Ulang Email Verifikasi',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textDark,
+                    letterSpacing: -0.3,
+                  ),
                 ),
-              ),
+                const SizedBox(height: 8),
+                Text(
+                  'Masukkan alamat email yang didaftarkan untuk menerima tautan verifikasi baru.',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 14,
+                    color: AppColors.textMedium,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                
+                ProfessionalTextField(
+                  controller: _resendEmailCtrl,
+                  label: 'Email',
+                  hintText: 'contoh@email.com',
+                  prefixIcon: Icons.mail_outline_rounded,
+                  keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.done,
+                ),
+                const SizedBox(height: 24),
+                
+                ProfessionalButton(
+                  label: _resendLoading ? 'Mengirim...' : 'Kirim Email Verifikasi',
+                  onPressed: _resendLoading
+                      ? null
+                      : () {
+                          Navigator.of(ctx).pop();
+                          _handleResend(_resendEmailCtrl.text);
+                        },
+                  isLoading: _resendLoading,
+                ),
+              ],
             ),
           ),
         );
@@ -196,124 +214,79 @@ class _VerifyEmailPageState extends ConsumerState<VerifyEmailPage> {
     );
   }
 
+  String get _statusTitle {
+    return switch (_status) {
+      _VerifyStatus.loading => 'Memverifikasi...',
+      _VerifyStatus.success => 'Email Terverifikasi!',
+      _VerifyStatus.error => 'Verifikasi Gagal',
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return Scaffold(
-      backgroundColor: colorScheme.surface,
-      appBar: AppBar(
-        title: Text(
-          'Verifikasi Email',
-          style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700),
-        ),
-        backgroundColor: colorScheme.surface,
-        surfaceTintColor: Colors.transparent,
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+      body: ProfessionalGradientBackground(
+        child: SafeArea(
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _buildStatusIcon(colorScheme),
-              const SizedBox(height: 24),
-              Text(
-                _statusTitle,
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  color: colorScheme.onSurface,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-              if (_status != _VerifyStatus.loading)
-                Text(
-                  _message,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 14,
-                    color: colorScheme.onSurfaceVariant,
-                    height: 1.5,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              if (_verifiedEmail != null && _status == _VerifyStatus.success) ...[
-                const SizedBox(height: 6),
-                Text(
-                  _verifiedEmail!,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: colorScheme.primary,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 40),
-              if (_status == _VerifyStatus.success)
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: () => context.go('/home'),
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 52),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      textStyle: GoogleFonts.plusJakartaSans(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    child: const Text('Lanjutkan ke Aplikasi'),
-                  ),
-                ),
-              if (_status == _VerifyStatus.error) ...[
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: _verifyToken,
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 52),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      textStyle: GoogleFonts.plusJakartaSans(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    child: const Text('Coba Lagi'),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    onPressed: _showResendBottomSheet,
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 52),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      textStyle: GoogleFonts.plusJakartaSans(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    child: const Text('Kirim Ulang Email Verifikasi'),
-                  ),
-                ),
-              ],
               const SizedBox(height: 16),
-              TextButton(
-                onPressed: () => context.go('/login'),
-                child: Text(
-                  'Kembali ke Login',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: colorScheme.primary,
+              
+              // Header
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () => context.go('/login'),
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withValues(alpha: 0.15),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.3),
+                            width: 1.0,
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.arrow_back_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Text(
+                      'Verifikasi Email',
+                      style: GoogleFonts.plusJakartaSans(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        height: 1.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 32),
+
+              // Content
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: AnimatedBuilder(
+                    animation: _animCtrl,
+                    builder: (context, child) {
+                      return Transform.translate(
+                        offset: Offset(0, _slideUp.value),
+                        child: Opacity(
+                          opacity: _fadeIn.value,
+                          child: _buildContent(),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),
@@ -324,34 +297,185 @@ class _VerifyEmailPageState extends ConsumerState<VerifyEmailPage> {
     );
   }
 
-  Widget _buildStatusIcon(ColorScheme colorScheme) {
-    if (_status == _VerifyStatus.loading) {
-      return SizedBox(
-        width: 80,
-        height: 80,
-        child: CircularProgressIndicator(
-          strokeWidth: 3,
-          color: colorScheme.primary,
+  Widget _buildContent() {
+    return ProfessionalCard(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          children: [
+            // Status icon
+            _buildStatusIcon(),
+            const SizedBox(height: 28),
+
+            // Title
+            Text(
+              _statusTitle,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+                color: _status == _VerifyStatus.success
+                    ? _kSuccessColor
+                    : _status == _VerifyStatus.error
+                        ? _kErrorColor
+                        : AppColors.textDark,
+                letterSpacing: -0.3,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+
+            // Message
+            if (_status != _VerifyStatus.loading)
+              Text(
+                _message,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 14,
+                  color: AppColors.textMedium,
+                  height: 1.5,
+                ),
+                textAlign: TextAlign.center,
+              ),
+
+            // Verified email
+            if (_verifiedEmail != null && _status == _VerifyStatus.success) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: _kSuccessColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  _verifiedEmail!,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: _kSuccessColor,
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 36),
+
+            // Action buttons
+            if (_status == _VerifyStatus.loading)
+              Column(
+                children: [
+                  SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 3,
+                      color: AppColors.primaryDarkGreen,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Mohon tunggu...',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 14,
+                      color: AppColors.textMedium,
+                    ),
+                  ),
+                ],
+              ),
+
+            if (_status == _VerifyStatus.success)
+              ProfessionalButton(
+                label: 'Lanjutkan ke Aplikasi',
+                onPressed: () => context.go('/home'),
+              ),
+
+            if (_status == _VerifyStatus.error) ...[
+              ProfessionalButton(
+                label: 'Coba Lagi',
+                onPressed: _verifyToken,
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 54,
+                child: OutlinedButton(
+                  onPressed: _showResendBottomSheet,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primaryDarkGreen,
+                    side: BorderSide(
+                      color: AppColors.primaryDarkGreen,
+                      width: 1.5,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: Text(
+                    'Kirim Ulang Email Verifikasi',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+            
+            if (_status != _VerifyStatus.loading) ...[
+              const SizedBox(height: 24),
+              GestureDetector(
+                onTap: () => context.go('/login'),
+                child: Text(
+                  'Kembali ke Login',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primaryDarkGreen,
+                    decoration: TextDecoration.underline,
+                    decorationColor: AppColors.primaryDarkGreen,
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
-      );
-    }
-    final (icon, color) = _status == _VerifyStatus.success
-        ? (Icons.mark_email_read_outlined, const Color(0xFF16A34A))
-        : (Icons.error_outline_rounded, colorScheme.error);
-    return Container(
-      width: 88,
-      height: 88,
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        shape: BoxShape.circle,
       ),
-      child: Icon(icon, size: 44, color: color),
     );
   }
 
-  String get _statusTitle => switch (_status) {
-        _VerifyStatus.loading => 'Memverifikasi...',
-        _VerifyStatus.success => 'Email Terverifikasi!',
-        _VerifyStatus.error => 'Verifikasi Gagal',
-      };
+  Widget _buildStatusIcon() {
+    if (_status == _VerifyStatus.loading) {
+      return Container(
+        width: 100,
+        height: 100,
+        decoration: BoxDecoration(
+          color: AppColors.primaryDarkGreen.withValues(alpha: 0.1),
+          shape: BoxShape.circle,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(26),
+          child: CircularProgressIndicator(
+            strokeWidth: 3,
+            color: AppColors.primaryDarkGreen,
+          ),
+        ),
+      );
+    }
+
+    final isSuccess = _status == _VerifyStatus.success;
+    final color = isSuccess ? _kSuccessColor : _kErrorColor;
+    final icon = isSuccess
+        ? Icons.mark_email_read_rounded
+        : Icons.error_outline_rounded;
+
+    return ScaleTransition(
+      scale: _scaleIn,
+      child: Container(
+        width: 100,
+        height: 100,
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, size: 52, color: color),
+      ),
+    );
+  }
 }

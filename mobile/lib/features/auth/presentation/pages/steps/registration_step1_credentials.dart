@@ -3,19 +3,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../../../config/colors.dart';
 import '../../../../../core/widgets/custom_toast.dart';
-import '../../../../../core/widgets/m3_text_field.dart';
-import '../../../../../core/widgets/phone_input_field.dart';
+import '../../../../../core/widgets/professional_text_field.dart';
+import '../../../../../core/widgets/professional_phone_field.dart';
+import '../../../../../core/widgets/professional/professional_button.dart';
+import '../../../data/providers/auth_provider.dart';
 import '../../providers/registration_provider.dart';
 
-/// Step 1 of 2  email, password, confirm password, optional referral code.
+/// Step 1 of 2 – Professional redesigned credentials input.
 ///
-/// Intentionally contains no header / step-indicator (the parent
-/// [RegistrationPageNew] owns that).  Only the form and CTAs live here.
-///
-/// Performance note: text fields use [M3TextField] which derives all
-/// [TextStyle]s from the ambient [Theme], avoiding per-keystroke
-/// [TextStyle] allocations.
+/// Uses ProfessionalTextField for consistent styling and enhanced UX.
+/// Implements keyboard auto-scroll for better mobile experience.
 class RegistrationStep1Credentials extends ConsumerStatefulWidget {
   const RegistrationStep1Credentials({super.key});
 
@@ -44,7 +43,7 @@ class _RegistrationStep1CredentialsState
   @override
   void initState() {
     super.initState();
-    // Restore email when returning from step 2.
+    // Restore data when returning from step 2
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final s = ref.read(registrationProvider);
@@ -68,15 +67,8 @@ class _RegistrationStep1CredentialsState
 
   void _handleNext() {
     if (!_formKey.currentState!.validate()) return;
-    // Validate phone separately since PhoneInputField uses FormField
-    final phoneError = validatePhoneNumber(_phoneCtrl.text);
-    if (phoneError != null) {
-      CustomToast.show(context, message: phoneError, type: ToastType.warning);
-      return;
-    }
-    ref
-        .read(registrationProvider.notifier)
-        .setCredentials(
+    
+    ref.read(registrationProvider.notifier).setCredentials(
           email: _emailCtrl.text.trim(),
           password: _passwordCtrl.text,
           phoneNumber: _phoneCtrl.text.trim(),
@@ -86,8 +78,8 @@ class _RegistrationStep1CredentialsState
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
+    final size = MediaQuery.sizeOf(context);
+    final isCompact = size.height < 740;
 
     return Form(
       key: _formKey,
@@ -95,35 +87,42 @@ class _RegistrationStep1CredentialsState
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          //  Section label
-          SizedBox(height: MediaQuery.sizeOf(context).height < 740 ? 12 : 20),
+          // Section header
+          SizedBox(height: isCompact ? 12 : 20),
           Text(
             'Informasi Akun',
+            textAlign: TextAlign.center,
             style: GoogleFonts.plusJakartaSans(
-              fontSize: 20,
+              fontSize: 24,
               fontWeight: FontWeight.w800,
-              color: cs.onSurface,
-              letterSpacing: -0.3,
+              color: AppColors.textDark,
+              letterSpacing: -0.5,
+              height: 1.2,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 8),
           Text(
-            'Langkah 1 dari 2  Masukkan email dan kata sandi',
-            style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+            'Langkah 1 dari 2 • Masukkan email dan kata sandi',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: AppColors.textMedium,
+              height: 1.4,
+            ),
           ),
-          SizedBox(height: MediaQuery.sizeOf(context).height < 740 ? 16 : 28),
+          SizedBox(height: isCompact ? 24 : 32),
 
-          //  Email
-          M3TextField(
+          // Email field
+          ProfessionalTextField(
             controller: _emailCtrl,
             focusNode: _emailFocus,
-            nextFocusNode: _passwordFocus,
             label: 'Email',
-            hint: 'contoh@email.com',
+            hintText: 'contoh@email.com',
             prefixIcon: Icons.email_outlined,
             keyboardType: TextInputType.emailAddress,
             textInputAction: TextInputAction.next,
-            autofillHints: const [AutofillHints.email],
+            onSubmitted: (_) => _passwordFocus.requestFocus(),
             validator: (v) {
               if (v == null || v.trim().isEmpty) return 'Email wajib diisi';
               if (!v.contains('@')) return 'Format email tidak valid';
@@ -132,19 +131,26 @@ class _RegistrationStep1CredentialsState
           ),
           const SizedBox(height: 16),
 
-          //  Password
-          M3TextField(
+          // Password field
+          ProfessionalTextField(
             controller: _passwordCtrl,
             focusNode: _passwordFocus,
-            nextFocusNode: _confirmFocus,
             label: 'Kata Sandi',
-            hint: 'Minimal 8 karakter',
+            hintText: 'Minimal 8 karakter',
             prefixIcon: Icons.lock_outline_rounded,
             obscureText: _obscurePassword,
             textInputAction: TextInputAction.next,
-            suffixWidget: _VisibilityToggle(
-              obscure: _obscurePassword,
-              onTap: () => setState(() => _obscurePassword = !_obscurePassword),
+            onSubmitted: (_) => _confirmFocus.requestFocus(),
+            suffixIcon: IconButton(
+              icon: Icon(
+                _obscurePassword
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
+                size: 20,
+                color: AppColors.textMedium,
+              ),
+              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+              tooltip: _obscurePassword ? 'Tampilkan' : 'Sembunyikan',
             ),
             validator: (v) {
               if (v == null || v.isEmpty) return 'Kata sandi wajib diisi';
@@ -154,20 +160,26 @@ class _RegistrationStep1CredentialsState
           ),
           const SizedBox(height: 16),
 
-          //  Confirm password
-          M3TextField(
+          // Confirm password field
+          ProfessionalTextField(
             controller: _confirmCtrl,
             focusNode: _confirmFocus,
             label: 'Konfirmasi Kata Sandi',
-            hint: 'Ulangi kata sandi',
+            hintText: 'Ulangi kata sandi',
             prefixIcon: Icons.lock_outline_rounded,
             obscureText: _obscureConfirm,
-            textInputAction: TextInputAction.done,
-            onSubmitted: (_) =>
-                FocusScope.of(context).requestFocus(_phoneFocus),
-            suffixWidget: _VisibilityToggle(
-              obscure: _obscureConfirm,
-              onTap: () => setState(() => _obscureConfirm = !_obscureConfirm),
+            textInputAction: TextInputAction.next,
+            onSubmitted: (_) => _phoneFocus.requestFocus(),
+            suffixIcon: IconButton(
+              icon: Icon(
+                _obscureConfirm
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
+                size: 20,
+                color: AppColors.textMedium,
+              ),
+              onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+              tooltip: _obscureConfirm ? 'Tampilkan' : 'Sembunyikan',
             ),
             validator: (v) {
               if (v != _passwordCtrl.text) return 'Kata sandi tidak cocok';
@@ -176,83 +188,61 @@ class _RegistrationStep1CredentialsState
           ),
           const SizedBox(height: 16),
 
-          //  Phone number
-          PhoneInputField(
+          // Phone number field
+          ProfessionalPhoneField(
             controller: _phoneCtrl,
             focusNode: _phoneFocus,
             label: 'Nomor Telepon',
-            hint: '81234567890',
+            hintText: '81234567890',
             textInputAction: TextInputAction.done,
           ),
-          SizedBox(height: MediaQuery.sizeOf(context).height < 740 ? 16 : 28),
+          SizedBox(height: isCompact ? 24 : 32),
 
-          //  Next button
-          FilledButton(
+          // Next button
+          ProfessionalButton(
+            label: 'Selanjutnya',
             onPressed: _handleNext,
-            style: FilledButton.styleFrom(
-              minimumSize: const Size(double.infinity, 52),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
-            child: Text(
-              'Selanjutnya',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.4,
-              ),
-            ),
+            icon: Icons.arrow_forward_rounded,
           ),
-          SizedBox(height: MediaQuery.sizeOf(context).height < 740 ? 16 : 28),
+          SizedBox(height: isCompact ? 20 : 28),
 
-          SizedBox(height: MediaQuery.sizeOf(context).height < 740 ? 16 : 28),
-
-          //  Login link
+          // Login link
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
                 'Sudah punya akun? ',
-                style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textMedium,
+                ),
               ),
-              GestureDetector(
+              InkWell(
                 onTap: () => context.go('/login'),
-                child: Text(
-                  'Masuk',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: cs.primary,
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  child: Text(
+                    'Masuk',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primaryDarkGreen,
+                      decoration: TextDecoration.underline,
+                      decorationColor: AppColors.primaryDarkGreen,
+                    ),
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 16),
         ],
       ),
-    );
-  }
-}
-
-//  Reusable visibility-toggle icon
-
-class _VisibilityToggle extends StatelessWidget {
-  final bool obscure;
-  final VoidCallback onTap;
-  const _VisibilityToggle({required this.obscure, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return IconButton(
-      icon: Icon(
-        obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-        size: 20,
-        color: Theme.of(context).colorScheme.onSurfaceVariant,
-      ),
-      onPressed: onTap,
-      tooltip: obscure ? 'Tampilkan' : 'Sembunyikan',
     );
   }
 }

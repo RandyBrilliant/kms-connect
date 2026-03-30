@@ -1,149 +1,60 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../config/colors.dart';
-import '../../../../core/widgets/auth_wave_header.dart';
 import '../../../../core/widgets/custom_toast.dart';
 import '../../data/providers/notification_provider.dart';
 import '../../domain/models/app_notification.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Page
-// ─────────────────────────────────────────────────────────────────────────────
-
+/// Professional notifications page with clean Material Design 3 styling
 class NotificationsPage extends ConsumerWidget {
   const NotificationsPage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(notificationProvider);
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    const headerH = 140.0;
     final topPad = MediaQuery.paddingOf(context).top;
 
     return Scaffold(
-      backgroundColor: cs.surfaceContainerLowest,
+      backgroundColor: const Color(0xFFF8FAFB),
       body: Column(
         children: [
-          // ── Header ──────────────────────────────────────────────────────
-          SizedBox(
-            height: headerH + topPad,
-            child: Stack(
-              children: [
-                Positioned.fill(
-                    child:
-                        AuthWaveHeader(height: headerH + topPad)),
-                Padding(
-                  padding: EdgeInsets.fromLTRB(
-                      16, topPad + 10, 16, 0),
-                  child: Row(
-                    children: [
-                      GestureDetector(
-                        onTap: () => Navigator.pop(context),
-                        child: Container(
-                          width: 38,
-                          height: 38,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.white
-                                .withValues(alpha: 0.18),
-                            border: Border.all(
-                              color: Colors.white
-                                  .withValues(alpha: 0.35),
-                              width: 1.2,
-                            ),
-                          ),
-                          child: const Icon(
-                              Icons.arrow_back_rounded,
-                              color: Colors.white,
-                              size: 18),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'Notifikasi',
-                              style: tt.titleMedium?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            if (state.unreadCount > 0)
-                              Text(
-                                '${state.unreadCount} belum dibaca',
-                                style: tt.bodySmall?.copyWith(
-                                  color: Colors.white
-                                      .withValues(alpha: 0.8),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      if (state.unreadCount > 0)
-                        GestureDetector(
-                          onTap: () {
-                            ref
-                                .read(notificationProvider.notifier)
-                                .markAllRead();
-                            CustomToast.show(context,
-                                message: 'Semua notifikasi ditandai dibaca',
-                                type: ToastType.success);
-                          },
-                          child: Container(
-                            width: 38,
-                            height: 38,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Colors.white
-                                  .withValues(alpha: 0.18),
-                              border: Border.all(
-                                color: Colors.white
-                                    .withValues(alpha: 0.35),
-                                width: 1.2,
-                              ),
-                            ),
-                            child: const Icon(
-                                Icons.done_all_rounded,
-                                color: Colors.white,
-                                size: 18),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+          // ── Professional Header ──────────────────────────────────────────────
+          _ProfessionalNotificationHeader(
+            topPad: topPad,
+            unreadCount: state.unreadCount,
+            onBack: () => Navigator.pop(context),
+            onMarkAllRead: state.unreadCount > 0 
+              ? () {
+                  ref.read(notificationProvider.notifier).markAllRead();
+                  CustomToast.show(
+                    context,
+                    message: 'Semua notifikasi ditandai dibaca',
+                    type: ToastType.success,
+                  );
+                }
+              : null,
           ),
 
-          // ── List ────────────────────────────────────────────────────────
+          // ── Content ───────────────────────────────────────────────────────────
           Expanded(
             child: state.isLoading && state.notifications.isEmpty
-                ? const Center(
-                    child: CircularProgressIndicator(
-                        color: AppColors.primaryDarkGreen,
-                        strokeWidth: 2.5))
+                ? const _ProfessionalLoadingState()
                 : state.notifications.isEmpty
-                    ? const _EmptyState()
+                    ? const _ProfessionalEmptyState()
                     : RefreshIndicator(
                         color: AppColors.primaryDarkGreen,
-                        onRefresh: () =>
-                            ref.read(notificationProvider.notifier).load(),
+                        backgroundColor: Colors.white,
+                        onRefresh: () => ref.read(notificationProvider.notifier).load(),
                         child: ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(
-                              20, 16, 20, 32),
+                          padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
                           itemCount: state.notifications.length,
-                          separatorBuilder: (context, index) =>
-                              const SizedBox(height: 8),
+                          separatorBuilder: (context, index) => const SizedBox(height: 12),
                           itemBuilder: (ctx, i) {
                             final n = state.notifications[i];
-                            return _NotificationCard(
+                            return _ProfessionalNotificationCard(
                               notification: n,
                               onTap: () => ref
                                   .read(notificationProvider.notifier)
@@ -160,113 +71,332 @@ class NotificationsPage extends ConsumerWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// _NotificationCard
+// Professional Notification Header
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _NotificationCard extends StatelessWidget {
-  const _NotificationCard({
+class _ProfessionalNotificationHeader extends StatelessWidget {
+  const _ProfessionalNotificationHeader({
+    required this.topPad,
+    required this.unreadCount,
+    required this.onBack,
+    this.onMarkAllRead,
+  });
+
+  final double topPad;
+  final int unreadCount;
+  final VoidCallback onBack;
+  final VoidCallback? onMarkAllRead;
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(20, topPad + 16, 20, 24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          bottom: BorderSide(
+            color: AppColors.divider.withValues(alpha: 0.3),
+            width: 1,
+          ),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Top row: Back button + Title + Action
+          Row(
+            children: [
+              // Back button
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: onBack,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryDarkGreen.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: AppColors.primaryDarkGreen.withValues(alpha: 0.2),
+                        width: 1,
+                      ),
+                    ),
+                    child: Icon(
+                      Icons.arrow_back_rounded,
+                      color: AppColors.primaryDarkGreen,
+                      size: 20,
+                    ),
+                  ),
+                ),
+              ),
+              
+              const SizedBox(width: 16),
+              
+              // Title and subtitle
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Notifikasi',
+                      style: tt.headlineSmall?.copyWith(
+                        color: AppColors.textDark,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (unreadCount > 0) ...[
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: AppColors.error,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            '$unreadCount belum dibaca',
+                            style: tt.bodyMedium?.copyWith(
+                              color: AppColors.textMedium,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              
+              // Mark all read button
+              if (onMarkAllRead != null)
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: onMarkAllRead,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryDarkGreen,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primaryDarkGreen.withValues(alpha: 0.2),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.done_all_rounded,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Tandai Semua',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Professional Notification Card
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ProfessionalNotificationCard extends StatelessWidget {
+  const _ProfessionalNotificationCard({
     required this.notification,
     required this.onTap,
   });
+
   final AppNotification notification;
   final VoidCallback onTap;
 
+  // Enhanced type configuration with professional colors
   static const _typeConfig = {
-    'SYSTEM': (Color(0xFF2563EB), Color(0xFFDBEAFE), Icons.settings_rounded),
-    'JOB': (AppColors.primaryDarkGreen, AppColors.secondaryLightGreen, Icons.work_outline_rounded),
-    'APPLICATION': (AppColors.primaryDarkGreen, AppColors.secondaryLightGreen, Icons.assignment_outlined),
-    'DOCUMENT': (Color(0xFFD97706), Color(0xFFFEF3C7), Icons.folder_open_outlined),
-    'PROFILE': (Color(0xFF7C3AED), Color(0xFFEDE9FE), Icons.person_outline_rounded),
-    'BROADCAST': (AppColors.error, Color(0xFFFFE4E6), Icons.campaign_outlined),
-    'INFO': (Color(0xFF0284C7), Color(0xFFE0F2FE), Icons.info_outline_rounded),
+    'SYSTEM': (Color(0xFF3B82F6), Color(0xFFEFF6FF), Icons.settings_rounded),
+    'JOB': (AppColors.primaryDarkGreen, Color(0xFFF0F9F4), Icons.work_outline_rounded),
+    'APPLICATION': (Color(0xFF0891B2), Color(0xFFECFCFF), Icons.description_outlined),
+    'DOCUMENT': (Color(0xFFF59E0B), Color(0xFFFFFBEB), Icons.folder_open_outlined),
+    'PROFILE': (Color(0xFF8B5CF6), Color(0xFFF3F4F6), Icons.person_outline_rounded),
+    'BROADCAST': (Color(0xFFEF4444), Color(0xFFFEF2F2), Icons.campaign_outlined),
+    'INFO': (Color(0xFF06B6D4), Color(0xFFECFDF5), Icons.info_outline_rounded),
   };
 
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
-    final cs = Theme.of(context).colorScheme;
-    final cfg = _typeConfig[notification.notificationType] ??
-        _typeConfig['SYSTEM']!;
+    final cfg = _typeConfig[notification.notificationType] ?? _typeConfig['SYSTEM']!;
     final (Color iconFg, Color iconBg, IconData icon) = cfg;
-
     final timeStr = _relativeTime(notification.createdAt);
 
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        decoration: BoxDecoration(
-          color: notification.isRead
-              ? cs.surface
-              : iconBg.withValues(alpha: 0.5),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: notification.isRead
-                ? cs.outlineVariant
-                : iconFg.withValues(alpha: 0.25),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: notification.isRead
+                  ? AppColors.divider.withValues(alpha: 0.3)
+                  : iconFg.withValues(alpha: 0.3),
+              width: notification.isRead ? 1 : 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: notification.isRead 
+                    ? Colors.black.withValues(alpha: 0.04)
+                    : iconFg.withValues(alpha: 0.08),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: iconBg,
-                  borderRadius: BorderRadius.circular(11),
-                ),
-                child: Icon(icon, color: iconFg, size: 20),
+              // Enhanced icon with status indicator
+              Stack(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: iconBg,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: iconFg.withValues(alpha: 0.1),
+                        width: 1,
+                      ),
+                    ),
+                    child: Icon(icon, color: iconFg, size: 22),
+                  ),
+                  if (!notification.isRead)
+                    Positioned(
+                      top: -2,
+                      right: -2,
+                      child: Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: AppColors.error,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
+                      ),
+                    ),
+                ],
               ),
-              const SizedBox(width: 12),
+              
+              const SizedBox(width: 16),
+              
+              // Content
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            notification.title,
-                            style: tt.bodyMedium?.copyWith(
-                              fontWeight: notification.isRead
-                                  ? FontWeight.w500
-                                  : FontWeight.w700,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        if (!notification.isRead)
-                          Container(
-                            width: 8,
-                            height: 8,
-                            margin: const EdgeInsets.only(left: 6),
-                            decoration: BoxDecoration(
-                              color: iconFg,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 3),
+                    // Title with professional typography
                     Text(
-                      notification.message,
-                      style: tt.bodySmall
-                          ?.copyWith(color: cs.onSurfaceVariant),
+                      notification.title,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 15,
+                        fontWeight: notification.isRead ? FontWeight.w600 : FontWeight.w700,
+                        color: AppColors.textDark,
+                        height: 1.3,
+                      ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    if (timeStr.isNotEmpty) ...[
-                      const SizedBox(height: 5),
-                      Text(
-                        timeStr,
-                        style: tt.labelSmall?.copyWith(
-                            color: cs.onSurfaceVariant),
+                    
+                    const SizedBox(height: 6),
+                    
+                    // Message
+                    Text(
+                      notification.message,
+                      style: tt.bodyMedium?.copyWith(
+                        color: AppColors.textMedium,
+                        height: 1.4,
                       ),
-                    ],
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    
+                    const SizedBox(height: 12),
+                    
+                    // Time and type badge
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        if (timeStr.isNotEmpty)
+                          Text(
+                            timeStr,
+                            style: tt.labelMedium?.copyWith(
+                              color: AppColors.textLight,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        
+                        // Type badge
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: iconFg.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            _getTypeLabel(notification.notificationType),
+                            style: tt.labelSmall?.copyWith(
+                              color: iconFg,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -275,6 +405,19 @@ class _NotificationCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _getTypeLabel(String? type) {
+    switch (type) {
+      case 'SYSTEM': return 'Sistem';
+      case 'JOB': return 'Lowongan';
+      case 'APPLICATION': return 'Lamaran';
+      case 'DOCUMENT': return 'Dokumen';
+      case 'PROFILE': return 'Profil';
+      case 'BROADCAST': return 'Pengumuman';
+      case 'INFO': return 'Info';
+      default: return 'Umum';
+    }
   }
 
   String _relativeTime(DateTime dt) {
@@ -290,45 +433,167 @@ class _NotificationCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// _EmptyState
+// Professional Loading State
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
+class _ProfessionalLoadingState extends StatelessWidget {
+  const _ProfessionalLoadingState();
 
   @override
   Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    final cs = Theme.of(context).colorScheme;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(40),
+    return Container(
+      margin: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(40),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: const BoxDecoration(
-                color: AppColors.secondaryLightGreen,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.notifications_outlined,
-                  size: 40, color: AppColors.primaryDarkGreen),
+            CircularProgressIndicator(
+              color: AppColors.primaryDarkGreen,
+              strokeWidth: 3,
             ),
-            const SizedBox(height: 16),
-            Text('Belum Ada Notifikasi',
-                style: tt.titleSmall
-                    ?.copyWith(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 6),
+            const SizedBox(height: 20),
             Text(
-              'Notifikasi terbaru akan muncul di sini.',
-              style: tt.bodySmall
-                  ?.copyWith(color: cs.onSurfaceVariant),
-              textAlign: TextAlign.center,
+              'Memuat notifikasi...',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textMedium,
+              ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Professional Empty State
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ProfessionalEmptyState extends StatelessWidget {
+  const _ProfessionalEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+
+    return Container(
+      margin: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(40),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Icon with professional styling
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: AppColors.primaryDarkGreen.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Icon(
+                Icons.notifications_none_rounded,
+                size: 40,
+                color: AppColors.primaryDarkGreen,
+              ),
+            ),
+            
+            const SizedBox(height: 24),
+            
+            // Title
+            Text(
+              'Belum Ada Notifikasi',
+              style: tt.headlineSmall?.copyWith(
+                color: AppColors.textDark,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            
+            const SizedBox(height: 8),
+            
+            // Subtitle
+            Text(
+              'Notifikasi terbaru akan muncul di sini.\nAnda akan mendapat pemberitahuan untuk lowongan,\nlamaran, dan pengumuman penting.',
+              style: tt.bodyMedium?.copyWith(
+                color: AppColors.textMedium,
+                height: 1.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            
+            const SizedBox(height: 24),
+            
+            // Decorative elements
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _EmptyStateIcon(
+                  icon: Icons.work_outline_rounded,
+                  color: const Color(0xFF3B82F6),
+                ),
+                const SizedBox(width: 16),
+                _EmptyStateIcon(
+                  icon: Icons.description_outlined,
+                  color: AppColors.primaryDarkGreen,
+                ),
+                const SizedBox(width: 16),
+                _EmptyStateIcon(
+                  icon: Icons.campaign_outlined,
+                  color: const Color(0xFFF59E0B),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyStateIcon extends StatelessWidget {
+  const _EmptyStateIcon({
+    required this.icon,
+    required this.color,
+  });
+
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 48,
+      height: 48,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Icon(icon, color: color, size: 20),
     );
   }
 }

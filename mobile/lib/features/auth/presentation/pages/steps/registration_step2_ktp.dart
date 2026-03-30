@@ -11,10 +11,14 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../../../../../config/colors.dart';
+import '../../../../../core/widgets/terms_privacy_modal.dart';
 import '../../../../../core/models/region.dart';
 import '../../../../../core/widgets/custom_toast.dart';
 import '../../../../../core/widgets/ktp_camera_screen.dart';
-import '../../../../../core/widgets/m3_text_field.dart';
+import '../../../../../core/widgets/professional_text_field.dart';
+import '../../../../../core/widgets/professional_dropdown_field.dart';
+import '../../../../../core/widgets/professional/professional_button.dart';
 import '../../../data/providers/regions_provider.dart';
 import '../../../domain/models/ktp_data.dart';
 import '../../providers/registration_provider.dart';
@@ -420,7 +424,6 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
   }
 
   Future<void> _selectDate() async {
-    final cs = Theme.of(context).colorScheme;
     final now = DateTime.now();
     final initial = _selectedDate ?? DateTime(1990);
     final picked = await showDatePicker(
@@ -430,7 +433,31 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
       lastDate: now,
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
-          colorScheme: Theme.of(ctx).colorScheme.copyWith(primary: cs.primary),
+          colorScheme: ColorScheme.light(
+            primary: AppColors.primaryDarkGreen,
+            onPrimary: Colors.white,
+            surface: Colors.white,
+            onSurface: AppColors.textDark,
+          ),
+          dialogTheme: const DialogThemeData(
+            backgroundColor: Colors.white,
+          ),
+          datePickerTheme: DatePickerThemeData(
+            backgroundColor: Colors.white,
+            surfaceTintColor: Colors.transparent,
+            headerBackgroundColor: AppColors.primaryDarkGreen,
+            headerForegroundColor: Colors.white,
+            dayStyle: GoogleFonts.plusJakartaSans(
+              fontWeight: FontWeight.w500,
+            ),
+            weekdayStyle: GoogleFonts.plusJakartaSans(
+              fontWeight: FontWeight.w600,
+              color: AppColors.textMedium,
+            ),
+            yearStyle: GoogleFonts.plusJakartaSans(
+              fontWeight: FontWeight.w500,
+            ),
+          ),
         ),
         child: child!,
       ),
@@ -585,17 +612,25 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
           const SizedBox(height: 20),
           Text(
             'Verifikasi Identitas',
+            textAlign: TextAlign.center,
             style: GoogleFonts.plusJakartaSans(
-              fontSize: 20,
+              fontSize: 24,
               fontWeight: FontWeight.w800,
-              color: cs.onSurface,
-              letterSpacing: -0.3,
+              color: AppColors.textDark,
+              letterSpacing: -0.5,
+              height: 1.2,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 8),
           Text(
-            'Langkah 2 dari 2  Upload KTP dan lengkapi data diri',
-            style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+            'Langkah 2 dari 2 • Upload KTP dan lengkapi data diri',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: AppColors.textMedium,
+              height: 1.4,
+            ),
           ),
           const SizedBox(height: 24),
 
@@ -614,29 +649,33 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
 
           const SizedBox(height: 24),
 
-          //  Data fields 
+          // Data fields section
           Text(
             'Data Diri',
             style: GoogleFonts.plusJakartaSans(
-              fontSize: 16,
+              fontSize: 18,
               fontWeight: FontWeight.w700,
-              color: cs.onSurface,
+              color: AppColors.textDark,
+              letterSpacing: -0.2,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             'Periksa dan lengkapi data diri sesuai KTP',
-            style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: AppColors.textMedium,
+            ),
           ),
           const SizedBox(height: 16),
 
           // NIK
-          M3TextField(
+          ProfessionalTextField(
             controller: _nikCtrl,
             focusNode: _nikFocus,
-            nextFocusNode: _nameFocus,
             label: 'NIK',
-            hint: '16 digit angka',
+            hintText: '16 digit angka',
             prefixIcon: Icons.badge_outlined,
             keyboardType: TextInputType.number,
             textInputAction: TextInputAction.next,
@@ -644,6 +683,7 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
               FilteringTextInputFormatter.digitsOnly,
               LengthLimitingTextInputFormatter(16),
             ],
+            onSubmitted: (_) => _nameFocus.requestFocus(),
             validator: (v) {
               if (v == null || v.isEmpty) return 'NIK wajib diisi';
               if (v.length != 16) return 'NIK harus 16 digit';
@@ -653,44 +693,39 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
           const SizedBox(height: 16),
 
           // Nama Lengkap
-          M3TextField(
+          ProfessionalTextField(
             controller: _nameCtrl,
             focusNode: _nameFocus,
             label: 'Nama Lengkap',
-            hint: 'Sesuai KTP',
+            hintText: 'Sesuai KTP',
             prefixIcon: Icons.person_outline_rounded,
-            upperCase: true,
+            keyboardType: TextInputType.name,
             textInputAction: TextInputAction.done,
+            textCapitalization: TextCapitalization.characters,
             validator: (v) =>
                 (v == null || v.trim().isEmpty) ? 'Nama wajib diisi' : null,
           ),
           const SizedBox(height: 16),
 
-          // Tempat Lahir  city picker
-          M3TextField(
+          // Tempat Lahir – city picker
+          ProfessionalDropdownField(
             controller: _birthPlaceCtrl,
             label: 'Tempat Lahir',
             hint: 'Pilih kota/kabupaten',
             prefixIcon: Icons.location_on_outlined,
-            readOnly: true,
             onTap: _showCityPicker,
-            suffixWidget: Icon(Icons.arrow_drop_down_rounded,
-                color: Theme.of(context).colorScheme.onSurfaceVariant),
             validator: (_) =>
                 _selectedCity == null ? 'Tempat lahir wajib dipilih' : null,
           ),
           const SizedBox(height: 16),
 
-          // Tanggal Lahir  date picker
-          M3TextField(
+          // Tanggal Lahir – date picker
+          ProfessionalDropdownField(
             controller: _birthDateCtrl,
             label: 'Tanggal Lahir',
             hint: 'Pilih tanggal lahir',
             prefixIcon: Icons.calendar_today_outlined,
-            readOnly: true,
             onTap: _selectDate,
-            suffixWidget: Icon(Icons.arrow_drop_down_rounded,
-                color: Theme.of(context).colorScheme.onSurfaceVariant),
             validator: (_) =>
                 _selectedDate == null ? 'Tanggal lahir wajib dipilih' : null,
           ),
@@ -733,7 +768,7 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
                               ),
                               recognizer: TapGestureRecognizer()
                                 ..onTap = () {
-                                  _showTermsAndPrivacyModal(context);
+                                  showTermsAndPrivacyModal(context);
                                 },
                             ),
                             TextSpan(
@@ -751,7 +786,7 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
                               ),
                               recognizer: TapGestureRecognizer()
                                 ..onTap = () {
-                                  _showTermsAndPrivacyModal(context);
+                                  showTermsAndPrivacyModal(context);
                                 },
                             ),
                             TextSpan(
@@ -798,161 +833,20 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
           ),
           const SizedBox(height: 24),
 
-          //  Register button (after agreements)
-          FilledButton(
+          // Register button (after agreements)
+          ProfessionalButton(
+            label: 'Daftar Sekarang',
             onPressed: (state.isProcessing || _isRegistering)
                 ? null
                 : _handleRegister,
-            style: FilledButton.styleFrom(
-              minimumSize: const Size(double.infinity, 52),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
-            ),
-            child: _isRegistering
-                ? SizedBox(
-                    height: 22,
-                    width: 22,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        color: Theme.of(context).colorScheme.onPrimary),
-                  )
-                : Text(
-                    'Daftar Sekarang',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
+            isLoading: _isRegistering,
+            icon: Icons.app_registration_rounded,
           ),
           const SizedBox(height: 8),
         ],
       ),
     );
   }
-}
-
-void _showTermsAndPrivacyModal(BuildContext context) {
-  final cs = Theme.of(context).colorScheme;
-  final tt = Theme.of(context).textTheme;
-
-  showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: cs.surface,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-    ),
-    builder: (ctx) {
-      return SafeArea(
-        top: false,
-        child: DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 0.8,
-          minChildSize: 0.5,
-          maxChildSize: 0.95,
-          builder: (context, scrollController) {
-            return Column(
-              children: [
-                const SizedBox(height: 8),
-                Container(
-                  width: 32,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: cs.onSurfaceVariant.withValues(alpha: 0.3),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Syarat & Ketentuan',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: cs.onSurface,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Harap baca dengan saksama sebelum melanjutkan pendaftaran.',
-                        style: tt.bodySmall?.copyWith(
-                          color: cs.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Expanded(
-                  child: SingleChildScrollView(
-                    controller: scrollController,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '1. Syarat & Ketentuan',
-                          style: tt.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: cs.onSurface,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          '• Data yang Anda isi harus sesuai dengan dokumen resmi (KTP, KK, ijazah, dan dokumen pendukung lainnya) dan dapat dipertanggungjawabkan.\n'
-                          '• Anda memberikan izin kepada perusahaan untuk menggunakan data ini dalam proses rekrutmen, pengolahan dokumen penempatan, dan pelaporan kepada instansi terkait.\n'
-                          '• Apabila di kemudian hari ditemukan ketidaksesuaian atau pemalsuan data, perusahaan berhak membatalkan proses penempatan dan/atau melakukan tindakan lain sesuai ketentuan yang berlaku.\n'
-                          '• Ketentuan lebih rinci mengenai proses penempatan kerja akan dijelaskan oleh petugas perusahaan dan/atau tercantum dalam dokumen perjanjian terpisah.',
-                          style: tt.bodySmall?.copyWith(
-                            color: cs.onSurfaceVariant,
-                            height: 1.4,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          '2. Kebijakan Privasi',
-                          style: tt.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: cs.onSurface,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          '• Data pribadi Anda akan disimpan dan diproses sesuai dengan ketentuan perlindungan data pribadi yang berlaku.\n'
-                          '• Data hanya akan digunakan untuk keperluan proses rekrutmen, penempatan kerja, pemenuhan kewajiban hukum, dan peningkatan layanan perusahaan.\n'
-                          '• Perusahaan tidak akan menjual atau membagikan data pribadi Anda kepada pihak ketiga yang tidak berkepentingan, kecuali diwajibkan oleh peraturan perundang-undangan atau dengan persetujuan Anda.\n'
-                          '• Anda berhak mengajukan permintaan koreksi, pembaruan, atau penghapusan data sesuai dengan prosedur internal perusahaan dan ketentuan hukum yang berlaku.',
-                          style: tt.bodySmall?.copyWith(
-                            color: cs.onSurfaceVariant,
-                            height: 1.4,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Dengan melanjutkan proses pendaftaran, Anda menyatakan telah membaca, memahami, dan menyetujui Syarat & Ketentuan serta Kebijakan Privasi ini.',
-                          style: tt.bodySmall?.copyWith(
-                            color: cs.onSurface,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
-      );
-    },
-  );
 }
 
 //  KTP upload card 
@@ -1158,8 +1052,6 @@ class _CityPickerSheetState extends State<_CityPickerSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     return DraggableScrollableSheet(
       initialChildSize: 0.75,
       minChildSize: 0.4,
@@ -1167,9 +1059,9 @@ class _CityPickerSheetState extends State<_CityPickerSheet> {
       expand: false,
       builder: (_, scrollCtrl) {
         return Container(
-          decoration: BoxDecoration(
-            color: cs.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
           ),
           child: Column(
             children: [
@@ -1180,7 +1072,7 @@ class _CityPickerSheetState extends State<_CityPickerSheet> {
                   width: 32,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: cs.onSurfaceVariant.withValues(alpha: 0.3),
+                    color: AppColors.divider,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -1197,12 +1089,12 @@ class _CityPickerSheetState extends State<_CityPickerSheet> {
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 17,
                         fontWeight: FontWeight.w800,
-                        color: cs.onSurface,
+                        color: AppColors.textDark,
                       ),
                     ),
                     const Spacer(),
                     IconButton(
-                      icon: Icon(Icons.close, color: cs.onSurfaceVariant),
+                      icon: Icon(Icons.close, color: AppColors.textMedium),
                       onPressed: () => Navigator.pop(context),
                     ),
                   ],
@@ -1217,19 +1109,40 @@ class _CityPickerSheetState extends State<_CityPickerSheet> {
                   controller: _searchCtrl,
                   autofocus: true,
                   style: GoogleFonts.plusJakartaSans(
-                      fontSize: 14, color: cs.onSurface),
+                      fontSize: 14, color: AppColors.textDark),
                   decoration: InputDecoration(
                     hintText: 'Cari kota atau kabupaten...',
+                    hintStyle: GoogleFonts.plusJakartaSans(
+                      fontSize: 14,
+                      color: AppColors.textLight,
+                    ),
                     prefixIcon:
-                        Icon(Icons.search, color: cs.onSurfaceVariant, size: 20),
+                        Icon(Icons.search, color: AppColors.textMedium, size: 20),
                     suffixIcon: _searchCtrl.text.isNotEmpty
                         ? IconButton(
                             icon: Icon(Icons.clear,
-                                color: cs.onSurfaceVariant, size: 18),
+                                color: AppColors.textMedium, size: 18),
                             onPressed: () => _searchCtrl.clear(),
                           )
                         : null,
-                    // Relies on InputDecorationTheme for fill + borders
+                    filled: true,
+                    fillColor: AppColors.backgroundOffWhite,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                        color: AppColors.primaryDarkGreen,
+                        width: 1.5,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -1244,12 +1157,12 @@ class _CityPickerSheetState extends State<_CityPickerSheet> {
                     '${_filtered.length} kota/kabupaten',
                     style: GoogleFonts.plusJakartaSans(
                         fontSize: 12,
-                        color: cs.onSurfaceVariant,
+                        color: AppColors.textMedium,
                         fontWeight: FontWeight.w500),
                   ),
                 ),
               ),
-              const Divider(height: 1),
+              Divider(height: 1, color: AppColors.divider),
 
               // City list
               Expanded(
@@ -1262,8 +1175,8 @@ class _CityPickerSheetState extends State<_CityPickerSheet> {
                     return ListTile(
                       onTap: () => Navigator.pop(context, city),
                       selected: isSelected,
-                      selectedTileColor: cs.primaryContainer,
-                      tileColor: Colors.transparent,
+                      selectedTileColor: AppColors.primaryDarkGreen.withValues(alpha: 0.1),
+                      tileColor: Colors.white,
                       contentPadding:
                           const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
                       title: Text(
@@ -1274,13 +1187,13 @@ class _CityPickerSheetState extends State<_CityPickerSheet> {
                               ? FontWeight.w700
                               : FontWeight.w500,
                           color: isSelected
-                              ? cs.onPrimaryContainer
-                              : cs.onSurface,
+                              ? AppColors.primaryDarkGreen
+                              : AppColors.textDark,
                         ),
                       ),
                       trailing: isSelected
                           ? Icon(Icons.check_circle_rounded,
-                              color: cs.primary, size: 20)
+                              color: AppColors.primaryDarkGreen, size: 20)
                           : null,
                     );
                   },

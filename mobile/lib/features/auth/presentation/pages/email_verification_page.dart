@@ -7,28 +7,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../../config/colors.dart';
 import '../../../../core/api/api_client.dart';
 import '../../../../core/api/endpoints.dart';
 import '../../../../core/models/api_response.dart';
 import '../../../../core/widgets/custom_toast.dart';
+import '../../../../core/widgets/professional/professional_gradient_background.dart';
+import '../../../../core/widgets/professional/professional_card.dart';
+import '../../../../core/widgets/professional/professional_button.dart';
 import '../../data/providers/auth_provider.dart';
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
 
 const _kDigitCount = 6;
 const _kResendSeconds = 60;
 const _kSuccessColor = Color(0xFF16A34A);
 const _kSuccessDelay = Duration(milliseconds: 1800);
 
-// ---------------------------------------------------------------------------
-// Page
-// ---------------------------------------------------------------------------
-
-/// 6-digit OTP verification page shown after registration.
-///
-/// Features: auto-focus, paste support, countdown timer, animated success.
 class EmailVerificationPage extends ConsumerStatefulWidget {
   final String email;
   const EmailVerificationPage({super.key, required this.email});
@@ -40,79 +33,63 @@ class EmailVerificationPage extends ConsumerStatefulWidget {
 
 class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
     with SingleTickerProviderStateMixin {
-  // -- Controllers & focus ------------------------------------------------
   final _controllers =
       List.generate(_kDigitCount, (_) => TextEditingController());
   final _focusNodes = List.generate(_kDigitCount, (_) => FocusNode());
 
-  // -- State --------------------------------------------------------------
   bool _isVerifying = false;
   bool _isResending = false;
   bool _isSuccess = false;
   int _resendCountdown = _kResendSeconds;
   Timer? _countdownTimer;
 
-  // -- Animation ----------------------------------------------------------
-  late final AnimationController _successCtrl;
-  late final Animation<double> _successScale;
-  late final Animation<double> _successOpacity;
+  late final AnimationController _animCtrl;
+  late final Animation<double> _fadeIn;
+  late final Animation<double> _slideUp;
 
-  // -- Helpers ------------------------------------------------------------
   String get _code => _controllers.map((c) => c.text).join();
-
-  // -- Lifecycle ----------------------------------------------------------
 
   @override
   void initState() {
     super.initState();
-
-    // Registration already sent the first email -- just start the countdown.
     _startCountdown();
 
-    // Listen to focus changes so the OTP cell decorations rebuild.
-    for (final node in _focusNodes) {
-      node.addListener(_onFocusChanged);
-    }
-
-    // Success animation setup.
-    _successCtrl = AnimationController(
+    _animCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 600),
     );
-    _successScale = CurvedAnimation(
-      parent: _successCtrl,
-      curve: Curves.elasticOut,
+    _fadeIn = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(parent: _animCtrl, curve: const Interval(0, 0.6, curve: Curves.easeOut)),
     );
-    _successOpacity = CurvedAnimation(
-      parent: _successCtrl,
-      curve: const Interval(0.0, 0.5, curve: Curves.easeOut),
+    _slideUp = Tween<double>(begin: 30, end: 0).animate(
+      CurvedAnimation(parent: _animCtrl, curve: const Interval(0.2, 1, curve: Curves.easeOutCubic)),
     );
 
-    // Auto-focus the first digit field.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _focusNodes[0].requestFocus();
+      if (mounted) {
+        _focusNodes[0].requestFocus();
+        _animCtrl.forward();
+      }
     });
   }
 
   @override
   void dispose() {
     _countdownTimer?.cancel();
-    _successCtrl.dispose();
+    _animCtrl.dispose();
     for (final c in _controllers) {
       c.dispose();
     }
-    for (final n in _focusNodes) {
-      n.removeListener(_onFocusChanged);
-      n.dispose();
+    for (final f in _focusNodes) {
+      f.dispose();
     }
     super.dispose();
   }
 
-  void _onFocusChanged() {
-    if (mounted) setState(() {});
+  void _handleBack() {
+    // Clear any pending state and navigate back
+    context.go('/register');
   }
-
-  // -- Countdown ----------------------------------------------------------
 
   void _startCountdown() {
     _resendCountdown = _kResendSeconds;
@@ -122,58 +99,13 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
         t.cancel();
         return;
       }
-      setState(() {
-        if (_resendCountdown > 0) {
-          _resendCountdown--;
-        } else {
-          t.cancel();
-        }
-      });
+      if (_resendCountdown <= 1) {
+        t.cancel();
+        setState(() => _resendCountdown = 0);
+      } else {
+        setState(() => _resendCountdown--);
+      }
     });
-  }
-
-  // -- OTP input logic ----------------------------------------------------
-
-  void _onDigitChanged(int index, String value) {
-    // Paste: distribute characters across all fields.
-    final digits = value.replaceAll(RegExp(r'\D'), '');
-    if (digits.length > 1) {
-      _pasteFill(digits);
-      return;
-    }
-
-    // Advance to the next field.
-    if (value.isNotEmpty && index < _kDigitCount - 1) {
-      _focusNodes[index + 1].requestFocus();
-    }
-
-    // Auto-submit when all 6 digits are filled.
-    if (_code.length == _kDigitCount) _verify();
-  }
-
-  void _pasteFill(String text) {
-    final digits = text.replaceAll(RegExp(r'\D'), '');
-    for (var i = 0; i < _kDigitCount; i++) {
-      _controllers[i].text = i < digits.length ? digits[i] : '';
-    }
-    if (digits.length >= _kDigitCount) {
-      _focusNodes.last.requestFocus();
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _code.length == _kDigitCount) _verify();
-      });
-    } else if (digits.isNotEmpty) {
-      _focusNodes[digits.length.clamp(0, _kDigitCount - 1)].requestFocus();
-    }
-  }
-
-  void _onKeyEvent(int index, KeyEvent event) {
-    if (event is KeyDownEvent &&
-        event.logicalKey == LogicalKeyboardKey.backspace &&
-        _controllers[index].text.isEmpty &&
-        index > 0) {
-      _controllers[index - 1].clear();
-      _focusNodes[index - 1].requestFocus();
-    }
   }
 
   void _clearCode() {
@@ -181,20 +113,38 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
       c.clear();
     }
     _focusNodes[0].requestFocus();
+    setState(() {});
   }
 
-  // -- Network actions ----------------------------------------------------
+  void _onDigitChanged(int index, String value) {
+    if (value.length > 1) {
+      // Handle paste
+      final digits = value.replaceAll(RegExp(r'[^0-9]'), '');
+      if (digits.length >= _kDigitCount) {
+        for (var i = 0; i < _kDigitCount; i++) {
+          _controllers[i].text = digits[i];
+        }
+        _focusNodes[_kDigitCount - 1].requestFocus();
+        if (_code.length == _kDigitCount) _verify();
+        return;
+      }
+      _controllers[index].text = value.substring(value.length - 1);
+    }
+
+    setState(() {}); // Rebuild to update cell colors
+
+    if (value.isNotEmpty && index < _kDigitCount - 1) {
+      _focusNodes[index + 1].requestFocus();
+    }
+
+    if (_code.length == _kDigitCount) {
+      _verify();
+    }
+  }
 
   Future<void> _verify() async {
-    if (_isVerifying) return;
-
     final code = _code;
-    if (code.length != _kDigitCount) {
-      CustomToast.show(context,
-          message: 'Masukkan 6 digit kode verifikasi',
-          type: ToastType.warning);
-      return;
-    }
+    if (code.length != _kDigitCount) return;
 
     setState(() => _isVerifying = true);
 
@@ -219,13 +169,8 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
           _isSuccess = true;
           _isVerifying = false;
         });
-        _successCtrl.forward();
 
-        // Immediately mark email as verified in auth state so the router
-        // redirects to /home as soon as the state update fires.
         ref.read(authStateProvider.notifier).markEmailVerified();
-
-        // Also refresh from server to get the latest user data.
         await ref.read(authStateProvider.notifier).refreshUser();
         await Future.delayed(_kSuccessDelay);
         if (!mounted) return;
@@ -286,90 +231,99 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
     }
   }
 
-  // -- Build --------------------------------------------------------------
-
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     return Scaffold(
-      backgroundColor: cs.surface,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_rounded, color: cs.onSurface),
-          onPressed: () => context.go('/login'),
-          tooltip: 'Kembali',
-        ),
-      ),
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: EdgeInsets.fromLTRB(
-              24,
-              24,
-              24,
-              MediaQuery.viewInsetsOf(context).bottom + 32,
-            ),
-            child: _isSuccess
-                ? _SuccessContent(
-                    scaleAnimation: _successScale,
-                    opacityAnimation: _successOpacity,
-                    cs: cs,
-                  )
-                : _VerifyContent(
-                    email: widget.email,
-                    controllers: _controllers,
-                    focusNodes: _focusNodes,
-                    isVerifying: _isVerifying,
-                    isResending: _isResending,
-                    resendCountdown: _resendCountdown,
-                    code: _code,
-                    cs: cs,
-                    onDigitChanged: _onDigitChanged,
-                    onKeyEvent: _onKeyEvent,
-                    onVerify: _verify,
-                    onResend: _resend,
+      resizeToAvoidBottomInset: true,
+      body: ProfessionalGradientBackground(
+        child: SafeArea(
+          child: Column(
+            children: [
+              const SizedBox(height: 16),
+              
+              // Header
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  children: [
+                    GestureDetector(
+                      onTap: _handleBack,
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withValues(alpha: 0.15),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.3),
+                            width: 1.0,
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.arrow_back_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Text(
+                      'Verifikasi Email',
+                      style: GoogleFonts.plusJakartaSans(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        height: 1.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 32),
+
+              // Content
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.only(
+                    left: 20,
+                    right: 20,
+                    bottom: MediaQuery.viewInsetsOf(context).bottom + 24,
                   ),
+                  child: AnimatedBuilder(
+                    animation: _animCtrl,
+                    builder: (context, child) {
+                      return Transform.translate(
+                        offset: Offset(0, _slideUp.value),
+                        child: Opacity(
+                          opacity: _fadeIn.value,
+                          child: _isSuccess
+                              ? _buildSuccessContent()
+                              : _buildVerifyContent(),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
-}
 
-// ---------------------------------------------------------------------------
-// Success state content
-// ---------------------------------------------------------------------------
-
-class _SuccessContent extends StatelessWidget {
-  const _SuccessContent({
-    required this.scaleAnimation,
-    required this.opacityAnimation,
-    required this.cs,
-  });
-
-  final Animation<double> scaleAnimation;
-  final Animation<double> opacityAnimation;
-  final ColorScheme cs;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        ScaleTransition(
-          scale: scaleAnimation,
-          child: FadeTransition(
-            opacity: opacityAnimation,
-            child: Container(
+  Widget _buildSuccessContent() {
+    return ProfessionalCard(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          children: [
+            Container(
               width: 100,
               height: 100,
-              decoration: const BoxDecoration(
-                color: Color(0x1916A34A), // 10% green
+              decoration: BoxDecoration(
+                color: _kSuccessColor.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
@@ -378,441 +332,276 @@ class _SuccessContent extends StatelessWidget {
                 color: _kSuccessColor,
               ),
             ),
-          ),
-        ),
-        const SizedBox(height: 28),
-        Text(
-          'Email Terverifikasi!',
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 24,
-            fontWeight: FontWeight.w800,
-            color: _kSuccessColor,
-            letterSpacing: -0.3,
-          ),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 12),
-        Text(
-          'Akun Anda telah berhasil diverifikasi.\nMengarahkan ke halaman utama...',
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 14,
-            color: cs.onSurfaceVariant,
-            height: 1.5,
-          ),
-          textAlign: TextAlign.center,
-        ),
-      ],
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Verification form content
-// ---------------------------------------------------------------------------
-
-class _VerifyContent extends StatelessWidget {
-  const _VerifyContent({
-    required this.email,
-    required this.controllers,
-    required this.focusNodes,
-    required this.isVerifying,
-    required this.isResending,
-    required this.resendCountdown,
-    required this.code,
-    required this.cs,
-    required this.onDigitChanged,
-    required this.onKeyEvent,
-    required this.onVerify,
-    required this.onResend,
-  });
-
-  final String email;
-  final List<TextEditingController> controllers;
-  final List<FocusNode> focusNodes;
-  final bool isVerifying;
-  final bool isResending;
-  final int resendCountdown;
-  final String code;
-  final ColorScheme cs;
-  final void Function(int index, String value) onDigitChanged;
-  final void Function(int index, KeyEvent event) onKeyEvent;
-  final VoidCallback onVerify;
-  final VoidCallback onResend;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // -- Icon ---------------------------------------------------------
-        Container(
-          width: 100,
-          height: 100,
-          decoration: BoxDecoration(
-            color: cs.primaryContainer.withAlpha(50),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(
-            Icons.mark_email_unread_rounded,
-            size: 48,
-            color: cs.primary,
-          ),
-        ),
-        const SizedBox(height: 28),
-
-        // -- Title --------------------------------------------------------
-        Text(
-          'Verifikasi Email',
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 24,
-            fontWeight: FontWeight.w800,
-            color: cs.onSurface,
-            letterSpacing: -0.3,
-          ),
-        ),
-        const SizedBox(height: 12),
-
-        // -- Subtitle -----------------------------------------------------
-        Text(
-          'Masukkan 6 digit kode yang telah dikirim ke',
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 14,
-            color: cs.onSurfaceVariant,
-            height: 1.5,
-          ),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 4),
-        Text(
-          email,
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 15,
-            fontWeight: FontWeight.w700,
-            color: cs.primary,
-          ),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 36),
-
-        // -- OTP digits ---------------------------------------------------
-        _OtpRow(
-          controllers: controllers,
-          focusNodes: focusNodes,
-          cs: cs,
-          onDigitChanged: onDigitChanged,
-          onKeyEvent: onKeyEvent,
-        ),
-        const SizedBox(height: 32),
-
-        // -- Verify button ------------------------------------------------
-        SizedBox(
-          width: double.infinity,
-          height: 54,
-          child: FilledButton(
-            onPressed: isVerifying || code.length != _kDigitCount
-                ? null
-                : onVerify,
-            style: FilledButton.styleFrom(
-              backgroundColor: cs.primary,
-              foregroundColor: cs.onPrimary,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+            const SizedBox(height: 28),
+            Text(
+              'Email Terverifikasi!',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+                color: _kSuccessColor,
+                letterSpacing: -0.3,
               ),
-              disabledBackgroundColor: cs.onSurface.withAlpha(30),
-              textStyle: GoogleFonts.plusJakartaSans(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.3,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Akun Anda telah berhasil diverifikasi.\nMengarahkan ke halaman utama...',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 14,
+                color: AppColors.textMedium,
+                height: 1.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                color: _kSuccessColor,
               ),
             ),
-            child: isVerifying
-                ? const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Text('Verifikasi'),
-          ),
+          ],
         ),
-        const SizedBox(height: 28),
-
-        // -- Resend section -----------------------------------------------
-        _ResendSection(
-          countdown: resendCountdown,
-          isResending: isResending,
-          cs: cs,
-          onResend: onResend,
-        ),
-        const SizedBox(height: 16),
-
-        // -- Tips card ----------------------------------------------------
-        _TipsCard(cs: cs),
-      ],
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// OTP digit row
-// ---------------------------------------------------------------------------
-
-class _OtpRow extends StatelessWidget {
-  const _OtpRow({
-    required this.controllers,
-    required this.focusNodes,
-    required this.cs,
-    required this.onDigitChanged,
-    required this.onKeyEvent,
-  });
-
-  final List<TextEditingController> controllers;
-  final List<FocusNode> focusNodes;
-  final ColorScheme cs;
-  final void Function(int, String) onDigitChanged;
-  final void Function(int, KeyEvent) onKeyEvent;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(_kDigitCount, (i) {
-        // Extra gap between 3rd and 4th digit (visual grouping).
-        final leftMargin = i == 0 ? 0.0 : (i == 3 ? 14.0 : 6.0);
-        final rightMargin =
-            i == _kDigitCount - 1 ? 0.0 : (i == 2 ? 14.0 : 6.0);
-
-        return _OtpCell(
-          controller: controllers[i],
-          focusNode: focusNodes[i],
-          cs: cs,
-          leftMargin: leftMargin,
-          rightMargin: rightMargin,
-          onChanged: (v) => onDigitChanged(i, v),
-          onKeyEvent: (e) => onKeyEvent(i, e),
-        );
-      }),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Single OTP cell
-// ---------------------------------------------------------------------------
-
-class _OtpCell extends StatelessWidget {
-  const _OtpCell({
-    required this.controller,
-    required this.focusNode,
-    required this.cs,
-    required this.leftMargin,
-    required this.rightMargin,
-    required this.onChanged,
-    required this.onKeyEvent,
-  });
-
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final ColorScheme cs;
-  final double leftMargin;
-  final double rightMargin;
-  final ValueChanged<String> onChanged;
-  final ValueChanged<KeyEvent> onKeyEvent;
-
-  @override
-  Widget build(BuildContext context) {
-    final hasValue = controller.text.isNotEmpty;
-    final isFocused = focusNode.hasFocus;
-
-    return Container(
-      width: 48,
-      height: 56,
-      margin: EdgeInsets.only(left: leftMargin, right: rightMargin),
-      decoration: BoxDecoration(
-        color: hasValue
-            ? cs.primaryContainer.withAlpha(40)
-            : cs.surfaceContainerHighest.withAlpha(80),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isFocused
-              ? cs.primary
-              : hasValue
-                  ? cs.primary.withAlpha(100)
-                  : cs.outlineVariant.withAlpha(120),
-          width: isFocused ? 2.0 : 1.5,
-        ),
-        boxShadow: isFocused
-            ? [
-                BoxShadow(
-                    color: cs.primary.withAlpha(25),
-                    blurRadius: 8,
-                    spreadRadius: 1)
-              ]
-            : null,
       ),
-      child: Focus(
-        canRequestFocus: false,
-        onKeyEvent: (_, event) {
-          onKeyEvent(event);
-          return KeyEventResult.ignored;
+    );
+  }
+
+  Widget _buildVerifyContent() {
+    return ProfessionalCard(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: [
+            // Icon
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: AppColors.primaryDarkGreen.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.mark_email_unread_rounded,
+                size: 40,
+                color: AppColors.primaryDarkGreen,
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Title
+            Text(
+              'Masukkan Kode Verifikasi',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textDark,
+                letterSpacing: -0.3,
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // Subtitle
+            Text(
+              'Masukkan 6 digit kode yang telah dikirim ke',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 14,
+                color: AppColors.textMedium,
+                height: 1.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              widget.email,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: AppColors.primaryDarkGreen,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+
+            // OTP digits - responsive to avoid overflow
+            LayoutBuilder(
+              builder: (context, constraints) {
+                // Calculate cell size to fit within available width
+                final availableWidth = constraints.maxWidth;
+                final gaps = 4 * 6.0 + 10.0; // 4 small gaps + 1 larger gap
+                final cellWidth = ((availableWidth - gaps) / 6).clamp(36.0, 46.0);
+                
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(_kDigitCount, (i) {
+                    final gap = i == 0 ? 0.0 : (i == 3 ? 10.0 : 6.0);
+                    return Padding(
+                      padding: EdgeInsets.only(left: gap),
+                      child: _buildOtpCell(i, cellWidth),
+                    );
+                  }),
+                );
+              },
+            ),
+            const SizedBox(height: 32),
+
+            // Verify button
+            ProfessionalButton(
+              label: 'Verifikasi',
+              onPressed: _isVerifying || _code.length != _kDigitCount ? null : _verify,
+              isLoading: _isVerifying,
+            ),
+            const SizedBox(height: 24),
+
+            // Resend section
+            _buildResendSection(),
+            const SizedBox(height: 20),
+
+            // Tips
+            _buildTipsCard(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOtpCell(int index, double width) {
+    final hasValue = _controllers[index].text.isNotEmpty;
+    final height = (width * 1.15).clamp(48.0, 56.0);
+    final fontSize = (width * 0.5).clamp(18.0, 22.0);
+
+    return SizedBox(
+      width: width,
+      height: height,
+      child: KeyboardListener(
+        focusNode: FocusNode(),
+        onKeyEvent: (event) {
+          if (event is KeyDownEvent &&
+              event.logicalKey == LogicalKeyboardKey.backspace) {
+            // If current field is empty and backspace is pressed, go to previous and clear it
+            if (_controllers[index].text.isEmpty && index > 0) {
+              _controllers[index - 1].clear();
+              _focusNodes[index - 1].requestFocus();
+              setState(() {});
+            }
+          }
         },
         child: TextField(
-          controller: controller,
-          focusNode: focusNode,
+          controller: _controllers[index],
+          focusNode: _focusNodes[index],
           textAlign: TextAlign.center,
           keyboardType: TextInputType.number,
-          maxLength: _kDigitCount, // allows paste
+          maxLength: 2,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          onChanged: (v) => _onDigitChanged(index, v),
           style: GoogleFonts.plusJakartaSans(
-            fontSize: 22,
-            fontWeight: FontWeight.w800,
-            color: cs.onSurface,
+            fontSize: fontSize,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textDark,
           ),
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             counterText: '',
-            border: InputBorder.none,
-            enabledBorder: InputBorder.none,
-            focusedBorder: InputBorder.none,
-            contentPadding: EdgeInsets.symmetric(vertical: 14),
+            contentPadding: EdgeInsets.symmetric(vertical: height * 0.2),
+            filled: true,
+            fillColor: Colors.white,
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: hasValue 
+                    ? AppColors.primaryDarkGreen 
+                    : AppColors.divider,
+                width: 1.5,
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: AppColors.primaryDarkGreen,
+                width: 2.5,
+              ),
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: AppColors.divider,
+                width: 1.5,
+              ),
+            ),
           ),
-          onChanged: onChanged,
-          onTap: () {
-            controller.selection = TextSelection(
-              baseOffset: 0,
-              extentOffset: controller.text.length,
-            );
-          },
         ),
       ),
     );
   }
-}
 
-// ---------------------------------------------------------------------------
-// Resend section
-// ---------------------------------------------------------------------------
-
-class _ResendSection extends StatelessWidget {
-  const _ResendSection({
-    required this.countdown,
-    required this.isResending,
-    required this.cs,
-    required this.onResend,
-  });
-
-  final int countdown;
-  final bool isResending;
-  final ColorScheme cs;
-  final VoidCallback onResend;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildResendSection() {
     return Column(
-      mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           'Tidak menerima kode?',
           style: GoogleFonts.plusJakartaSans(
             fontSize: 14,
-            color: cs.onSurfaceVariant,
+            color: AppColors.textMedium,
           ),
         ),
         const SizedBox(height: 8),
-        if (countdown > 0)
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.timer_outlined,
-                  size: 16, color: cs.onSurfaceVariant.withAlpha(150)),
-              const SizedBox(width: 6),
-              Text(
-                'Kirim ulang dalam ${countdown}s',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: cs.onSurfaceVariant.withAlpha(150),
-                ),
-              ),
-            ],
+        if (_resendCountdown > 0)
+          Text(
+            'Kirim ulang dalam ${_resendCountdown}s',
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textMedium,
+            ),
           )
         else
-          TextButton(
-            onPressed: isResending ? null : onResend,
-            style: TextButton.styleFrom(
-              foregroundColor: cs.primary,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            ),
-            child: isResending
-                ? SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: cs.primary),
+          GestureDetector(
+            onTap: _isResending ? null : _resend,
+            child: _isResending
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : Text(
                     'Kirim Ulang Kode',
                     style: GoogleFonts.plusJakartaSans(
-                      fontSize: 15,
+                      fontSize: 14,
                       fontWeight: FontWeight.w700,
+                      color: AppColors.primaryDarkGreen,
+                      decoration: TextDecoration.underline,
+                      decorationColor: AppColors.primaryDarkGreen,
                     ),
                   ),
           ),
       ],
     );
   }
-}
 
-// ---------------------------------------------------------------------------
-// Tips info card
-// ---------------------------------------------------------------------------
-
-class _TipsCard extends StatelessWidget {
-  const _TipsCard({required this.cs});
-
-  final ColorScheme cs;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildTipsCard() {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withAlpha(60),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: cs.outlineVariant.withAlpha(60)),
+        color: AppColors.backgroundOffWhite,
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.info_outline_rounded,
-              size: 20, color: cs.onSurfaceVariant.withAlpha(180)),
+          Icon(
+            Icons.lightbulb_outline_rounded,
+            size: 20,
+            color: AppColors.textMedium,
+          ),
           const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Tips:',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: cs.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${String.fromCharCode(8226)} Periksa folder spam jika email tidak masuk\n'
-                  '${String.fromCharCode(8226)} Kode berlaku selama 10 menit\n'
-                  '${String.fromCharCode(8226)} Anda bisa langsung paste kode dari email',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 12,
-                    color: cs.onSurfaceVariant.withAlpha(180),
-                    height: 1.6,
-                  ),
-                ),
-              ],
+            child: Text(
+              'Periksa folder spam jika email tidak ditemukan di kotak masuk.',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 13,
+                color: AppColors.textMedium,
+                height: 1.4,
+              ),
             ),
           ),
         ],

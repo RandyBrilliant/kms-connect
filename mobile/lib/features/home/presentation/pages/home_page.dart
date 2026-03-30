@@ -1,12 +1,9 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../config/colors.dart';
 import '../../../../core/models/paginated_state.dart';
-import '../../../../core/widgets/auth_wave_header.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../auth/data/providers/auth_provider.dart';
 import '../../../notifications/data/providers/notification_provider.dart';
@@ -29,29 +26,6 @@ class HomePage extends ConsumerStatefulWidget {
 class _HomePageState extends ConsumerState<HomePage>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
-
-  // Accent palette for news icon badges – cycles by card index.
-  static const _iconBg = [
-    Color(0xFFDBEAFE), // blue-100
-    Color(0xFFEDE9FE), // purple-100
-    Color(0xFFD1FAE5), // green-100
-    Color(0xFFFEF3C7), // amber-100
-    Color(0xFFFFE4E6), // rose-100
-  ];
-  static const _iconFg = [
-    Color(0xFF2563EB),
-    Color(0xFF7C3AED),
-    Color(0xFF16A34A),
-    Color(0xFFD97706),
-    Color(0xFFE11D48),
-  ];
-  static const _icons = [
-    Icons.smart_toy_outlined,
-    Icons.lightbulb_outline,
-    Icons.campaign_outlined,
-    Icons.star_outline,
-    Icons.info_outline,
-  ];
 
   @override
   void initState() {
@@ -90,14 +64,6 @@ class _HomePageState extends ConsumerState<HomePage>
     );
   }
 
-  static String _relativeTime(DateTime date) {
-    final diff = DateTime.now().difference(date);
-    if (diff.inDays >= 1) return '${diff.inDays}h lalu';
-    if (diff.inHours >= 1) return '${diff.inHours}j lalu';
-    if (diff.inMinutes >= 1) return '${diff.inMinutes}m lalu';
-    return 'Baru saja';
-  }
-
   static String _firstName(String? fullName, String? email) {
     if (fullName != null && fullName.trim().isNotEmpty) {
       return fullName.trim().split(' ').first;
@@ -126,7 +92,6 @@ class _HomePageState extends ConsumerState<HomePage>
     final newsState = ref.watch(paginatedNewsProvider(null));
     final notifState = ref.watch(notificationProvider);
     final cs = Theme.of(context).colorScheme;
-    final size = MediaQuery.sizeOf(context);
 
     final user = authState.user;
     final displayName = user?.fullName?.isNotEmpty == true
@@ -142,11 +107,8 @@ class _HomePageState extends ConsumerState<HomePage>
     final statusColor =
         _statusColor(profileState.profile?.verificationStatus);
 
-    // Header height: 26 % of screen height, floor at 210 px.
-    final headerH = math.max(size.height * 0.26, 210.0);
-
     return Scaffold(
-      backgroundColor: cs.surfaceContainerLowest,
+      backgroundColor: const Color(0xFFF8FAFB), // Light gray background
       body: Column(
         children: [
           // ── Offline indicator ───────────────────────────────────────────
@@ -171,10 +133,9 @@ class _HomePageState extends ConsumerState<HomePage>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ── Hero wave header ─────────────────────────────────
+                  // ── Professional header ─────────────────────────────────
                   _animated(
-                    _HeroHeader(
-                      headerHeight: headerH,
+                    _ProfessionalHeader(
                       displayName: displayName,
                       firstName: firstName,
                       unreadCount: notifState.unreadCount,
@@ -186,64 +147,74 @@ class _HomePageState extends ConsumerState<HomePage>
 
                   const SizedBox(height: 20),
 
-                  // ── Stat cards ───────────────────────────────────────
+                  // ── Dashboard stats ───────────────────────────────────────
                   _animated(
                     Padding(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 20),
-                      child: Row(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Column(
                         children: [
-                          Expanded(
-                            child: GestureDetector(
-                              onTap: () => context.push('/profile'),
-                              child: _ProfileScoreCard(
-                                score:
-                                    profileState.isLoading ? null : score,
+                          // Top stats row
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _DashboardStatCard(
+                                  title: 'Kelengkapan Profil',
+                                  value: profileState.isLoading ? null : score,
+                                  unit: '%',
+                                  icon: Icons.person_outline_rounded,
+                                  color: AppColors.primaryDarkGreen,
+                                  onTap: () => context.push('/profile'),
+                                ),
                               ),
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: GestureDetector(
-                              onTap: () => context.push('/profile'),
-                              child: _StatusCard(
-                                label: statusLabel,
-                                color: statusColor,
-                                isLoading: profileState.isLoading,
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: _DashboardStatCard(
+                                  title: 'Status Lamaran',
+                                  value: null,
+                                  customLabel: statusLabel,
+                                  icon: Icons.work_outline_rounded,
+                                  color: statusColor,
+                                  isLoading: profileState.isLoading,
+                                  onTap: () => context.push('/profile'),
+                                ),
                               ),
-                            ),
+                            ],
                           ),
+                          
+                          const SizedBox(height: 16),
+                          
+                          // Quick actions row
+                          _DashboardQuickActions(),
                         ],
                       ),
                     ),
                     0.20, 0.60,
                   ),
 
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 32),
 
-                  // ── Section header ───────────────────────────────────
+                  // ── Professional news section ────────────────────────────────
                   _animated(
-                    _SectionHeader(
-                      title: 'Pengumuman Terbaru',
-                      actionLabel: 'Lihat semua',
-                      onAction: () => context.go('/news'),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Column(
+                        children: [
+                          _ProfessionalSectionHeader(
+                            title: 'Pengumuman Terbaru',
+                            actionLabel: 'Lihat semua',
+                            onAction: () => context.go('/news'),
+                          ),
+                          
+                          const SizedBox(height: 20),
+                          
+                          _ProfessionalNewsList(
+                            newsState: newsState,
+                            onTap: (id) => context.push('/news/$id'),
+                          ),
+                        ],
+                      ),
                     ),
-                    0.35, 0.72,
-                  ),
-
-                  const SizedBox(height: 4),
-
-                  // ── News list ────────────────────────────────────────
-                  _animated(
-                    _NewsList(
-                      newsState: newsState,
-                      iconBg: _iconBg,
-                      iconFg: _iconFg,
-                      icons: _icons,
-                      relativeTime: _relativeTime,
-                      onTap: (id) => context.push('/news/$id'),
-                    ),
-                    0.50, 0.90,
+                    0.35, 0.90,
                   ),
                 ],
               ),
@@ -260,19 +231,17 @@ class _HomePageState extends ConsumerState<HomePage>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Hero Header  — wave background + greeting + notification bell
+// Professional Header — clean flat design with user info and notifications
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _HeroHeader extends StatelessWidget {
-  const _HeroHeader({
-    required this.headerHeight,
+class _ProfessionalHeader extends StatelessWidget {
+  const _ProfessionalHeader({
     required this.displayName,
     required this.firstName,
     required this.unreadCount,
     required this.onNotificationTap,
   });
 
-  final double headerHeight;
   final String displayName;
   final String firstName;
   final int unreadCount;
@@ -281,93 +250,140 @@ class _HeroHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
     final topPad = MediaQuery.paddingOf(context).top;
+    final now = DateTime.now();
+    final hour = now.hour;
+    
+    String greeting;
+    IconData greetingIcon;
+    if (hour < 12) {
+      greeting = 'Selamat Pagi';
+      greetingIcon = Icons.wb_sunny_outlined;
+    } else if (hour < 15) {
+      greeting = 'Selamat Siang';
+      greetingIcon = Icons.wb_sunny;
+    } else if (hour < 18) {
+      greeting = 'Selamat Sore';
+      greetingIcon = Icons.wb_cloudy_outlined;
+    } else {
+      greeting = 'Selamat Malam';
+      greetingIcon = Icons.nights_stay_outlined;
+    }
 
-    return SizedBox(
-      height: headerHeight + topPad,
-      child: Stack(
-        children: [
-          // Full-bleed wave background
-          Positioned.fill(
-            child: AuthWaveHeader(height: headerHeight + topPad),
+    return Container(
+      padding: EdgeInsets.fromLTRB(20, topPad + 16, 20, 24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          bottom: BorderSide(
+            color: cs.outlineVariant.withValues(alpha: 0.3),
+            width: 1,
           ),
-
-          // Content below the status bar
-          Padding(
-            padding: EdgeInsets.fromLTRB(20, topPad + 14, 20, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Top row: avatar + name + bell
-                Row(
-                  children: [
-                    Container(
-                      width: 46,
-                      height: 46,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withValues(alpha: 0.18),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.38),
-                          width: 1.5,
-                        ),
-                      ),
-                      child: const Icon(Icons.person_rounded,
-                          color: Colors.white, size: 26),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Selamat datang,',
-                            style: tt.labelSmall?.copyWith(
-                              color: Colors.white.withValues(alpha: 0.75),
-                              letterSpacing: 0.3,
-                            ),
-                          ),
-                          Text(
-                            displayName,
-                            style: tt.titleMedium
-                                ?.copyWith(color: Colors.white, height: 1.2),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                    _NotificationBell(
-                      unreadCount: unreadCount,
-                      onTap: onNotificationTap,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Top row: User info + Notification
+          Row(
+            children: [
+              // User Avatar
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [
+                      AppColors.primaryDarkGreen,
+                      AppColors.primaryDarkGreen.withValues(alpha: 0.8),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primaryDarkGreen.withValues(alpha: 0.2),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
                     ),
                   ],
                 ),
-
-                const Spacer(),
-
-                // Large greeting
-                RichText(
-                  text: TextSpan(
-                    style: tt.headlineMedium
-                        ?.copyWith(color: Colors.white, height: 1.25),
-                    children: [
-                      const TextSpan(text: 'Halo, '),
-                      TextSpan(
-                        text: firstName,
-                        style: tt.headlineMedium?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.92),
-                          fontWeight: FontWeight.w800,
-                          height: 1.25,
-                        ),
-                      ),
-                      const TextSpan(text: ' 👋'),
-                    ],
-                  ),
+                child: const Icon(
+                  Icons.person_rounded,
+                  color: Colors.white,
+                  size: 28,
                 ),
-
-                const SizedBox(height: 28),
-              ],
-            ),
+              ),
+              
+              const SizedBox(width: 16),
+              
+              // User Info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          greetingIcon,
+                          size: 16,
+                          color: AppColors.textMedium,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          greeting,
+                          style: tt.bodyMedium?.copyWith(
+                            color: AppColors.textMedium,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      firstName,
+                      style: tt.headlineSmall?.copyWith(
+                        color: AppColors.textDark,
+                        fontWeight: FontWeight.w700,
+                        height: 1.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Notification Bell
+              _ProfessionalNotificationBell(
+                unreadCount: unreadCount,
+                onTap: onNotificationTap,
+              ),
+            ],
+          ),
+          
+          const SizedBox(height: 20),
+          
+          // Dashboard Title
+          Row(
+            children: [
+              Container(
+                width: 4,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryDarkGreen,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Dashboard Karir',
+                style: tt.titleLarge?.copyWith(
+                  color: AppColors.textDark,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -376,53 +392,81 @@ class _HeroHeader extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Notification Bell
+// Professional Notification Bell
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _NotificationBell extends StatelessWidget {
-  const _NotificationBell({required this.onTap, this.unreadCount = 0});
+class _ProfessionalNotificationBell extends StatelessWidget {
+  const _ProfessionalNotificationBell({required this.onTap, this.unreadCount = 0});
 
   final VoidCallback onTap;
   final int unreadCount;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: SizedBox(
-        width: 40,
-        height: 40,
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: 0.18),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.30),
-                    width: 1.2,
-                  ),
-                ),
-                child: const Icon(Icons.notifications_outlined,
-                    size: 22, color: Colors.white),
-              ),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: AppColors.divider,
+              width: 1.2,
             ),
-            if (unreadCount > 0)
-              Positioned(
-                top: 7,
-                right: 7,
-                child: Container(
-                  width: 9,
-                  height: 9,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEF4444),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 1.5),
-                  ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Stack(
+            children: [
+              Center(
+                child: Icon(
+                  Icons.notifications_outlined,
+                  size: 22,
+                  color: AppColors.textMedium,
                 ),
               ),
-          ],
+              if (unreadCount > 0)
+                Positioned(
+                  top: 10,
+                  right: 10,
+                  child: Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: AppColors.error,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                    child: unreadCount > 9 
+                        ? const Icon(
+                            Icons.add, 
+                            size: 8, 
+                            color: Colors.white,
+                          )
+                        : Center(
+                            child: Text(
+                              '$unreadCount',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 8,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -430,189 +474,153 @@ class _NotificationBell extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Profile Score Card  (green filled)
+// Dashboard Stat Card - Modern professional design
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _ProfileScoreCard extends StatelessWidget {
-  const _ProfileScoreCard({required this.score});
+class _DashboardStatCard extends StatelessWidget {
+  const _DashboardStatCard({
+    required this.title,
+    this.value,
+    this.unit,
+    this.customLabel,
+    required this.icon,
+    required this.color,
+    this.isLoading = false,
+    this.onTap,
+  });
 
-  /// `null` means data is still loading.
-  final int? score;
+  final String title;
+  final int? value;
+  final String? unit;
+  final String? customLabel;
+  final IconData icon;
+  final Color color;
+  final bool isLoading;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
 
-    return Container(
-      height: 150,
-      decoration: BoxDecoration(
-        color: AppColors.primaryDarkGreen,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primaryDarkGreen.withValues(alpha: 0.32),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Stack(
-        children: [
-          // Decorative glow orb
-          Positioned(
-            top: -12,
-            right: -12,
-            child: Container(
-              width: 84,
-              height: 84,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.08),
-              ),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppColors.divider.withValues(alpha: 0.3),
+              width: 1,
             ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // Icon bubble
-                    Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withValues(alpha: 0.18),
-                      ),
-                      child: const Icon(Icons.person_outline,
-                          color: Colors.white, size: 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Icon and title
+              Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    // Label chip
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.14),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        'Profil',
-                        style: tt.labelSmall?.copyWith(
-                          color: Colors.white70,
-                          letterSpacing: 0.3,
-                        ),
+                    child: Icon(icon, color: color, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: tt.bodyMedium?.copyWith(
+                        color: AppColors.textMedium,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
-                  ],
-                ),
-                const Spacer(),
-                score == null
-                    ? const SizedBox(
-                        width: 26,
-                        height: 26,
-                        child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2.5),
-                      )
-                    : Text(
-                        '$score%',
-                        style: tt.displaySmall?.copyWith(
-                          color: Colors.white,
+                  ),
+                ],
+              ),
+              
+              const SizedBox(height: 20),
+              
+              // Value
+              if (isLoading)
+                SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    color: color,
+                    strokeWidth: 2.5,
+                  ),
+                )
+              else if (customLabel != null)
+                Text(
+                  customLabel!,
+                  style: tt.headlineSmall?.copyWith(
+                    color: AppColors.textDark,
+                    fontWeight: FontWeight.w700,
+                    height: 1.1,
+                  ),
+                )
+              else
+                RichText(
+                  text: TextSpan(
+                    children: [
+                      TextSpan(
+                        text: '${value ?? 0}',
+                        style: tt.headlineLarge?.copyWith(
+                          color: AppColors.textDark,
                           fontWeight: FontWeight.w800,
                           height: 1.0,
                         ),
                       ),
-                const SizedBox(height: 4),
-                Text(
-                  'Kelengkapan',
-                  style: tt.labelMedium?.copyWith(color: Colors.white70),
+                      if (unit != null)
+                        TextSpan(
+                          text: unit!,
+                          style: tt.titleLarge?.copyWith(
+                            color: AppColors.textMedium,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              
+              // Progress indicator for percentage
+              if (value != null && unit == '%') ...[
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                  child: FractionallySizedBox(
+                    alignment: Alignment.centerLeft,
+                    widthFactor: (value! / 100).clamp(0.0, 1.0),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: color,
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                  ),
                 ),
               ],
-            ),
+            ],
           ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Status Card  (surface / bordered)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _StatusCard extends StatelessWidget {
-  const _StatusCard({
-    required this.label,
-    required this.color,
-    required this.isLoading,
-  });
-
-  final String label;
-  final Color color;
-  final bool isLoading;
-
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    final cs = Theme.of(context).colorScheme;
-
-    return Container(
-      height: 150,
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: cs.outlineVariant, width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: color.withValues(alpha: 0.12),
-              ),
-              child: Icon(Icons.verified_user_outlined,
-                  color: color, size: 20),
-            ),
-            const Spacer(),
-            isLoading
-                ? SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                        color: color, strokeWidth: 2),
-                  )
-                : Text(
-                    label,
-                    style: (label.length > 9
-                            ? tt.titleLarge
-                            : tt.headlineSmall)
-                        ?.copyWith(
-                      color: cs.onSurface,
-                      height: 1.1,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-            const SizedBox(height: 4),
-            Text(
-              'Status Lamaran',
-              style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
-            ),
-          ],
         ),
       ),
     );
@@ -620,11 +628,138 @@ class _StatusCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Section header row
+// Dashboard Quick Actions
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({
+class _DashboardQuickActions extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: AppColors.divider.withValues(alpha: 0.3),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Aksi Cepat',
+            style: tt.titleMedium?.copyWith(
+              color: AppColors.textDark,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          
+          const SizedBox(height: 16),
+          
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _QuickActionButton(
+                icon: Icons.work_outline_rounded,
+                label: 'Lowongan',
+                color: const Color(0xFF3B82F6),
+                onTap: () => context.go('/jobs'),
+              ),
+              _QuickActionButton(
+                icon: Icons.person_outline_rounded,
+                label: 'Profil',
+                color: AppColors.primaryDarkGreen,
+                onTap: () => context.push('/profile'),
+              ),
+              _QuickActionButton(
+                icon: Icons.description_outlined,
+                label: 'Lamaran',
+                color: const Color(0xFFF59E0B),
+                onTap: () => context.push('/applications'),
+              ),
+              _QuickActionButton(
+                icon: Icons.chat_bubble_outline_rounded,
+                label: 'Chat',
+                color: const Color(0xFF8B5CF6),
+                onTap: () => context.go('/chat'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickActionButton extends StatelessWidget {
+  const _QuickActionButton({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Column(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: color, size: 24),
+              ),
+              
+              const SizedBox(height: 8),
+              
+              Text(
+                label,
+                style: tt.bodySmall?.copyWith(
+                  color: AppColors.textMedium,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Professional Section Header
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ProfessionalSectionHeader extends StatelessWidget {
+  const _ProfessionalSectionHeader({
     required this.title,
     required this.actionLabel,
     required this.onAction,
@@ -637,117 +772,206 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
-    final cs = Theme.of(context).colorScheme;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            title,
-            style: tt.titleMedium?.copyWith(color: cs.onSurface),
-          ),
-          TextButton(
-            onPressed: onAction,
-            style: TextButton.styleFrom(
-              padding: EdgeInsets.zero,
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              foregroundColor: cs.primary,
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 4,
+              height: 20,
+              decoration: BoxDecoration(
+                color: AppColors.primaryDarkGreen,
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
-            child: Text(
-              actionLabel,
-              style: tt.labelMedium?.copyWith(color: cs.primary),
+            const SizedBox(width: 12),
+            Text(
+              title,
+              style: tt.titleLarge?.copyWith(
+                color: AppColors.textDark,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onAction,
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    actionLabel,
+                    style: tt.labelLarge?.copyWith(
+                      color: AppColors.primaryDarkGreen,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    size: 14,
+                    color: AppColors.primaryDarkGreen,
+                  ),
+                ],
+              ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// News List  — handles loading / error / empty / data
+// Professional News List - Modern design with improved typography
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _NewsList extends StatelessWidget {
-  const _NewsList({
+class _ProfessionalNewsList extends StatelessWidget {
+  const _ProfessionalNewsList({
     required this.newsState,
-    required this.iconBg,
-    required this.iconFg,
-    required this.icons,
-    required this.relativeTime,
     required this.onTap,
   });
 
   final PaginatedState<News> newsState;
-  final List<Color> iconBg;
-  final List<Color> iconFg;
-  final List<IconData> icons;
-  final String Function(DateTime) relativeTime;
   final void Function(int id) onTap;
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
     // Loading state
     if (newsState.isLoading) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 40),
+      return Container(
+        padding: const EdgeInsets.all(40),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: AppColors.divider.withValues(alpha: 0.3),
+            width: 1,
+          ),
+        ),
         child: Center(
-          child: CircularProgressIndicator(color: cs.primary, strokeWidth: 2),
+          child: CircularProgressIndicator(
+            color: AppColors.primaryDarkGreen,
+            strokeWidth: 2.5,
+          ),
         ),
       );
     }
 
     // Error state
     if (newsState.error != null && newsState.items.isEmpty) {
-      return Padding(
-        padding:
-            const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
-        child: Center(
-          child: Text(
-            'Gagal memuat berita.',
-            style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+      return Container(
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: AppColors.divider.withValues(alpha: 0.3),
+            width: 1,
           ),
+        ),
+        child: Column(
+          children: [
+            Icon(
+              Icons.error_outline_rounded,
+              size: 48,
+              color: AppColors.textMedium,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Gagal memuat pengumuman',
+              style: tt.titleMedium?.copyWith(
+                color: AppColors.textDark,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Coba lagi nanti',
+              style: tt.bodyMedium?.copyWith(
+                color: AppColors.textMedium,
+              ),
+            ),
+          ],
         ),
       );
     }
 
     // Empty state
     if (newsState.items.isEmpty) {
-      return Padding(
-        padding:
-            const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
-        child: Center(
-          child: Text(
-            'Belum ada pengumuman.',
-            style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+      return Container(
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: AppColors.divider.withValues(alpha: 0.3),
+            width: 1,
           ),
+        ),
+        child: Column(
+          children: [
+            Icon(
+              Icons.article_outlined,
+              size: 48,
+              color: AppColors.textMedium,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Belum ada pengumuman',
+              style: tt.titleMedium?.copyWith(
+                color: AppColors.textDark,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Pengumuman akan tampil di sini',
+              style: tt.bodyMedium?.copyWith(
+                color: AppColors.textMedium,
+              ),
+            ),
+          ],
         ),
       );
     }
 
     final list = newsState.items;
     final items = list.length > 5 ? list.sublist(0, 5) : list;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
+    
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: AppColors.divider.withValues(alpha: 0.3),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: Column(
         children: [
           for (var i = 0; i < items.length; i++)
-            RepaintBoundary(
-              child: _NewsCard(
-                news: items[i],
-                iconBg: iconBg[i % iconBg.length],
-                iconFg: iconFg[i % iconFg.length],
-                icon: icons[i % icons.length],
-                relativeTime:
-                    relativeTime(items[i].publishedAt ?? items[i].createdAt),
-                onTap: () => onTap(items[i].id),
-              ),
+            _ProfessionalNewsCard(
+              news: items[i],
+              isLast: i == items.length - 1,
+              onTap: () => onTap(items[i].id),
             ),
         ],
       ),
@@ -756,85 +980,111 @@ class _NewsList extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// News Card
+// Professional News Card - Clean modern design
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _NewsCard extends StatelessWidget {
-  const _NewsCard({
+class _ProfessionalNewsCard extends StatelessWidget {
+  const _ProfessionalNewsCard({
     required this.news,
-    required this.iconBg,
-    required this.iconFg,
-    required this.icon,
-    required this.relativeTime,
+    required this.isLast,
     required this.onTap,
   });
 
   final News news;
-  final Color iconBg;
-  final Color iconFg;
-  final IconData icon;
-  final String relativeTime;
+  final bool isLast;
   final VoidCallback onTap;
+
+  static String _relativeTime(DateTime date) {
+    final diff = DateTime.now().difference(date);
+    if (diff.inDays >= 1) return '${diff.inDays} hari lalu';
+    if (diff.inHours >= 1) return '${diff.inHours} jam lalu';
+    if (diff.inMinutes >= 1) return '${diff.inMinutes} menit lalu';
+    return 'Baru saja';
+  }
 
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
-    final cs = Theme.of(context).colorScheme;
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
+    
+    return Material(
+      color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            border: !isLast ? Border(
+              bottom: BorderSide(
+                color: AppColors.divider.withValues(alpha: 0.2),
+                width: 1,
+              ),
+            ) : null,
+          ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Icon badge
+              // Status indicator
               Container(
-                width: 42,
-                height: 42,
+                width: 8,
+                height: 8,
+                margin: const EdgeInsets.only(top: 6),
                 decoration: BoxDecoration(
+                  color: AppColors.primaryDarkGreen,
                   shape: BoxShape.circle,
-                  color: iconBg,
                 ),
-                child: Icon(icon, color: iconFg, size: 21),
               ),
-              const SizedBox(width: 12),
-
-              // Text
+              
+              const SizedBox(width: 16),
+              
+              // Content
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Title and time
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
                           child: Text(
                             news.title,
-                            style: tt.labelLarge
-                                ?.copyWith(color: cs.onSurface, height: 1.3),
+                            style: tt.bodyLarge?.copyWith(
+                              color: AppColors.textDark,
+                              fontWeight: FontWeight.w600,
+                              height: 1.4,
+                            ),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          relativeTime,
-                          style: tt.bodySmall
-                              ?.copyWith(color: cs.onSurfaceVariant),
+                        const SizedBox(width: 12),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryDarkGreen.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            _relativeTime(news.publishedAt ?? news.createdAt),
+                            style: tt.labelSmall?.copyWith(
+                              color: AppColors.primaryDarkGreen,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                         ),
                       ],
                     ),
-                    if (news.summary != null &&
-                        news.summary!.isNotEmpty) ...[
-                      const SizedBox(height: 4),
+                    
+                    // Summary if available
+                    if (news.summary != null && news.summary!.isNotEmpty) ...[
+                      const SizedBox(height: 8),
                       Text(
                         news.summary!,
-                        style: tt.bodySmall?.copyWith(
-                          color: cs.onSurfaceVariant,
+                        style: tt.bodyMedium?.copyWith(
+                          color: AppColors.textMedium,
                           height: 1.4,
                         ),
                         maxLines: 2,

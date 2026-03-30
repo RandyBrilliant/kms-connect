@@ -6,7 +6,7 @@ import 'config/theme.dart';
 import 'core/widgets/custom_toast.dart';
 
 import 'features/auth/presentation/pages/splash_page.dart';
-import 'features/auth/presentation/pages/login_page.dart';
+import 'features/auth/presentation/pages/login_page_new.dart';
 import 'features/auth/presentation/pages/registration_page_new.dart';
 import 'features/auth/presentation/pages/email_verification_page.dart';
 import 'features/auth/presentation/pages/forgot_password_page.dart';
@@ -94,12 +94,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       final authState = ref.read(authStateProvider);
       final isAuthenticated = authState.isAuthenticated;
 
-      // Pre-auth routes: login, register, email verification, password reset.
-      final isPreAuthRoute = loc == '/login' ||
-          loc == '/register' ||
-          loc.startsWith('/email-verification') ||
-          loc == '/forgot-password' ||
-          loc == '/reset-password';
+      // Pre-auth routes: login, register, email verification, and password reset.
+      final isPreAuthRoute = loc == '/login' || 
+                            loc == '/register' || 
+                            loc.startsWith('/email-verification') ||
+                            loc == '/forgot-password' ||
+                            loc.startsWith('/reset-password');
 
       if (!isAuthenticated) {
         // Unauthenticated users can only access pre-auth routes.
@@ -139,7 +139,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         name: 'login',
         pageBuilder: (context, state) => CustomTransitionPage<void>(
           key: state.pageKey,
-          child: const LoginPage(),
+          child: const LoginPageNew(),
           transitionDuration: const Duration(milliseconds: 450),
           transitionsBuilder: (_, animation, _, child) => FadeTransition(
             opacity: CurvedAnimation(
@@ -166,10 +166,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/forgot-password',
         name: 'forgot-password',
-        builder: (context, state) {
-          final email = state.uri.queryParameters['email'] ?? '';
-          return ForgotPasswordPage(initialEmail: email);
-        },
+        builder: (context, state) => const ForgotPasswordPage(),
       ),
       GoRoute(
         path: '/reset-password',

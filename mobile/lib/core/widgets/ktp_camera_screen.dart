@@ -73,7 +73,9 @@ class _KtpCameraScreenState extends State<KtpCameraScreen>
         camera,
         ResolutionPreset.high,
         enableAudio: false,
-        imageFormatGroup: ImageFormatGroup.jpeg,
+        imageFormatGroup: Platform.isIOS 
+            ? ImageFormatGroup.bgra8888 
+            : ImageFormatGroup.jpeg,
       );
 
       await controller.initialize();

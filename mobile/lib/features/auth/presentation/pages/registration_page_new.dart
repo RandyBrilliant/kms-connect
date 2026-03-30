@@ -1,20 +1,21 @@
-﻿import 'dart:math' as math;
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../../../core/widgets/auth_wave_header.dart';
+import '../../../../config/colors.dart';
+import '../../../../core/widgets/professional/professional_gradient_background.dart';
+import '../../../../core/widgets/professional/professional_card.dart';
 import '../providers/registration_provider.dart';
 import 'steps/registration_step1_credentials.dart';
 import 'steps/registration_step2_ktp.dart';
 
-/// Multi-step registration shell.
+/// Professional multi-step registration shell.
 ///
-/// Hosts the animated green-wave header (same visual language as [LoginPage])
-/// with a live step-progress indicator, entrance animations, and an
-/// [AnimatedSwitcher] that fades/slides between steps.
+/// Uses ProfessionalGradientBackground for consistent visual language with login.
+/// Features smooth step transitions and a modern progress indicator.
 class RegistrationPageNew extends ConsumerStatefulWidget {
   const RegistrationPageNew({super.key});
 
@@ -27,9 +28,8 @@ class _RegistrationPageNewState extends ConsumerState<RegistrationPageNew>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
   late final Animation<double> _headerOpacity;
-  late final Animation<double> _headerScale;
-  late final Animation<Offset> _panelSlide;
-  late final Animation<double> _panelOpacity;
+  late final Animation<double> _cardSlide;
+  late final Animation<double> _cardOpacity;
 
   @override
   void initState() {
@@ -43,20 +43,15 @@ class _RegistrationPageNewState extends ConsumerState<RegistrationPageNew>
           parent: _ctrl,
           curve: const Interval(0.0, 0.55, curve: Curves.easeOut)),
     );
-    _headerScale = Tween<double>(begin: 0.88, end: 1).animate(
+    _cardSlide = Tween<double>(begin: 30, end: 0).animate(
       CurvedAnimation(
           parent: _ctrl,
-          curve: const Interval(0.0, 0.75, curve: Curves.easeOutBack)),
+          curve: const Interval(0.3, 1.0, curve: Curves.easeOutCubic)),
     );
-    _panelSlide = Tween<Offset>(begin: const Offset(0, 0.1), end: Offset.zero)
-        .animate(CurvedAnimation(
-      parent: _ctrl,
-      curve: const Interval(0.15, 1.0, curve: Curves.easeOutCubic),
-    ));
-    _panelOpacity = Tween<double>(begin: 0, end: 1).animate(
+    _cardOpacity = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(
           parent: _ctrl,
-          curve: const Interval(0.0, 0.65, curve: Curves.easeOut)),
+          curve: const Interval(0.3, 0.9, curve: Curves.easeOut)),
     );
     WidgetsBinding.instance.addPostFrameCallback((_) => _ctrl.forward());
   }
@@ -75,257 +70,223 @@ class _RegistrationPageNewState extends ConsumerState<RegistrationPageNew>
     }
   }
 
+  Widget _buildProgressIndicator(int currentStep) {
+    return FadeTransition(
+      opacity: _headerOpacity,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Row(
+          children: [
+            // Step 1
+            Expanded(
+              child: Container(
+                height: 4,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(2),
+                  color: Colors.white.withOpacity(0.9),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            // Step 2
+            Expanded(
+              child: Container(
+                height: 4,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(2),
+                  color: currentStep >= 1
+                      ? Colors.white.withOpacity(0.9)
+                      : Colors.white.withOpacity(0.3),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentStep = ref.watch(registrationProvider).currentStep;
-    final cs = Theme.of(context).colorScheme;
     final size = MediaQuery.sizeOf(context);
-    // NOTE: do NOT read viewInsetsOf here — keyboard animation would rebuild
-    // the entire tree on every frame. The _BottomInsetSpacer leaf widget
-    // isolates that dependency so only the spacer itself rebuilds.
-    final safePad = MediaQuery.paddingOf(context);
-    final isCompact = size.height < 740;
-    final headerH = math.max(size.height * 0.30, isCompact ? 185.0 : 220.0);
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
-      backgroundColor: cs.surface,
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          //  Green wave header 
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            height: headerH,
-            child: FadeTransition(
-              opacity: _headerOpacity,
-              child: ScaleTransition(
-                scale: _headerScale,
-                alignment: Alignment.topCenter,
-                child: AuthWaveHeader(height: headerH),
-              ),
-            ),
-          ),
+      body: ProfessionalGradientBackground(
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.only(bottom: bottomInset + 24),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: size.height - 48),
+              child: Column(
+                children: [
+                  const SizedBox(height: 16),
 
-          //  Scrollable content 
-          SingleChildScrollView(
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            physics: const ClampingScrollPhysics(),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SizedBox(height: headerH * 0.18),
-
-                // Header content (logo + title + step pills)
-                FadeTransition(
-                  opacity: _headerOpacity,
-                  child: ScaleTransition(
-                    scale: _headerScale,
-                    child: _RegHeaderContent(currentStep: currentStep),
-                  ),
-                ),
-
-                // Form panel
-                SlideTransition(
-                  position: _panelSlide,
-                  child: FadeTransition(
-                    opacity: _panelOpacity,
-                    child: Container(
-                      color: cs.surface,
-                      padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 280),
-                        switchInCurve: Curves.easeOutCubic,
-                        switchOutCurve: Curves.easeIn,
-                        transitionBuilder: (child, anim) => FadeTransition(
-                          opacity: anim,
-                          child: SlideTransition(
-                            position: Tween<Offset>(
-                              begin: const Offset(0.04, 0),
-                              end: Offset.zero,
-                            ).animate(anim),
-                            child: child,
+                  // Header with back button and title
+                  FadeTransition(
+                    opacity: _headerOpacity,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                      child: Row(
+                        children: [
+                          GestureDetector(
+                            onTap: () => _handleBack(currentStep),
+                            child: Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white.withValues(alpha: 0.15),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.3),
+                                  width: 1.0,
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.arrow_back_rounded,
+                                color: Colors.white,
+                                size: 20,
+                              ),
+                            ),
                           ),
-                        ),
-                        child: currentStep == 0
-                            ? const RegistrationStep1Credentials(
-                                key: ValueKey(0))
-                            : const RegistrationStep2Ktp(key: ValueKey(1)),
+                          const SizedBox(width: 16),
+                          Text(
+                            'Daftar Akun',
+                            style: GoogleFonts.plusJakartaSans(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              height: 1.2,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                ),
 
-                // Listens to keyboard inset independently — only this leaf
-                // widget rebuilds during keyboard animation, not the form tree.
-                const _BottomInsetSpacer(),
-              ],
-            ),
-          ),
+                  const SizedBox(height: 32),
 
-          //  Back button — LAST in stack so it renders above everything 
-          Positioned(
-            top: safePad.top + 4,
-            left: 4,
-            child: FadeTransition(
-              opacity: _headerOpacity,
-              child: IconButton(
-                icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                    color: Colors.white, size: 20),
-                onPressed: () => _handleBack(currentStep),
-                tooltip: currentStep == 0
-                    ? 'Kembali ke login'
-                    : 'Langkah sebelumnya',
+                  // Header with logo and progress
+                  FadeTransition(
+                    opacity: _headerOpacity,
+                    child: Column(
+                      children: [
+                        // Logo
+                        Container(
+                          width: 80,
+                          height: 80,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: AppColors.cardShadow,
+                          ),
+                          child: ClipOval(
+                            child: Image.asset(
+                              'assets/images/logo.png',
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      AppColors.gradientStart,
+                                      AppColors.gradientEnd,
+                                    ],
+                                  ),
+                                ),
+                                child: const Icon(
+                                  Icons.business_center_rounded,
+                                  size: 40,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // App title
+                        Text(
+                          'KMS Connect',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            letterSpacing: -0.5,
+                            height: 1.1,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+
+                        Text(
+                          'Bergabunglah dengan platform profesional',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.white.withOpacity(0.9),
+                            height: 1.4,
+                          ),
+                        ),
+                        const SizedBox(height: 32),
+
+                        // Progress indicator
+                        _buildProgressIndicator(currentStep),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 40),
+
+                  // Registration form card
+                  AnimatedBuilder(
+                    animation: _ctrl,
+                    builder: (context, child) {
+                      return Transform.translate(
+                        offset: Offset(0, _cardSlide.value),
+                        child: FadeTransition(
+                          opacity: _cardOpacity,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: ProfessionalCard(
+                              child: Padding(
+                                padding: const EdgeInsets.all(24),
+                                child: AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 280),
+                                  transitionBuilder: (child, animation) {
+                                    return FadeTransition(
+                                      opacity: animation,
+                                      child: SlideTransition(
+                                        position: Tween<Offset>(
+                                          begin: const Offset(0.1, 0),
+                                          end: Offset.zero,
+                                        ).animate(animation),
+                                        child: child,
+                                      ),
+                                    );
+                                  },
+                                  child: currentStep == 0
+                                      ? const RegistrationStep1Credentials()
+                                      : const RegistrationStep2Ktp(),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+
+                  const SizedBox(height: 32),
+                ],
               ),
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-//  Header content (logo + title + step progress) 
-
-class _RegHeaderContent extends StatelessWidget {
-  final int currentStep;
-  const _RegHeaderContent({required this.currentStep});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Logo badge
-        Container(
-          width: 72,
-          height: 72,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.18),
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.35),
-              width: 1.5,
-            ),
-          ),
-          child: ClipOval(
-            child: Image.asset(
-              'assets/images/logo.png',
-              width: 72,
-              height: 72,
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => const Icon(
-                Icons.eco_rounded,
-                size: 36,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          'Buat Akun Baru',
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 22,
-            fontWeight: FontWeight.w800,
-            color: Colors.white,
-            letterSpacing: -0.3,
-          ),
-        ),
-        const SizedBox(height: 14),
-        _StepProgressIndicator(currentStep: currentStep),
-        const SizedBox(height: 28),
-      ],
-    );
-  }
-}
-
-//  Step progress indicator 
-
-class _StepProgressIndicator extends StatelessWidget {
-  final int currentStep;
-  const _StepProgressIndicator({required this.currentStep});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _StepCircle(number: 1, isActive: currentStep == 0, isComplete: currentStep > 0),
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          width: 48,
-          height: 2,
-          decoration: BoxDecoration(
-            color: currentStep > 0
-                ? Colors.white.withValues(alpha: 0.85)
-                : Colors.white.withValues(alpha: 0.3),
-            borderRadius: BorderRadius.circular(1),
-          ),
-        ),
-        _StepCircle(number: 2, isActive: currentStep == 1, isComplete: false),
-      ],
-    );
-  }
-}
-
-class _StepCircle extends StatelessWidget {
-  final int number;
-  final bool isActive;
-  final bool isComplete;
-  const _StepCircle(
-      {required this.number, required this.isActive, required this.isComplete});
-
-  @override
-  Widget build(BuildContext context) {
-    final filled = isActive || isComplete;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      width: 32,
-      height: 32,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: filled
-            ? Colors.white.withValues(alpha: 0.95)
-            : Colors.white.withValues(alpha: 0.22),
-        border: Border.all(
-          color: filled ? Colors.transparent : Colors.white.withValues(alpha: 0.5),
-          width: 1.5,
         ),
       ),
-      child: Center(
-        child: isComplete
-            ? Icon(Icons.check_rounded,
-                size: 16,
-                color: const Color(0xFF2B6E36))
-            : Text(
-                '$number',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: isActive
-                      ? const Color(0xFF2B6E36)
-                      : Colors.white.withValues(alpha: 0.7),
-                ),
-              ),
-      ),
     );
-  }
-}
-
-// ── Keyboard inset spacer ────────────────────────────────────────────────────
-//
-// Isolates MediaQuery.viewInsetsOf into a leaf widget so only this one node
-// rebuilds during keyboard animation — the form fields above are untouched.
-class _BottomInsetSpacer extends StatelessWidget {
-  const _BottomInsetSpacer();
-
-  @override
-  Widget build(BuildContext context) {
-    final inset = MediaQuery.viewInsetsOf(context).bottom;
-    return SizedBox(height: inset + 24);
   }
 }
