@@ -403,7 +403,13 @@ class _FormPanel extends StatelessWidget {
             Align(
               alignment: Alignment.centerRight,
               child: TextButton(
-                onPressed: () => context.push('/forgot-password'),
+                onPressed: () {
+                  final q = emailCtrl.text.trim();
+                  final path = q.contains('@')
+                      ? '/forgot-password?email=${Uri.encodeComponent(q)}'
+                      : '/forgot-password';
+                  context.push(path);
+                },
                 style: TextButton.styleFrom(
                   foregroundColor: colorScheme.primary,
                   padding:

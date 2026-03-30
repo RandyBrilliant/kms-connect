@@ -6,7 +6,6 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../../../core/widgets/custom_toast.dart';
 import '../../../../../core/widgets/m3_text_field.dart';
 import '../../../../../core/widgets/phone_input_field.dart';
-import '../../../data/providers/auth_provider.dart';
 import '../../providers/registration_provider.dart';
 
 /// Step 1 of 2  email, password, confirm password, optional referral code.
@@ -72,14 +71,12 @@ class _RegistrationStep1CredentialsState
     // Validate phone separately since PhoneInputField uses FormField
     final phoneError = validatePhoneNumber(_phoneCtrl.text);
     if (phoneError != null) {
-      CustomToast.show(
-        context,
-        message: phoneError,
-        type: ToastType.warning,
-      );
+      CustomToast.show(context, message: phoneError, type: ToastType.warning);
       return;
     }
-    ref.read(registrationProvider.notifier).setCredentials(
+    ref
+        .read(registrationProvider.notifier)
+        .setCredentials(
           email: _emailCtrl.text.trim(),
           password: _passwordCtrl.text,
           phoneNumber: _phoneCtrl.text.trim(),
@@ -98,7 +95,7 @@ class _RegistrationStep1CredentialsState
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          //  Section label 
+          //  Section label
           SizedBox(height: MediaQuery.sizeOf(context).height < 740 ? 12 : 20),
           Text(
             'Informasi Akun',
@@ -116,7 +113,7 @@ class _RegistrationStep1CredentialsState
           ),
           SizedBox(height: MediaQuery.sizeOf(context).height < 740 ? 16 : 28),
 
-          //  Email 
+          //  Email
           M3TextField(
             controller: _emailCtrl,
             focusNode: _emailFocus,
@@ -135,7 +132,7 @@ class _RegistrationStep1CredentialsState
           ),
           const SizedBox(height: 16),
 
-          //  Password 
+          //  Password
           M3TextField(
             controller: _passwordCtrl,
             focusNode: _passwordFocus,
@@ -157,7 +154,7 @@ class _RegistrationStep1CredentialsState
           ),
           const SizedBox(height: 16),
 
-          //  Confirm password 
+          //  Confirm password
           M3TextField(
             controller: _confirmCtrl,
             focusNode: _confirmFocus,
@@ -166,7 +163,8 @@ class _RegistrationStep1CredentialsState
             prefixIcon: Icons.lock_outline_rounded,
             obscureText: _obscureConfirm,
             textInputAction: TextInputAction.done,
-            onSubmitted: (_) => FocusScope.of(context).requestFocus(_phoneFocus),
+            onSubmitted: (_) =>
+                FocusScope.of(context).requestFocus(_phoneFocus),
             suffixWidget: _VisibilityToggle(
               obscure: _obscureConfirm,
               onTap: () => setState(() => _obscureConfirm = !_obscureConfirm),
@@ -178,7 +176,7 @@ class _RegistrationStep1CredentialsState
           ),
           const SizedBox(height: 16),
 
-          //  Phone number 
+          //  Phone number
           PhoneInputField(
             controller: _phoneCtrl,
             focusNode: _phoneFocus,
@@ -188,13 +186,14 @@ class _RegistrationStep1CredentialsState
           ),
           SizedBox(height: MediaQuery.sizeOf(context).height < 740 ? 16 : 28),
 
-          //  Next button 
+          //  Next button
           FilledButton(
             onPressed: _handleNext,
             style: FilledButton.styleFrom(
               minimumSize: const Size(double.infinity, 52),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
+                borderRadius: BorderRadius.circular(14),
+              ),
             ),
             child: Text(
               'Selanjutnya',
@@ -209,7 +208,7 @@ class _RegistrationStep1CredentialsState
 
           SizedBox(height: MediaQuery.sizeOf(context).height < 740 ? 16 : 28),
 
-          //  Login link 
+          //  Login link
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -237,7 +236,7 @@ class _RegistrationStep1CredentialsState
   }
 }
 
-//  Reusable visibility-toggle icon 
+//  Reusable visibility-toggle icon
 
 class _VisibilityToggle extends StatelessWidget {
   final bool obscure;

@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../../config/colors.dart';
 import '../../../../core/api/api_client.dart';
 import '../../../../core/api/endpoints.dart';
+import '../../../../core/models/api_response.dart';
 import '../../../../core/widgets/auth_wave_header.dart';
 import '../../../../core/widgets/custom_toast.dart';
 import '../../../../core/widgets/m3_text_field.dart';
@@ -82,7 +83,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
     setState(() => _isLoading = true);
 
     try {
-      await ApiClient().dio.post(
+      final response = await ApiClient().dio.post(
         ApiEndpoints.confirmPasswordReset,
         data: {
           'uid': widget.uid,
@@ -91,6 +92,17 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
         },
       );
       if (!mounted) return;
+      final body = response.data;
+      if (body is Map<String, dynamic>) {
+        final api = ApiResponse<dynamic>.fromJson(body, (_) => null);
+        if (!api.isSuccess) {
+          setState(() => _isLoading = false);
+          CustomToast.show(context,
+              message: api.detail ?? 'Reset gagal. Silakan coba lagi.',
+              type: ToastType.error);
+          return;
+        }
+      }
       setState(() {
         _isLoading = false;
         _success = true;

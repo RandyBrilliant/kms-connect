@@ -7,7 +7,8 @@ class AuthInterceptor extends Interceptor {
   final ApiClient _apiClient;
   final Dio _dio;
   bool _isRefreshing = false;
-  final List<({RequestOptions options, ErrorInterceptorHandler handler})> _pendingRequests = [];
+  final List<({RequestOptions options, ErrorInterceptorHandler handler})>
+  _pendingRequests = [];
 
   /// Set this from outside (e.g. authStateProvider) so that when the
   /// interceptor invalidates tokens it can force GoRouter to redirect to login.
@@ -16,7 +17,10 @@ class AuthInterceptor extends Interceptor {
   AuthInterceptor(this._apiClient, this._dio);
 
   @override
-  void onRequest(RequestOptions options, RequestInterceptorHandler handler) async {
+  void onRequest(
+    RequestOptions options,
+    RequestInterceptorHandler handler,
+  ) async {
     // Skip auth for public endpoints
     if (_isPublicEndpoint(options.path)) {
       if (const bool.fromEnvironment('dart.vm.product') == false) {
@@ -108,7 +112,7 @@ class AuthInterceptor extends Interceptor {
           if (newAccessToken != null) {
             await _apiClient.setTokens(
               newAccessToken,
-              newRefreshToken ?? refreshToken!,
+              newRefreshToken ?? refreshToken,
             );
 
             // Mark as retry so a second 401 on the retry doesn't wipe tokens
@@ -141,7 +145,8 @@ class AuthInterceptor extends Interceptor {
         // Only force-logout when the server explicitly rejects the refresh token
         // (400 or 401).  Network errors, timeouts, or server outages should NOT
         // log the user out — their tokens are still valid.
-        final isServerRejection = e is DioException &&
+        final isServerRejection =
+            e is DioException &&
             e.response != null &&
             (e.response!.statusCode == 401 || e.response!.statusCode == 400);
 
@@ -180,14 +185,16 @@ class AuthInterceptor extends Interceptor {
       final opts = pending.options;
       opts.headers['Authorization'] = 'Bearer $newToken';
       opts.extra['auth_retry'] = true;
-      _dio.fetch(opts).then(
-        (res) => pending.handler.resolve(res),
-        onError: (e) => pending.handler.reject(
-          e is DioException
-              ? e
-              : DioException(requestOptions: opts, error: e),
-        ),
-      );
+      _dio
+          .fetch(opts)
+          .then(
+            (res) => pending.handler.resolve(res),
+            onError: (e) => pending.handler.reject(
+              e is DioException
+                  ? e
+                  : DioException(requestOptions: opts, error: e),
+            ),
+          );
     }
   }
 
@@ -216,7 +223,9 @@ class LoggingInterceptor extends Interceptor {
   @override
   void onResponse(Response response, ResponseInterceptorHandler handler) {
     if (const bool.fromEnvironment('dart.vm.product') == false) {
-      print('RESPONSE[${response.statusCode}] => PATH: ${response.requestOptions.path}');
+      print(
+        'RESPONSE[${response.statusCode}] => PATH: ${response.requestOptions.path}',
+      );
     }
     handler.next(response);
   }
@@ -224,7 +233,9 @@ class LoggingInterceptor extends Interceptor {
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
     if (const bool.fromEnvironment('dart.vm.product') == false) {
-      print('ERROR[${err.response?.statusCode}] => PATH: ${err.requestOptions.path}');
+      print(
+        'ERROR[${err.response?.statusCode}] => PATH: ${err.requestOptions.path}',
+      );
       print('MESSAGE: ${err.message}');
       // Try to extract backend error detail
       if (err.response?.data != null) {

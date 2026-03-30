@@ -17,6 +17,35 @@ logger = logging.getLogger(__name__)
 _firebase_initialized = False
 
 
+def _webpush_fcm_options():
+    """
+    FCM requires WebpushFCMOptions.link to be a full HTTPS URL (not a path like '/').
+
+    When FRONTEND_URL is http:// (local dev) or unset, omit fcm_options so webpush
+    still works for mobile tokens; web clients get no default click URL.
+    """
+    base = (getattr(settings, "FRONTEND_URL", None) or "").strip().rstrip("/")
+    if not base.startswith("https://"):
+        return None
+    return messaging.WebpushFCMOptions(link=f"{base}/")
+
+
+def _build_webpush_config(title: str, body: str) -> messaging.WebpushConfig:
+    """Webpush notification; click link only when FRONTEND_URL is HTTPS."""
+    notification = messaging.WebpushNotification(
+        title=title,
+        body=body,
+        icon="/logo.png",
+    )
+    fcm_opts = _webpush_fcm_options()
+    if fcm_opts is not None:
+        return messaging.WebpushConfig(
+            notification=notification,
+            fcm_options=fcm_opts,
+        )
+    return messaging.WebpushConfig(notification=notification)
+
+
 def initialize_firebase():
     """Initialize Firebase Admin SDK."""
     global _firebase_initialized
@@ -105,16 +134,7 @@ def send_fcm_notification(
                 ),
             ),
         ),
-        webpush=messaging.WebpushConfig(
-            notification=messaging.WebpushNotification(
-                title=title,
-                body=body,
-                icon="/logo.png",  # Update with your logo path
-            ),
-            fcm_options=messaging.WebpushFCMOptions(
-                link="/",  # Default link when notification is clicked
-            ),
-        ),
+        webpush=_build_webpush_config(title, body),
         tokens=tokens,
     )
     

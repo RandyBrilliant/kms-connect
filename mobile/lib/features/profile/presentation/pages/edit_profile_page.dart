@@ -738,8 +738,11 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           prefixIcon: Icons.location_city_outlined,
                           selected: _birthPlace,
                           onTap: () async {
-                            final items = await ref
-                                .read(regenciesProvider.future);
+                            final items = await readRegionListWithRetry(
+                              ref,
+                              () => ref.read(regenciesProvider.future),
+                              () => ref.invalidate(regenciesProvider),
+                            );
                             if (!mounted) return;
                             final picked = await _showRegionPicker(
                                 title: 'Pilih Kota/Kabupaten',
@@ -953,8 +956,11 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           prefixIcon: Icons.map_outlined,
                           selected: _province,
                           onTap: () async {
-                            final items = await ref
-                                .read(provincesProvider.future);
+                            final items = await readRegionListWithRetry(
+                              ref,
+                              () => ref.read(provincesProvider.future),
+                              () => ref.invalidate(provincesProvider),
+                            );
                             if (!mounted) return;
                             final picked = await _showRegionPicker(
                                 title: 'Pilih Provinsi',
@@ -982,10 +988,14 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           enabled: _province != null,
                           onTap: () async {
                             if (_province == null) return;
-                            final items = await ref.read(
-                                regenciesByProvinceProvider(
-                                        _province!.id)
-                                    .future);
+                            final pid = _province!.id;
+                            final items = await readRegionListWithRetry(
+                              ref,
+                              () => ref.read(
+                                  regenciesByProvinceProvider(pid).future),
+                              () => ref.invalidate(
+                                  regenciesByProvinceProvider(pid)),
+                            );
                             if (!mounted) return;
                             final picked = await _showRegionPicker(
                                 title: 'Pilih Kab/Kota',
@@ -1011,10 +1021,14 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           enabled: _kabupaten != null,
                           onTap: () async {
                             if (_kabupaten == null) return;
-                            final items = await ref.read(
-                                districtsByRegencyProvider(
-                                        _kabupaten!.id)
-                                    .future);
+                            final rid = _kabupaten!.id;
+                            final items = await readRegionListWithRetry(
+                              ref,
+                              () => ref.read(
+                                  districtsByRegencyProvider(rid).future),
+                              () => ref.invalidate(
+                                  districtsByRegencyProvider(rid)),
+                            );
                             if (!mounted) return;
                             final picked = await _showRegionPicker(
                                 title: 'Pilih Kecamatan',
@@ -1039,10 +1053,14 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           enabled: _kecamatan != null,
                           onTap: () async {
                             if (_kecamatan == null) return;
-                            final items = await ref.read(
-                                villagesByDistrictProvider(
-                                        _kecamatan!.id)
-                                    .future);
+                            final did = _kecamatan!.id;
+                            final items = await readRegionListWithRetry(
+                              ref,
+                              () => ref.read(
+                                  villagesByDistrictProvider(did).future),
+                              () => ref.invalidate(
+                                  villagesByDistrictProvider(did)),
+                            );
                             if (!mounted) return;
                             final picked = await _showRegionPicker(
                                 title: 'Pilih Kelurahan/Desa',
@@ -1307,7 +1325,11 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           prefixIcon: Icons.map_outlined,
                           selected: _familyProvince,
                           onTap: () async {
-                            final items = await ref.read(provincesProvider.future);
+                            final items = await readRegionListWithRetry(
+                              ref,
+                              () => ref.read(provincesProvider.future),
+                              () => ref.invalidate(provincesProvider),
+                            );
                             if (!mounted) return;
                             final picked = await _showRegionPicker(
                                 title: 'Pilih Provinsi', items: items);
@@ -1332,8 +1354,14 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           enabled: _familyProvince != null,
                           onTap: () async {
                             if (_familyProvince == null) return;
-                            final items = await ref.read(
-                                regenciesByProvinceProvider(_familyProvince!.id).future);
+                            final pid = _familyProvince!.id;
+                            final items = await readRegionListWithRetry(
+                              ref,
+                              () => ref.read(
+                                  regenciesByProvinceProvider(pid).future),
+                              () => ref.invalidate(
+                                  regenciesByProvinceProvider(pid)),
+                            );
                             if (!mounted) return;
                             final picked = await _showRegionPicker(
                                 title: 'Pilih Kab/Kota', items: items);
@@ -1357,8 +1385,14 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           enabled: _familyKabupaten != null,
                           onTap: () async {
                             if (_familyKabupaten == null) return;
-                            final items = await ref.read(
-                                districtsByRegencyProvider(_familyKabupaten!.id).future);
+                            final rid = _familyKabupaten!.id;
+                            final items = await readRegionListWithRetry(
+                              ref,
+                              () => ref.read(
+                                  districtsByRegencyProvider(rid).future),
+                              () => ref.invalidate(
+                                  districtsByRegencyProvider(rid)),
+                            );
                             if (!mounted) return;
                             final picked = await _showRegionPicker(
                                 title: 'Pilih Kecamatan', items: items);
@@ -1381,8 +1415,14 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           enabled: _familyKecamatan != null,
                           onTap: () async {
                             if (_familyKecamatan == null) return;
-                            final items = await ref.read(
-                                villagesByDistrictProvider(_familyKecamatan!.id).future);
+                            final did = _familyKecamatan!.id;
+                            final items = await readRegionListWithRetry(
+                              ref,
+                              () => ref.read(
+                                  villagesByDistrictProvider(did).future),
+                              () => ref.invalidate(
+                                  villagesByDistrictProvider(did)),
+                            );
                             if (!mounted) return;
                             final picked = await _showRegionPicker(
                                 title: 'Pilih Kelurahan/Desa', items: items);

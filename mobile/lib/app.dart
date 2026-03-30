@@ -94,8 +94,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       final authState = ref.read(authStateProvider);
       final isAuthenticated = authState.isAuthenticated;
 
-      // Pre-auth routes: login, register, and email verification.
-      final isPreAuthRoute = loc == '/login' || loc == '/register' || loc.startsWith('/email-verification');
+      // Pre-auth routes: login, register, email verification, password reset.
+      final isPreAuthRoute = loc == '/login' ||
+          loc == '/register' ||
+          loc.startsWith('/email-verification') ||
+          loc == '/forgot-password' ||
+          loc == '/reset-password';
 
       if (!isAuthenticated) {
         // Unauthenticated users can only access pre-auth routes.
@@ -162,7 +166,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/forgot-password',
         name: 'forgot-password',
-        builder: (context, state) => const ForgotPasswordPage(),
+        builder: (context, state) {
+          final email = state.uri.queryParameters['email'] ?? '';
+          return ForgotPasswordPage(initialEmail: email);
+        },
       ),
       GoRoute(
         path: '/reset-password',

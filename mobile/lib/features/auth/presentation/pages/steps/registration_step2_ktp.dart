@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -22,9 +23,9 @@ import '../../providers/registration_provider.dart';
 /// let the user verify / complete the form, then submit.
 ///
 /// Performance note: [M3TextField] derives all styles from [Theme], avoiding
-/// per-keystroke [TextStyle] allocations.  [regenciesProvider] is *read* (not
-/// watched) in [build] so loading cities never causes a rebuild of this widget
-/// while step 1 is visible.
+/// per-keystroke [TextStyle] allocations. [regenciesProvider] is not watched in
+/// [build] so loading the full regency list does not rebuild this widget on
+/// every frame; birth-place resolution awaits the provider when needed.
 class RegistrationStep2Ktp extends ConsumerStatefulWidget {
   const RegistrationStep2Ktp({super.key});
 
@@ -224,39 +225,56 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
     setState(() {
       if (data.nik != null) _nikCtrl.text = data.nik!;
       if (data.name != null) _nameCtrl.text = data.name!.toUpperCase();
-      if (data.birthPlace != null) {
-        _ocrBirthPlace = data.birthPlace;
-        // If backend already matched a regency, use it directly
-        if (data.birthPlaceRegency != null) {
-          _setRegencyFromBackend(data.birthPlaceRegency!);
-        } else {
-          // Fallback to client-side matching
-          _tryMatchCity(data.birthPlace!);
-        }
-      }
+      if (data.birthPlace != null) _ocrBirthPlace = data.birthPlace;
       if (data.birthDate != null) _parseAndSetDate(data.birthDate!);
     });
+    if (data.birthPlace != null || data.birthPlaceRegency != null) {
+      unawaited(_resolveBirthPlaceFromKtp(data));
+    }
   }
 
-  /// Set the city dropdown from backend-matched regency.
-  void _setRegencyFromBackend(BirthPlaceRegency regency) {
-    ref.read(regenciesProvider).whenData((cities) {
+  /// Loads regencies then applies OCR/backend birth place — avoids [whenData]
+  /// silently doing nothing while [regenciesProvider] is still loading.
+  Future<void> _resolveBirthPlaceFromKtp(KtpData data) async {
+    final cities = await _loadRegenciesWithRetry();
+    if (!mounted || cities == null) return;
+
+    if (data.birthPlaceRegency != null) {
+      final regency = data.birthPlaceRegency!;
       final match = cities.where((c) => c.id == regency.id).firstOrNull;
-      if (match != null && mounted) {
+      if (match != null) {
         setState(() {
           _selectedCity = match;
           _birthPlaceCtrl.text = match.name;
         });
-      } else {
-        // Regency not found in local list, try client-side matching
-        if (_ocrBirthPlace != null) {
-          _tryMatchCity(_ocrBirthPlace!);
-        }
+        return;
       }
-    });
+      if (data.birthPlace != null) {
+        _applyTryMatchCity(data.birthPlace!, cities);
+      } else if (_ocrBirthPlace != null) {
+        _applyTryMatchCity(_ocrBirthPlace!, cities);
+      }
+    } else if (data.birthPlace != null) {
+      _applyTryMatchCity(data.birthPlace!, cities);
+    }
   }
 
-  //  City matching helpers (unchanged logic)
+  /// Fetches all regencies; on failure invalidates once and retries (helps
+  /// after transient errors so Riverpod does not stay stuck on AsyncError).
+  Future<List<Region>?> _loadRegenciesWithRetry() async {
+    try {
+      return await ref.read(regenciesProvider.future);
+    } catch (_) {
+      ref.invalidate(regenciesProvider);
+      try {
+        return await ref.read(regenciesProvider.future);
+      } catch (_) {
+        return null;
+      }
+    }
+  }
+
+  //  City matching helpers
 
   String _normalizePlace(String s) {
     return s
@@ -276,58 +294,56 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
         .trim();
   }
 
-  void _tryMatchCity(String birthPlace) {
-    ref.read(regenciesProvider).whenData((cities) {
-      final query = _normalizePlace(birthPlace);
-      if (query.isEmpty) return;
-      Region? match;
+  void _applyTryMatchCity(String birthPlace, List<Region> cities) {
+    final query = _normalizePlace(birthPlace);
+    if (query.isEmpty) return;
+    Region? match;
 
-      for (final c in cities) {
-        if (_normalizePlace(c.name) == query) {
-          match = c;
-          break;
-        }
+    for (final c in cities) {
+      if (_normalizePlace(c.name) == query) {
+        match = c;
+        break;
       }
-      if (match == null) {
-        final qs = _stripRegencyPrefix(query);
-        if (qs.isNotEmpty) {
-          for (final c in cities) {
-            if (_stripRegencyPrefix(_normalizePlace(c.name)) == qs) {
-              match = c;
-              break;
-            }
-          }
-        }
-      }
-      if (match == null) {
+    }
+    if (match == null) {
+      final qs = _stripRegencyPrefix(query);
+      if (qs.isNotEmpty) {
         for (final c in cities) {
-          final cn = _normalizePlace(c.name);
-          if (cn.contains(query) || query.contains(cn)) {
+          if (_stripRegencyPrefix(_normalizePlace(c.name)) == qs) {
             match = c;
             break;
           }
         }
       }
-      if (match == null) {
-        final qs = _stripRegencyPrefix(query);
-        if (qs.length >= 3) {
-          for (final c in cities) {
-            final cn = _stripRegencyPrefix(_normalizePlace(c.name));
-            if (cn.contains(qs) || qs.contains(cn)) {
-              match = c;
-              break;
-            }
+    }
+    if (match == null) {
+      for (final c in cities) {
+        final cn = _normalizePlace(c.name);
+        if (cn.contains(query) || query.contains(cn)) {
+          match = c;
+          break;
+        }
+      }
+    }
+    if (match == null) {
+      final qs = _stripRegencyPrefix(query);
+      if (qs.length >= 3) {
+        for (final c in cities) {
+          final cn = _stripRegencyPrefix(_normalizePlace(c.name));
+          if (cn.contains(qs) || qs.contains(cn)) {
+            match = c;
+            break;
           }
         }
       }
+    }
 
-      if (match != null && mounted) {
-        setState(() {
-          _selectedCity = match;
-          _birthPlaceCtrl.text = match!.name;
-        });
-      }
-    });
+    if (match != null && mounted) {
+      setState(() {
+        _selectedCity = match;
+        _birthPlaceCtrl.text = match!.name;
+      });
+    }
   }
 
   void _parseAndSetDate(String dateStr) {
@@ -428,11 +444,20 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
   }
 
   Future<void> _showCityPicker() async {
-    final cities = ref.read(regenciesProvider).valueOrNull;
+    final cities = await _loadRegenciesWithRetry();
+    if (!mounted) return;
     if (cities == null) {
       CustomToast.show(context,
-          message: 'Data kota sedang dimuat, coba lagi sebentar',
-          type: ToastType.info);
+          message:
+              'Gagal memuat daftar kota/kabupaten. Periksa koneksi internet lalu coba lagi.',
+          type: ToastType.error);
+      return;
+    }
+    if (cities.isEmpty) {
+      CustomToast.show(context,
+          message:
+              'Daftar wilayah kosong di server. Hubungi administrator atau coba lagi nanti.',
+          type: ToastType.error);
       return;
     }
     final result = await showModalBottomSheet<Region>(

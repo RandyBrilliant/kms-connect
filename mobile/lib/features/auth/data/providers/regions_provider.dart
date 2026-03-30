@@ -4,6 +4,23 @@ import '../../../../core/api/api_client.dart';
 import '../../../../core/api/endpoints.dart';
 import '../../../../core/models/region.dart';
 
+/// Loads a region list; on failure invalidates the source once and retries.
+///
+/// Avoids a stuck UI when a [FutureProvider] stayed in [AsyncError] after one
+/// bad request (Riverpod keeps that state until invalidated).
+Future<List<Region>> readRegionListWithRetry(
+  WidgetRef ref,
+  Future<List<Region>> Function() read,
+  void Function() invalidate,
+) async {
+  try {
+    return await read();
+  } catch (_) {
+    invalidate();
+    return await read();
+  }
+}
+
 // ── Province ──────────────────────────────────────────────────────────────────
 /// All provinces – loaded once, cached for session.
 final provincesProvider = FutureProvider<List<Region>>((ref) async {

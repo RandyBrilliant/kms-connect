@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../../config/colors.dart';
 import '../../../../core/api/api_client.dart';
 import '../../../../core/api/endpoints.dart';
+import '../../../../core/models/api_response.dart';
 import '../../../../core/widgets/auth_wave_header.dart';
 import '../../../../core/widgets/custom_toast.dart';
 import '../../../../core/widgets/m3_text_field.dart';
@@ -15,7 +16,10 @@ import '../../../../core/widgets/m3_text_field.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 
 class ForgotPasswordPage extends StatefulWidget {
-  const ForgotPasswordPage({super.key});
+  /// Optional email from login screen (query `email`) to reduce re-typing.
+  final String initialEmail;
+
+  const ForgotPasswordPage({super.key, this.initialEmail = ''});
 
   @override
   State<ForgotPasswordPage> createState() => _ForgotPasswordPageState();
@@ -23,10 +27,16 @@ class ForgotPasswordPage extends StatefulWidget {
 
 class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   final _formKey = GlobalKey<FormState>();
-  final _emailCtrl = TextEditingController();
+  late final TextEditingController _emailCtrl;
 
   bool _isLoading = false;
   bool _emailSent = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailCtrl = TextEditingController(text: widget.initialEmail.trim());
+  }
 
   @override
   void dispose() {
@@ -68,11 +78,22 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
     setState(() => _isLoading = true);
 
     try {
-      await ApiClient().dio.post(
+      final response = await ApiClient().dio.post(
         ApiEndpoints.requestPasswordReset,
         data: {'email': _emailCtrl.text.trim().toLowerCase()},
       );
       if (!mounted) return;
+      final body = response.data;
+      if (body is Map<String, dynamic>) {
+        final api = ApiResponse<dynamic>.fromJson(body, (_) => null);
+        if (!api.isSuccess) {
+          setState(() => _isLoading = false);
+          CustomToast.show(context,
+              message: api.detail ?? 'Permintaan gagal. Silakan coba lagi.',
+              type: ToastType.error);
+          return;
+        }
+      }
       setState(() {
         _isLoading = false;
         _emailSent = true;
