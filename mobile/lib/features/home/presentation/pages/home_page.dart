@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../config/colors.dart';
 import '../../../../core/models/paginated_state.dart';
+import '../../../../core/update/app_update_service.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../auth/data/providers/auth_provider.dart';
 import '../../../notifications/data/providers/notification_provider.dart';
@@ -37,6 +38,7 @@ class _HomePageState extends ConsumerState<HomePage>
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(profileNotifierProvider.notifier).loadProfile();
+      AppUpdateService().checkAndRunPlayStoreUpdate();
     });
   }
 
@@ -685,7 +687,7 @@ class _DashboardQuickActions extends StatelessWidget {
                 icon: Icons.description_outlined,
                 label: 'Lamaran',
                 color: const Color(0xFFF59E0B),
-                onTap: () => context.push('/applications'),
+                onTap: () => context.push('/jobs/my-applications'),
               ),
               _QuickActionButton(
                 icon: Icons.chat_bubble_outline_rounded,
@@ -774,28 +776,33 @@ class _ProfessionalSectionHeader extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
 
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Row(
-          children: [
-            Container(
-              width: 4,
-              height: 20,
-              decoration: BoxDecoration(
-                color: AppColors.primaryDarkGreen,
-                borderRadius: BorderRadius.circular(2),
+        Expanded(
+          child: Row(
+            children: [
+              Container(
+                width: 4,
+                height: 20,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryDarkGreen,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              title,
-              style: tt.titleLarge?.copyWith(
-                color: AppColors.textDark,
-                fontWeight: FontWeight.w600,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: tt.titleLarge?.copyWith(
+                    color: AppColors.textDark,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
         Material(
           color: Colors.transparent,
@@ -803,15 +810,19 @@ class _ProfessionalSectionHeader extends StatelessWidget {
             onTap: onAction,
             borderRadius: BorderRadius.circular(8),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    actionLabel,
-                    style: tt.labelLarge?.copyWith(
-                      color: AppColors.primaryDarkGreen,
-                      fontWeight: FontWeight.w600,
+                  Flexible(
+                    child: Text(
+                      actionLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: tt.labelLarge?.copyWith(
+                        color: AppColors.primaryDarkGreen,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 4),

@@ -173,6 +173,21 @@ class _SplashPageState extends ConsumerState<SplashPage>
 
                   const SizedBox(height: 32),
 
+                  // Welcome + app name
+                  FadeTransition(
+                    opacity: _taglineOpacity,
+                    child: Text(
+                      'Selamat Datang',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white.withValues(alpha: 0.92),
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+
                   // App name
                   SlideTransition(
                     position: _textSlide,
@@ -207,13 +222,13 @@ class _SplashPageState extends ConsumerState<SplashPage>
                     ),
                   ),
 
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
 
                   // Professional subtitle
                   FadeTransition(
                     opacity: _taglineOpacity,
                     child: Text(
-                      'Temukan Karir Impianmu',
+                      'Mulai perjalanan karir profesional Anda',
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
@@ -303,7 +318,7 @@ class _ProfessionalLogoBadge extends StatelessWidget {
               width: 96,
               height: 96,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
+              errorBuilder: (_, _, _) => Container(
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: LinearGradient(

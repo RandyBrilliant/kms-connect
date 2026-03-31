@@ -1,4 +1,5 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 /// The semantic type of a toast notification.
@@ -27,9 +28,21 @@ class CustomToast {
     ToastType type = ToastType.info,
     Duration duration = const Duration(seconds: 3),
   }) {
-    final overlay =
-        rootNavigatorKey.currentState?.overlay ?? Overlay.of(context);
-    _insert(overlay, message: message, title: title, type: type, duration: duration);
+    // Defer [Overlay.insert] so we never mutate the overlay during
+    // [Navigator] build / locked transitions (fixes !_debugLocked with go_router).
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      Future.microtask(() {
+        final overlay = rootNavigatorKey.currentState?.overlay;
+        if (overlay == null) return;
+        _insert(
+          overlay,
+          message: message,
+          title: title,
+          type: type,
+          duration: duration,
+        );
+      });
+    });
   }
 
   /// Show a toast without a [BuildContext]  safe to call from providers,
@@ -40,9 +53,19 @@ class CustomToast {
     ToastType type = ToastType.info,
     Duration duration = const Duration(seconds: 3),
   }) {
-    final overlay = rootNavigatorKey.currentState?.overlay;
-    if (overlay == null) return;
-    _insert(overlay, message: message, title: title, type: type, duration: duration);
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      Future.microtask(() {
+        final overlay = rootNavigatorKey.currentState?.overlay;
+        if (overlay == null) return;
+        _insert(
+          overlay,
+          message: message,
+          title: title,
+          type: type,
+          duration: duration,
+        );
+      });
+    });
   }
 
   static void _insert(

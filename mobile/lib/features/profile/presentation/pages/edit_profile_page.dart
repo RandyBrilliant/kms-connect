@@ -1,12 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
+import '../../../../config/colors.dart';
+import '../../../../core/utils/safe_navigation.dart';
 import '../../../../core/models/region.dart';
+import '../../../../core/widgets/professional/professional_button.dart';
+import '../../../../core/widgets/professional/professional_card.dart';
+import '../../../../core/widgets/professional/professional_gradient_background.dart';
 import '../../../../core/widgets/custom_toast.dart';
-import '../../../../core/widgets/m3_text_field.dart';
-import '../../../../core/widgets/phone_input_field.dart';
+import '../../../../core/widgets/professional_text_field.dart';
+import '../../../../core/widgets/professional_phone_field.dart';
+import '../../../../core/widgets/professional_dropdown_field.dart';
 import '../../../auth/data/providers/regions_provider.dart';
 import '../../../auth/data/providers/staff_referrers_provider.dart';
 import '../../data/providers/profile_provider.dart';
@@ -179,6 +186,25 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     super.dispose();
   }
 
+  /// Maps backend strings to dropdown keys (case/spacing tolerant).
+  static String? _normalizeDropdownKey(String? raw) {
+    if (raw == null) return null;
+    final t = raw.trim();
+    if (t.isEmpty) return null;
+    return t.toUpperCase();
+  }
+
+  /// Normalizes gender to `M` / `F` for segmented control.
+  static String? _normalizeGender(String? raw) {
+    if (raw == null) return null;
+    final u = raw.trim().toUpperCase();
+    if (u == 'M' || u == 'L' || u == 'LAKI' || u.startsWith('LAKI')) {
+      return 'M';
+    }
+    if (u == 'F' || u == 'P' || u.startsWith('PEREM')) return 'F';
+    return u.length == 1 ? u : null;
+  }
+
   /// Populates controllers exactly once from the loaded profile.
   /// Does NOT call setState — the controllers themselves notify their
   /// respective TextFormField widgets via ChangeNotifier.
@@ -191,25 +217,25 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
       _pickedDate = p.birthDate;
       _birthDate.text = DateFormat('dd MMMM yyyy', 'id').format(p.birthDate!);
     }
-    _gender = p.gender;
+    _gender = _normalizeGender(p.gender);
     _address.text = (p.address ?? '').toUpperCase();
     _phone.text = p.contactPhone ?? '';
     _siblingCount.text = p.siblingCount?.toString() ?? '';
     _birthOrder.text = p.birthOrder?.toString() ?? '';
 
-    // ── New: Data Pribadi dropdowns ──────────────────────────────────────
-    _religion = (p.religion?.isNotEmpty == true) ? p.religion : null;
-    _educationLevel = (p.educationLevel?.isNotEmpty == true) ? p.educationLevel : null;
+    // ── New: Data Pribadi dropdowns (normalize to API keys / item keys) ─
+    _religion = _normalizeDropdownKey(p.religion);
+    _educationLevel = _normalizeDropdownKey(p.educationLevel);
     _educationMajor.text = (p.educationMajor ?? '').toUpperCase();
-    _maritalStatus = (p.maritalStatus?.isNotEmpty == true) ? p.maritalStatus : null;
+    _maritalStatus = _normalizeDropdownKey(p.maritalStatus);
 
     // ── New: Data Fisik ──────────────────────────────────────────────────
     _heightCm.text = p.heightCm?.toString() ?? '';
     _weightKg.text = p.weightKg?.toString() ?? '';
     _wearsGlasses = p.wearsGlasses;
-    _writingHand = (p.writingHand?.isNotEmpty == true) ? p.writingHand : null;
+    _writingHand = _normalizeDropdownKey(p.writingHand);
     _shoeSize.text = p.shoeSize?.toString() ?? '';
-    _shirtSize = (p.shirtSize?.isNotEmpty == true) ? p.shirtSize : null;
+    _shirtSize = _normalizeDropdownKey(p.shirtSize);
 
     // ── New: Data Paspor ────────────────────────────────────────────────
     _hasPassport = p.hasPassport;
@@ -262,7 +288,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
 
     // Ahli Waris
     _heirName.text = (p.heirName ?? '').toUpperCase();
-    _heirRelationship = (p.heirRelationship?.isNotEmpty == true) ? p.heirRelationship : null;
+    _heirRelationship = _normalizeDropdownKey(p.heirRelationship);
     _heirContactPhone.text = p.heirContactPhone ?? '';
 
     // Pre-seed region objects from names stored in profile
@@ -380,7 +406,6 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
         'address': _address.text.trim(),
       if (_province != null) 'province': _province!.id,
       if (_kabupaten != null) 'district': _kabupaten!.id,
-      if (_kecamatan != null) 'kecamatan': _kecamatan!.id,
       if (_kelurahan != null) 'village': _kelurahan!.id,
       if (_phone.text.trim().isNotEmpty)
         'contact_phone': _phone.text.trim(),
@@ -468,11 +493,21 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
         await ref.read(profileNotifierProvider.notifier).updateProfile(data);
     if (!mounted) return;
     if (success) {
-      ref.invalidate(profileProvider);
-      CustomToast.show(context,
-          message: 'Profil berhasil diperbarui',
-          type: ToastType.success);
-      Navigator.pop(context);
+      // Capture container before pop — [ref] is unsafe after [dispose].
+      // Sync [ref.invalidate] + toast overlay could rebuild go_router's
+      // [Navigator] while it is locked.
+      final container = ProviderScope.containerOf(context);
+      CustomToast.showGlobal(
+        message: 'Profil berhasil diperbarui',
+        type: ToastType.success,
+      );
+      runWhenNavigatorUnlocked(() {
+        if (!mounted) return;
+        Navigator.pop(context);
+        runWhenNavigatorUnlocked(() {
+          container.invalidate(profileProvider);
+        });
+      });
     } else {
       final err =
           ref.read(profileNotifierProvider).error ?? 'Gagal menyimpan';
@@ -480,91 +515,20 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     }
   }
 
-  // ── Region bottom-sheet picker ─────────────────────────────────────────────
+  // ── Region bottom-sheet picker (matches registration KTP city sheet) ─────
   Future<Region?> _showRegionPicker({
     required String title,
     required List<Region> items,
+    Region? selected,
   }) async {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    final searchCtrl = TextEditingController();
-    List<Region> filtered = List.of(items);
-
     return showModalBottomSheet<Region>(
       context: context,
       isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: cs.surfaceContainerLow,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setModal) => DraggableScrollableSheet(
-          initialChildSize: 0.75,
-          minChildSize: 0.4,
-          maxChildSize: 0.92,
-          expand: false,
-          builder: (_, scrollCtrl) => Column(
-            children: [
-              const SizedBox(height: 8),
-              Container(
-                width: 32,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: cs.onSurfaceVariant.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                child: Text(title,
-                    style: tt.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w700)),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: SearchBar(
-                  controller: searchCtrl,
-                  hintText: 'Cari...',
-                  leading: const Icon(Icons.search_rounded, size: 20),
-                  onChanged: (q) {
-                    final lower = q.toLowerCase();
-                    setModal(() {
-                      filtered = items
-                          .where((r) =>
-                              r.name.toLowerCase().contains(lower))
-                          .toList();
-                    });
-                  },
-                ),
-              ),
-              const SizedBox(height: 8),
-              Divider(height: 1, color: cs.outlineVariant),
-              Expanded(
-                child: filtered.isEmpty
-                    ? Center(
-                        child: Text('Tidak ditemukan',
-                            style: tt.bodyMedium?.copyWith(
-                                color: cs.onSurfaceVariant)),
-                      )
-                    : ListView.builder(
-                        controller: scrollCtrl,
-                        itemCount: filtered.length,
-                        itemBuilder: (_, i) {
-                          final r = filtered[i];
-                          return ListTile(
-                            title: Text(r.name,
-                                style: tt.bodyMedium?.copyWith(
-                                    fontWeight: FontWeight.w500)),
-                            onTap: () => Navigator.pop(ctx, r),
-                          );
-                        },
-                      ),
-              ),
-              SizedBox(height: MediaQuery.paddingOf(ctx).bottom + 8),
-            ],
-          ),
-        ),
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _RegionPickerSheet(
+        title: title,
+        items: items,
+        selected: selected,
       ),
     );
   }
@@ -578,7 +542,15 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     if (profile != null && !_populated) {
       // Schedule outside the build phase to avoid setState-during-build.
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _populate(profile);
+        if (!mounted) return;
+        _populate(profile);
+        // Kecamatan is not stored on profile; derive from village (same as initState path).
+        if (profile.villageId != null) {
+          _loadKecamatan(profile.villageId!, isFamily: false);
+        }
+        if (profile.familyVillageId != null) {
+          _loadKecamatan(profile.familyVillageId!, isFamily: true);
+        }
       });
     }
 
@@ -591,14 +563,23 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     // Loading skeleton
     if (profileState.isLoading && profile == null) {
       return Scaffold(
-        backgroundColor: cs.surfaceContainerLowest,
-        body: SafeArea(
-          child: Column(
-            children: [
-              _buildAppBar(context),
-              const Expanded(
-                  child: Center(child: CircularProgressIndicator())),
-            ],
+        resizeToAvoidBottomInset: true,
+        backgroundColor: Colors.transparent,
+        body: ProfessionalGradientBackground(
+          child: SafeArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildProfessionalHeader(context),
+                const Expanded(
+                  child: Center(
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       );
@@ -607,87 +588,121 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     // Error state
     if (profileState.error != null && profile == null) {
       return Scaffold(
-        backgroundColor: cs.surfaceContainerLowest,
-        body: SafeArea(
-          child: Column(
-            children: [
-              _buildAppBar(context),
-              Expanded(
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.error_outline_rounded,
-                            size: 48, color: cs.error),
-                        const SizedBox(height: 12),
-                        Text('Gagal memuat data',
-                            style: tt.titleMedium
-                                ?.copyWith(color: cs.error)),
-                        const SizedBox(height: 8),
-                        Text(profileState.error!,
-                            style: tt.bodySmall?.copyWith(
-                                color: cs.onSurfaceVariant),
-                            textAlign: TextAlign.center),
-                        const SizedBox(height: 20),
-                        FilledButton.icon(
-                          onPressed: () => ref
-                              .read(profileNotifierProvider.notifier)
-                              .loadProfile(),
-                          icon:
-                              const Icon(Icons.refresh_rounded),
-                          label: const Text('Coba lagi'),
+        resizeToAvoidBottomInset: true,
+        backgroundColor: Colors.transparent,
+        body: ProfessionalGradientBackground(
+          child: SafeArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildProfessionalHeader(context),
+                Expanded(
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: ProfessionalCard(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.error_outline_rounded,
+                                  size: 48, color: cs.error),
+                              const SizedBox(height: 12),
+                              Text('Gagal memuat data',
+                                  style: tt.titleMedium
+                                      ?.copyWith(color: cs.error)),
+                              const SizedBox(height: 8),
+                              Text(profileState.error!,
+                                  style: tt.bodySmall?.copyWith(
+                                      color: cs.onSurfaceVariant),
+                                  textAlign: TextAlign.center),
+                              const SizedBox(height: 20),
+                              FilledButton.icon(
+                                onPressed: () => ref
+                                    .read(profileNotifierProvider.notifier)
+                                    .loadProfile(),
+                                icon:
+                                    const Icon(Icons.refresh_rounded),
+                                label: const Text('Coba lagi'),
+                              ),
+                            ],
+                          ),
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       );
     }
 
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final bottomPad = MediaQuery.paddingOf(context).bottom;
+
     return Scaffold(
-      backgroundColor: cs.surfaceContainerLowest,
-      body: Column(
-        children: [
-          _buildAppBar(context),
-          Expanded(
-            child: Form(
-              key: _formKey,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+      resizeToAvoidBottomInset: true,
+      backgroundColor: Colors.transparent,
+      body: ProfessionalGradientBackground(
+        child: SafeArea(
+          bottom: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildProfessionalHeader(context),
+              Expanded(
+                child: Form(
+                  key: _formKey,
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.fromLTRB(
+                      20,
+                      4,
+                      20,
+                      24 + bottomInset + bottomPad,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                     if (isAccepted) ...[
                       Container(
                         width: double.infinity,
                         margin: const EdgeInsets.only(bottom: 20),
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: cs.surfaceContainerHigh,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: cs.outlineVariant),
+                          color: Colors.white.withValues(alpha: 0.95),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.45),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.08),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
                         ),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(
+                            const Icon(
                               Icons.lock_outline_rounded,
-                              size: 20,
-                              color: cs.primary,
+                              size: 22,
+                              color: Color(0xFF0A7A43),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
                                 'Profil Anda sudah diterima oleh admin. '
                                 'Data diri tidak dapat diubah lagi dari aplikasi.',
-                                style: tt.bodySmall?.copyWith(
-                                  color: cs.onSurfaceVariant,
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                  height: 1.4,
+                                  color: const Color(0xFF1B4332),
                                 ),
                               ),
                             ),
@@ -710,12 +725,13 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           label: 'Nama Lengkap',
                           hint: 'Sesuai KTP',
                           prefixIcon: Icons.badge_outlined,
-                          readOnly: true,
                           upperCase: true,
-                          suffixWidget: const Icon(
-                            Icons.lock_outline_rounded,
-                            size: 18,
-                          ),
+                          validator: (v) {
+                            final s = (v ?? '').trim();
+                            if (s.isEmpty) return 'Nama wajib diisi';
+                            if (s.length < 2) return 'Nama terlalu pendek';
+                            return null;
+                          },
                         ),
                         const SizedBox(height: 14),
                         M3TextField(
@@ -746,7 +762,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                             if (!mounted) return;
                             final picked = await _showRegionPicker(
                                 title: 'Pilih Kota/Kabupaten',
-                                items: items);
+                                items: items,
+                                selected: _birthPlace);
                             if (picked != null) {
                               setState(
                                   () => _birthPlace = picked);
@@ -964,7 +981,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                             if (!mounted) return;
                             final picked = await _showRegionPicker(
                                 title: 'Pilih Provinsi',
-                                items: items);
+                                items: items,
+                                selected: _province);
                             if (picked != null) {
                               setState(() {
                                 _province = picked;
@@ -999,7 +1017,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                             if (!mounted) return;
                             final picked = await _showRegionPicker(
                                 title: 'Pilih Kab/Kota',
-                                items: items);
+                                items: items,
+                                selected: _kabupaten);
                             if (picked != null) {
                               setState(() {
                                 _kabupaten = picked;
@@ -1032,7 +1051,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                             if (!mounted) return;
                             final picked = await _showRegionPicker(
                                 title: 'Pilih Kecamatan',
-                                items: items);
+                                items: items,
+                                selected: _kecamatan);
                             if (picked != null) {
                               setState(() {
                                 _kecamatan = picked;
@@ -1064,7 +1084,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                             if (!mounted) return;
                             final picked = await _showRegionPicker(
                                 title: 'Pilih Kelurahan/Desa',
-                                items: items);
+                                items: items,
+                                selected: _kelurahan);
                             if (picked != null) {
                               setState(
                                   () => _kelurahan = picked);
@@ -1332,7 +1353,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                             );
                             if (!mounted) return;
                             final picked = await _showRegionPicker(
-                                title: 'Pilih Provinsi', items: items);
+                                title: 'Pilih Provinsi',
+                                items: items,
+                                selected: _familyProvince);
                             if (picked != null) {
                               setState(() {
                                 _familyProvince = picked;
@@ -1364,7 +1387,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                             );
                             if (!mounted) return;
                             final picked = await _showRegionPicker(
-                                title: 'Pilih Kab/Kota', items: items);
+                                title: 'Pilih Kab/Kota',
+                                items: items,
+                                selected: _familyKabupaten);
                             if (picked != null) {
                               setState(() {
                                 _familyKabupaten = picked;
@@ -1395,7 +1420,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                             );
                             if (!mounted) return;
                             final picked = await _showRegionPicker(
-                                title: 'Pilih Kecamatan', items: items);
+                                title: 'Pilih Kecamatan',
+                                items: items,
+                                selected: _familyKecamatan);
                             if (picked != null) {
                               setState(() {
                                 _familyKecamatan = picked;
@@ -1425,7 +1452,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                             );
                             if (!mounted) return;
                             final picked = await _showRegionPicker(
-                                title: 'Pilih Kelurahan/Desa', items: items);
+                                title: 'Pilih Kelurahan/Desa',
+                                items: items,
+                                selected: _familyKelurahan);
                             if (picked != null) {
                               setState(() => _familyKelurahan = picked);
                             }
@@ -1544,34 +1573,13 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                     const SizedBox(height: 28),
 
                     // ─── Save button ───────────────────────────────────
-                    SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: FilledButton(
-                        onPressed: (profileState.isLoading || isAccepted)
-                            ? null
-                            : _handleSave,
-                        style: FilledButton.styleFrom(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        child: profileState.isLoading
-                            ? const SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2.5,
-                                    color: Colors.white),
-                              )
-                            : const Text(
-                                'Simpan Perubahan',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 15,
-                                ),
-                              ),
-                      ),
+                    ProfessionalButton(
+                      label: 'Simpan Perubahan',
+                      icon: Icons.save_rounded,
+                      isLoading: profileState.isLoading,
+                      onPressed: (profileState.isLoading || isAccepted)
+                          ? null
+                          : _handleSave,
                     ),
                   ],
                 ),
@@ -1580,29 +1588,29 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
           ),
         ],
       ),
+    ),
+    ),
     );
   }
 
-  Widget _buildAppBar(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    final topPad = MediaQuery.paddingOf(context).top;
-    return Container(
-      color: cs.primaryContainer,
-      padding: EdgeInsets.fromLTRB(8, topPad + 8, 16, 16),
+  Widget _buildProfessionalHeader(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 8, 20, 8),
       child: Row(
         children: [
           IconButton(
             onPressed: () => Navigator.pop(context),
-            icon: Icon(Icons.arrow_back_rounded,
-                color: cs.onPrimaryContainer),
+            icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+            tooltip: 'Kembali',
           ),
-          const SizedBox(width: 4),
-          Text(
-            'Data Diri',
-            style: tt.titleLarge?.copyWith(
-              color: cs.onPrimaryContainer,
-              fontWeight: FontWeight.w700,
+          Expanded(
+            child: Text(
+              'Data Diri',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
             ),
           ),
         ],
@@ -1614,6 +1622,95 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
 // =============================================================================
 // Private reusable widgets
 // =============================================================================
+
+/// Backward-compatible wrapper that renders the new professional text field.
+class M3TextField extends StatelessWidget {
+  const M3TextField({
+    super.key,
+    required this.controller,
+    required this.label,
+    required this.hint,
+    required this.prefixIcon,
+    this.readOnly = false,
+    this.upperCase = true,
+    this.suffixWidget,
+    this.keyboardType = TextInputType.text,
+    this.textInputAction = TextInputAction.next,
+    this.onTap,
+    this.maxLines = 1,
+    this.inputFormatters,
+    this.validator,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final String hint;
+  final IconData prefixIcon;
+  final bool readOnly;
+  final bool upperCase;
+  final Widget? suffixWidget;
+  final TextInputType keyboardType;
+  final TextInputAction textInputAction;
+  final VoidCallback? onTap;
+  final int maxLines;
+  final List<TextInputFormatter>? inputFormatters;
+  final String? Function(String?)? validator;
+
+  @override
+  Widget build(BuildContext context) {
+    return ProfessionalTextField(
+      controller: controller,
+      label: label,
+      hintText: hint,
+      prefixIcon: prefixIcon,
+      readOnly: readOnly,
+      onTap: onTap,
+      upperCase: upperCase,
+      suffixIcon: suffixWidget,
+      keyboardType: keyboardType,
+      textInputAction: textInputAction,
+      maxLines: maxLines,
+      inputFormatters: inputFormatters,
+      validator: validator,
+    );
+  }
+}
+
+/// Backward-compatible wrapper that renders the new professional phone field.
+class PhoneInputField extends StatelessWidget {
+  const PhoneInputField({
+    super.key,
+    required this.controller,
+    required this.label,
+    required this.hint,
+    this.validator,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final String hint;
+  final String? Function(String?)? validator;
+
+  @override
+  Widget build(BuildContext context) {
+    return ProfessionalPhoneField(
+      controller: controller,
+      label: label,
+      hintText: hint,
+      textInputAction: TextInputAction.next,
+      validator: validator,
+    );
+  }
+}
+
+String? validatePhoneNumber(String? value) {
+  final normalized = ProfessionalPhoneField.normalizeIndonesiaNumber(value ?? '');
+  if (normalized.isEmpty) return 'Nomor telepon wajib diisi';
+  if (normalized.length < 8 || normalized.length > 13) {
+    return 'Nomor telepon harus 8-13 digit';
+  }
+  return null;
+}
 
 /// M3 card wrapping a section with icon header and children.
 class _SectionCard extends StatelessWidget {
@@ -1629,17 +1726,12 @@ class _SectionCard extends StatelessWidget {
   final String? subtitle;
   final List<Widget> children;
 
+  static const Color _accent = Color(0xFF0A7A43);
+
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: cs.outlineVariant, width: 1),
-      ),
-      color: cs.surfaceContainerLow,
+    return ProfessionalCard(
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -1650,31 +1742,38 @@ class _SectionCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: cs.primaryContainer,
+                    color: _accent.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(icon, size: 18,
-                      color: cs.onPrimaryContainer),
+                  child: Icon(icon, size: 18, color: _accent),
                 ),
                 const SizedBox(width: 10),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(label,
-                        style: tt.titleSmall?.copyWith(
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        label,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 15,
                           fontWeight: FontWeight.w700,
-                          color: cs.onSurface,
-                        )),
-                    if (subtitle != null)
-                      Text(subtitle!,
+                          color: const Color(0xFF1B4332),
+                        ),
+                      ),
+                      if (subtitle != null)
+                        Text(
+                          subtitle!,
                           style: tt.bodySmall?.copyWith(
-                              color: cs.onSurfaceVariant)),
-                  ],
+                            color: const Color(0xFF52796F),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 18),
-            Divider(height: 1, color: cs.outlineVariant),
+            Divider(height: 1, color: Colors.grey.shade200),
             const SizedBox(height: 18),
             ...children,
           ],
@@ -1704,54 +1803,224 @@ class _RegionPickerField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    final activeColor =
-        enabled ? cs.onSurfaceVariant : cs.onSurface.withValues(alpha: 0.38);
-    final fillColor = enabled
-        ? cs.surfaceContainerHighest
-        : cs.onSurface.withValues(alpha: 0.04);
-
-    return InkWell(
-      onTap: enabled ? onTap : null,
-      borderRadius: BorderRadius.circular(12),
-      child: InputDecorator(
-        decoration: InputDecoration(
-          labelText: label,
-          floatingLabelBehavior: FloatingLabelBehavior.always,
-          prefixIcon: Icon(prefixIcon, size: 20, color: activeColor),
-          suffixIcon:
-              Icon(Icons.arrow_drop_down_rounded, color: activeColor),
-          filled: true,
-          fillColor: fillColor,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
-          contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16, vertical: 14),
+    return Opacity(
+      opacity: enabled ? 1 : 0.6,
+      child: IgnorePointer(
+        ignoring: !enabled,
+        child: ProfessionalDropdownField(
+          valueText: selected?.name ?? '',
+          label: label,
+          hint: hint,
+          prefixIcon: prefixIcon,
+          onTap: onTap,
         ),
-        isEmpty: selected == null,
-        child: selected != null
-            ? Text(
-                selected!.name,
-                style: tt.bodyLarge?.copyWith(
-                  color: enabled
-                      ? cs.onSurface
-                      : cs.onSurface.withValues(alpha: 0.38),
-                  fontWeight: FontWeight.w500,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              )
-            : Text(hint,
-                style: tt.bodyLarge?.copyWith(
-                    color: cs.onSurface.withValues(alpha: 0.38))),
       ),
+    );
+  }
+}
+
+/// Region list sheet styled like registration tempat lahir picker.
+class _RegionPickerSheet extends StatefulWidget {
+  const _RegionPickerSheet({
+    required this.title,
+    required this.items,
+    this.selected,
+  });
+
+  final String title;
+  final List<Region> items;
+  final Region? selected;
+
+  @override
+  State<_RegionPickerSheet> createState() => _RegionPickerSheetState();
+}
+
+class _RegionPickerSheetState extends State<_RegionPickerSheet> {
+  late final TextEditingController _searchCtrl;
+  late List<Region> _filtered;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchCtrl = TextEditingController();
+    _filtered = List.of(widget.items);
+    _searchCtrl.addListener(() {
+      final q = _searchCtrl.text.trim().toLowerCase();
+      setState(() {
+        if (q.isEmpty) {
+          _filtered = List.of(widget.items);
+        } else {
+          _filtered = widget.items
+              .where((r) => r.name.toLowerCase().contains(q))
+              .toList();
+        }
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.75,
+      minChildSize: 0.4,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (_, scrollCtrl) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 12, bottom: 4),
+                child: Container(
+                  width: 32,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.divider,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        widget.title,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textDark,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.close, color: AppColors.textMedium),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                child: TextField(
+                  controller: _searchCtrl,
+                  autofocus: true,
+                  style: GoogleFonts.plusJakartaSans(
+                      fontSize: 14, color: AppColors.textDark),
+                  decoration: InputDecoration(
+                    hintText: 'Cari wilayah...',
+                    hintStyle: GoogleFonts.plusJakartaSans(
+                      fontSize: 14,
+                      color: AppColors.textLight,
+                    ),
+                    prefixIcon:
+                        Icon(Icons.search, color: AppColors.textMedium, size: 20),
+                    suffixIcon: _searchCtrl.text.isNotEmpty
+                        ? IconButton(
+                            icon: Icon(Icons.clear,
+                                color: AppColors.textMedium, size: 18),
+                            onPressed: () => _searchCtrl.clear(),
+                          )
+                        : null,
+                    filled: true,
+                    fillColor: AppColors.backgroundOffWhite,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 14),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                        color: AppColors.primaryDarkGreen,
+                        width: 1.5,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '${_filtered.length} hasil',
+                    style: GoogleFonts.plusJakartaSans(
+                        fontSize: 12,
+                        color: AppColors.textMedium,
+                        fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ),
+              Divider(height: 1, color: AppColors.divider),
+              Expanded(
+                child: _filtered.isEmpty
+                    ? Center(
+                        child: Text(
+                          'Tidak ditemukan',
+                          style: GoogleFonts.plusJakartaSans(
+                            color: AppColors.textMedium,
+                          ),
+                        ),
+                      )
+                    : ListView.builder(
+                        controller: scrollCtrl,
+                        itemCount: _filtered.length,
+                        itemBuilder: (_, i) {
+                          final r = _filtered[i];
+                          final isSelected = widget.selected?.id == r.id;
+                          return ListTile(
+                            onTap: () => Navigator.pop(context, r),
+                            selected: isSelected,
+                            selectedTileColor:
+                                AppColors.primaryDarkGreen.withValues(alpha: 0.1),
+                            tileColor: Colors.white,
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 2),
+                            title: Text(
+                              r.name,
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 14,
+                                fontWeight: isSelected
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                                color: isSelected
+                                    ? AppColors.primaryDarkGreen
+                                    : AppColors.textDark,
+                              ),
+                            ),
+                            trailing: isSelected
+                                ? Icon(Icons.check_circle_rounded,
+                                    color: AppColors.primaryDarkGreen, size: 20)
+                                : null,
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -1781,7 +2050,29 @@ class _SubLabel extends StatelessWidget {
   }
 }
 
-/// Generic dropdown field matching the M3 filled style.
+/// Non-null wrapper so a bottom sheet can return "clear" vs user dismissing (null).
+class _OptionPick<T> {
+  const _OptionPick(this.value);
+  final T? value;
+}
+
+String? _dropdownLabelForValue<T>(T? value, List<(T, String)> items) {
+  if (value == null) return null;
+  for (final i in items) {
+    if (i.$1 == value) return i.$2;
+  }
+  if (value is String) {
+    final vu = value.toUpperCase();
+    for (final i in items) {
+      if (i.$1 is String && (i.$1 as String).toUpperCase() == vu) {
+        return i.$2;
+      }
+    }
+  }
+  return null;
+}
+
+/// Generic dropdown field matching professional white style + registration sheets.
 class _DropdownField<T> extends StatelessWidget {
   const _DropdownField({
     required this.label,
@@ -1803,34 +2094,222 @@ class _DropdownField<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return DropdownButtonFormField<T>(
-      initialValue: value,
-      decoration: InputDecoration(
-        labelText: label,
-        floatingLabelBehavior: FloatingLabelBehavior.always,
-        prefixIcon: Icon(prefixIcon, size: 20, color: cs.onSurfaceVariant),
-        filled: true,
-        fillColor: cs.surfaceContainerHighest,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        hintText: hint,
-      ),
-      items: [
-        DropdownMenuItem<T>(value: null, child: Text(hint)),
-        ...items.map(
-          (i) => DropdownMenuItem<T>(value: i.$1, child: Text(i.$2)),
-        ),
-      ],
-      onChanged: onChanged,
+    final selectedLabel = _dropdownLabelForValue(value, items);
+    return ProfessionalDropdownField(
+      valueText: selectedLabel ?? '',
+      label: label,
+      hint: hint,
+      prefixIcon: prefixIcon,
+      onTap: () async {
+        final result = await showModalBottomSheet<_OptionPick<T>?>(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (_) => _SimpleOptionSheet<T>(
+            title: label,
+            hint: hint,
+            value: value,
+            items: items,
+          ),
+        );
+        if (result == null) return;
+        onChanged(result.value);
+      },
+    );
+  }
+}
+
+class _SimpleOptionSheet<T> extends StatefulWidget {
+  const _SimpleOptionSheet({
+    required this.title,
+    required this.hint,
+    required this.value,
+    required this.items,
+  });
+
+  final String title;
+  final String hint;
+  final T? value;
+  final List<(T, String)> items;
+
+  @override
+  State<_SimpleOptionSheet<T>> createState() => _SimpleOptionSheetState<T>();
+}
+
+class _SimpleOptionSheetState<T> extends State<_SimpleOptionSheet<T>> {
+  final _searchCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  bool _selected(T? a, T? b) {
+    if (a == null && b == null) return true;
+    if (a == null || b == null) return false;
+    if (a == b) return true;
+    if (a is String && b is String) {
+      return (a as String).toUpperCase() == (b as String).toUpperCase();
+    }
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final q = _searchCtrl.text.trim().toLowerCase();
+    final filtered = widget.items
+        .where((i) => i.$2.toLowerCase().contains(q))
+        .toList();
+    return DraggableScrollableSheet(
+      initialChildSize: 0.72,
+      minChildSize: 0.4,
+      maxChildSize: 0.92,
+      expand: false,
+      builder: (_, scrollCtrl) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 12, bottom: 4),
+                child: Container(
+                  width: 32,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.divider,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        widget.title,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textDark,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.close, color: AppColors.textMedium),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                child: TextField(
+                  controller: _searchCtrl,
+                  onChanged: (_) => setState(() {}),
+                  style: GoogleFonts.plusJakartaSans(
+                      fontSize: 14, color: AppColors.textDark),
+                  decoration: InputDecoration(
+                    hintText: 'Cari...',
+                    hintStyle: GoogleFonts.plusJakartaSans(
+                      fontSize: 14,
+                      color: AppColors.textLight,
+                    ),
+                    prefixIcon:
+                        Icon(Icons.search, color: AppColors.textMedium, size: 20),
+                    suffixIcon: _searchCtrl.text.isNotEmpty
+                        ? IconButton(
+                            icon: Icon(Icons.clear,
+                                color: AppColors.textMedium, size: 18),
+                            onPressed: () => _searchCtrl.clear(),
+                          )
+                        : null,
+                    filled: true,
+                    fillColor: AppColors.backgroundOffWhite,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 14),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                        color: AppColors.primaryDarkGreen,
+                        width: 1.5,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Divider(height: 1, color: AppColors.divider),
+              Expanded(
+                child: ListView.builder(
+                  controller: scrollCtrl,
+                  itemCount: filtered.length + 1,
+                  itemBuilder: (_, index) {
+                    if (index == 0) {
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 2),
+                        title: Text(
+                          'Kosongkan pilihan',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textMedium,
+                          ),
+                        ),
+                        onTap: () => Navigator.pop(
+                            context, _OptionPick<T>(null)),
+                      );
+                    }
+                    final item = filtered[index - 1];
+                    final selected = _selected(item.$1, widget.value);
+                    return ListTile(
+                      onTap: () => Navigator.pop(
+                          context, _OptionPick<T>(item.$1)),
+                      selected: selected,
+                      selectedTileColor:
+                          AppColors.primaryDarkGreen.withValues(alpha: 0.1),
+                      tileColor: Colors.white,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 2),
+                      title: Text(
+                        item.$2,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 14,
+                          fontWeight: selected
+                              ? FontWeight.w700
+                              : FontWeight.w500,
+                          color: selected
+                              ? AppColors.primaryDarkGreen
+                              : AppColors.textDark,
+                        ),
+                      ),
+                      trailing: selected
+                          ? Icon(Icons.check_circle_rounded,
+                              color: AppColors.primaryDarkGreen, size: 20)
+                          : null,
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -1887,7 +2366,10 @@ class _GenderSelector extends StatelessWidget {
 /// Dropdown selector for heir (ahli waris) relationship type.
 class _HeirRelationshipSelector extends StatelessWidget {
   const _HeirRelationshipSelector({
-      required this.selected, required this.onChanged});
+    required this.selected,
+    required this.onChanged,
+  });
+
   final String? selected;
   final ValueChanged<String?> onChanged;
 
@@ -1906,50 +2388,13 @@ class _HeirRelationshipSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 8),
-          child: Text('Hubungan',
-              style: tt.labelMedium
-                  ?.copyWith(color: cs.onSurfaceVariant)),
-        ),
-        DropdownButtonFormField<String>(
-          initialValue: selected,
-          decoration: InputDecoration(
-            prefixIcon: const Icon(Icons.family_restroom_outlined, size: 20),
-            filled: true,
-            fillColor: cs.surfaceContainerHighest,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-            contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16, vertical: 14),
-            hintText: 'Pilih hubungan',
-          ),
-          items: [
-            const DropdownMenuItem<String>(
-              value: null,
-              child: Text('Pilih hubungan'),
-            ),
-            ..._options.map(
-              (o) => DropdownMenuItem<String>(
-                value: o.$1,
-                child: Text(o.$2),
-              ),
-            ),
-          ],
-          onChanged: onChanged,
-        ),
-      ],
+    return _DropdownField<String>(
+      label: 'Hubungan',
+      prefixIcon: Icons.family_restroom_outlined,
+      value: selected,
+      hint: 'Pilih hubungan',
+      items: _options,
+      onChanged: onChanged,
     );
   }
 }
@@ -1969,50 +2414,16 @@ class _StaffReferrerPickerField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
     final hasValue = selected != null;
-
-    return InkWell(
+    final valueText = hasValue
+        ? '${selected!.fullName} • ${selected!.referralCode}'
+        : '';
+    return ProfessionalDropdownField(
+      valueText: valueText,
+      label: 'Staff Penerima Rujukan',
+      hint: 'Pilih staff...',
+      prefixIcon: Icons.person_outline_rounded,
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: InputDecorator(
-        decoration: InputDecoration(
-          labelText: 'Staff Penerima Rujukan',
-          floatingLabelBehavior: FloatingLabelBehavior.always,
-          prefixIcon:
-              Icon(Icons.person_outline_rounded, size: 20, color: cs.onSurfaceVariant),
-          suffixIcon: Icon(Icons.arrow_drop_down_rounded, color: cs.onSurfaceVariant),
-          filled: true,
-          fillColor: cs.surfaceContainerHighest,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        ),
-        isEmpty: !hasValue,
-        child: hasValue
-            ? Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(selected!.fullName,
-                      style: tt.bodyMedium?.copyWith(color: cs.onSurface)),
-                  Text(
-                    'Kode: ${selected!.referralCode}',
-                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                  ),
-                ],
-              )
-            : Text('Pilih staff...',
-                style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
-      ),
     );
   }
 }

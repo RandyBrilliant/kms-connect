@@ -733,3 +733,41 @@ flutter build appbundle --release
 
 # 5. Upload ke Google Play Console → buat release baru
 ```
+
+---
+
+### 9.13 In-App Update (Prompt Update Langsung di Aplikasi)
+
+KMS Connect sudah diimplementasikan untuk cek update otomatis via Google Play:
+
+- Service: `mobile/lib/core/update/app_update_service.dart`
+- Trigger: `mobile/lib/features/home/presentation/pages/home_page.dart` (setelah home pertama kali dibuka)
+- Package: `in_app_update`
+
+#### Cara kerja implementasi saat ini
+
+1. App cek update ke Google Play saat user masuk ke Home.
+2. Jika update tersedia:
+   - Jika **Immediate update** diizinkan oleh Play Core → update dipaksa langsung.
+   - Jika tidak, tapi **Flexible update** diizinkan → app download lalu menyelesaikan update.
+3. Jika app bukan dari Play Store (misalnya APK sideload/debug), proses akan otomatis skip tanpa crash.
+
+#### Syarat agar prompt update muncul
+
+- Aplikasi diinstall dari **Google Play** (Internal/Closed/Production track).
+- Di Play Console sudah ada versi lebih baru (`versionCode` lebih tinggi) yang dirilis ke track user tersebut.
+- User memakai akun tester yang sudah di-allow jika masih di Internal/Closed testing.
+
+#### Cara test yang benar
+
+1. Naikkan versi di `pubspec.yaml` (contoh `1.0.4+4` -> `1.0.5+5`).
+2. Build AAB release dan upload ke **Internal testing**.
+3. Install app dari link tester Play Console (bukan install APK manual).
+4. Buka aplikasi, login, masuk Home.
+5. Verifikasi prompt update muncul ketika rilis baru tersedia.
+
+#### Catatan penting
+
+- In-app update **tidak bekerja** di emulator/debug APK yang tidak berasal dari Play Store.
+- Proses review dan propagasi rilis di Play bisa butuh beberapa menit sebelum update terdeteksi.
+- Untuk update kritis, prioritaskan flow **Immediate** (sudah diprioritaskan di implementasi saat ini).

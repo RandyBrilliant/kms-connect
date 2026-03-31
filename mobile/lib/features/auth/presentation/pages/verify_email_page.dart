@@ -193,6 +193,7 @@ class _VerifyEmailPageState extends ConsumerState<VerifyEmailPage>
                   prefixIcon: Icons.mail_outline_rounded,
                   keyboardType: TextInputType.emailAddress,
                   textInputAction: TextInputAction.done,
+                  upperCase: false,
                 ),
                 const SizedBox(height: 24),
                 

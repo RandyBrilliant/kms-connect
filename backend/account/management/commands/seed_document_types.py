@@ -52,5 +52,9 @@ class Command(BaseCommand):
             action = "Created" if created else "Updated"
             self.stdout.write(f"  {action}: [{obj.phase}] {obj.code} – {obj.name}")
 
-        self.stdout.write(self.style.SUCCESS("Done. 14 document types ready."))
+        from django.core.cache import cache
+        cache.delete('document_types_all')
+        cache.delete('document_types_required')
+        cache.delete('document_types_public_list')
+        self.stdout.write(self.style.SUCCESS("Done. 14 document types ready. Caches cleared."))
 

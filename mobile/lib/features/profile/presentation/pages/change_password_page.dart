@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 
-import '../../../../config/colors.dart';
 import '../../../../core/api/api_client.dart';
 import '../../../../core/api/endpoints.dart';
-import '../../../../core/widgets/auth_wave_header.dart';
+import '../../../../core/utils/safe_navigation.dart';
 import '../../../../core/widgets/custom_toast.dart';
-import '../../../../core/widgets/m3_text_field.dart';
+import '../../../../core/widgets/professional/professional_button.dart';
+import '../../../../core/widgets/professional/professional_card.dart';
+import '../../../../core/widgets/professional/professional_gradient_background.dart';
+import '../../../../core/widgets/professional_text_field.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Page
@@ -25,6 +28,10 @@ class _ChangePasswordPageState extends ConsumerState<ChangePasswordPage> {
   final _newPassword = TextEditingController();
   final _confirmPassword = TextEditingController();
 
+  final _oldFocus = FocusNode();
+  final _newFocus = FocusNode();
+  final _confirmFocus = FocusNode();
+
   bool _isLoading = false;
   bool _showOld = false;
   bool _showNew = false;
@@ -35,10 +42,14 @@ class _ChangePasswordPageState extends ConsumerState<ChangePasswordPage> {
     _oldPassword.dispose();
     _newPassword.dispose();
     _confirmPassword.dispose();
+    _oldFocus.dispose();
+    _newFocus.dispose();
+    _confirmFocus.dispose();
     super.dispose();
   }
 
   Future<void> _handleSubmit() async {
+    FocusScope.of(context).unfocus();
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
     setState(() => _isLoading = true);
@@ -53,17 +64,18 @@ class _ChangePasswordPageState extends ConsumerState<ChangePasswordPage> {
       );
 
       if (!mounted) return;
-      CustomToast.show(
-        context,
+      CustomToast.showGlobal(
         message: 'Password berhasil diubah.',
         type: ToastType.success,
       );
-      Navigator.pop(context);
+      runWhenNavigatorUnlocked(() {
+        if (!mounted) return;
+        Navigator.pop(context);
+      });
     } catch (e) {
       if (!mounted) return;
       String message = 'Gagal mengubah password.';
 
-      // Try to extract the backend error detail
       final dynamic err = e;
       try {
         final dynamic response = err.response;
@@ -73,7 +85,6 @@ class _ChangePasswordPageState extends ConsumerState<ChangePasswordPage> {
           if (detail is String && detail.isNotEmpty) {
             message = detail;
           } else {
-            // Try field-level errors
             final errors = data['errors'];
             if (errors is Map) {
               final allMsgs = errors.values
@@ -93,257 +104,214 @@ class _ChangePasswordPageState extends ConsumerState<ChangePasswordPage> {
 
   @override
   Widget build(BuildContext context) {
-    final topPad = MediaQuery.paddingOf(context).top;
-    const headerH = 140.0;
-    final tt = Theme.of(context).textTheme;
-    final cs = Theme.of(context).colorScheme;
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final bottomPad = MediaQuery.paddingOf(context).bottom;
+    const accent = Color(0xFF0A7A43);
 
     return Scaffold(
-      backgroundColor: cs.surfaceContainerLowest,
-      body: Column(
-        children: [
-          // ── Header ────────────────────────────────────────────────────
-          SizedBox(
-            height: headerH + topPad,
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: AuthWaveHeader(height: headerH + topPad),
-                ),
-                Padding(
-                  padding: EdgeInsets.fromLTRB(16, topPad + 10, 16, 0),
-                  child: Row(
-                    children: [
-                      GestureDetector(
-                        onTap: () => Navigator.pop(context),
-                        child: Container(
-                          width: 38,
-                          height: 38,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.white.withValues(alpha: 0.18),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.35),
-                              width: 1.2,
-                            ),
-                          ),
-                          child: const Icon(
-                            Icons.arrow_back_rounded,
-                            color: Colors.white,
-                            size: 18,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'Ganti Password',
-                              style: tt.titleMedium?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            Text(
-                              'Ubah password akun kamu',
-                              style: tt.bodySmall?.copyWith(
-                                color: Colors.white.withValues(alpha: 0.8),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // ── Form ──────────────────────────────────────────────────────
-          Expanded(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(
-                20,
-                24,
-                20,
-                MediaQuery.viewInsetsOf(context).bottom + 32,
-              ),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+      resizeToAvoidBottomInset: true,
+      backgroundColor: Colors.transparent,
+      body: ProfessionalGradientBackground(
+        child: SafeArea(
+          bottom: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 8, 20, 8),
+                child: Row(
                   children: [
-                    // Info card
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFCFFAFE),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: const Color(0xFF0891B2).withValues(alpha: 0.35),
-                        ),
-                      ),
-                      child: Row(
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+                      tooltip: 'Kembali',
+                    ),
+                    Expanded(
+                      child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(
-                            Icons.info_outline_rounded,
-                            size: 18,
-                            color: Color(0xFF0891B2),
+                          Text(
+                            'Ganti Password',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                            ),
                           ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              'Gunakan minimal 8 karakter. Kombinasikan huruf, angka, dan simbol untuk keamanan yang lebih baik.',
-                              style: tt.bodySmall?.copyWith(
-                                color: const Color(0xFF0E7490),
-                                height: 1.5,
-                              ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Ubah password akun Anda',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white.withValues(alpha: 0.88),
                             ),
                           ),
                         ],
                       ),
                     ),
-
-                    const SizedBox(height: 24),
-
-                    // Old password
-                    M3TextField(
-                      controller: _oldPassword,
-                      label: 'Password Lama',
-                      hint: 'Masukkan password saat ini',
-                      prefixIcon: Icons.lock_outline_rounded,
-                      obscureText: !_showOld,
-                      textInputAction: TextInputAction.next,
-                      suffixWidget: GestureDetector(
-                        onTap: () => setState(() => _showOld = !_showOld),
-                        child: Icon(
-                          _showOld
-                              ? Icons.visibility_off_outlined
-                              : Icons.visibility_outlined,
-                          size: 20,
-                          color: cs.onSurfaceVariant,
-                        ),
-                      ),
-                      validator: (v) {
-                        if (v == null || v.trim().isEmpty) {
-                          return 'Password lama wajib diisi.';
-                        }
-                        return null;
-                      },
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // New password
-                    M3TextField(
-                      controller: _newPassword,
-                      label: 'Password Baru',
-                      hint: 'Minimal 8 karakter',
-                      prefixIcon: Icons.lock_reset_rounded,
-                      obscureText: !_showNew,
-                      textInputAction: TextInputAction.next,
-                      suffixWidget: GestureDetector(
-                        onTap: () => setState(() => _showNew = !_showNew),
-                        child: Icon(
-                          _showNew
-                              ? Icons.visibility_off_outlined
-                              : Icons.visibility_outlined,
-                          size: 20,
-                          color: cs.onSurfaceVariant,
-                        ),
-                      ),
-                      validator: (v) {
-                        if (v == null || v.trim().isEmpty) {
-                          return 'Password baru wajib diisi.';
-                        }
-                        if (v.trim().length < 8) {
-                          return 'Password minimal 8 karakter.';
-                        }
-                        if (v.trim() == _oldPassword.text.trim()) {
-                          return 'Password baru tidak boleh sama dengan password lama.';
-                        }
-                        return null;
-                      },
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // Confirm new password
-                    M3TextField(
-                      controller: _confirmPassword,
-                      label: 'Konfirmasi Password Baru',
-                      hint: 'Ulangi password baru',
-                      prefixIcon: Icons.lock_outline_rounded,
-                      obscureText: !_showConfirm,
-                      textInputAction: TextInputAction.done,
-                      onSubmitted: (_) => _handleSubmit(),
-                      suffixWidget: GestureDetector(
-                        onTap: () =>
-                            setState(() => _showConfirm = !_showConfirm),
-                        child: Icon(
-                          _showConfirm
-                              ? Icons.visibility_off_outlined
-                              : Icons.visibility_outlined,
-                          size: 20,
-                          color: cs.onSurfaceVariant,
-                        ),
-                      ),
-                      validator: (v) {
-                        if (v == null || v.trim().isEmpty) {
-                          return 'Konfirmasi password wajib diisi.';
-                        }
-                        if (v.trim() != _newPassword.text.trim()) {
-                          return 'Konfirmasi password tidak cocok.';
-                        }
-                        return null;
-                      },
-                    ),
-
-                    const SizedBox(height: 32),
-
-                    // Submit button
-                    SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: FilledButton(
-                        onPressed: _isLoading ? null : _handleSubmit,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.primaryDarkGreen,
-                          disabledBackgroundColor:
-                              AppColors.primaryDarkGreen.withValues(alpha: 0.5),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                        child: _isLoading
-                            ? const SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.5,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : Text(
-                                'Simpan Password',
-                                style: tt.labelLarge?.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                      ),
-                    ),
                   ],
                 ),
               ),
-            ),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(
+                    20,
+                    4,
+                    20,
+                    24 + bottomInset + bottomPad,
+                  ),
+                  child: ProfessionalCard(
+                    child: Padding(
+                      padding: const EdgeInsets.all(22),
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: accent.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: accent.withValues(alpha: 0.22),
+                                ),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Icon(
+                                    Icons.info_outline_rounded,
+                                    size: 20,
+                                    color: accent,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      'Gunakan minimal 8 karakter. Kombinasikan huruf, angka, dan simbol untuk keamanan yang lebih baik.',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500,
+                                        height: 1.45,
+                                        color: const Color(0xFF1B4332),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 22),
+                            ProfessionalTextField(
+                              controller: _oldPassword,
+                              focusNode: _oldFocus,
+                              label: 'Password Lama',
+                              hintText: 'Masukkan password saat ini',
+                              prefixIcon: Icons.lock_outline_rounded,
+                              obscureText: !_showOld,
+                              textInputAction: TextInputAction.next,
+                              upperCase: false,
+                              onSubmitted: (_) => _newFocus.requestFocus(),
+                              suffixIcon: IconButton(
+                                onPressed: () =>
+                                    setState(() => _showOld = !_showOld),
+                                icon: Icon(
+                                  _showOld
+                                      ? Icons.visibility_off_outlined
+                                      : Icons.visibility_outlined,
+                                  size: 20,
+                                ),
+                              ),
+                              validator: (v) {
+                                if (v == null || v.trim().isEmpty) {
+                                  return 'Password lama wajib diisi.';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 14),
+                            ProfessionalTextField(
+                              controller: _newPassword,
+                              focusNode: _newFocus,
+                              label: 'Password Baru',
+                              hintText: 'Minimal 8 karakter',
+                              prefixIcon: Icons.lock_reset_rounded,
+                              obscureText: !_showNew,
+                              textInputAction: TextInputAction.next,
+                              upperCase: false,
+                              onSubmitted: (_) => _confirmFocus.requestFocus(),
+                              suffixIcon: IconButton(
+                                onPressed: () =>
+                                    setState(() => _showNew = !_showNew),
+                                icon: Icon(
+                                  _showNew
+                                      ? Icons.visibility_off_outlined
+                                      : Icons.visibility_outlined,
+                                  size: 20,
+                                ),
+                              ),
+                              validator: (v) {
+                                if (v == null || v.trim().isEmpty) {
+                                  return 'Password baru wajib diisi.';
+                                }
+                                if (v.trim().length < 8) {
+                                  return 'Password minimal 8 karakter.';
+                                }
+                                if (v.trim() == _oldPassword.text.trim()) {
+                                  return 'Password baru tidak boleh sama dengan password lama.';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 14),
+                            ProfessionalTextField(
+                              controller: _confirmPassword,
+                              focusNode: _confirmFocus,
+                              label: 'Konfirmasi Password Baru',
+                              hintText: 'Ulangi password baru',
+                              prefixIcon: Icons.lock_outline_rounded,
+                              obscureText: !_showConfirm,
+                              textInputAction: TextInputAction.done,
+                              upperCase: false,
+                              onSubmitted: (_) => _handleSubmit(),
+                              suffixIcon: IconButton(
+                                onPressed: () => setState(
+                                    () => _showConfirm = !_showConfirm),
+                                icon: Icon(
+                                  _showConfirm
+                                      ? Icons.visibility_off_outlined
+                                      : Icons.visibility_outlined,
+                                  size: 20,
+                                ),
+                              ),
+                              validator: (v) {
+                                if (v == null || v.trim().isEmpty) {
+                                  return 'Konfirmasi password wajib diisi.';
+                                }
+                                if (v.trim() != _newPassword.text.trim()) {
+                                  return 'Konfirmasi password tidak cocok.';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 28),
+                            ProfessionalButton(
+                              label: 'Simpan Password',
+                              icon: Icons.save_rounded,
+                              isLoading: _isLoading,
+                              onPressed: _isLoading ? null : _handleSubmit,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

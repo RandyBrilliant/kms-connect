@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../config/colors.dart';
-import '../../../../core/widgets/auth_wave_header.dart';
+import '../../../../core/utils/safe_navigation.dart';
 import '../../../../core/widgets/custom_toast.dart';
-import '../../../../core/widgets/m3_text_field.dart';
+import '../../../../core/widgets/professional_text_field.dart';
+import '../../../../core/widgets/professional/professional_card.dart';
+import '../../../../core/widgets/professional/professional_gradient_background.dart';
 import '../../data/providers/profile_provider.dart';
 import '../../domain/models/work_experience.dart';
 
@@ -19,10 +22,6 @@ class WorkExperiencesPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(workExperienceNotifierProvider);
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    const headerH = 140.0;
-    final topPad = MediaQuery.paddingOf(context).top;
 
     void openForm({WorkExperience? existing}) {
       showModalBottomSheet(
@@ -38,133 +37,175 @@ class WorkExperiencesPage extends ConsumerWidget {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.transparent,
           shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20)),
-          title: Text('Hapus Pengalaman',
-              style: tt.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w700)),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(
+            'Hapus Pengalaman',
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: const Color(0xFF111827),
+            ),
+          ),
           content: Text(
             'Hapus "${exp.companyName}" dari riwayat pekerjaan?',
-            style: tt.bodyMedium
-                ?.copyWith(color: cs.onSurfaceVariant),
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: const Color(0xFF6B7280),
+              height: 1.45,
+            ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Batal'),
+              child: Text(
+                'Batal',
+                style: GoogleFonts.plusJakartaSans(
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF6B7280),
+                ),
+              ),
             ),
             FilledButton(
               style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.error),
+                backgroundColor: AppColors.error,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Hapus'),
+              child: Text(
+                'Hapus',
+                style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700),
+              ),
             ),
           ],
         ),
       );
       if (confirmed != true || !context.mounted) return;
-      final ok =
-          await ref.read(workExperienceNotifierProvider.notifier)
-              .delete(exp.id);
+      final ok = await ref
+          .read(workExperienceNotifierProvider.notifier)
+          .delete(exp.id);
       if (context.mounted) {
         if (ok) {
-          CustomToast.show(context,
-              message: 'Pengalaman berhasil dihapus',
-              type: ToastType.success);
+          CustomToast.showGlobal(
+            message: 'Pengalaman berhasil dihapus',
+            type: ToastType.success,
+          );
         } else {
-          final err = ref.read(workExperienceNotifierProvider).error
-              ?? 'Gagal menghapus';
-          CustomToast.show(context,
-              message: err, type: ToastType.error);
+          final err =
+              ref.read(workExperienceNotifierProvider).error ??
+              'Gagal menghapus';
+          CustomToast.show(context, message: err, type: ToastType.error);
         }
       }
     }
 
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final bottomPad = MediaQuery.paddingOf(context).bottom;
+
     return Scaffold(
-      backgroundColor: cs.surfaceContainerLowest,
+      resizeToAvoidBottomInset: true,
+      backgroundColor: Colors.transparent,
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => openForm(),
         icon: const Icon(Icons.add_rounded),
-        label: const Text('Tambah'),
+        label: Text(
+          'Tambah',
+          style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700),
+        ),
         backgroundColor: AppColors.primaryDarkGreen,
         foregroundColor: Colors.white,
       ),
-      body: Column(
-        children: [
-          SizedBox(
-            height: headerH + topPad,
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: AuthWaveHeader(height: headerH + topPad),
-                ),
-                Padding(
-                  padding:
-                      EdgeInsets.fromLTRB(16, topPad + 10, 16, 0),
-                  child: Row(
-                    children: [
-                      GestureDetector(
-                        onTap: () => Navigator.pop(context),
-                        child: Container(
-                          width: 38,
-                          height: 38,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.white
-                                .withValues(alpha: 0.18),
-                            border: Border.all(
-                              color: Colors.white
-                                  .withValues(alpha: 0.35),
-                              width: 1.2,
+      body: ProfessionalGradientBackground(
+        child: SafeArea(
+          bottom: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 8, 8, 8),
+                child: Row(
+                  children: [
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(
+                        Icons.arrow_back_rounded,
+                        color: Colors.white,
+                      ),
+                      tooltip: 'Kembali',
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Pengalaman Kerja',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
                             ),
                           ),
-                          child: const Icon(
-                              Icons.arrow_back_rounded,
-                              color: Colors.white,
-                              size: 18),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'Pengalaman Kerja',
-                              style: tt.titleMedium?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                              ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${state.items.length} riwayat',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white.withValues(alpha: 0.88),
                             ),
-                            Text(
-                              '${state.items.length} riwayat',
-                              style: tt.bodySmall?.copyWith(
-                                color: Colors.white
-                                    .withValues(alpha: 0.8),
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                    IconButton(
+                      onPressed: () => ref
+                          .read(workExperienceNotifierProvider.notifier)
+                          .reload(),
+                      icon: const Icon(
+                        Icons.refresh_rounded,
+                        color: Colors.white,
+                      ),
+                      tooltip: 'Segarkan',
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: state.isLoading && state.items.isEmpty
-                ? const Center(
-                    child: CircularProgressIndicator(
-                        color: AppColors.primaryDarkGreen,
-                        strokeWidth: 2.5),
-                  )
-                : state.items.isEmpty
+              ),
+              Expanded(
+                child: state.isLoading && state.items.isEmpty
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2.5,
+                        ),
+                      )
+                    : state.error != null &&
+                          state.items.isEmpty &&
+                          !state.isLoading
+                    ? _WorkExpErrorState(
+                        message: state.error!,
+                        onRetry: () => ref
+                            .read(workExperienceNotifierProvider.notifier)
+                            .reload(),
+                      )
+                    : state.items.isEmpty
                     ? _EmptyState(onAdd: () => openForm())
                     : ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(
-                            20, 20, 20, 100),
+                        padding: EdgeInsets.fromLTRB(
+                          20,
+                          4,
+                          20,
+                          100 + bottomInset + bottomPad,
+                        ),
+                        physics: const BouncingScrollPhysics(
+                          parent: AlwaysScrollableScrollPhysics(),
+                        ),
                         itemCount: state.items.length,
                         separatorBuilder: (ctx, i) =>
                             const SizedBox(height: 10),
@@ -177,8 +218,86 @@ class WorkExperiencesPage extends ConsumerWidget {
                           );
                         },
                       ),
+              ),
+            ],
           ),
-        ],
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Error state (load failed)
+// ---------------------------------------------------------------------------
+
+class _WorkExpErrorState extends StatelessWidget {
+  const _WorkExpErrorState({required this.message, required this.onRetry});
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: ProfessionalCard(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.cloud_off_outlined,
+                  size: 44,
+                  color: AppColors.primaryDarkGreen.withValues(alpha: 0.75),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Gagal memuat data',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF111827),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: const Color(0xFF6B7280),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: onRetry,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primaryDarkGreen,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    icon: const Icon(Icons.refresh_rounded, size: 20),
+                    label: Text(
+                      'Coba Lagi',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -211,9 +330,7 @@ class _WorkExpCard extends StatelessWidget {
       parts.add(exp.location!);
     }
     if (exp.country != null && exp.country!.isNotEmpty) {
-      final item = _kCountries
-          .where((c) => c.code == exp.country)
-          .firstOrNull;
+      final item = _kCountries.where((c) => c.code == exp.country).firstOrNull;
       if (item != null) {
         parts.add('${item.flag} ${item.name}');
       } else {
@@ -228,17 +345,10 @@ class _WorkExpCard extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
     final start = _formatDate(exp.startDate);
-    final end = exp.stillEmployed
-        ? 'Sekarang'
-        : _formatDate(exp.endDate);
-    final duration =
-        start.isEmpty ? '' : '$start - $end';
+    final end = exp.stillEmployed ? 'Sekarang' : _formatDate(exp.endDate);
+    final duration = start.isEmpty ? '' : '$start - $end';
 
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16)),
-      color: cs.surface,
+    return ProfessionalCard(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -254,8 +364,11 @@ class _WorkExpCard extends StatelessWidget {
                     color: AppColors.secondaryLightGreen,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.business_rounded,
-                      color: AppColors.primaryDarkGreen, size: 22),
+                  child: const Icon(
+                    Icons.business_rounded,
+                    color: AppColors.primaryDarkGreen,
+                    size: 22,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -264,27 +377,33 @@ class _WorkExpCard extends StatelessWidget {
                     children: [
                       Text(
                         exp.position,
-                        style: tt.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w600),
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: cs.onSurface,
+                        ),
                       ),
                       Text(
                         exp.companyName,
-                        style: tt.bodySmall?.copyWith(
-                            color: AppColors.primaryDarkGreen,
-                            fontWeight: FontWeight.w600),
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primaryDarkGreen,
+                        ),
                       ),
                       if (exp.industryType != null &&
-                          exp.industryType!.isNotEmpty) ...[                        
+                          exp.industryType!.isNotEmpty) ...[
                         const SizedBox(height: 2),
                         Text(
                           _kIndustryTypes
-                              .where((i) => i.value == exp.industryType)
-                              .map((i) => i.label)
-                              .firstOrNull ??
+                                  .where((i) => i.value == exp.industryType)
+                                  .map((i) => i.label)
+                                  .firstOrNull ??
                               exp.industryType!,
                           style: tt.labelSmall?.copyWith(
-                              color: cs.onSurfaceVariant,
-                              fontStyle: FontStyle.italic),
+                            color: cs.onSurfaceVariant,
+                            fontStyle: FontStyle.italic,
+                          ),
                         ),
                       ],
                       if ((exp.location ?? exp.country) != null &&
@@ -292,14 +411,17 @@ class _WorkExpCard extends StatelessWidget {
                         const SizedBox(height: 2),
                         Row(
                           children: [
-                            Icon(Icons.location_on_outlined,
-                                size: 12,
-                                color: cs.onSurfaceVariant),
+                            Icon(
+                              Icons.location_on_outlined,
+                              size: 12,
+                              color: cs.onSurfaceVariant,
+                            ),
                             const SizedBox(width: 3),
                             Text(
                               _buildLocationLabel(exp),
                               style: tt.labelSmall?.copyWith(
-                                  color: cs.onSurfaceVariant),
+                                color: cs.onSurfaceVariant,
+                              ),
                             ),
                           ],
                         ),
@@ -313,27 +435,36 @@ class _WorkExpCard extends StatelessWidget {
                     if (v == 'delete') onDelete();
                   },
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   itemBuilder: (_) => [
                     const PopupMenuItem(
-                        value: 'edit',
-                        child: Row(children: [
-                          Icon(Icons.edit_outlined,
-                              size: 16),
+                      value: 'edit',
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit_outlined, size: 16),
                           SizedBox(width: 8),
                           Text('Edit'),
-                        ])),
+                        ],
+                      ),
+                    ),
                     const PopupMenuItem(
-                        value: 'delete',
-                        child: Row(children: [
-                          Icon(Icons.delete_outline,
-                              size: 16,
-                              color: AppColors.error),
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.delete_outline,
+                            size: 16,
+                            color: AppColors.error,
+                          ),
                           SizedBox(width: 8),
-                          Text('Hapus',
-                              style: TextStyle(
-                                  color: AppColors.error)),
-                        ])),
+                          Text(
+                            'Hapus',
+                            style: TextStyle(color: AppColors.error),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -342,7 +473,9 @@ class _WorkExpCard extends StatelessWidget {
               const SizedBox(height: 10),
               Container(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 5),
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: cs.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(20),
@@ -350,25 +483,27 @@ class _WorkExpCard extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.schedule_rounded,
-                        size: 12, color: cs.onSurfaceVariant),
+                    Icon(
+                      Icons.schedule_rounded,
+                      size: 12,
+                      color: cs.onSurfaceVariant,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       duration,
                       style: tt.labelSmall?.copyWith(
-                          color: cs.onSurfaceVariant),
+                        color: cs.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),
               ),
             ],
-            if (exp.description != null &&
-                exp.description!.isNotEmpty) ...[
+            if (exp.description != null && exp.description!.isNotEmpty) ...[
               const SizedBox(height: 8),
               Text(
                 exp.description!,
-                style: tt.bodySmall
-                    ?.copyWith(color: cs.onSurfaceVariant),
+                style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -390,43 +525,94 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    final cs = Theme.of(context).colorScheme;
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(40),
+        padding: const EdgeInsets.symmetric(horizontal: 24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: AppColors.secondaryLightGreen,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.work_history_outlined,
-                  size: 40, color: AppColors.primaryDarkGreen),
-            ),
-            const SizedBox(height: 16),
             Text(
-              'Belum Ada Pengalaman Kerja',
-              style: tt.titleSmall
-                  ?.copyWith(fontWeight: FontWeight.w700),
+              'Belum ada riwayat',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
             ),
             const SizedBox(height: 6),
             Text(
-              'Tambahkan riwayat pekerjaan kamu\nuntuk memperkuat profil.',
-              style: tt.bodySmall
-                  ?.copyWith(color: cs.onSurfaceVariant),
+              'Tambahkan pengalaman kerja untuk memperkuat profil Anda.',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: Colors.white.withValues(alpha: 0.88),
+                height: 1.4,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 20),
-            FilledButton.icon(
-              onPressed: onAdd,
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('Tambah Pengalaman'),
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primaryDarkGreen,
+            ProfessionalCard(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: AppColors.secondaryLightGreen,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.work_history_outlined,
+                        size: 40,
+                        color: AppColors.primaryDarkGreen,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Mulai dari sini',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF111827),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Tekan tombol di bawah atau ikon + di pojok kanan.',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFF6B7280),
+                        height: 1.35,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: onAdd,
+                        icon: const Icon(Icons.add_rounded),
+                        label: Text(
+                          'Tambah Pengalaman',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.primaryDarkGreen,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -488,13 +674,11 @@ class _WorkExperienceFormSheetState
       }
       if (e.startDate != null) {
         _startPicked = e.startDate;
-        _startDate.text =
-            DateFormat('MMM yyyy', 'id').format(e.startDate!);
+        _startDate.text = DateFormat('MMM yyyy', 'id').format(e.startDate!);
       }
       if (e.endDate != null) {
         _endPicked = e.endDate;
-        _endDate.text =
-            DateFormat('MMM yyyy', 'id').format(e.endDate!);
+        _endDate.text = DateFormat('MMM yyyy', 'id').format(e.endDate!);
       }
     }
   }
@@ -502,7 +686,12 @@ class _WorkExperienceFormSheetState
   @override
   void dispose() {
     for (final c in [
-      _company, _position, _location, _description, _startDate, _endDate
+      _company,
+      _position,
+      _location,
+      _description,
+      _startDate,
+      _endDate,
     ]) {
       c.dispose();
     }
@@ -540,17 +729,18 @@ class _WorkExperienceFormSheetState
     if (!(_formKey.currentState?.validate() ?? false)) return;
     // Validate end date when not still employed
     if (!_stillEmployed && _endPicked == null) {
-      CustomToast.show(context,
-          message: 'Tanggal selesai wajib diisi jika sudah tidak bekerja',
-          type: ToastType.warning);
+      CustomToast.show(
+        context,
+        message: 'Tanggal selesai wajib diisi jika sudah tidak bekerja',
+        type: ToastType.warning,
+      );
       return;
     }
     setState(() => _isLoading = true);
     final data = <String, dynamic>{
       'company_name': _company.text.trim(),
       'position': _position.text.trim(),
-      if (_location.text.trim().isNotEmpty)
-        'location': _location.text.trim(),
+      if (_location.text.trim().isNotEmpty) 'location': _location.text.trim(),
       if (_selectedCountryCode != null && _selectedCountryCode!.isNotEmpty)
         'country': _selectedCountryCode,
       if (_selectedIndustryType != null && _selectedIndustryType!.isNotEmpty)
@@ -559,14 +749,12 @@ class _WorkExperienceFormSheetState
         'description': _description.text.trim(),
       'still_employed': _stillEmployed,
       if (_startPicked != null)
-        'start_date':
-            DateFormat('yyyy-MM-dd').format(_startPicked!),
+        'start_date': DateFormat('yyyy-MM-dd').format(_startPicked!),
       if (!_stillEmployed && _endPicked != null)
         'end_date': DateFormat('yyyy-MM-dd').format(_endPicked!),
     };
 
-    final notifier =
-        ref.read(workExperienceNotifierProvider.notifier);
+    final notifier = ref.read(workExperienceNotifierProvider.notifier);
     final ok = widget.existing == null
         ? await notifier.create(data)
         : await notifier.update(widget.existing!.id, data);
@@ -574,15 +762,19 @@ class _WorkExperienceFormSheetState
     setState(() => _isLoading = false);
     if (!mounted) return;
     if (ok) {
-      Navigator.pop(context);
-      CustomToast.show(context,
-          message: widget.existing == null
-              ? 'Pengalaman berhasil ditambahkan'
-              : 'Pengalaman berhasil diperbarui',
-          type: ToastType.success);
+      CustomToast.showGlobal(
+        message: widget.existing == null
+            ? 'Pengalaman berhasil ditambahkan'
+            : 'Pengalaman berhasil diperbarui',
+        type: ToastType.success,
+      );
+      runWhenNavigatorUnlocked(() {
+        if (!mounted) return;
+        Navigator.pop(context);
+      });
     } else {
-      final err = ref.read(workExperienceNotifierProvider).error
-          ?? 'Gagal menyimpan';
+      final err =
+          ref.read(workExperienceNotifierProvider).error ?? 'Gagal menyimpan';
       CustomToast.show(context, message: err, type: ToastType.error);
     }
   }
@@ -594,7 +786,7 @@ class _WorkExperienceFormSheetState
       context: ctx,
       isScrollControlled: true,
       useSafeArea: true,
-      backgroundColor: cs.surfaceContainerLow,
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
@@ -604,7 +796,8 @@ class _WorkExperienceFormSheetState
           children: [
             const SizedBox(height: 8),
             Container(
-              width: 32, height: 4,
+              width: 32,
+              height: 4,
               decoration: BoxDecoration(
                 color: cs.onSurfaceVariant.withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(2),
@@ -612,9 +805,14 @@ class _WorkExperienceFormSheetState
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-              child: Text('Pilih Jenis Industri',
-                  style: tt.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w700)),
+              child: Text(
+                'Pilih Jenis Industri',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF111827),
+                ),
+              ),
             ),
             const Divider(height: 1),
             ...List.generate(_kIndustryTypes.length, (i) {
@@ -626,12 +824,13 @@ class _WorkExperienceFormSheetState
                   color: isSelected ? cs.primary : cs.onSurfaceVariant,
                   size: 20,
                 ),
-                title: Text(item.label,
-                    style: tt.bodyMedium?.copyWith(
-                        fontWeight: isSelected
-                            ? FontWeight.w700
-                            : FontWeight.w500,
-                        color: isSelected ? cs.primary : null)),
+                title: Text(
+                  item.label,
+                  style: tt.bodyMedium?.copyWith(
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                    color: isSelected ? cs.primary : null,
+                  ),
+                ),
                 trailing: isSelected
                     ? Icon(Icons.check_rounded, color: cs.primary, size: 18)
                     : null,
@@ -655,7 +854,7 @@ class _WorkExperienceFormSheetState
       context: ctx,
       isScrollControlled: true,
       useSafeArea: true,
-      backgroundColor: cs.surfaceContainerLow,
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
@@ -669,7 +868,8 @@ class _WorkExperienceFormSheetState
             children: [
               const SizedBox(height: 8),
               Container(
-                width: 32, height: 4,
+                width: 32,
+                height: 4,
                 decoration: BoxDecoration(
                   color: cs.onSurfaceVariant.withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(2),
@@ -677,23 +877,63 @@ class _WorkExperienceFormSheetState
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                child: Text('Pilih Negara',
-                    style: tt.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w700)),
+                child: Text(
+                  'Pilih Negara',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF111827),
+                  ),
+                ),
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: SearchBar(
+                child: TextField(
                   controller: searchCtrl,
-                  hintText: 'Cari negara...',
-                  leading: const Icon(Icons.search_rounded, size: 20),
+                  style: tt.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: cs.onSurface,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Cari negara...',
+                    prefixIcon: Icon(
+                      Icons.search_rounded,
+                      size: 20,
+                      color: cs.onSurfaceVariant,
+                    ),
+                    floatingLabelBehavior: FloatingLabelBehavior.never,
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    hintStyle: tt.bodyMedium?.copyWith(
+                      color: cs.onSurface.withValues(alpha: 0.45),
+                      fontWeight: FontWeight.w500,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(color: cs.outlineVariant),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(color: cs.outlineVariant),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(color: cs.primary, width: 1.6),
+                    ),
+                  ),
                   onChanged: (q) {
                     final lower = q.toLowerCase();
                     setModal(() {
                       filtered = _kCountries
-                          .where((c) =>
-                              c.name.toLowerCase().contains(lower) ||
-                              c.code.toLowerCase().contains(lower))
+                          .where(
+                            (c) =>
+                                c.name.toLowerCase().contains(lower) ||
+                                c.code.toLowerCase().contains(lower),
+                          )
                           .toList();
                     });
                   },
@@ -704,39 +944,51 @@ class _WorkExperienceFormSheetState
               Expanded(
                 child: filtered.isEmpty
                     ? Center(
-                        child: Text('Tidak ditemukan',
-                            style: tt.bodyMedium
-                                ?.copyWith(color: cs.onSurfaceVariant)))
+                        child: Text(
+                          'Tidak ditemukan',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      )
                     : ListView.builder(
                         controller: scrollCtrl,
                         itemCount: filtered.length,
                         itemBuilder: (_, i) {
                           final c = filtered[i];
-                          final isSelected =
-                              _selectedCountryCode == c.code;
+                          final isSelected = _selectedCountryCode == c.code;
                           return ListTile(
-                            leading: Text(c.flag,
-                                style: const TextStyle(fontSize: 22)),
-                            title: Text(c.name,
-                                style: tt.bodyMedium?.copyWith(
-                                    fontWeight: isSelected
-                                        ? FontWeight.w700
-                                        : FontWeight.w500,
-                                    color: isSelected
-                                        ? cs.primary
-                                        : null)),
+                            leading: Text(
+                              c.flag,
+                              style: const TextStyle(fontSize: 22),
+                            ),
+                            title: Text(
+                              c.name,
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 15,
+                                fontWeight: isSelected
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                                color: isSelected
+                                    ? cs.primary
+                                    : const Color(0xFF111827),
+                              ),
+                            ),
                             trailing: isSelected
-                                ? Icon(Icons.check_rounded,
-                                    color: cs.primary, size: 18)
+                                ? Icon(
+                                    Icons.check_rounded,
+                                    color: cs.primary,
+                                    size: 18,
+                                  )
                                 : null,
-                            onTap: () =>
-                                Navigator.pop(sheetCtx, c),
+                            onTap: () => Navigator.pop(sheetCtx, c),
                           );
                         },
                       ),
               ),
-              SizedBox(
-                  height: MediaQuery.paddingOf(sheetCtx).bottom + 8),
+              SizedBox(height: MediaQuery.paddingOf(sheetCtx).bottom + 8),
             ],
           ),
         ),
@@ -746,231 +998,250 @@ class _WorkExperienceFormSheetState
 
   @override
   Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
-    return Container(
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius:
-            const BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Drag handle
-          Padding(
-            padding: const EdgeInsets.only(top: 12, bottom: 4),
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: cs.outlineVariant,
-                borderRadius: BorderRadius.circular(2),
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          boxShadow: [
+            BoxShadow(
+              color: Color(0x1A000000),
+              blurRadius: 24,
+              offset: Offset(0, -4),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 12, bottom: 4),
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: cs.outlineVariant.withValues(alpha: 0.6),
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
-            child: Row(
-              children: [
-                Text(
-                  widget.existing == null
-                      ? 'Tambah Pengalaman'
-                      : 'Edit Pengalaman',
-                  style: tt.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                const Spacer(),
-                GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: cs.surfaceContainerHighest,
-                      shape: BoxShape.circle,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 16, 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.existing == null
+                          ? 'Tambah Pengalaman'
+                          : 'Edit Pengalaman',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF111827),
+                      ),
                     ),
-                    child: Icon(Icons.close_rounded,
-                        size: 16, color: cs.onSurfaceVariant),
                   ),
-                ),
-              ],
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: Icon(
+                      Icons.close_rounded,
+                      size: 22,
+                      color: cs.onSurfaceVariant,
+                    ),
+                    tooltip: 'Tutup',
+                  ),
+                ],
+              ),
             ),
-          ),
-          Flexible(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(
+            Flexible(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(
                   20,
                   12,
                   20,
-                  MediaQuery.viewInsetsOf(context).bottom + 24),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  children: [
-                    M3TextField(
-                      controller: _company,
-                      label: 'Nama Perusahaan',
-                      hint: 'PT. Contoh Indonesia',
-                      prefixIcon: Icons.business_rounded,
-                      upperCase: true,
-                      validator: (v) =>
-                          (v == null || v.trim().isEmpty)
-                              ? 'Wajib diisi'
-                              : null,
-                    ),
-                    const SizedBox(height: 10),
-                    _IndustryTypePickerField(
-                      value: _selectedIndustryType,
-                      onTap: () async {
-                        final picked =
-                            await _showIndustryTypePicker(context);
-                        if (picked != null && mounted) {
-                          setState(
-                              () => _selectedIndustryType = picked.value);
-                        }
-                      },
-                      onClear: () =>
-                          setState(() => _selectedIndustryType = null),
-                    ),
-                    const SizedBox(height: 10),
-                    M3TextField(
-                      controller: _position,
-                      label: 'Jabatan',
-                      hint: 'Staff, Manager, dll.',
-                      prefixIcon: Icons.work_outline_rounded,
-                      upperCase: true,
-                      validator: (v) =>
-                          (v == null || v.trim().isEmpty)
-                              ? 'Wajib diisi'
-                              : null,
-                    ),
-                    const SizedBox(height: 10),
-                    M3TextField(
-                      controller: _location,
-                      label: 'Kota / Lokasi',
-                      hint: 'Jakarta, Kuala Lumpur, dll.',
-                      prefixIcon: Icons.location_city_outlined,
-                      upperCase: true,
-                    ),
-                    const SizedBox(height: 10),
-                    _CountryPickerField(
-                      selectedCode: _selectedCountryCode,
-                      selectedName: _selectedCountryName,
-                      onTap: () async {
-                        final picked =
-                            await _showCountryPicker(context);
-                        if (picked != null) {
-                          setState(() {
-                            _selectedCountryCode = picked.code;
-                            _selectedCountryName = picked.name;
-                          });
-                        }
-                      },
-                      onClear: () => setState(() {
-                        _selectedCountryCode = null;
-                        _selectedCountryName = null;
-                      }),
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: M3TextField(
-                            controller: _startDate,
-                            label: 'Mulai',
-                            hint: 'Jan 2022',
-                            prefixIcon:
-                                Icons.calendar_today_outlined,
-                            readOnly: true,
-                            onTap: () => _pickMonth(true),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        if (!_stillEmployed)
+                  MediaQuery.viewInsetsOf(context).bottom + 24,
+                ),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    children: [
+                      ProfessionalTextField(
+                        controller: _company,
+                        label: 'Nama Perusahaan',
+                        hintText: 'PT. Contoh Indonesia',
+                        prefixIcon: Icons.business_rounded,
+                        upperCase: true,
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? 'Wajib diisi'
+                            : null,
+                      ),
+                      const SizedBox(height: 10),
+                      _IndustryTypePickerField(
+                        value: _selectedIndustryType,
+                        onTap: () async {
+                          final picked = await _showIndustryTypePicker(context);
+                          if (picked != null && mounted) {
+                            setState(
+                              () => _selectedIndustryType = picked.value,
+                            );
+                          }
+                        },
+                        onClear: () =>
+                            setState(() => _selectedIndustryType = null),
+                      ),
+                      const SizedBox(height: 10),
+                      ProfessionalTextField(
+                        controller: _position,
+                        label: 'Jabatan',
+                        hintText: 'Staff, Manager, dll.',
+                        prefixIcon: Icons.work_outline_rounded,
+                        upperCase: true,
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? 'Wajib diisi'
+                            : null,
+                      ),
+                      const SizedBox(height: 10),
+                      ProfessionalTextField(
+                        controller: _location,
+                        label: 'Kota / Lokasi',
+                        hintText: 'Jakarta, Kuala Lumpur, dll.',
+                        prefixIcon: Icons.location_city_outlined,
+                        upperCase: true,
+                      ),
+                      const SizedBox(height: 10),
+                      _CountryPickerField(
+                        selectedCode: _selectedCountryCode,
+                        selectedName: _selectedCountryName,
+                        onTap: () async {
+                          final picked = await _showCountryPicker(context);
+                          if (picked != null) {
+                            setState(() {
+                              _selectedCountryCode = picked.code;
+                              _selectedCountryName = picked.name;
+                            });
+                          }
+                        },
+                        onClear: () => setState(() {
+                          _selectedCountryCode = null;
+                          _selectedCountryName = null;
+                        }),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
                           Expanded(
-                            child: M3TextField(
-                              controller: _endDate,
-                              label: 'Selesai',
-                              hint: 'Des 2023',
-                              prefixIcon:
-                                  Icons.event_outlined,
+                            child: ProfessionalTextField(
+                              controller: _startDate,
+                              label: 'Mulai',
+                              hintText: 'Jan 2022',
+                              prefixIcon: Icons.calendar_today_outlined,
                               readOnly: true,
-                              onTap: () => _pickMonth(false),
+                              onTap: () => _pickMonth(true),
                             ),
                           ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        Checkbox(
-                          value: _stillEmployed,
-                          onChanged: (v) => setState(
-                              () => _stillEmployed = v ?? false),
-                          activeColor: AppColors.primaryDarkGreen,
-                          materialTapTargetSize:
-                              MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        GestureDetector(
-                          onTap: () => setState(() =>
-                              _stillEmployed = !_stillEmployed),
-                          child: Text(
-                            'Masih bekerja di sini',
-                            style: tt.bodySmall?.copyWith(
-                                fontWeight: FontWeight.w500),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    M3TextField(
-                      controller: _description,
-                      label: 'Deskripsi (opsional)',
-                      hint: 'Tugas dan Tanggung Jawab',
-                      prefixIcon: Icons.description_outlined,
-                      maxLines: 3,
-                      upperCase: true,
-                    ),
-                    const SizedBox(height: 20),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        onPressed:
-                            _isLoading ? null : _handleSave,
-                        style: FilledButton.styleFrom(
-                          backgroundColor:
-                              AppColors.primaryDarkGreen,
-                          padding: const EdgeInsets.symmetric(
-                              vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: _isLoading
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child:
-                                    CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white),
-                              )
-                            : Text(
-                                'Simpan',
-                                style: tt.labelLarge?.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w700),
+                          const SizedBox(width: 10),
+                          if (!_stillEmployed)
+                            Expanded(
+                              child: ProfessionalTextField(
+                                controller: _endDate,
+                                label: 'Selesai',
+                                hintText: 'Des 2023',
+                                prefixIcon: Icons.event_outlined,
+                                readOnly: true,
+                                onTap: () => _pickMonth(false),
                               ),
+                            ),
+                        ],
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 6),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: cs.outlineVariant),
+                        ),
+                        child: Row(
+                          children: [
+                            Checkbox(
+                              value: _stillEmployed,
+                              onChanged: (v) =>
+                                  setState(() => _stillEmployed = v ?? false),
+                              activeColor: AppColors.primaryDarkGreen,
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () => setState(
+                                  () => _stillEmployed = !_stillEmployed,
+                                ),
+                                child: Text(
+                                  'Masih bekerja di sini',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: const Color(0xFF374151),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      ProfessionalTextField(
+                        controller: _description,
+                        label: 'Deskripsi (opsional)',
+                        hintText: 'Tugas dan Tanggung Jawab',
+                        prefixIcon: Icons.description_outlined,
+                        maxLines: 3,
+                        upperCase: true,
+                      ),
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          onPressed: _isLoading ? null : _handleSave,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.primaryDarkGreen,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: _isLoading
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : Text(
+                                  'Simpan',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -986,7 +1257,7 @@ class _CountryItem {
   final String flag;
 }
 
-/// Tappable field that looks like a filled text field.
+/// Tappable field matching [ProfessionalDropdownField] / [ProfessionalTextField] styling.
 class _CountryPickerField extends StatelessWidget {
   const _CountryPickerField({
     required this.onTap,
@@ -1006,61 +1277,110 @@ class _CountryPickerField extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     final hasValue = selectedCode != null && selectedCode!.isNotEmpty;
     final flag = hasValue
-        ? (_kCountries
-                .where((c) => c.code == selectedCode)
-                .firstOrNull
-                ?.flag ??
-            '🌐')
+        ? (_kCountries.where((c) => c.code == selectedCode).firstOrNull?.flag ??
+              '🌐')
         : null;
     return InkWell(
-      onTap: onTap,
+      onTap: () => runWhenNavigatorUnlocked(onTap),
       borderRadius: BorderRadius.circular(14),
       child: InputDecorator(
         decoration: InputDecoration(
           labelText: 'Negara',
+          hintText: 'Pilih negara',
           floatingLabelBehavior: FloatingLabelBehavior.always,
+          labelStyle: tt.labelMedium?.copyWith(
+            color: cs.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
+          ),
+          hintStyle: tt.bodyMedium?.copyWith(
+            color: cs.onSurface.withValues(alpha: 0.45),
+            fontWeight: FontWeight.w500,
+          ),
           prefixIcon: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: flag != null
                 ? Text(flag, style: const TextStyle(fontSize: 20))
-                : Icon(Icons.flag_outlined,
-                    size: 20, color: cs.onSurfaceVariant),
+                : Icon(
+                    Icons.flag_outlined,
+                    size: 20,
+                    color: cs.primary,
+                  ),
           ),
-          prefixIconConstraints:
-              const BoxConstraints(minWidth: 44, minHeight: 44),
+          prefixIconConstraints: const BoxConstraints(
+            minWidth: 44,
+            minHeight: 44,
+          ),
           suffixIcon: hasValue
-              ? IconButton(
-                  icon:
-                      Icon(Icons.close_rounded, size: 18, color: cs.onSurfaceVariant),
-                  onPressed: onClear,
+              ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: Icon(
+                        Icons.close_rounded,
+                        size: 18,
+                        color: cs.onSurfaceVariant,
+                      ),
+                      onPressed: onClear,
+                      style: IconButton.styleFrom(
+                        padding: const EdgeInsets.all(8),
+                        minimumSize: const Size(36, 36),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                    Icon(
+                      Icons.arrow_drop_down_rounded,
+                      color: cs.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 4),
+                  ],
                 )
-              : Icon(Icons.arrow_drop_down_rounded,
-                  color: cs.onSurfaceVariant),
+              : Icon(
+                  Icons.arrow_drop_down_rounded,
+                  color: cs.onSurfaceVariant,
+                ),
+          suffixIconConstraints: BoxConstraints(
+            minHeight: 48,
+            minWidth: hasValue ? 88 : 48,
+          ),
           filled: true,
-          fillColor: cs.surfaceContainerHighest,
+          fillColor: Colors.white,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide.none,
+            borderSide: BorderSide(color: cs.outlineVariant),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide.none,
+            borderSide: BorderSide(color: cs.outlineVariant),
           ),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(color: cs.primary, width: 1.6),
+          ),
+          errorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(color: cs.error),
+          ),
+          focusedErrorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(color: cs.error, width: 1.6),
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 14,
+          ),
         ),
         isEmpty: !hasValue,
         child: hasValue
             ? Text(
                 selectedName ?? selectedCode!,
                 style: tt.bodyLarge?.copyWith(
-                    color: cs.onSurface, fontWeight: FontWeight.w500),
+                  color: cs.onSurface,
+                  fontWeight: FontWeight.w600,
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               )
-            : Text('Pilih negara',
-                style: tt.bodyLarge?.copyWith(
-                    color: cs.onSurface.withValues(alpha: 0.38))),
+            : const SizedBox.shrink(),
       ),
     );
   }
@@ -1102,11 +1422,8 @@ class _IndustryTypePickerField extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     final hasValue = value != null && value!.isNotEmpty;
     final label = hasValue
-        ? (_kIndustryTypes
-                .where((i) => i.value == value)
-                .firstOrNull
-                ?.label ??
-            value!)
+        ? (_kIndustryTypes.where((i) => i.value == value).firstOrNull?.label ??
+              value!)
         : null;
     return InkWell(
       onTap: onTap,
@@ -1115,41 +1432,53 @@ class _IndustryTypePickerField extends StatelessWidget {
         decoration: InputDecoration(
           labelText: 'Jenis Industri',
           floatingLabelBehavior: FloatingLabelBehavior.always,
-          prefixIcon: Icon(Icons.factory_outlined,
-              size: 20, color: cs.onSurfaceVariant),
+          prefixIcon: Icon(
+            Icons.factory_outlined,
+            size: 20,
+            color: cs.onSurfaceVariant,
+          ),
           suffixIcon: hasValue
               ? IconButton(
-                  icon: Icon(Icons.close_rounded,
-                      size: 18, color: cs.onSurfaceVariant),
+                  icon: Icon(
+                    Icons.close_rounded,
+                    size: 18,
+                    color: cs.onSurfaceVariant,
+                  ),
                   onPressed: onClear,
                 )
-              : Icon(Icons.arrow_drop_down_rounded,
-                  color: cs.onSurfaceVariant),
+              : Icon(Icons.arrow_drop_down_rounded, color: cs.onSurfaceVariant),
           filled: true,
-          fillColor: cs.surfaceContainerHighest,
+          fillColor: Colors.white,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide.none,
+            borderSide: BorderSide(color: cs.outlineVariant),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide.none,
+            borderSide: BorderSide(color: cs.outlineVariant),
           ),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 14,
+          ),
         ),
         isEmpty: !hasValue,
         child: hasValue
             ? Text(
                 label!,
                 style: tt.bodyLarge?.copyWith(
-                    color: cs.onSurface, fontWeight: FontWeight.w500),
+                  color: cs.onSurface,
+                  fontWeight: FontWeight.w500,
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               )
-            : Text('Pilih jenis industri',
-                style: tt.bodyLarge
-                    ?.copyWith(color: cs.onSurface.withValues(alpha: 0.38))),
+            : Text(
+                'Pilih jenis industri',
+                style: tt.bodyLarge?.copyWith(
+                  color: cs.onSurface.withValues(alpha: 0.38),
+                ),
+              ),
       ),
     );
   }

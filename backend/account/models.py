@@ -1548,12 +1548,14 @@ class DocumentType(models.Model):
         super().save(*args, **kwargs)
         cache.delete('document_types_all')
         cache.delete('document_types_required')
+        cache.delete('document_types_public_list')
     
     def delete(self, *args, **kwargs):
         """Invalidate cache when document types are deleted."""
         super().delete(*args, **kwargs)
         cache.delete('document_types_all')
         cache.delete('document_types_required')
+        cache.delete('document_types_public_list')
 
 
 def applicant_document_upload_to(instance, filename: str) -> str:

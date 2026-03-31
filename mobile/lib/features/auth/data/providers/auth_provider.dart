@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -7,6 +8,26 @@ import '../repositories/auth_repository.dart';
 import '../../../../core/api/interceptors.dart';
 import '../../../../core/widgets/custom_toast.dart';
 import '../../../notifications/data/services/notification_service.dart';
+
+bool _isTransientNetworkError(Object e) {
+  if (e is! DioException) return false;
+  return e.type == DioExceptionType.connectionTimeout ||
+      e.type == DioExceptionType.receiveTimeout ||
+      e.type == DioExceptionType.sendTimeout ||
+      e.type == DioExceptionType.connectionError ||
+      (e.type == DioExceptionType.unknown && e.response == null);
+}
+
+bool _isServerError(Object e) {
+  if (e is! DioException) return false;
+  final code = e.response?.statusCode;
+  return code != null && code >= 500 && code < 600;
+}
+
+/// Offline / flaky network or server errors: safe to show last known user.
+bool _shouldRecoverSessionWithCache(Object e) {
+  return _isTransientNetworkError(e) || _isServerError(e);
+}
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   return AuthRepository();
@@ -70,16 +91,43 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> _checkAuth() async {
     try {
       final isAuth = await _repository.isAuthenticated();
-      if (isAuth) {
-        final user = await _repository.getCurrentUser();
-        state = state.copyWith(user: user, initialized: true);
-        // Re-register FCM token now that we have a valid auth session.
-        NotificationService().registerToken();
-      } else {
+      if (!isAuth) {
         state = state.copyWith(initialized: true);
+        return;
       }
-    } catch (e) {
-      // Not authenticated or error
+      try {
+        final user = await _repository.getCurrentUser();
+        await _repository.persistCachedUser(user);
+        state = state.copyWith(user: user, initialized: true);
+        NotificationService().registerToken();
+      } catch (e) {
+        final stillAuth = await _repository.isAuthenticated();
+        if (!stillAuth) {
+          await _repository.clearCachedUser();
+          state = state.copyWith(user: null, initialized: true);
+          return;
+        }
+        final cached = await _repository.loadCachedUser();
+        if (cached != null && _shouldRecoverSessionWithCache(e)) {
+          state = state.copyWith(user: cached, initialized: true);
+          NotificationService().registerToken();
+          return;
+        }
+        if (_isTransientNetworkError(e)) {
+          await Future<void>.delayed(const Duration(milliseconds: 400));
+          try {
+            final user = await _repository.getCurrentUser();
+            await _repository.persistCachedUser(user);
+            state = state.copyWith(user: user, initialized: true);
+            NotificationService().registerToken();
+          } catch (_) {
+            state = state.copyWith(user: null, initialized: true);
+          }
+          return;
+        }
+        state = state.copyWith(user: null, initialized: true);
+      }
+    } catch (_) {
       state = state.copyWith(user: null, initialized: true);
     }
   }
@@ -117,6 +165,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = state.copyWith(isLoading: true, error: null, errorCode: null);
     try {
       final authResponse = await _repository.login(email, password);
+      await _repository.persistCachedUser(authResponse.user);
       state = state.copyWith(
         user: authResponse.user,
         isLoading: false,
@@ -151,6 +200,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         user: authResponse.user,
         isLoading: false,
       );
+      await _repository.persistCachedUser(authResponse.user);
       NotificationService().registerToken();
       return true;
     } catch (e) {
@@ -166,6 +216,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   /// directly from the registration response (avoids a redundant network call).
   void setAuthenticatedUser(User user) {
     state = state.copyWith(user: user, isLoading: false, error: null);
+    unawaited(_repository.persistCachedUser(user));
   }
 
   Future<void> logout() async {
@@ -182,12 +233,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
   /// storage by the interceptor — this just resets the Riverpod state so
   /// GoRouter redirects immediately to the login screen.
   void forceSignOut() {
+    unawaited(_repository.clearCachedUser());
     state = const AuthState(initialized: true);
   }
 
   Future<void> refreshUser() async {
     try {
       final user = await _repository.getCurrentUser();
+      await _repository.persistCachedUser(user);
       state = state.copyWith(user: user);
     } catch (_) {
       // Keep existing user state on failure — do not log out the user
@@ -201,7 +254,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
   void markEmailVerified() {
     final user = state.user;
     if (user != null) {
-      state = state.copyWith(user: user.copyWith(emailVerified: true));
+      final updated = user.copyWith(emailVerified: true);
+      state = state.copyWith(user: updated);
+      unawaited(_repository.persistCachedUser(updated));
     }
   }
 

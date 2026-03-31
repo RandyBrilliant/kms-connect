@@ -4,11 +4,9 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../../config/colors.dart';
-import '../../../../../core/widgets/custom_toast.dart';
 import '../../../../../core/widgets/professional_text_field.dart';
 import '../../../../../core/widgets/professional_phone_field.dart';
 import '../../../../../core/widgets/professional/professional_button.dart';
-import '../../../data/providers/auth_provider.dart';
 import '../../providers/registration_provider.dart';
 
 /// Step 1 of 2 – Professional redesigned credentials input.
@@ -71,7 +69,8 @@ class _RegistrationStep1CredentialsState
     ref.read(registrationProvider.notifier).setCredentials(
           email: _emailCtrl.text.trim(),
           password: _passwordCtrl.text,
-          phoneNumber: _phoneCtrl.text.trim(),
+          phoneNumber:
+              ProfessionalPhoneField.toIndonesiaE164(_phoneCtrl.text),
         );
     ref.read(registrationProvider.notifier).nextStep();
   }
@@ -122,6 +121,7 @@ class _RegistrationStep1CredentialsState
             prefixIcon: Icons.email_outlined,
             keyboardType: TextInputType.emailAddress,
             textInputAction: TextInputAction.next,
+            upperCase: false,
             onSubmitted: (_) => _passwordFocus.requestFocus(),
             validator: (v) {
               if (v == null || v.trim().isEmpty) return 'Email wajib diisi';
@@ -140,6 +140,7 @@ class _RegistrationStep1CredentialsState
             prefixIcon: Icons.lock_outline_rounded,
             obscureText: _obscurePassword,
             textInputAction: TextInputAction.next,
+            upperCase: false,
             onSubmitted: (_) => _confirmFocus.requestFocus(),
             suffixIcon: IconButton(
               icon: Icon(
@@ -169,6 +170,7 @@ class _RegistrationStep1CredentialsState
             prefixIcon: Icons.lock_outline_rounded,
             obscureText: _obscureConfirm,
             textInputAction: TextInputAction.next,
+            upperCase: false,
             onSubmitted: (_) => _phoneFocus.requestFocus(),
             suffixIcon: IconButton(
               icon: Icon(

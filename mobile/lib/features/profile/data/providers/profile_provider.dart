@@ -50,6 +50,7 @@ class WorkExperienceState {
 class WorkExperienceNotifier extends StateNotifier<WorkExperienceState> {
   final ProfileRepository _repository;
   final Ref _ref;
+  bool _disposed = false;
 
   WorkExperienceNotifier(this._repository, this._ref)
       : super(const WorkExperienceState()) {
@@ -57,75 +58,86 @@ class WorkExperienceNotifier extends StateNotifier<WorkExperienceState> {
   }
 
   Future<void> _load() async {
-    state = state.copyWith(isLoading: true, error: null);
+    _setStateSafely(state.copyWith(isLoading: true, error: null));
     try {
       final items = await _repository.getWorkExperiences();
-      state = state.copyWith(items: items, isLoading: false);
+      _setStateSafely(state.copyWith(items: items, isLoading: false));
     } catch (e) {
-      state = state.copyWith(
+      _setStateSafely(state.copyWith(
         isLoading: false,
         error: e.toString().replaceAll('DioException: ', ''),
-      );
+      ));
     }
   }
 
   Future<void> reload() => _load();
 
   Future<bool> create(Map<String, dynamic> data) async {
-    state = state.copyWith(isLoading: true, error: null);
+    _setStateSafely(state.copyWith(isLoading: true, error: null));
     try {
       final created = await _repository.createWorkExperience(data);
-      state = state.copyWith(
+      _setStateSafely(state.copyWith(
         items: [...state.items, created],
         isLoading: false,
-      );
+      ));
       _ref.invalidate(workExperiencesProvider);
       return true;
     } catch (e) {
-      state = state.copyWith(
+      _setStateSafely(state.copyWith(
         isLoading: false,
         error: e.toString().replaceAll('DioException: ', ''),
-      );
+      ));
       return false;
     }
   }
 
   Future<bool> update(int id, Map<String, dynamic> data) async {
-    state = state.copyWith(isLoading: true, error: null);
+    _setStateSafely(state.copyWith(isLoading: true, error: null));
     try {
       final updated = await _repository.updateWorkExperience(id, data);
-      state = state.copyWith(
+      _setStateSafely(state.copyWith(
         items: state.items.map((e) => e.id == id ? updated : e).toList(),
         isLoading: false,
-      );
+      ));
       _ref.invalidate(workExperiencesProvider);
       return true;
     } catch (e) {
-      state = state.copyWith(
+      _setStateSafely(state.copyWith(
         isLoading: false,
         error: e.toString().replaceAll('DioException: ', ''),
-      );
+      ));
       return false;
     }
   }
 
   Future<bool> delete(int id) async {
-    state = state.copyWith(isLoading: true, error: null);
+    _setStateSafely(state.copyWith(isLoading: true, error: null));
     try {
       await _repository.deleteWorkExperience(id);
-      state = state.copyWith(
+      _setStateSafely(state.copyWith(
         items: state.items.where((e) => e.id != id).toList(),
         isLoading: false,
-      );
+      ));
       _ref.invalidate(workExperiencesProvider);
       return true;
     } catch (e) {
-      state = state.copyWith(
+      _setStateSafely(state.copyWith(
         isLoading: false,
         error: e.toString().replaceAll('DioException: ', ''),
-      );
+      ));
       return false;
     }
+  }
+
+  void _setStateSafely(WorkExperienceState nextState) {
+    if (_disposed) return;
+    state = nextState;
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 }
 

@@ -81,7 +81,27 @@ dist/
 # mobile/.flutter-plugins-dependencies
 # mobile/android/.gradle/
 # mobile/ios/build/
+!mobile/lib/
+mobile/lib/**
 
 # Documentation (keep source, ignore generated)
 *.md~
 .backup/
+
+# Keep mobile redesign source files (overrides broad `lib/` ignore above)
+!mobile/lib/core/
+!mobile/lib/core/widgets/
+!mobile/lib/core/widgets/professional/
+!mobile/lib/features/auth/presentation/pages/login_page_new.dart
+!mobile/lib/core/widgets/professional_text_field.dart
+!mobile/lib/core/widgets/professional_phone_field.dart
+!mobile/lib/core/widgets/professional_dropdown_field.dart
+!mobile/lib/core/widgets/terms_privacy_modal.dart
+!mobile/lib/core/widgets/professional/professional_gradient_background.dart
+!mobile/lib/core/widgets/professional/professional_card.dart
+!mobile/lib/core/widgets/professional/professional_button.dart
+!mobile/lib/features/
+!mobile/lib/features/auth/
+!mobile/lib/features/auth/presentation/
+!mobile/lib/features/auth/presentation/pages/
+

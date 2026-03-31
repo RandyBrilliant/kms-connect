@@ -1,5 +1,8 @@
-import 'package:dio/dio.dart';
+import 'dart:convert';
 import 'dart:io';
+
+import 'package:dio/dio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../core/api/api_client.dart';
 import '../../../../core/api/endpoints.dart';
@@ -11,6 +14,31 @@ import '../../domain/models/ktp_data.dart';
 
 class AuthRepository {
   final ApiClient _apiClient = ApiClient();
+
+  static const String _cachedUserKey = 'auth_cached_user_json';
+
+  /// Last known user from a successful `/me` (or login) — used to restore the
+  /// session UI when the network is unavailable on cold start.
+  Future<void> persistCachedUser(User user) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_cachedUserKey, jsonEncode(user.toJson()));
+  }
+
+  Future<User?> loadCachedUser() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_cachedUserKey);
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      return User.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> clearCachedUser() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_cachedUserKey);
+  }
 
   /// Login with email and password
   Future<AuthResponse> login(String email, String password) async {
@@ -311,6 +339,7 @@ class AuthRepository {
       // Server logout failed — still clear local tokens
     }
     await _apiClient.clearTokens();
+    await clearCachedUser();
   }
 
   /// Resend verification email for the given email address.

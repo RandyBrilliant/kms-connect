@@ -5,6 +5,7 @@ class DocumentType {
   final bool isRequired;
   final int sortOrder;
   final String description;
+
   /// 'INITIAL' or 'POST_INTERVIEW' — matches backend DocumentType.phase
   final String phase;
 
@@ -18,6 +19,17 @@ class DocumentType {
     this.phase = 'INITIAL',
   });
 
+  static bool _parseRequired(dynamic v) {
+    if (v == null) return false;
+    if (v is bool) return v;
+    if (v is num) return v != 0;
+    if (v is String) {
+      final s = v.toLowerCase().trim();
+      return s == 'true' || s == '1' || s == 'yes';
+    }
+    return false;
+  }
+
   factory DocumentType.fromJson(Map<String, dynamic> json) {
     return DocumentType(
       id: json['id'] is int
@@ -25,7 +37,7 @@ class DocumentType {
           : int.tryParse(json['id'].toString()) ?? 0,
       code: (json['code'] ?? '') as String,
       name: (json['name'] ?? '') as String,
-      isRequired: json['is_required'] as bool? ?? false,
+      isRequired: _parseRequired(json['is_required']),
       sortOrder: json['sort_order'] is int
           ? json['sort_order'] as int
           : int.tryParse(json['sort_order']?.toString() ?? '') ?? 0,

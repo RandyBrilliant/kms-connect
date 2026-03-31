@@ -1,15 +1,19 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../../config/colors.dart';
 import '../../../../core/utils/image_compressor.dart';
-import '../../../../core/widgets/auth_wave_header.dart';
+import '../../../../core/utils/safe_navigation.dart';
 import '../../../../core/widgets/custom_toast.dart';
+import '../../../../core/widgets/professional/professional_card.dart';
+import '../../../../core/widgets/professional/professional_gradient_background.dart';
 import '../../../documents/data/providers/document_provider.dart';
 import '../../../documents/domain/models/document_type.dart';
 
@@ -22,8 +26,7 @@ class UploadDocumentPage extends ConsumerStatefulWidget {
   final int? documentTypeId;
 
   @override
-  ConsumerState<UploadDocumentPage> createState() =>
-      _UploadDocumentPageState();
+  ConsumerState<UploadDocumentPage> createState() => _UploadDocumentPageState();
 }
 
 // PDF document type codes — must match backend document_specs.py
@@ -36,8 +39,7 @@ const _pdfDocCodes = {
   'perjanjian-penempatan',
 };
 
-class _UploadDocumentPageState
-    extends ConsumerState<UploadDocumentPage> {
+class _UploadDocumentPageState extends ConsumerState<UploadDocumentPage> {
   final _picker = ImagePicker();
   File? _file;
   bool _filePdf = false; // true if _file is a PDF
@@ -45,7 +47,8 @@ class _UploadDocumentPageState
   bool _isUploading = false;
   bool _didPreselect = false;
 
-  bool get _isPdf => _selectedType != null && _pdfDocCodes.contains(_selectedType!.code);
+  bool get _isPdf =>
+      _selectedType != null && _pdfDocCodes.contains(_selectedType!.code);
 
   @override
   void initState() {
@@ -63,8 +66,9 @@ class _UploadDocumentPageState
     final typesAsync = ref.read(documentTypesProvider);
     typesAsync.whenData((types) {
       if (_selectedType == null && widget.documentTypeId != null) {
-        final match =
-            types.where((t) => t.id == widget.documentTypeId).firstOrNull;
+        final match = types
+            .where((t) => t.id == widget.documentTypeId)
+            .firstOrNull;
         if (match != null) {
           _didPreselect = true;
           setState(() {
@@ -109,93 +113,32 @@ class _UploadDocumentPageState
     }
   }
 
-  // ── Source picker bottom sheet (image types) ─────────────────────────────
-  void _showImageSourcePicker() {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        margin: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: cs.surface,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                child: Text(
-                  'Pilih Sumber Foto',
-                  style: tt.titleSmall
-                      ?.copyWith(fontWeight: FontWeight.w700),
-                ),
-              ),
-              ListTile(
-                leading: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFDBEAFE),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.camera_alt_outlined,
-                      color: Color(0xFF2563EB)),
-                ),
-                title: const Text('Kamera'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _pickImage(ImageSource.camera);
-                },
-              ),
-              ListTile(
-                leading: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: AppColors.secondaryLightGreen,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.photo_library_outlined,
-                      color: AppColors.primaryDarkGreen),
-                ),
-                title: const Text('Galeri Foto'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _pickImage(ImageSource.gallery);
-                },
-              ),
-              const SizedBox(height: 8),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   // ── Unified entry point ──────────────────────────────────────────────────
+  /// Opens the system gallery immediately for image types (no extra sheet delay).
+  /// PDF types open the file picker directly.
   void _onTapFilePicker() {
     if (_isPdf) {
       _pickPdf();
     } else {
-      _showImageSourcePicker();
+      _pickImage(ImageSource.gallery);
     }
   }
 
   Future<void> _handleUpload() async {
     if (_file == null) {
-      CustomToast.show(context,
-          message: 'Pilih file terlebih dahulu',
-          type: ToastType.warning);
+      CustomToast.show(
+        context,
+        message: 'Pilih file terlebih dahulu',
+        type: ToastType.warning,
+      );
       return;
     }
     if (_selectedType == null) {
-      CustomToast.show(context,
-          message: 'Pilih jenis dokumen terlebih dahulu',
-          type: ToastType.warning);
+      CustomToast.show(
+        context,
+        message: 'Pilih jenis dokumen terlebih dahulu',
+        type: ToastType.warning,
+      );
       return;
     }
     setState(() => _isUploading = true);
@@ -214,10 +157,14 @@ class _UploadDocumentPageState
       setState(() => _isUploading = false);
       ref.invalidate(myDocumentsProvider);
       ref.invalidate(documentChecklistProvider);
-      CustomToast.show(context,
-          message: 'Dokumen berhasil diunggah',
-          type: ToastType.success);
-      Navigator.pop(context);
+      CustomToast.showGlobal(
+        message: 'Dokumen berhasil diunggah',
+        type: ToastType.success,
+      );
+      runWhenNavigatorUnlocked(() {
+        if (!mounted) return;
+        Navigator.pop(context);
+      });
     } on DioException catch (e) {
       if (!mounted) return;
       setState(() => _isUploading = false);
@@ -228,9 +175,11 @@ class _UploadDocumentPageState
     } catch (e) {
       if (!mounted) return;
       setState(() => _isUploading = false);
-      CustomToast.show(context,
-          message: 'Gagal mengunggah dokumen',
-          type: ToastType.error);
+      CustomToast.show(
+        context,
+        message: 'Gagal mengunggah dokumen',
+        type: ToastType.error,
+      );
     }
   }
 
@@ -240,8 +189,8 @@ class _UploadDocumentPageState
     final docsAsync = ref.watch(myDocumentsProvider);
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    const headerH = 140.0;
-    final topPad = MediaQuery.paddingOf(context).top;
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final bottomPad = MediaQuery.paddingOf(context).bottom;
 
     // If initState callback ran before data loaded, try again now
     if (!_didPreselect && widget.documentTypeId != null) {
@@ -250,7 +199,8 @@ class _UploadDocumentPageState
 
     // Check whether the currently selected document type already has an
     // APPROVED document — if so the form is locked.
-    final isApproved = _selectedType != null &&
+    final isApproved =
+        _selectedType != null &&
         docsAsync.whenOrNull(
               data: (docs) => docs.any(
                 (d) =>
@@ -261,291 +211,419 @@ class _UploadDocumentPageState
             true;
 
     return Scaffold(
-      backgroundColor: cs.surfaceContainerLowest,
-      body: Column(
-        children: [
-          // ── Header ───────────────────────────────────────────────────
-          SizedBox(
-            height: headerH + topPad,
-            child: Stack(
-              children: [
-                Positioned.fill(
-                    child:
-                        AuthWaveHeader(height: headerH + topPad)),
-                Padding(
-                  padding: EdgeInsets.fromLTRB(
-                      16, topPad + 10, 16, 0),
-                  child: Row(
-                    children: [
-                      GestureDetector(
-                        onTap: () => Navigator.pop(context),
-                        child: Container(
-                          width: 38,
-                          height: 38,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.white
-                                .withValues(alpha: 0.18),
-                            border: Border.all(
-                              color: Colors.white
-                                  .withValues(alpha: 0.35),
-                              width: 1.2,
-                            ),
-                          ),
-                          child: const Icon(
-                              Icons.arrow_back_rounded,
-                              color: Colors.white,
-                              size: 18),
-                        ),
+      resizeToAvoidBottomInset: true,
+      backgroundColor: Colors.transparent,
+      body: ProfessionalGradientBackground(
+        child: SafeArea(
+          bottom: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 8, 8, 8),
+                child: Row(
+                  children: [
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(
+                        Icons.arrow_back_rounded,
+                        color: Colors.white,
                       ),
-                      const SizedBox(width: 12),
-                      Text(
-                        'Unggah Dokumen',
-                        style: tt.titleMedium?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // ── Body ─────────────────────────────────────────────────────
-          Expanded(
-            child: SingleChildScrollView(
-              padding:
-                  const EdgeInsets.fromLTRB(20, 20, 20, 32),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Approved-type banner (shown when doc is locked)
-                  if (isApproved) ...[                    
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFD1FAE5),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: const Color(0xFF6EE7B7),
-                          width: 1,
-                        ),
-                      ),
-                      child: Row(
+                      tooltip: 'Kembali',
+                    ),
+                    Expanded(
+                      child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(
-                            Icons.lock_rounded,
-                            size: 18,
-                            color: Color(0xFF065F46),
+                          Text(
+                            'Unggah Dokumen',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                            ),
                           ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Dokumen Sudah Disetujui',
-                                  style: tt.bodySmall?.copyWith(
-                                    fontWeight: FontWeight.w700,
-                                    color: const Color(0xFF065F46),
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'Dokumen ini telah disetujui oleh tim kami dan tidak dapat diganti.',
-                                  style: tt.bodySmall?.copyWith(
-                                    color: const Color(0xFF047857),
-                                    height: 1.4,
-                                  ),
-                                ),
-                              ],
+                          const SizedBox(height: 4),
+                          Text(
+                            'Unggah file sesuai jenis dokumen',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white.withValues(alpha: 0.88),
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 16),
                   ],
-
-                  // Format hint chip (shown only when type selected)
-                  if (_selectedType != null) ...[
-                    _FormatHintChip(isPdf: _isPdf),
-                    const SizedBox(height: 12),
-                  ],
-
-                  // File picker area
-                  GestureDetector(
-                    onTap: isApproved ? null : _onTapFilePicker,
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      width: double.infinity,
-                      height: (_file != null && !_filePdf) ? 220 : 130,
-                      decoration: BoxDecoration(
-                        color: isApproved
-                            ? cs.surfaceContainerHighest.withValues(alpha: 0.5)
-                            : _file != null
-                                ? (_filePdf
-                                    ? const Color(0xFFF0FDF4)
-                                    : Colors.black)
-                                : cs.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: isApproved
-                              ? cs.outlineVariant.withValues(alpha: 0.4)
-                              : _file != null
-                                  ? (_filePdf
-                                      ? AppColors.primaryDarkGreen
-                                      : cs.outlineVariant)
-                                  : AppColors.primaryDarkGreen
-                                      .withValues(alpha: 0.4),
-                          width: _file != null ? 1.5 : 2,
+                ),
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(
+                    parent: AlwaysScrollableScrollPhysics(),
+                  ),
+                  padding: EdgeInsets.fromLTRB(
+                    20,
+                    4,
+                    20,
+                    24 + bottomInset + bottomPad,
+                  ),
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: math.min(
+                          MediaQuery.sizeOf(context).width - 40,
+                          560,
                         ),
                       ),
-                      child: _file != null
-                          ? _filePdf
-                              ? _PdfPreview(file: _file!)
-                              : ClipRRect(
-                                  borderRadius:
-                                      BorderRadius.circular(15),
-                                  child: Image.file(
-                                    _file!,
-                                    fit: BoxFit.cover,
+                      child: ProfessionalCard(
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Approved-type banner (shown when doc is locked)
+                              if (isApproved) ...[
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFD1FAE5),
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: const Color(0xFF6EE7B7),
+                                      width: 1,
+                                    ),
                                   ),
-                                )
-                          : _FilePlaceholder(
-                              isPdf: _isPdf,
-                              tt: tt,
-                              cs: cs,
-                            ),
-                    ),
-                  ),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Icon(
+                                        Icons.lock_rounded,
+                                        size: 18,
+                                        color: Color(0xFF065F46),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'Dokumen Sudah Disetujui',
+                                              style: tt.bodySmall?.copyWith(
+                                                fontWeight: FontWeight.w700,
+                                                color: const Color(0xFF065F46),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              'Dokumen ini telah disetujui oleh tim kami dan tidak dapat diganti.',
+                                              style: tt.bodySmall?.copyWith(
+                                                color: const Color(0xFF047857),
+                                                height: 1.4,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                              ],
 
-                  if (_file != null) ...[  
-                    const SizedBox(height: 8),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton.icon(
-                        onPressed: _onTapFilePicker,
-                        icon: const Icon(Icons.swap_horiz_rounded,
-                            size: 16),
-                        label: const Text('Ganti File'),
-                        style: TextButton.styleFrom(
-                          foregroundColor: cs.onSurfaceVariant,
-                          tapTargetSize:
-                              MaterialTapTargetSize.shrinkWrap,
-                        ),
-                      ),
-                    ),
-                  ],
+                              // Format hint chip (shown only when type selected)
+                              if (_selectedType != null) ...[
+                                _FormatHintChip(isPdf: _isPdf),
+                                const SizedBox(height: 12),
+                              ],
 
-                  const SizedBox(height: 20),
-
-                  // Type selector
-                  Text(
-                    'Jenis Dokumen',
-                    style: tt.labelLarge
-                        ?.copyWith(fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 10),
-                  // Note: selecting a different type clears the picked file
-                  typesAsync.when(
-                    loading: () => const Center(
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: AppColors.primaryDarkGreen)),
-                    error: (e, s) => Text(
-                      'Gagal memuat jenis dokumen',
-                      style: tt.bodySmall
-                          ?.copyWith(color: AppColors.error),
-                    ),
-                    data: (types) => Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: types
-                          .map((t) => _TypeChip(
-                                type: t,
-                                selected: _selectedType?.id == t.id,
-                                onTap: () {
-                                  // Clear file if format type changes
-                                  final newIsPdf =
-                                      _pdfDocCodes.contains(t.code);
-                                  final curIsPdf = _selectedType != null &&
-                                      _pdfDocCodes
-                                          .contains(_selectedType!.code);
-                                  setState(() {
-                                    _selectedType = t;
-                                    if (newIsPdf != curIsPdf) {
-                                      _file = null;
-                                      _filePdf = false;
-                                    }
-                                  });
+                              // File picker area — InkWell for reliable taps; gallery opens on main tap
+                              LayoutBuilder(
+                                builder: (context, constraints) {
+                                  final screenH = MediaQuery.sizeOf(
+                                    context,
+                                  ).height;
+                                  final maxW = constraints.maxWidth;
+                                  final emptyH = math.max(
+                                    148.0,
+                                    math.min(200.0, maxW * 0.42),
+                                  );
+                                  final previewImgH = math.max(
+                                    200.0,
+                                    math.min(340.0, screenH * 0.36),
+                                  );
+                                  final h = _file == null
+                                      ? emptyH
+                                      : (_filePdf ? 132.0 : previewImgH);
+                                  return ClipRRect(
+                                    borderRadius: BorderRadius.circular(16),
+                                    child: Stack(
+                                      clipBehavior: Clip.hardEdge,
+                                      children: [
+                                        Material(
+                                          color: isApproved
+                                              ? cs.surfaceContainerHighest
+                                                    .withValues(alpha: 0.5)
+                                              : _file != null
+                                              ? (_filePdf
+                                                    ? const Color(0xFFF0FDF4)
+                                                    : Colors.black)
+                                              : cs.surfaceContainerHighest,
+                                          child: InkWell(
+                                            onTap: isApproved
+                                                ? null
+                                                : _onTapFilePicker,
+                                            splashColor: AppColors
+                                                .primaryDarkGreen
+                                                .withValues(alpha: 0.12),
+                                            child: AnimatedContainer(
+                                              duration: const Duration(
+                                                milliseconds: 200,
+                                              ),
+                                              width: double.infinity,
+                                              height: h,
+                                              decoration: BoxDecoration(
+                                                border: Border.all(
+                                                  color: isApproved
+                                                      ? cs.outlineVariant
+                                                            .withValues(
+                                                              alpha: 0.4,
+                                                            )
+                                                      : _file != null
+                                                      ? (_filePdf
+                                                            ? AppColors
+                                                                  .primaryDarkGreen
+                                                            : cs.outlineVariant)
+                                                      : AppColors
+                                                            .primaryDarkGreen
+                                                            .withValues(
+                                                              alpha: 0.4,
+                                                            ),
+                                                  width: _file != null
+                                                      ? 1.5
+                                                      : 2,
+                                                ),
+                                              ),
+                                              child: _file != null
+                                                  ? _filePdf
+                                                        ? _PdfPreview(
+                                                            file: _file!,
+                                                          )
+                                                        : ClipRRect(
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                  14,
+                                                                ),
+                                                            child: Image.file(
+                                                              _file!,
+                                                              width: double
+                                                                  .infinity,
+                                                              height: h,
+                                                              fit: BoxFit.cover,
+                                                            ),
+                                                          )
+                                                  : _FilePlaceholder(
+                                                      isPdf: _isPdf,
+                                                      tt: tt,
+                                                      cs: cs,
+                                                    ),
+                                            ),
+                                          ),
+                                        ),
+                                        if (!isApproved &&
+                                            !_isPdf &&
+                                            _file == null)
+                                          Positioned(
+                                            top: 6,
+                                            right: 6,
+                                            child: Material(
+                                              color: Colors.white.withValues(
+                                                alpha: 0.95,
+                                              ),
+                                              shape: const CircleBorder(),
+                                              elevation: 1,
+                                              child: InkWell(
+                                                customBorder:
+                                                    const CircleBorder(),
+                                                onTap: () => _pickImage(
+                                                  ImageSource.camera,
+                                                ),
+                                                child: Padding(
+                                                  padding: const EdgeInsets.all(
+                                                    8,
+                                                  ),
+                                                  child: Icon(
+                                                    Icons.camera_alt_outlined,
+                                                    size: 22,
+                                                    color: AppColors
+                                                        .primaryDarkGreen,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  );
                                 },
-                              ))
-                          .toList(),
-                    ),
-                  ),
+                              ),
 
-                  const SizedBox(height: 28),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: _isUploading || isApproved
-                          ? null
-                          : _handleUpload,
-                      style: FilledButton.styleFrom(
-                        backgroundColor:
-                            isApproved
-                                ? const Color(0xFF059669)
-                                : AppColors.primaryDarkGreen,
-                        disabledBackgroundColor:
-                            isApproved
-                                ? const Color(0xFF059669).withValues(alpha: 0.5)
-                                : null,
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(14),
-                        ),
-                      ),
-                      child: _isUploading
-                          ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white),
-                            )
-                          : Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (isApproved) ...[
-                                  const Icon(Icons.lock_rounded,
-                                      size: 16, color: Colors.white),
-                                  const SizedBox(width: 6),
-                                ],
-                                Text(
-                                  isApproved
-                                      ? 'Dokumen Disetujui'
-                                      : 'Unggah Dokumen',
-                                  style: tt.labelLarge?.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w700,
+                              if (_file != null) ...[
+                                const SizedBox(height: 8),
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: TextButton.icon(
+                                    onPressed: _onTapFilePicker,
+                                    icon: const Icon(
+                                      Icons.swap_horiz_rounded,
+                                      size: 16,
+                                    ),
+                                    label: const Text('Ganti File'),
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: cs.onSurfaceVariant,
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                    ),
                                   ),
                                 ),
                               ],
-                            ),
+
+                              const SizedBox(height: 20),
+
+                              // Type selector
+                              Text(
+                                'Jenis Dokumen',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                  color: cs.onSurface,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              // Note: selecting a different type clears the picked file
+                              typesAsync.when(
+                                loading: () => const Center(
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: AppColors.primaryDarkGreen,
+                                  ),
+                                ),
+                                error: (e, s) => Text(
+                                  'Gagal memuat jenis dokumen',
+                                  style: tt.bodySmall?.copyWith(
+                                    color: AppColors.error,
+                                  ),
+                                ),
+                                data: (types) {
+                                  final sorted = List<DocumentType>.from(types)
+                                    ..sort(
+                                      (a, b) =>
+                                          a.sortOrder.compareTo(b.sortOrder),
+                                    );
+                                  return Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: sorted
+                                        .map(
+                                          (t) => _TypeChip(
+                                            type: t,
+                                            selected: _selectedType?.id == t.id,
+                                            onTap: () {
+                                              // Clear file if format type changes
+                                              final newIsPdf = _pdfDocCodes
+                                                  .contains(t.code);
+                                              final curIsPdf =
+                                                  _selectedType != null &&
+                                                  _pdfDocCodes.contains(
+                                                    _selectedType!.code,
+                                                  );
+                                              setState(() {
+                                                _selectedType = t;
+                                                if (newIsPdf != curIsPdf) {
+                                                  _file = null;
+                                                  _filePdf = false;
+                                                }
+                                              });
+                                            },
+                                          ),
+                                        )
+                                        .toList(),
+                                  );
+                                },
+                              ),
+
+                              const SizedBox(height: 28),
+                              SizedBox(
+                                width: double.infinity,
+                                child: FilledButton(
+                                  onPressed: _isUploading || isApproved
+                                      ? null
+                                      : _handleUpload,
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: isApproved
+                                        ? const Color(0xFF059669)
+                                        : AppColors.primaryDarkGreen,
+                                    disabledBackgroundColor: isApproved
+                                        ? const Color(
+                                            0xFF059669,
+                                          ).withValues(alpha: 0.5)
+                                        : null,
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 16,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                  ),
+                                  child: _isUploading
+                                      ? const SizedBox(
+                                          width: 22,
+                                          height: 22,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                      : Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            if (isApproved) ...[
+                                              const Icon(
+                                                Icons.lock_rounded,
+                                                size: 16,
+                                                color: Colors.white,
+                                              ),
+                                              const SizedBox(width: 6),
+                                            ],
+                                            Text(
+                                              isApproved
+                                                  ? 'Dokumen Disetujui'
+                                                  : 'Unggah Dokumen',
+                                              style: tt.labelLarge?.copyWith(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
                   ),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -573,17 +651,14 @@ class _TypeChip extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(
-            horizontal: 14, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: selected
               ? AppColors.secondaryLightGreen
               : cs.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: selected
-                ? AppColors.primaryDarkGreen
-                : cs.outlineVariant,
+            color: selected ? AppColors.primaryDarkGreen : cs.outlineVariant,
             width: selected ? 1.5 : 1,
           ),
         ),
@@ -598,6 +673,18 @@ class _TypeChip extends StatelessWidget {
                   height: 6,
                   decoration: const BoxDecoration(
                     color: AppColors.error,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: Container(
+                  width: 6,
+                  height: 6,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF0369A1),
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -693,16 +780,14 @@ class _FilePlaceholder extends StatelessWidget {
             shape: BoxShape.circle,
           ),
           child: Icon(
-            isPdf
-                ? Icons.picture_as_pdf_rounded
-                : Icons.upload_file_rounded,
+            isPdf ? Icons.picture_as_pdf_rounded : Icons.upload_file_rounded,
             size: 32,
             color: AppColors.primaryDarkGreen,
           ),
         ),
         const SizedBox(height: 12),
         Text(
-          isPdf ? 'Ketuk untuk pilih PDF' : 'Ketuk untuk pilih foto',
+          isPdf ? 'Ketuk untuk pilih PDF' : 'Ketuk untuk buka galeri',
           style: tt.bodyMedium?.copyWith(
             fontWeight: FontWeight.w600,
             color: AppColors.primaryDarkGreen,
@@ -713,6 +798,16 @@ class _FilePlaceholder extends StatelessWidget {
           isPdf ? 'PDF — maks. 2 MB' : 'JPG, PNG — maks. 500 KB',
           style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
         ),
+        if (!isPdf) ...[
+          const SizedBox(height: 2),
+          Text(
+            'Ikon kamera di kanan atas untuk foto langsung',
+            style: tt.bodySmall?.copyWith(
+              color: cs.onSurfaceVariant.withValues(alpha: 0.85),
+              fontSize: 11,
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -757,9 +852,7 @@ class _PdfPreview extends StatelessWidget {
               children: [
                 Text(
                   fileName,
-                  style: tt.bodySmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: tt.bodySmall?.copyWith(fontWeight: FontWeight.w600),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
