@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../config/colors.dart';
@@ -205,31 +206,54 @@ class _ChatThreadPageState extends ConsumerState<ChatThreadPage> {
     });
 
     return Scaffold(
-      backgroundColor: cs.surfaceContainerLowest,
+      backgroundColor: const Color(0xFFF8FAFB),
       appBar: AppBar(
-        backgroundColor: AppColors.primaryDarkGreen,
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
+          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textDark),
           onPressed: () => context.pop(),
         ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Chat dengan Admin',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+            Text(
+              'Chat dengan Admin',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textDark,
+              ),
+            ),
             if (_typingUserName != null)
-              Text('$_typingUserName sedang mengetik...',
-                  style: const TextStyle(
-                      fontSize: 11,
-                      color: Colors.white70,
-                      fontStyle: FontStyle.italic))
+              Text(
+                '$_typingUserName sedang mengetik…',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.primaryDarkGreen,
+                  fontStyle: FontStyle.italic,
+                ),
+              )
             else
-              const Text('Pesan akan dibalas secepatnya',
-                  style: TextStyle(fontSize: 11, color: Colors.white70)),
+              Text(
+                'Pesan akan dibalas secepatnya',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textMedium,
+                ),
+              ),
           ],
         ),
-        elevation: 0,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Divider(
+            height: 1,
+            color: cs.outlineVariant.withValues(alpha: 0.35),
+          ),
+        ),
       ),
       body: Column(
         children: [
@@ -239,13 +263,34 @@ class _ChatThreadPageState extends ConsumerState<ChatThreadPage> {
                 ? _buildMessageList(cs)
                 : messagesAsync.when(
                     data: (_) => _buildMessageList(cs),
-                    loading: () =>
-                        const Center(child: CircularProgressIndicator()),
+                    loading: () => const Center(
+                      child: CircularProgressIndicator(
+                        color: AppColors.primaryDarkGreen,
+                        strokeWidth: 2.5,
+                      ),
+                    ),
                     error: (error, _) => Center(
-                      child: Text(
-                        '$error',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodyMedium,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: Container(
+                          padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: AppColors.divider.withValues(alpha: 0.3),
+                            ),
+                          ),
+                          child: Text(
+                            '$error',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.textMedium,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -266,29 +311,53 @@ class _ChatThreadPageState extends ConsumerState<ChatThreadPage> {
   Widget _buildMessageList(ColorScheme cs) {
     if (_messages.isEmpty) {
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.chat_bubble_outline_rounded,
-                size: 56,
-                color: cs.onSurfaceVariant.withValues(alpha: 0.35)),
-            const SizedBox(height: 12),
-            Text(
-              'Belum ada pesan',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(color: cs.onSurfaceVariant),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: AppColors.divider.withValues(alpha: 0.3),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-            const SizedBox(height: 4),
-            Text(
-              'Mulailah percakapan di bawah',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: cs.onSurfaceVariant),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.chat_bubble_outline_rounded,
+                  size: 48,
+                  color: cs.onSurfaceVariant.withValues(alpha: 0.32),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'Belum ada pesan',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textDark,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Mulailah percakapan di bawah',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.textMedium,
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       );
     }
@@ -354,9 +423,11 @@ class _DateDivider extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Text(
               label,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: cs.onSurfaceVariant,
-                  ),
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textMedium,
+              ),
             ),
           ),
           Expanded(child: Divider(color: cs.outlineVariant)),
@@ -379,7 +450,6 @@ class _MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
     final timeFmt = DateFormat('HH:mm', 'id_ID');
 
     final bgColor = isMine
@@ -426,7 +496,8 @@ class _MessageBubble extends StatelessWidget {
                   padding: const EdgeInsets.only(bottom: 3),
                   child: Text(
                     message.senderName,
-                    style: tt.labelSmall?.copyWith(
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 11,
                       color: AppColors.primaryDarkGreen,
                       fontWeight: FontWeight.w700,
                     ),
@@ -434,7 +505,12 @@ class _MessageBubble extends StatelessWidget {
                 ),
               Text(
                 message.body,
-                style: tt.bodyMedium?.copyWith(color: textColor),
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  height: 1.4,
+                  color: textColor,
+                ),
               ),
               const SizedBox(height: 3),
               Row(
@@ -442,9 +518,10 @@ class _MessageBubble extends StatelessWidget {
                 children: [
                   Text(
                     timeFmt.format(message.sentAt.toLocal()),
-                    style: tt.labelSmall?.copyWith(
+                    style: GoogleFonts.plusJakartaSans(
                       color: timeColor,
                       fontSize: 10,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   if (isMine) ...[
@@ -490,11 +567,22 @@ class _InputBar extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: cs.surface,
-        border: Border(top: BorderSide(color: cs.outlineVariant)),
+        color: Colors.white,
+        border: Border(
+          top: BorderSide(
+            color: cs.outlineVariant.withValues(alpha: 0.35),
+          ),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, -2),
+          ),
+        ],
       ),
       padding: EdgeInsets.fromLTRB(
-          12, 8, 12, 8 + MediaQuery.of(context).viewInsets.bottom),
+          16, 10, 16, 10 + MediaQuery.of(context).viewInsets.bottom),
       child: SafeArea(
         top: false,
         child: Row(
@@ -507,26 +595,42 @@ class _InputBar extends StatelessWidget {
                 maxLines: 4,
                 minLines: 1,
                 textCapitalization: TextCapitalization.sentences,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textDark,
+                ),
                 onChanged: (_) => onChanged?.call(),
                 decoration: InputDecoration(
                   hintText: 'Tulis pesan…',
-                  hintStyle: TextStyle(color: cs.onSurfaceVariant),
+                  hintStyle: GoogleFonts.plusJakartaSans(
+                    color: AppColors.textMedium,
+                    fontWeight: FontWeight.w500,
+                  ),
                   contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 10),
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   filled: true,
-                  fillColor: cs.surfaceContainerLow,
+                  fillColor: const Color(0xFFF8FAFB),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: BorderSide.none,
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(
+                      color: AppColors.divider.withValues(alpha: 0.45),
+                    ),
                   ),
                   enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: BorderSide.none,
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(
+                      color: AppColors.divider.withValues(alpha: 0.45),
+                    ),
                   ),
                   focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: BorderSide(
-                        color: AppColors.primaryDarkGreen, width: 1.5),
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(
+                      color: AppColors.primaryDarkGreen,
+                      width: 1.5,
+                    ),
                   ),
                 ),
                 onSubmitted: (_) => onSend(),
@@ -539,7 +643,10 @@ class _InputBar extends StatelessWidget {
                     height: 42,
                     child: Padding(
                       padding: EdgeInsets.all(9),
-                      child: CircularProgressIndicator(strokeWidth: 2.5),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: AppColors.primaryDarkGreen,
+                      ),
                     ),
                   )
                 : IconButton.filled(

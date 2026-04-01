@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../config/colors.dart';
+import '../../../../core/widgets/offline_banner.dart';
 import '../../data/providers/chat_provider.dart';
 import '../../domain/models/chat_thread_preview.dart';
 import '../../../home/presentation/widgets/bottom_nav_bar.dart';
@@ -34,17 +36,27 @@ class _ChatInboxPageState extends ConsumerState<ChatInboxPage> {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: cs.surfaceContainerLowest,
+      backgroundColor: const Color(0xFFF8FAFB),
       appBar: AppBar(
-        backgroundColor: AppColors.primaryDarkGreen,
-        foregroundColor: Colors.white,
-        title: const Text(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text(
           'Pesan',
-          style: TextStyle(fontWeight: FontWeight.w700),
+          style: GoogleFonts.plusJakartaSans(
+            fontWeight: FontWeight.w700,
+            fontSize: 18,
+            color: AppColors.textDark,
+          ),
         ),
         centerTitle: false,
-        elevation: 0,
-        // Unread badge in title area
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Divider(
+            height: 1,
+            color: cs.outlineVariant.withValues(alpha: 0.35),
+          ),
+        ),
         actions: [
           if (state.totalUnread > 0)
             Padding(
@@ -55,7 +67,12 @@ class _ChatInboxPageState extends ConsumerState<ChatInboxPage> {
             ),
         ],
       ),
-      body: _Body(state: state),
+      body: Column(
+        children: [
+          const OfflineBanner(),
+          Expanded(child: _Body(state: state)),
+        ],
+      ),
       bottomNavigationBar: const BottomNavBar(currentRoute: '/chat'),
     );
   }
@@ -92,9 +109,9 @@ class _Body extends ConsumerWidget {
       onRefresh: () => ref.read(chatInboxProvider.notifier).load(),
       child: ListView.separated(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
         itemCount: state.threads.length,
-        separatorBuilder: (_, __) => const Divider(height: 1, indent: 72),
+        separatorBuilder: (_, __) => const SizedBox(height: 10),
         itemBuilder: (context, index) {
           return _ThreadTile(thread: state.threads[index]);
         },
@@ -115,59 +132,73 @@ class _ThreadTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
     final hasUnread = thread.unreadCount > 0;
 
-    return InkWell(
-      onTap: () => context.push(
-        '/jobs/applications/${thread.applicationId}/chat',
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Avatar ────────────────────────────────────────────────
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                CircleAvatar(
-                  radius: 24,
-                  backgroundColor: AppColors.secondaryLightGreen,
-                  child: const Icon(
-                    Icons.support_agent_rounded,
-                    color: AppColors.primaryDarkGreen,
-                    size: 26,
-                  ),
-                ),
-                if (hasUnread)
-                  Positioned(
-                    right: -2,
-                    top: -2,
-                    child: _Badge(count: thread.unreadCount),
-                  ),
-              ],
+    return Material(
+      color: Colors.white,
+      elevation: 0,
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.hardEdge,
+      child: InkWell(
+        onTap: () => context.push(
+          '/jobs/applications/${thread.applicationId}/chat',
+        ),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppColors.divider.withValues(alpha: 0.35),
             ),
-            const SizedBox(width: 12),
-
-            // ── Main content ───────────────────────────────────────────
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
                 children: [
-                  // Job title + time
-                  Row(
-                    children: [
+                  CircleAvatar(
+                    radius: 24,
+                    backgroundColor: AppColors.secondaryLightGreen,
+                    child: const Icon(
+                      Icons.support_agent_rounded,
+                      color: AppColors.primaryDarkGreen,
+                      size: 26,
+                    ),
+                  ),
+                  if (hasUnread)
+                    Positioned(
+                      right: -2,
+                      top: -2,
+                      child: _Badge(count: thread.unreadCount),
+                    ),
+                ],
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
                       Expanded(
                         child: Text(
                           thread.jobTitle.isEmpty
                               ? 'Lamaran #${thread.applicationId}'
                               : thread.jobTitle,
-                          style: tt.bodyMedium?.copyWith(
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 14,
                             fontWeight: hasUnread
-                                ? FontWeight.w700
-                                : FontWeight.w600,
-                            color: cs.onSurface,
+                                ? FontWeight.w800
+                                : FontWeight.w700,
+                            color: AppColors.textDark,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -176,23 +207,22 @@ class _ThreadTile extends StatelessWidget {
                       const SizedBox(width: 8),
                       Text(
                         _formatTime(thread.updatedAt),
-                        style: tt.labelSmall?.copyWith(
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 11,
+                          fontWeight: hasUnread
+                              ? FontWeight.w700
+                              : FontWeight.w600,
                           color: hasUnread
                               ? AppColors.primaryDarkGreen
-                              : cs.onSurfaceVariant,
-                          fontWeight: hasUnread
-                              ? FontWeight.w600
-                              : FontWeight.normal,
+                              : AppColors.textMedium,
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-
-                  // Last message preview + closed tag
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
                       Expanded(
                         child: _LastMessagePreview(
                           lastMessage: thread.lastMessage,
@@ -210,19 +240,21 @@ class _ThreadTile extends StatelessWidget {
                           ),
                           child: Text(
                             'Ditutup',
-                            style: tt.labelSmall?.copyWith(
-                              color: cs.onSurfaceVariant,
+                            style: GoogleFonts.plusJakartaSans(
+                              color: AppColors.textMedium,
                               fontSize: 10,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
                       ],
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -261,28 +293,29 @@ class _LastMessagePreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
 
     if (lastMessage == null) {
       return Text(
         'Belum ada pesan',
-        style: tt.bodySmall?.copyWith(
-          color: cs.onSurfaceVariant,
+        style: GoogleFonts.plusJakartaSans(
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+          color: AppColors.textMedium,
           fontStyle: FontStyle.italic,
         ),
       );
     }
 
-    // Show "Anda: ..." for messages sent by the applicant themselves
     final isOwnMessage = lastMessage!.senderRole == 'APPLICANT';
     final prefix = isOwnMessage ? 'Anda: ' : '';
 
     return Text(
       '$prefix${lastMessage!.body}',
-      style: tt.bodySmall?.copyWith(
-        color: hasUnread ? cs.onSurface : cs.onSurfaceVariant,
-        fontWeight:
-            hasUnread ? FontWeight.w500 : FontWeight.normal,
+      style: GoogleFonts.plusJakartaSans(
+        fontSize: 12,
+        fontWeight: hasUnread ? FontWeight.w600 : FontWeight.w500,
+        color: hasUnread ? cs.onSurface : AppColors.textMedium,
+        height: 1.35,
       ),
       maxLines: 2,
       overflow: TextOverflow.ellipsis,
@@ -311,7 +344,7 @@ class _Badge extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: const TextStyle(
+        style: GoogleFonts.plusJakartaSans(
           color: Colors.white,
           fontSize: 11,
           fontWeight: FontWeight.w700,
@@ -334,9 +367,9 @@ class _LoadingSkeleton extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView.separated(
       physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
       itemCount: 6,
-      separatorBuilder: (_, __) => const Divider(height: 1, indent: 72),
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
       itemBuilder: (context, _) => const _SkeletonTile(),
     );
   }
@@ -350,8 +383,15 @@ class _SkeletonTile extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final shimmerColor = cs.surfaceContainerHigh;
 
-    return Padding(
+    return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: AppColors.divider.withValues(alpha: 0.25),
+        ),
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -413,34 +453,57 @@ class _EmptyView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
 
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.chat_bubble_outline_rounded,
-              size: 72,
-              color: cs.onSurfaceVariant.withValues(alpha: 0.35),
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 36),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppColors.divider.withValues(alpha: 0.3),
             ),
-            const SizedBox(height: 16),
-            Text(
-              'Belum ada pesan',
-              style: tt.titleMedium?.copyWith(
-                color: cs.onSurface,
-                fontWeight: FontWeight.w600,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Pesan dari admin terkait lamaranmu\nakan muncul di sini.',
-              style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
-              textAlign: TextAlign.center,
-            ),
-          ],
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.chat_bubble_outline_rounded,
+                size: 56,
+                color: cs.onSurfaceVariant.withValues(alpha: 0.32),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Belum ada pesan',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textDark,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Pesan dari admin terkait lamaranmu\nakan muncul di sini.',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textMedium,
+                  height: 1.45,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -460,42 +523,75 @@ class _ErrorView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
 
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.wifi_off_rounded,
-              size: 56,
-              color: cs.onSurfaceVariant.withValues(alpha: 0.45),
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Container(
+          padding: const EdgeInsets.all(28),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppColors.divider.withValues(alpha: 0.3),
             ),
-            const SizedBox(height: 16),
-            Text(
-              'Gagal memuat pesan',
-              style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              message,
-              style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-              textAlign: TextAlign.center,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 24),
-            FilledButton.icon(
-              onPressed: onRetry,
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primaryDarkGreen,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
               ),
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Coba lagi'),
-            ),
-          ],
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.wifi_off_rounded,
+                size: 48,
+                color: AppColors.error,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Gagal memuat pesan',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textDark,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                message,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: cs.onSurface.withValues(alpha: 0.52),
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 20),
+              FilledButton.icon(
+                onPressed: onRetry,
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primaryDarkGreen,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: Text(
+                  'Coba lagi',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

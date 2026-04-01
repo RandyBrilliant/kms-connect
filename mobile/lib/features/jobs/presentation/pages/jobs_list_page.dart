@@ -3,12 +3,13 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../config/colors.dart';
 import '../../../../core/models/paginated_state.dart';
 import '../../../../core/utils/debouncer.dart';
-import '../../../../core/widgets/auth_wave_header.dart';
+import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/shimmer_loading.dart';
 import '../../../home/presentation/widgets/bottom_nav_bar.dart';
 import '../../data/providers/job_provider.dart';
@@ -59,6 +60,7 @@ class _JobsListPageState extends ConsumerState<JobsListPage>
       duration: const Duration(milliseconds: 800),
     )..forward();
     _scrollCtrl.addListener(_onScroll);
+    _searchCtrl.addListener(() => setState(() {}));
   }
 
   @override
@@ -126,15 +128,12 @@ class _JobsListPageState extends ConsumerState<JobsListPage>
     final filters = _getFilters();
     final jobsState = ref.watch(paginatedJobsProvider(filters));
     final cs = Theme.of(context).colorScheme;
-    final size = MediaQuery.sizeOf(context);
-
-    final headerH = math.max(size.height * 0.22, 180.0);
 
     return Scaffold(
-      backgroundColor: cs.surfaceContainerLowest,
+      backgroundColor: const Color(0xFFF8FAFB),
       body: Column(
         children: [
-          // ── Scrollable content ───────────────────────────────────────
+          const OfflineBanner(),
           Expanded(
             child: RefreshIndicator(
               onRefresh: () async {
@@ -149,11 +148,9 @@ class _JobsListPageState extends ConsumerState<JobsListPage>
                   parent: BouncingScrollPhysics(),
                 ),
               slivers: [
-                // ── Hero wave header ──────────────────────────────────
                 SliverToBoxAdapter(
                   child: _animated(
-                    _HeroHeader(
-                      headerHeight: headerH,
+                    _JobsProfessionalHeader(
                       onMyApplicationsTap: () =>
                           context.push('/jobs/my-applications'),
                     ),
@@ -284,12 +281,14 @@ class _JobsContent extends StatelessWidget {
               padding: const EdgeInsets.only(top: 8, bottom: 4),
               child: Text(
                 'Semua lowongan telah dimuat',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withValues(alpha: 0.4),
-                    ),
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.42),
+                ),
               ),
             ),
         ],
@@ -300,101 +299,114 @@ class _JobsContent extends StatelessWidget {
 
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Hero Header
+// Professional header (aligned with Berita / Beranda)
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _HeroHeader extends StatelessWidget {
-  const _HeroHeader({
-    required this.headerHeight,
-    required this.onMyApplicationsTap,
-  });
+class _JobsProfessionalHeader extends StatelessWidget {
+  const _JobsProfessionalHeader({required this.onMyApplicationsTap});
 
-  final double headerHeight;
   final VoidCallback onMyApplicationsTap;
 
   @override
   Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
     final topPad = MediaQuery.paddingOf(context).top;
+    final cs = Theme.of(context).colorScheme;
 
-    return SizedBox(
-      height: headerHeight + topPad,
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: AuthWaveHeader(height: headerHeight + topPad),
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          bottom: BorderSide(
+            color: cs.outlineVariant.withValues(alpha: 0.35),
+            width: 1,
           ),
-          Padding(
-            padding: EdgeInsets.fromLTRB(20, topPad + 14, 20, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Top row: icon + title + action button
-                Row(
-                  children: [
-                    Container(
-                      width: 46,
-                      height: 46,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withValues(alpha: 0.18),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.38),
-                          width: 1.5,
-                        ),
-                      ),
-                      child: const Icon(Icons.work_rounded,
-                          color: Colors.white, size: 24),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Lowongan Kerja',
-                        style: tt.titleMedium
-                            ?.copyWith(color: Colors.white, height: 1.2),
-                      ),
-                    ),
-                    // "Lamaranku" ghost button
-                    OutlinedButton.icon(
-                      onPressed: onMyApplicationsTap,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: BorderSide(
-                            color: Colors.white.withValues(alpha: 0.55),
-                            width: 1.2),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                      ),
-                      icon: const Icon(Icons.assignment_outlined, size: 16),
-                      label: Text(
-                        'Lamaranku',
-                        style: tt.labelMedium?.copyWith(color: Colors.white),
-                      ),
-                    ),
-                  ],
-                ),
-
-                const Spacer(),
-
-                // Big title
-                Text(
-                  'Temukan\nPekerjaan Impianmu',
-                  style: tt.headlineMedium?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    height: 1.2,
-                  ),
-                ),
-
-                const SizedBox(height: 28),
-              ],
-            ),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
+      ),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(20, topPad + 16, 20, 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 4,
+                  height: 26,
+                  margin: const EdgeInsets.only(top: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryDarkGreen,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Lowongan Kerja',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textDark,
+                          letterSpacing: -0.35,
+                          height: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Temukan pekerjaan yang sesuai dengan profil Anda',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.textMedium,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  onPressed: onMyApplicationsTap,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primaryDarkGreen,
+                    side: BorderSide(
+                      color: AppColors.primaryDarkGreen.withValues(alpha: 0.55),
+                      width: 1.2,
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  icon: const Icon(Icons.assignment_outlined, size: 16),
+                  label: Text(
+                    'Lamaranku',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -426,81 +438,90 @@ class _SearchFilterBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Search field
-          Container(
-            decoration: BoxDecoration(
-              color: cs.surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: cs.outlineVariant, width: 1),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
+          TextField(
+            controller: searchCtrl,
+            focusNode: searchFocus,
+            textInputAction: TextInputAction.search,
+            onChanged: onSearchChanged,
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  fontWeight: FontWeight.w500,
                 ),
-              ],
-            ),
-            child: TextField(
-              controller: searchCtrl,
-              focusNode: searchFocus,
-              textInputAction: TextInputAction.search,
-              onChanged: onSearchChanged,
-              style: tt.bodyLarge,
-              decoration: InputDecoration(
-                hintText: 'Cari jabatan, perusahaan…',
-                hintStyle: tt.bodyLarge?.copyWith(
-                  color: cs.onSurfaceVariant,
+            decoration: InputDecoration(
+              hintText: 'Cari jabatan, perusahaan…',
+              hintStyle: GoogleFonts.plusJakartaSans(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: cs.onSurface.withValues(alpha: 0.42),
+              ),
+              prefixIcon: Icon(
+                Icons.search_rounded,
+                size: 22,
+                color: AppColors.primaryDarkGreen.withValues(alpha: 0.85),
+              ),
+              suffixIcon: searchCtrl.text.isNotEmpty
+                  ? IconButton(
+                      icon: Icon(
+                        Icons.close_rounded,
+                        size: 20,
+                        color: cs.onSurfaceVariant,
+                      ),
+                      onPressed: onSearchCleared,
+                    )
+                  : null,
+              filled: true,
+              fillColor: const Color(0xFFF8FAFB),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 14,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: cs.outlineVariant),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: cs.outlineVariant),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(
+                  color: AppColors.primaryDarkGreen,
+                  width: 1.6,
                 ),
-                prefixIcon: Icon(Icons.search_rounded,
-                    color: cs.onSurfaceVariant, size: 22),
-                suffixIcon: searchCtrl.text.isNotEmpty
-                    ? IconButton(
-                        icon: Icon(Icons.close_rounded,
-                            color: cs.onSurfaceVariant, size: 20),
-                        onPressed: onSearchCleared,
-                      )
-                    : null,
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 14),
               ),
             ),
           ),
-
-          const SizedBox(height: 12),
-
-          // Filter chips
+          const SizedBox(height: 14),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                // "Semua" chip
                 Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: FilterChip(
-                    label: const Text('Semua'),
+                    label: Text(
+                      'Semua',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 12,
+                        fontWeight: selectedType == null
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                        color: selectedType == null
+                            ? AppColors.primaryDarkGreen
+                            : cs.onSurfaceVariant,
+                      ),
+                    ),
                     selected: selectedType == null,
                     onSelected: (_) => onTypeSelected(null),
                     selectedColor:
                         AppColors.primaryDarkGreen.withValues(alpha: 0.12),
                     checkmarkColor: AppColors.primaryDarkGreen,
-                    labelStyle: tt.labelMedium?.copyWith(
-                      color: selectedType == null
-                          ? AppColors.primaryDarkGreen
-                          : cs.onSurfaceVariant,
-                      fontWeight: selectedType == null
-                          ? FontWeight.w700
-                          : FontWeight.w500,
-                    ),
                     showCheckmark: false,
                     side: BorderSide(
                       color: selectedType == null
@@ -508,28 +529,32 @@ class _SearchFilterBar extends StatelessWidget {
                           : cs.outlineVariant,
                     ),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
                 for (final c in typeChips)
                   Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: FilterChip(
-                      label: Text(c.label),
+                      label: Text(
+                        c.label,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 12,
+                          fontWeight: selectedType == c.value
+                              ? FontWeight.w700
+                              : FontWeight.w500,
+                          color: selectedType == c.value
+                              ? AppColors.primaryDarkGreen
+                              : cs.onSurfaceVariant,
+                        ),
+                      ),
                       selected: selectedType == c.value,
                       onSelected: (sel) =>
                           onTypeSelected(sel ? c.value : null),
                       selectedColor:
                           AppColors.primaryDarkGreen.withValues(alpha: 0.12),
                       checkmarkColor: AppColors.primaryDarkGreen,
-                      labelStyle: tt.labelMedium?.copyWith(
-                        color: selectedType == c.value
-                            ? AppColors.primaryDarkGreen
-                            : cs.onSurfaceVariant,
-                        fontWeight: selectedType == c.value
-                            ? FontWeight.w700
-                            : FontWeight.w500,
-                      ),
                       showCheckmark: false,
                       side: BorderSide(
                         color: selectedType == c.value
@@ -538,7 +563,8 @@ class _SearchFilterBar extends StatelessWidget {
                             : cs.outlineVariant,
                       ),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
               ],
@@ -580,27 +606,41 @@ class _JobCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── Top row: avatar + title + arrow ─────────────────────
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: AppColors.divider.withValues(alpha: 0.3),
+                width: 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Company initial avatar
                   Container(
-                    width: 46,
-                    height: 46,
+                    width: 48,
+                    height: 48,
                     decoration: BoxDecoration(
                       color: AppColors.primaryDarkGreen
                           .withValues(alpha: 0.10),
@@ -609,47 +649,59 @@ class _JobCard extends StatelessWidget {
                     child: Center(
                       child: Text(
                         _initials,
-                        style: tt.titleSmall?.copyWith(
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 15,
                           color: AppColors.primaryDarkGreen,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           job.title,
-                          style: tt.titleSmall?.copyWith(
-                            color: cs.onSurface,
-                            height: 1.3,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textDark,
+                            height: 1.35,
                           ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        const SizedBox(height: 2),
+                        const SizedBox(height: 4),
                         Text(
                           job.companyName,
-                          style: tt.bodySmall
-                              ?.copyWith(color: cs.onSurfaceVariant),
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.textMedium,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Icon(Icons.chevron_right_rounded,
-                      color: cs.onSurfaceVariant, size: 20),
+                  const SizedBox(width: 6),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: cs.onSurfaceVariant,
+                    size: 22,
+                  ),
                 ],
               ),
 
-              const SizedBox(height: 12),
-              Divider(color: cs.outlineVariant, height: 1),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
+              Divider(
+                height: 1,
+                color: cs.outlineVariant.withValues(alpha: 0.45),
+              ),
+              const SizedBox(height: 14),
 
               // ── Meta row: location + type chip ───────────────────────
               Wrap(
@@ -691,15 +743,16 @@ class _JobCard extends StatelessWidget {
                       _deadlinePassed
                           ? 'Sudah berakhir · ${DateFormat('dd MMM', 'id_ID').format(job.deadline!)}'
                           : 'Deadline ${DateFormat('dd MMM yyyy', 'id_ID').format(job.deadline!)}',
-                      style: tt.labelSmall?.copyWith(
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 11,
+                        fontWeight: (_deadlinePassed || _deadlineSoon)
+                            ? FontWeight.w700
+                            : FontWeight.w500,
                         color: _deadlinePassed
                             ? AppColors.error
                             : _deadlineSoon
                                 ? AppColors.warning
                                 : cs.onSurfaceVariant,
-                        fontWeight: (_deadlinePassed || _deadlineSoon)
-                            ? FontWeight.w700
-                            : FontWeight.w500,
                       ),
                     ),
                   ],
@@ -709,6 +762,7 @@ class _JobCard extends StatelessWidget {
           ),
         ),
       ),
+    ),
     );
   }
 }
@@ -726,23 +780,28 @@ class _MetaChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
+        color: const Color(0xFFF8FAFB),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: cs.outlineVariant.withValues(alpha: 0.55),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 13, color: cs.onSurfaceVariant),
-          const SizedBox(width: 4),
+          Icon(icon, size: 14, color: cs.onSurfaceVariant),
+          const SizedBox(width: 5),
           Text(
             label,
-            style:
-                tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textMedium,
+            ),
           ),
         ],
       ),
@@ -757,19 +816,21 @@ class _TypeBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: AppColors.primaryDarkGreen.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: AppColors.primaryDarkGreen.withValues(alpha: 0.22),
+        ),
       ),
       child: Text(
         label,
-        style: tt.labelSmall?.copyWith(
-          color: AppColors.primaryDarkGreen,
+        style: GoogleFonts.plusJakartaSans(
+          fontSize: 11,
           fontWeight: FontWeight.w700,
+          color: AppColors.primaryDarkGreen,
         ),
       ),
     );
@@ -785,21 +846,59 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
 
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(Icons.work_off_rounded, size: 64,
-            color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
-        const SizedBox(height: 16),
-        Text('Tidak ada lowongan ditemukan',
-            style: tt.titleMedium?.copyWith(color: cs.onSurfaceVariant)),
-        const SizedBox(height: 6),
-        Text('Coba ubah filter pencarianmu',
-            style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
-      ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 36),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppColors.divider.withValues(alpha: 0.3),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.work_off_rounded,
+                size: 56,
+                color: cs.onSurfaceVariant.withValues(alpha: 0.35),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Tidak ada lowongan',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textDark,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Coba ubah kata kunci atau filter jenis pekerjaan',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textMedium,
+                  height: 1.45,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -812,32 +911,78 @@ class _ErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
 
     return Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.cloud_off_rounded, size: 56,
-              color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
-          const SizedBox(height: 16),
-          Text('Gagal memuat lowongan',
-              style: tt.titleMedium?.copyWith(color: cs.onSurface)),
-          const SizedBox(height: 6),
-          Text(message,
-              style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-              textAlign: TextAlign.center,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis),
-          const SizedBox(height: 20),
-          FilledButton.icon(
-            onPressed: onRetry,
-            icon: const Icon(Icons.refresh_rounded, size: 18),
-            label: const Text('Coba Lagi'),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.all(28),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppColors.divider.withValues(alpha: 0.3),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-        ],
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.cloud_off_rounded,
+                size: 52,
+                color: cs.onSurfaceVariant.withValues(alpha: 0.4),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Gagal memuat lowongan',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textDark,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                message,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: cs.onSurface.withValues(alpha: 0.52),
+                  height: 1.4,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 22),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primaryDarkGreen,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: Text(
+                  'Coba Lagi',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

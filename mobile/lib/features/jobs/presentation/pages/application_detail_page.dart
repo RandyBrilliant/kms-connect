@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../config/colors.dart';
@@ -94,32 +95,81 @@ class _ApplicationDetailPageState
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: cs.surfaceContainerLowest,
+      backgroundColor: const Color(0xFFF8FAFB),
       body: applicationAsync.when(
         data: (application) => _buildContent(context, application),
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Center(
+          child: CircularProgressIndicator(
+            color: AppColors.primaryDarkGreen,
+            strokeWidth: 2.5,
+          ),
+        ),
         error: (error, _) => Center(
           child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.error_outline, size: 48, color: AppColors.error),
-                const SizedBox(height: 16),
-                Text('$error',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium),
-                const SizedBox(height: 16),
-                FilledButton.icon(
-                  onPressed: () =>
-                      ref.invalidate(applicationDetailProvider(widget.applicationId)),
-                  icon: const Icon(Icons.refresh_rounded, size: 18),
-                  label: const Text('Coba Lagi'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.primaryDarkGreen,
-                  ),
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Container(
+              padding: const EdgeInsets.all(28),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: AppColors.divider.withValues(alpha: 0.3),
                 ),
-              ],
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.04),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.wifi_off_rounded, size: 48, color: AppColors.error),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Gagal memuat detail lamaran',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textDark,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '$error',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: cs.onSurface.withValues(alpha: 0.52),
+                    ),
+                    maxLines: 4,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 20),
+                  FilledButton.icon(
+                    onPressed: () => ref.invalidate(
+                      applicationDetailProvider(widget.applicationId),
+                    ),
+                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                    label: Text(
+                      'Coba Lagi',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primaryDarkGreen,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -140,7 +190,7 @@ class _ApplicationDetailPageState
             child: FadeTransition(
               opacity: _animCtrl,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 20, 16, 80),
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 80),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -179,8 +229,6 @@ class _ApplicationDetailPageState
 
   SliverAppBar _buildSliverHeader(
       BuildContext context, JobApplication application) {
-    final tt = Theme.of(context).textTheme;
-
     return SliverAppBar(
       expandedHeight: 220,
       pinned: true,
@@ -188,7 +236,7 @@ class _ApplicationDetailPageState
         icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
         onPressed: () => context.pop(),
       ),
-      backgroundColor: AppColors.primaryDarkGreen,
+      backgroundColor: const Color(0xFF075B31),
       flexibleSpace: FlexibleSpaceBar(
         collapseMode: CollapseMode.parallax,
         background: FadeTransition(
@@ -199,9 +247,10 @@ class _ApplicationDetailPageState
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Color(0xFF1B4D27),
-                  Color(0xFF2B6E36),
-                  Color(0xFF3A7D44),
+                  Color(0xFF075B31),
+                  Color(0xFF0A7A43),
+                  Color(0xFF0E8E50),
+                  Color(0xFF149E5D),
                 ],
               ),
             ),
@@ -214,19 +263,23 @@ class _ApplicationDetailPageState
                   children: [
                     Text(
                       application.jobTitle ?? 'Detail Lamaran',
-                      style: tt.headlineSmall?.copyWith(
-                        color: Colors.white,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 22,
                         fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                        height: 1.25,
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                     if (application.companyName != null) ...[
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 6),
                       Text(
                         application.companyName!,
-                        style: tt.bodyMedium?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.85),
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white.withValues(alpha: 0.88),
                         ),
                       ),
                     ],
@@ -260,19 +313,26 @@ class _InfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final fmt = DateFormat('dd MMMM yyyy', 'id_ID');
     final fmtDt = DateFormat('dd MMM yyyy, HH:mm', 'id_ID');
 
-    return Card(
-      elevation: 0,
-      color: cs.surface,
-      shape: RoundedRectangleBorder(
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: cs.outlineVariant),
+        border: Border.all(
+          color: AppColors.divider.withValues(alpha: 0.35),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(18),
         child: Column(
           children: [
             _InfoRow(
@@ -397,30 +457,41 @@ class _InfoCard extends StatelessWidget {
                             strokeWidth: 2, color: Colors.white),
                       )
                     : const Icon(Icons.how_to_reg_outlined, size: 16),
-                label: Text(isConfirming
-                    ? 'Mengkonfirmasi...'
-                    : 'Konfirmasi Kehadiran'),
+                label: Text(
+                  isConfirming
+                      ? 'Mengkonfirmasi...'
+                      : 'Konfirmasi Kehadiran',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
                 style: FilledButton.styleFrom(
                   backgroundColor: const Color(0xFF17A2B8),
                   minimumSize: const Size.fromHeight(44),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
               const SizedBox(height: 8),
             ],
-            // Chat button — only available from DITERIMA onwards
             if (_kChatAllowedStatuses.contains(application.status))
               FilledButton.icon(
                 onPressed: () => context.push(
                     '/jobs/applications/${application.id}/chat'),
                 icon: const Icon(Icons.chat_bubble_outline_rounded, size: 16),
-                label: const Text('Chat dengan Admin'),
+                label: Text(
+                  'Chat dengan Admin',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.primaryDarkGreen,
                   minimumSize: const Size.fromHeight(44),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
           ],
@@ -443,9 +514,6 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    final cs = Theme.of(context).colorScheme;
-
     return Row(
       children: [
         Icon(icon, size: 18, color: AppColors.primaryDarkGreen),
@@ -454,14 +522,24 @@ class _InfoRow extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label,
-                  style: tt.labelSmall?.copyWith(
-                    color: cs.onSurfaceVariant,
-                  )),
-              Text(value,
-                  style: tt.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  )),
+              Text(
+                label,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textMedium,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textDark,
+                  height: 1.35,
+                ),
+              ),
             ],
           ),
         ),
@@ -481,12 +559,26 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      title,
-      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w700,
+    return Row(
+      children: [
+        Container(
+          width: 4,
+          height: 18,
+          decoration: BoxDecoration(
             color: AppColors.primaryDarkGreen,
+            borderRadius: BorderRadius.circular(2),
           ),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          title,
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 15,
+            fontWeight: FontWeight.w800,
+            color: AppColors.textDark,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -525,7 +617,6 @@ class _TimelineItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
     final fmt = DateFormat('dd MMM yyyy, HH:mm', 'id_ID');
 
     // Determine dot color from status
@@ -561,7 +652,7 @@ class _TimelineItem extends StatelessWidget {
                   Expanded(
                     child: Container(
                       width: 2,
-                      color: cs.outlineVariant,
+                      color: AppColors.divider.withValues(alpha: 0.45),
                     ),
                   ),
               ],
@@ -573,54 +664,75 @@ class _TimelineItem extends StatelessWidget {
             child: Padding(
               padding: EdgeInsets.only(
                   left: 10, bottom: isLast ? 0 : 12),
-              child: Card(
-                elevation: 0,
-                color: cs.surfaceContainerLow,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: cs.outlineVariant),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: AppColors.divider.withValues(alpha: 0.35),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(14),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         item.toStatusDisplay,
-                        style: tt.labelLarge?.copyWith(
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 14,
                           fontWeight: FontWeight.w700,
                           color: dotColor,
                         ),
                       ),
-                      const SizedBox(height: 3),
+                      const SizedBox(height: 4),
                       Text(
                         fmt.format(item.changedAt),
-                        style: tt.labelSmall?.copyWith(
-                          color: cs.onSurfaceVariant,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.textMedium,
                         ),
                       ),
                       if (item.changedByName != null) ...[
                         const SizedBox(height: 2),
                         Text(
                           'oleh ${item.changedByName}',
-                          style: tt.labelSmall?.copyWith(
-                            color: cs.onSurfaceVariant,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.textMedium,
                           ),
                         ),
                       ],
                       if (item.note != null &&
                           item.note!.isNotEmpty) ...[
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 8),
                         Container(
                           width: double.infinity,
-                          padding: const EdgeInsets.all(8),
+                          padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: cs.surfaceContainerHighest,
-                            borderRadius: BorderRadius.circular(8),
+                            color: const Color(0xFFF8FAFB),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: cs.outlineVariant.withValues(alpha: 0.35),
+                            ),
                           ),
                           child: Text(
                             item.note!,
-                            style: tt.bodySmall,
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              height: 1.4,
+                              color: AppColors.textDark,
+                            ),
                           ),
                         ),
                       ],
@@ -647,21 +759,20 @@ class _StatusPillLarge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = application.statusColor;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.18),
+        color: Colors.white.withValues(alpha: 0.22),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.45)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.45)),
       ),
       child: Text(
         application.statusDisplay,
-        style: TextStyle(
+        style: GoogleFonts.plusJakartaSans(
           color: Colors.white,
           fontWeight: FontWeight.w700,
           fontSize: 12,
-          letterSpacing: 0.3,
+          letterSpacing: 0.2,
         ),
       ),
     );
@@ -681,25 +792,34 @@ class _AnnouncementsSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final annoAsync = ref.watch(applicationAnnouncementsProvider(applicationId));
     final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
     final fmt = DateFormat('dd MMM yyyy, HH:mm', 'id_ID');
 
     return annoAsync.when(
       loading: () => const Center(
         child: Padding(
           padding: EdgeInsets.symmetric(vertical: 16),
-          child: CircularProgressIndicator(strokeWidth: 2),
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: AppColors.primaryDarkGreen,
+          ),
         ),
       ),
       error: (_, __) => Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: cs.errorContainer,
-          borderRadius: BorderRadius.circular(12),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: AppColors.error.withValues(alpha: 0.35),
+          ),
         ),
         child: Text(
           'Gagal memuat pengumuman.',
-          style: tt.bodySmall?.copyWith(color: cs.onErrorContainer),
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: cs.error,
+          ),
         ),
       ),
       data: (announcements) {
@@ -707,18 +827,29 @@ class _AnnouncementsSection extends ConsumerWidget {
           return Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: cs.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: cs.outlineVariant),
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: AppColors.divider.withValues(alpha: 0.35),
+              ),
             ),
             child: Row(
               children: [
-                Icon(Icons.notifications_none_rounded,
-                    size: 18, color: cs.onSurfaceVariant),
+                Icon(
+                  Icons.notifications_none_rounded,
+                  size: 20,
+                  color: AppColors.textMedium.withValues(alpha: 0.7),
+                ),
                 const SizedBox(width: 10),
-                Text(
-                  'Belum ada pengumuman dari admin.',
-                  style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                Expanded(
+                  child: Text(
+                    'Belum ada pengumuman dari admin.',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.textMedium,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -749,15 +880,22 @@ class _AnnouncementCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
 
-    return Card(
-      elevation: 0,
-      color: cs.surfaceContainerLow,
-      margin: const EdgeInsets.only(bottom: 8),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: cs.outlineVariant),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: AppColors.divider.withValues(alpha: 0.35),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -770,14 +908,19 @@ class _AnnouncementCard extends StatelessWidget {
                 Expanded(
                   child: Row(
                     children: [
-                      Icon(Icons.notifications_active_outlined,
-                          size: 16, color: AppColors.primaryDarkGreen),
-                      const SizedBox(width: 6),
+                      Icon(
+                        Icons.notifications_active_outlined,
+                        size: 18,
+                        color: AppColors.primaryDarkGreen,
+                      ),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           announcement.title,
-                          style: tt.labelLarge?.copyWith(
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 14,
                             fontWeight: FontWeight.w700,
+                            color: AppColors.textDark,
                           ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
@@ -788,8 +931,10 @@ class _AnnouncementCard extends StatelessWidget {
                 ),
                 Text(
                   fmt.format(announcement.createdAt),
-                  style: tt.labelSmall?.copyWith(
-                    color: cs.onSurfaceVariant,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textMedium,
                   ),
                 ),
               ],
@@ -797,7 +942,9 @@ class _AnnouncementCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               announcement.body,
-              style: tt.bodySmall?.copyWith(
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
                 color: cs.onSurface,
                 height: 1.5,
               ),
@@ -806,7 +953,11 @@ class _AnnouncementCard extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 'oleh ${announcement.createdByName}',
-                style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textMedium,
+                ),
               ),
             ],
           ],
