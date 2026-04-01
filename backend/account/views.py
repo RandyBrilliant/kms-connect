@@ -238,15 +238,23 @@ class NotificationPreferenceView(APIView):
     def get(self, request):
         pref = self._get_or_create_pref(request.user)
         serializer = NotificationPreferenceSerializer(pref)
-        return success_response(serializer.data)
+        return Response(success_response(data=serializer.data))
 
     def patch(self, request):
         pref = self._get_or_create_pref(request.user)
         serializer = NotificationPreferenceSerializer(pref, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
-            return success_response(serializer.data)
-        return error_response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(success_response(data=serializer.data))
+        return Response(
+            error_response(
+                ApiMessage.VALIDATION_ERROR,
+                ApiCode.VALIDATION_ERROR,
+                errors=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST,
+            ),
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
 
 # ---------------------------------------------------------------------------

@@ -131,7 +131,9 @@ api.interceptors.response.use(
       // Replay the original request
       return api(originalRequest)
     } catch (refreshError) {
-      // Refresh failed → session truly expired      isSessionDead = true      processQueue(refreshError as AxiosError)
+      // Refresh failed → session truly expired
+      isSessionDead = true
+      processQueue(refreshError as AxiosError)
       getOnUnauthorized()?.()
       return Promise.reject(refreshError)
     } finally {

@@ -20,6 +20,8 @@ class ApiCode:
     PERMISSION_DENIED = "permission_denied"
     METHOD_NOT_ALLOWED = "method_not_allowed"
     INTERNAL_ERROR = "internal_error"
+    # Alias for legacy / verbose naming (same client contract as internal_error)
+    SERVER_ERROR = INTERNAL_ERROR
 
     # Akun / status
     DELETE_NOT_ALLOWED = "delete_not_allowed"

@@ -75,7 +75,7 @@ class _ChatThreadPageState extends ConsumerState<ChatThreadPage> {
           });
           // Clear typing indicator when a message arrives
           _clearTyping();
-          Future.delayed(const Duration(milliseconds: 150), _scrollToBottom);
+          _scheduleScrollToBottom();
 
           // Auto mark as read if the message is from the other side
           if (message.senderRole != 'APPLICANT') {
@@ -161,6 +161,7 @@ class _ChatThreadPageState extends ConsumerState<ChatThreadPage> {
       }
 
       await Future.delayed(const Duration(milliseconds: 250));
+      if (!mounted) return;
       _scrollToBottom();
     } catch (e) {
       if (mounted) {
@@ -177,13 +178,19 @@ class _ChatThreadPageState extends ConsumerState<ChatThreadPage> {
   }
 
   void _scrollToBottom() {
-    if (_scrollCtrl.hasClients) {
-      _scrollCtrl.animateTo(
-        _scrollCtrl.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
-    }
+    if (!mounted || !_scrollCtrl.hasClients) return;
+    _scrollCtrl.animateTo(
+      _scrollCtrl.position.maxScrollExtent,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+    );
+  }
+
+  void _scheduleScrollToBottom() {
+    Future.delayed(const Duration(milliseconds: 150), () {
+      if (!mounted) return;
+      _scrollToBottom();
+    });
   }
 
   @override
@@ -200,7 +207,7 @@ class _ChatThreadPageState extends ConsumerState<ChatThreadPage> {
             _messages = data;
             _initialLoaded = true;
           });
-          Future.delayed(const Duration(milliseconds: 150), _scrollToBottom);
+          _scheduleScrollToBottom();
         }
       });
     });

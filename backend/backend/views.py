@@ -1,6 +1,7 @@
 """
 Minimal views for backend (e.g. health check for Docker/load balancer).
 """
+from django.conf import settings
 from django.http import JsonResponse
 from django.db import connection
 from django.core.cache import cache
@@ -23,7 +24,7 @@ def health(request):
             cursor.execute("SELECT 1")
         checks["database"] = "ok"
     except Exception as e:
-        checks["database"] = str(e)
+        checks["database"] = str(e) if settings.DEBUG else "unavailable"
         failed = True
 
     # Cache (Redis when CELERY_BROKER_URL is redis) – optional; don't fail if cache is down
@@ -34,7 +35,7 @@ def health(request):
         else:
             checks["cache"] = "miss"
     except Exception as e:
-        checks["cache"] = str(e)
+        checks["cache"] = str(e) if settings.DEBUG else "unavailable"
 
     result["checks"] = checks
     if failed:

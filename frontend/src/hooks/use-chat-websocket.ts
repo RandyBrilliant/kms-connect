@@ -9,6 +9,7 @@
 
 import { useEffect, useRef, useCallback, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
+import { env } from "@/lib/env"
 import { chatKeys } from "./use-chat-query"
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -66,17 +67,21 @@ function getAccessToken(): string | null {
   return localStorage.getItem("access_token")
 }
 
+/**
+ * WebSocket host must match the REST API (same as axios `VITE_API_URL`).
+ * Legacy: if you still set `VITE_API_BASE_URL` only, set `VITE_API_URL` to the same value in production.
+ */
 function buildWsUrl(threadId: number, token: string): string {
+  const legacyBase = import.meta.env.VITE_API_BASE_URL as string | undefined
+  const base = env.VITE_API_URL || legacyBase
+  if (base) {
+    const url = new URL(base)
+    const scheme = url.protocol === "https:" ? "wss" : "ws"
+    return `${scheme}://${url.host}/ws/chat/${threadId}/?token=${encodeURIComponent(token)}`
+  }
   const loc = window.location
   const wsScheme = loc.protocol === "https:" ? "wss" : "ws"
-  // API is on a different host (data.kms-connect.com) — read from env or infer from API base
-  const apiBase = import.meta.env.VITE_API_BASE_URL as string | undefined
-  if (apiBase) {
-    const url = new URL(apiBase)
-    const scheme = url.protocol === "https:" ? "wss" : "ws"
-    return `${scheme}://${url.host}/ws/chat/${threadId}/?token=${token}`
-  }
-  return `${wsScheme}://${loc.host}/ws/chat/${threadId}/?token=${token}`
+  return `${wsScheme}://${loc.host}/ws/chat/${threadId}/?token=${encodeURIComponent(token)}`
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────

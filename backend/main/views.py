@@ -66,7 +66,7 @@ class NewsViewSet(viewsets.ModelViewSet):
     ordering = ["-published_at", "-created_at"]
 
     def get_queryset(self):
-        return News.objects.all()
+        return News.objects.select_related("created_by")
 
 
 class LowonganKerjaViewSet(viewsets.ModelViewSet):

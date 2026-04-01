@@ -126,10 +126,16 @@ class AuthInterceptor extends Interceptor {
               _retryPendingRequests(newAccessToken);
               handler.resolve(retryResponse);
             } catch (retryErr) {
-              // Retry itself failed — reject but do NOT clear tokens
+              // Retry itself failed — surface the retry error, not the stale 401
               _isRefreshing = false;
               _rejectPendingRequests(err);
-              handler.next(err);
+              final forward = retryErr is DioException
+                  ? retryErr
+                  : DioException(
+                      requestOptions: opts,
+                      error: retryErr,
+                    );
+              handler.next(forward);
             }
             return;
           }
