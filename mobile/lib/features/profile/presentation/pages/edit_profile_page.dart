@@ -425,7 +425,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
       if (_wearsGlasses != null) 'wears_glasses': _wearsGlasses,
       if (_writingHand != null) 'writing_hand': _writingHand,
       if (_shoeSize.text.trim().isNotEmpty)
-        'shoe_size': _shoeSize.text.trim(),
+        'shoe_size': int.tryParse(_shoeSize.text.trim()),
       if (_shirtSize != null) 'shirt_size': _shirtSize,
 
       // ── New: Data Paspor ─────────────────────────────────────────────

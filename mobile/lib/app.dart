@@ -10,7 +10,6 @@ import 'features/auth/presentation/pages/login_page_new.dart';
 import 'features/auth/presentation/pages/registration_page_new.dart';
 import 'features/auth/presentation/pages/email_verification_page.dart';
 import 'features/auth/presentation/pages/forgot_password_page.dart';
-import 'features/auth/presentation/pages/forgot_password_confirmation_page.dart';
 import 'features/auth/presentation/pages/reset_password_page.dart';
 import 'features/home/presentation/pages/home_page.dart';
 import 'features/profile/presentation/pages/profile_page.dart';
@@ -86,8 +85,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     initialLocation: '/splash',
     refreshListenable: authNotifier,
     redirect: (context, state) {
-      // Use actual URI path to avoid ambiguity with matched route templates.
-      final loc = state.uri.path;
+      final loc = state.matchedLocation;
 
       // Splash handles its own auth-aware navigation — never redirect away.
       if (loc == '/splash') return null;
@@ -97,11 +95,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       final isAuthenticated = authState.isAuthenticated;
 
       // Pre-auth routes: login, register, email verification, and password reset.
-      final isPreAuthRoute = loc == '/login' ||
-          loc == '/register' ||
-          loc.startsWith('/email-verification') ||
-          loc.startsWith('/forgot-password') ||
-          loc.startsWith('/reset-password');
+      final isPreAuthRoute = loc == '/login' || 
+                            loc == '/register' || 
+                            loc.startsWith('/email-verification') ||
+                            loc == '/forgot-password' ||
+                            loc.startsWith('/reset-password');
 
       if (!isAuthenticated) {
         // Unauthenticated users can only access pre-auth routes.
@@ -168,18 +166,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/forgot-password',
         name: 'forgot-password',
-        builder: (context, state) {
-          final email = state.uri.queryParameters['email'] ?? '';
-          return ForgotPasswordPage(initialEmail: email);
-        },
-      ),
-      GoRoute(
-        path: '/forgot-password/confirmation',
-        name: 'forgot-password-confirmation',
-        builder: (context, state) {
-          final email = state.uri.queryParameters['email'] ?? '';
-          return ForgotPasswordConfirmationPage(email: email);
-        },
+        builder: (context, state) => const ForgotPasswordPage(),
       ),
       GoRoute(
         path: '/reset-password',

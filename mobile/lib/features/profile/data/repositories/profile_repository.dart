@@ -285,6 +285,24 @@ class ProfileRepository {
     if (error.response != null) {
       final data = error.response!.data;
       if (data is Map<String, dynamic>) {
+        final errors = data['errors'];
+        if (errors is Map && errors.isNotEmpty) {
+          final firstField = errors.entries.first;
+          final field = firstField.key.toString();
+          final value = firstField.value;
+          String message;
+          if (value is List && value.isNotEmpty) {
+            message = value.first.toString();
+          } else {
+            message = value.toString();
+          }
+          return DioException(
+            requestOptions: error.requestOptions,
+            response: error.response,
+            type: error.type,
+            message: '$field: $message',
+          );
+        }
         final detail = data['detail'] as String?;
         if (detail != null) {
           return DioException(
