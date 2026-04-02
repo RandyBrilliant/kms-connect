@@ -25,8 +25,8 @@ from .api_responses import (
     success_response,
 )
 from .throttles import AuthPublicRateThrottle
-from .document_specs import validate_document_file
-from .tasks import process_document_ocr, optimize_document_image
+from .document_specs import validate_document_file, compress_image_file
+from .tasks import process_document_ocr
 from .validators import validate_indonesian_phone
 
 
@@ -168,6 +168,9 @@ class ApplicantRegistrationView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Compress KTP image before saving
+        ktp_file = compress_image_file(ktp_file)
+
         # Cek apakah email sudah terdaftar
         if CustomUser.objects.filter(email=email).exists():
             return Response(
@@ -270,9 +273,6 @@ class ApplicantRegistrationView(APIView):
 
             # Trigger OCR processing (async)
             process_document_ocr.delay(ktp_document.id)
-
-            # Trigger image optimization (async)
-            optimize_document_image.delay(ktp_document.id)
 
         except Exception as e:
             # Jika upload gagal, hapus user dan profile
@@ -581,6 +581,9 @@ class GoogleCompleteRegistrationView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Compress KTP image before saving
+        ktp_file = compress_image_file(ktp_file)
+
         # Update full_name on user if provided
         if full_name and not user.full_name:
             user.full_name = full_name
@@ -648,7 +651,6 @@ class GoogleCompleteRegistrationView(APIView):
             )
 
             process_document_ocr.delay(ktp_document.id)
-            optimize_document_image.delay(ktp_document.id)
 
         except Exception as e:
             return Response(
