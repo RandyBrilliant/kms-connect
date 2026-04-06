@@ -704,6 +704,7 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
             keyboardType: TextInputType.name,
             textInputAction: TextInputAction.done,
             textCapitalization: TextCapitalization.characters,
+            upperCase: true,
             validator: (v) =>
                 (v == null || v.trim().isEmpty) ? 'Nama wajib diisi' : null,
           ),

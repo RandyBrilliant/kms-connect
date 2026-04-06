@@ -227,10 +227,11 @@ class _LoginPageNewState extends ConsumerState<LoginPageNew>
                       child: FadeTransition(
                         opacity: _cardOpacity,
                         child: ProfessionalCard(
-                          padding: const EdgeInsets.all(28),
-                          child: Form(
-                            key: _formKey,
-                            child: Column(
+                          child: Padding(
+                            padding: const EdgeInsets.all(28),
+                            child: Form(
+                              key: _formKey,
+                              child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
                                 // Email field
@@ -363,6 +364,7 @@ class _LoginPageNewState extends ConsumerState<LoginPageNew>
                         ),
                       ),
                     ),
+                  ),
 
                     const SizedBox(height: 32),
 

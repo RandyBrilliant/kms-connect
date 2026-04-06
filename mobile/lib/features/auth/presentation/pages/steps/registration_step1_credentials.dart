@@ -4,11 +4,9 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../../config/colors.dart';
-import '../../../../../core/widgets/custom_toast.dart';
 import '../../../../../core/widgets/professional_text_field.dart';
 import '../../../../../core/widgets/professional_phone_field.dart';
 import '../../../../../core/widgets/professional/professional_button.dart';
-import '../../../data/providers/auth_provider.dart';
 import '../../providers/registration_provider.dart';
 
 /// Step 1 of 2 – Professional redesigned credentials input.
@@ -67,8 +65,10 @@ class _RegistrationStep1CredentialsState
 
   void _handleNext() {
     if (!_formKey.currentState!.validate()) return;
-    
-    ref.read(registrationProvider.notifier).setCredentials(
+
+    ref
+        .read(registrationProvider.notifier)
+        .setCredentials(
           email: _emailCtrl.text.trim(),
           password: _passwordCtrl.text,
           phoneNumber: _phoneCtrl.text.trim(),
@@ -149,7 +149,8 @@ class _RegistrationStep1CredentialsState
                 size: 20,
                 color: AppColors.textMedium,
               ),
-              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+              onPressed: () =>
+                  setState(() => _obscurePassword = !_obscurePassword),
               tooltip: _obscurePassword ? 'Tampilkan' : 'Sembunyikan',
             ),
             validator: (v) {
@@ -178,7 +179,8 @@ class _RegistrationStep1CredentialsState
                 size: 20,
                 color: AppColors.textMedium,
               ),
-              onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+              onPressed: () =>
+                  setState(() => _obscureConfirm = !_obscureConfirm),
               tooltip: _obscureConfirm ? 'Tampilkan' : 'Sembunyikan',
             ),
             validator: (v) {

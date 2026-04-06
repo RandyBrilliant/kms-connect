@@ -281,29 +281,50 @@ class ProfileRepository {
     }
   }
 
+  /// Picks the first field-level validation message from DRF-style [errors]
+  /// (nested maps / lists / strings).
+  static String? _firstValidationMessage(dynamic errors) {
+    if (errors == null) return null;
+    if (errors is List) {
+      if (errors.isEmpty) return null;
+      final first = errors.first;
+      if (first is Map) return _firstValidationMessage(first);
+      return first.toString();
+    }
+    if (errors is Map) {
+      for (final e in errors.entries) {
+        final key = e.key.toString();
+        final v = e.value;
+        if (v is List && v.isNotEmpty) {
+          return '$key: ${v.first}';
+        }
+        if (v is Map) {
+          final nested = _firstValidationMessage(v);
+          if (nested != null) return '$key: $nested';
+        }
+        if (v is String && v.trim().isNotEmpty) {
+          return '$key: $v';
+        }
+      }
+    }
+    return null;
+  }
+
   DioException _handleError(DioException error) {
     if (error.response != null) {
       final data = error.response!.data;
-      if (data is Map<String, dynamic>) {
-        final errors = data['errors'];
-        if (errors is Map && errors.isNotEmpty) {
-          final firstField = errors.entries.first;
-          final field = firstField.key.toString();
-          final value = firstField.value;
-          String message;
-          if (value is List && value.isNotEmpty) {
-            message = value.first.toString();
-          } else {
-            message = value.toString();
-          }
+      if (data is Map) {
+        final raw = Map<String, dynamic>.from(data);
+        final specific = _firstValidationMessage(raw['errors']);
+        if (specific != null && specific.isNotEmpty) {
           return DioException(
             requestOptions: error.requestOptions,
             response: error.response,
             type: error.type,
-            message: '$field: $message',
+            message: specific,
           );
         }
-        final detail = data['detail'] as String?;
+        final detail = raw['detail'] as String?;
         if (detail != null) {
           return DioException(
             requestOptions: error.requestOptions,

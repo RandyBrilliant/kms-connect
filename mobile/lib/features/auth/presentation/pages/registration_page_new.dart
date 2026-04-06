@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -40,18 +38,21 @@ class _RegistrationPageNewState extends ConsumerState<RegistrationPageNew>
     );
     _headerOpacity = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(
-          parent: _ctrl,
-          curve: const Interval(0.0, 0.55, curve: Curves.easeOut)),
+        parent: _ctrl,
+        curve: const Interval(0.0, 0.55, curve: Curves.easeOut),
+      ),
     );
     _cardSlide = Tween<double>(begin: 30, end: 0).animate(
       CurvedAnimation(
-          parent: _ctrl,
-          curve: const Interval(0.3, 1.0, curve: Curves.easeOutCubic)),
+        parent: _ctrl,
+        curve: const Interval(0.3, 1.0, curve: Curves.easeOutCubic),
+      ),
     );
     _cardOpacity = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(
-          parent: _ctrl,
-          curve: const Interval(0.3, 0.9, curve: Curves.easeOut)),
+        parent: _ctrl,
+        curve: const Interval(0.3, 0.9, curve: Curves.easeOut),
+      ),
     );
     WidgetsBinding.instance.addPostFrameCallback((_) => _ctrl.forward());
   }
