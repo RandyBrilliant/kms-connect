@@ -178,11 +178,13 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
     if (source == ImageSource.camera) {
       final status = await Permission.camera.request();
       if (!mounted) return null;
-      if (status.isDenied || status.isPermanentlyDenied) {
+      if (status.isDenied || status.isPermanentlyDenied || status.isRestricted) {
         CustomToast.show(context,
             message: 'Izin kamera diperlukan untuk mengambil foto',
             type: ToastType.error);
-        if (status.isPermanentlyDenied) await openAppSettings();
+        if (status.isPermanentlyDenied || status.isRestricted) {
+          await openAppSettings();
+        }
         return null;
       }
       return Navigator.push<File>(
@@ -702,6 +704,7 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
             keyboardType: TextInputType.name,
             textInputAction: TextInputAction.done,
             textCapitalization: TextCapitalization.characters,
+            upperCase: true,
             validator: (v) =>
                 (v == null || v.trim().isEmpty) ? 'Nama wajib diisi' : null,
           ),

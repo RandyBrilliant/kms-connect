@@ -1,91 +1,86 @@
 import 'package:flutter/material.dart';
+import '../../../config/colors.dart';
 
-/// Reusable professional auth gradient + pattern background.
+/// Professional gradient background with subtle geometric patterns
+/// Used for splash and login screens to create visual depth
 class ProfessionalGradientBackground extends StatelessWidget {
   const ProfessionalGradientBackground({
     super.key,
-    required this.child,
+    this.child,
+    this.withGeometricPattern = true,
   });
 
-  final Widget child;
+  final Widget? child;
+  final bool withGeometricPattern;
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF075B31),
-            Color(0xFF0A7A43),
-            Color(0xFF0E8E50),
-            Color(0xFF149E5D),
-          ],
-        ),
-      ),
+    return Container(
+      decoration: const BoxDecoration(gradient: AppColors.professionalGradient),
       child: Stack(
-        fit: StackFit.expand,
         children: [
-          CustomPaint(painter: _AuthPatternPainter()),
-          child,
+          // Subtle geometric pattern overlay
+          if (withGeometricPattern)
+            Positioned.fill(
+              child: CustomPaint(painter: _GeometricPatternPainter()),
+            ),
+
+          ?child,
         ],
       ),
     );
   }
 }
 
-class _AuthPatternPainter extends CustomPainter {
+/// Subtle geometric pattern painter for professional background
+class _GeometricPatternPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final linePaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.06)
+    final paint = Paint()
+      ..color = const Color(0x08FFFFFF)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
+      ..strokeWidth = 1.5;
 
-    const gap = 36.0;
-    for (double x = -size.height; x < size.width + size.height; x += gap) {
+    // Draw subtle diagonal lines
+    const spacing = 60.0;
+    for (double i = -size.height; i < size.width + size.height; i += spacing) {
       canvas.drawLine(
-        Offset(x, 0),
-        Offset(x + size.height, size.height),
-        linePaint,
+        Offset(i, 0),
+        Offset(i + size.height, size.height),
+        paint,
       );
     }
 
-    final glowA = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          Colors.white.withValues(alpha: 0.14),
-          Colors.white.withValues(alpha: 0.0),
-        ],
-      ).createShader(
-        Rect.fromCircle(
-          center: Offset(size.width * 0.12, size.height * 0.08),
-          radius: size.width * 0.45,
-        ),
-      );
+    // Draw subtle circles in corners
+    final circlePaint = Paint()
+      ..color = const Color(0x05FFFFFF)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0;
+
+    // Top right
     canvas.drawCircle(
-      Offset(size.width * 0.12, size.height * 0.08),
-      size.width * 0.45,
-      glowA,
+      Offset(size.width * 0.9, size.height * 0.1),
+      80,
+      circlePaint,
     );
 
-    final glowB = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          Colors.black.withValues(alpha: 0.12),
-          Colors.black.withValues(alpha: 0.0),
-        ],
-      ).createShader(
-        Rect.fromCircle(
-          center: Offset(size.width * 0.9, size.height * 0.92),
-          radius: size.width * 0.55,
-        ),
-      );
     canvas.drawCircle(
-      Offset(size.width * 0.9, size.height * 0.92),
-      size.width * 0.55,
-      glowB,
+      Offset(size.width * 0.9, size.height * 0.1),
+      140,
+      circlePaint,
+    );
+
+    // Bottom left
+    canvas.drawCircle(
+      Offset(size.width * 0.1, size.height * 0.9),
+      100,
+      circlePaint,
+    );
+
+    canvas.drawCircle(
+      Offset(size.width * 0.1, size.height * 0.9),
+      160,
+      circlePaint,
     );
   }
 

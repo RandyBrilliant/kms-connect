@@ -1,6 +1,4 @@
-
 import 'package:flutter/material.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -8,7 +6,6 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../../config/colors.dart';
 import '../../../../core/widgets/professional/professional_gradient_background.dart';
 import '../../../../core/widgets/professional/professional_card.dart';
-import '../../../../core/widgets/terms_privacy_modal.dart';
 import '../providers/registration_provider.dart';
 import 'steps/registration_step1_credentials.dart';
 import 'steps/registration_step2_ktp.dart';
@@ -41,18 +38,21 @@ class _RegistrationPageNewState extends ConsumerState<RegistrationPageNew>
     );
     _headerOpacity = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(
-          parent: _ctrl,
-          curve: const Interval(0.0, 0.55, curve: Curves.easeOut)),
+        parent: _ctrl,
+        curve: const Interval(0.0, 0.55, curve: Curves.easeOut),
+      ),
     );
     _cardSlide = Tween<double>(begin: 30, end: 0).animate(
       CurvedAnimation(
-          parent: _ctrl,
-          curve: const Interval(0.3, 1.0, curve: Curves.easeOutCubic)),
+        parent: _ctrl,
+        curve: const Interval(0.3, 1.0, curve: Curves.easeOutCubic),
+      ),
     );
     _cardOpacity = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(
-          parent: _ctrl,
-          curve: const Interval(0.3, 0.9, curve: Curves.easeOut)),
+        parent: _ctrl,
+        curve: const Interval(0.3, 0.9, curve: Curves.easeOut),
+      ),
     );
     WidgetsBinding.instance.addPostFrameCallback((_) => _ctrl.forward());
   }
@@ -112,28 +112,24 @@ class _RegistrationPageNewState extends ConsumerState<RegistrationPageNew>
     final currentStep = ref.watch(registrationProvider).currentStep;
     final size = MediaQuery.sizeOf(context);
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
-    final muted = Colors.white.withValues(alpha: 0.72);
-    const footerSpace = 96.0;
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
       body: ProfessionalGradientBackground(
-        child: Stack(
-          children: [
-            SafeArea(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.only(bottom: bottomInset + footerSpace),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: size.height - 48),
-                  child: Column(
-                    children: [
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.only(bottom: bottomInset + 24),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: size.height - 48),
+              child: Column(
+                children: [
                   const SizedBox(height: 16),
 
                   // Header with back button and title
                   FadeTransition(
                     opacity: _headerOpacity,
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                      padding: const EdgeInsets.symmetric(horizontal: 20.0),
                       child: Row(
                         children: [
                           GestureDetector(
@@ -157,20 +153,13 @@ class _RegistrationPageNewState extends ConsumerState<RegistrationPageNew>
                             ),
                           ),
                           const SizedBox(width: 16),
-                          Expanded(
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                'Daftar Akun',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: GoogleFonts.plusJakartaSans(
-                                  color: Colors.white,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w700,
-                                  height: 1.2,
-                                ),
-                              ),
+                          Text(
+                            'Daftar Akun',
+                            style: GoogleFonts.plusJakartaSans(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              height: 1.2,
                             ),
                           ),
                         ],
@@ -292,60 +281,11 @@ class _RegistrationPageNewState extends ConsumerState<RegistrationPageNew>
                     },
                   ),
 
-                      const SizedBox(height: 32),
-                    ],
-                  ),
-                ),
+                  const SizedBox(height: 32),
+                ],
               ),
             ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: SafeArea(
-                top: false,
-                minimum: const EdgeInsets.fromLTRB(16, 4, 16, 10),
-                child: Text.rich(
-                  TextSpan(
-                    text: 'Dengan mendaftar, Anda menyetujui ',
-                    children: [
-                      TextSpan(
-                        text: 'Syarat & Ketentuan',
-                        style: GoogleFonts.plusJakartaSans(
-                          color: muted,
-                          fontWeight: FontWeight.w700,
-                          decoration: TextDecoration.underline,
-                          decorationColor: muted,
-                        ),
-                        recognizer: TapGestureRecognizer()
-                          ..onTap = () => showTermsAndPrivacyModal(context),
-                      ),
-                      const TextSpan(text: ' dan '),
-                      TextSpan(
-                        text: 'Kebijakan Privasi',
-                        style: GoogleFonts.plusJakartaSans(
-                          color: muted,
-                          fontWeight: FontWeight.w700,
-                          decoration: TextDecoration.underline,
-                          decorationColor: muted,
-                        ),
-                        recognizer: TapGestureRecognizer()
-                          ..onTap = () => showTermsAndPrivacyModal(context),
-                      ),
-                      const TextSpan(text: '.'),
-                    ],
-                  ),
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w500,
-                    color: muted,
-                    height: 1.35,
-                  ),
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

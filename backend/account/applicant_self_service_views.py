@@ -27,8 +27,8 @@ from .serializers import (
 from django.http import HttpResponse
 from .permissions import IsApplicant
 from .api_responses import success_response, error_response, ApiCode, ApiMessage
-from .document_specs import validate_document_file
-from .tasks import process_document_ocr, optimize_document_image
+from .document_specs import validate_document_file, compress_image_file, is_image_type
+from .tasks import process_document_ocr
 from .services.biodata_pdf import generate_biodata_pdf
 
 
@@ -296,6 +296,10 @@ class ApplicantDocumentSelfServiceViewSet(ApplicantSelfServiceMixin, viewsets.Mo
         except Exception as e:
             raise ValidationError({"file": str(e)})
 
+        # Compress image files before saving (synchronous)
+        if is_image_type(document_type.code):
+            file = compress_image_file(file)
+
         existing = ApplicantDocument.objects.filter(
             applicant_profile=profile,
             document_type=document_type,
@@ -333,11 +337,9 @@ class ApplicantDocumentSelfServiceViewSet(ApplicantSelfServiceMixin, viewsets.Mo
             )
             created = True
 
-        # Trigger async tasks
+        # Trigger OCR for KTP
         if document_type.code == "ktp":
             process_document_ocr.delay(document.id)
-        if is_image_type(document_type.code):
-            optimize_document_image.delay(document.id)
 
         response_serializer = self.get_serializer(document)
         response_status = status.HTTP_201_CREATED if created else status.HTTP_200_OK

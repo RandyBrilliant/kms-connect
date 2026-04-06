@@ -73,9 +73,6 @@ class _KtpCameraScreenState extends State<KtpCameraScreen>
         camera,
         ResolutionPreset.high,
         enableAudio: false,
-        imageFormatGroup: Platform.isIOS 
-            ? ImageFormatGroup.bgra8888 
-            : ImageFormatGroup.jpeg,
       );
 
       await controller.initialize();
@@ -100,6 +97,18 @@ class _KtpCameraScreenState extends State<KtpCameraScreen>
         _isInitialized = true;
         _errorMessage = null;
       });
+    } on CameraException catch (e) {
+      if (mounted) {
+        setState(() {
+          if (e.code == 'CameraAccessDenied' ||
+              e.code == 'CameraAccessDeniedWithoutPrompt') {
+            _errorMessage =
+                'Izin kamera ditolak. Aktifkan izin kamera di Pengaturan iPhone.';
+          } else {
+            _errorMessage = 'Gagal membuka kamera (${e.code})';
+          }
+        });
+      }
     } catch (e) {
       if (mounted) {
         setState(() => _errorMessage = 'Gagal membuka kamera');

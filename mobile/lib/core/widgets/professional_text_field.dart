@@ -21,7 +21,7 @@ class ProfessionalTextField extends StatefulWidget {
     this.suffixIcon,
     this.inputFormatters,
     this.textCapitalization = TextCapitalization.none,
-    this.upperCase = true,
+    this.upperCase = false,
     this.readOnly = false,
     this.onTap,
     this.maxLines = 1,

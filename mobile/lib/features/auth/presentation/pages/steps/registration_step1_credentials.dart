@@ -65,12 +65,13 @@ class _RegistrationStep1CredentialsState
 
   void _handleNext() {
     if (!_formKey.currentState!.validate()) return;
-    
-    ref.read(registrationProvider.notifier).setCredentials(
+
+    ref
+        .read(registrationProvider.notifier)
+        .setCredentials(
           email: _emailCtrl.text.trim(),
           password: _passwordCtrl.text,
-          phoneNumber:
-              ProfessionalPhoneField.toIndonesiaE164(_phoneCtrl.text),
+          phoneNumber: _phoneCtrl.text.trim(),
         );
     ref.read(registrationProvider.notifier).nextStep();
   }
@@ -121,7 +122,6 @@ class _RegistrationStep1CredentialsState
             prefixIcon: Icons.email_outlined,
             keyboardType: TextInputType.emailAddress,
             textInputAction: TextInputAction.next,
-            upperCase: false,
             onSubmitted: (_) => _passwordFocus.requestFocus(),
             validator: (v) {
               if (v == null || v.trim().isEmpty) return 'Email wajib diisi';
@@ -140,7 +140,6 @@ class _RegistrationStep1CredentialsState
             prefixIcon: Icons.lock_outline_rounded,
             obscureText: _obscurePassword,
             textInputAction: TextInputAction.next,
-            upperCase: false,
             onSubmitted: (_) => _confirmFocus.requestFocus(),
             suffixIcon: IconButton(
               icon: Icon(
@@ -150,7 +149,8 @@ class _RegistrationStep1CredentialsState
                 size: 20,
                 color: AppColors.textMedium,
               ),
-              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+              onPressed: () =>
+                  setState(() => _obscurePassword = !_obscurePassword),
               tooltip: _obscurePassword ? 'Tampilkan' : 'Sembunyikan',
             ),
             validator: (v) {
@@ -170,7 +170,6 @@ class _RegistrationStep1CredentialsState
             prefixIcon: Icons.lock_outline_rounded,
             obscureText: _obscureConfirm,
             textInputAction: TextInputAction.next,
-            upperCase: false,
             onSubmitted: (_) => _phoneFocus.requestFocus(),
             suffixIcon: IconButton(
               icon: Icon(
@@ -180,7 +179,8 @@ class _RegistrationStep1CredentialsState
                 size: 20,
                 color: AppColors.textMedium,
               ),
-              onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+              onPressed: () =>
+                  setState(() => _obscureConfirm = !_obscureConfirm),
               tooltip: _obscureConfirm ? 'Tampilkan' : 'Sembunyikan',
             ),
             validator: (v) {
