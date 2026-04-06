@@ -121,7 +121,7 @@ class ApplicantRegistrationView(APIView):
             try:
                 referrer_user = CustomUser.objects.get(
                     referral_code=referral_code,
-                    role__in=[UserRole.STAFF, UserRole.ADMIN],
+                    role__in=[UserRole.STAFF, UserRole.MASTER_ADMIN, UserRole.ADMIN],
                     is_active=True,
                 )
             except CustomUser.DoesNotExist:
@@ -538,7 +538,7 @@ class GoogleCompleteRegistrationView(APIView):
             try:
                 referrer_user = CustomUser.objects.get(
                     referral_code=referral_code,
-                    role__in=[UserRole.STAFF, UserRole.ADMIN],
+                    role__in=[UserRole.STAFF, UserRole.MASTER_ADMIN, UserRole.ADMIN],
                     is_active=True,
                 )
             except CustomUser.DoesNotExist:
