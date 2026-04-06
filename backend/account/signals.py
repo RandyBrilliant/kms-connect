@@ -96,7 +96,7 @@ def auto_generate_referral_code(sender, instance: CustomUser, created, **kwargs)
     Auto-generate referral code for new staff/admin users.
     Also ensures existing staff/admin get codes if they don't have one.
     """
-    if instance.role not in (UserRole.STAFF, UserRole.ADMIN):
+    if instance.role not in (UserRole.STAFF, UserRole.MASTER_ADMIN, UserRole.ADMIN):
         return
     
     if not instance.referral_code:
@@ -238,7 +238,7 @@ def notify_on_verification_status_change(
         # Notify all Admin and Staff users about the new submission
         admins_staff = list(
             CustomUser.objects.filter(
-                role__in=[UserRole.ADMIN, UserRole.STAFF],
+                role__in=[UserRole.MASTER_ADMIN, UserRole.ADMIN, UserRole.STAFF],
                 is_active=True,
             ).select_related("notification_preference")
         )

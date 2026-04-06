@@ -52,9 +52,10 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
 
 interface StaffTableProps {
     basePath: string
+    readOnly?: boolean
 }
 
-export function StaffTable({ basePath }: StaffTableProps) {
+export function StaffTable({ basePath, readOnly = false }: StaffTableProps) {
     const navigate = useNavigate()
     const [params, setParams] = useState<StaffsListParams>({
         page: 1,
@@ -121,7 +122,8 @@ export function StaffTable({ basePath }: StaffTableProps) {
     }, [])
 
     const columns = useMemo<ColumnDef<StaffUser>[]>(
-        () => [
+        () => {
+            const cols: ColumnDef<StaffUser>[] = [
             {
                 accessorKey: "staff_profile.full_name",
                 header: "Nama",
@@ -217,52 +219,56 @@ export function StaffTable({ basePath }: StaffTableProps) {
                         locale: id,
                     }),
             },
-            {
-                id: "actions",
-                header: "",
-                cell: ({ row }) => {
-                    const staff = row.original
-                    return (
-                        <div className="flex items-center gap-1">
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-8 cursor-pointer"
-                                onClick={() => navigate(`${basePath}/${staff.id}/edit`)}
-                                title="Edit"
-                            >
-                                <IconPencil className="size-4" />
-                                <span className="sr-only">Edit</span>
-                            </Button>
-                            {staff.is_active ? (
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="size-8 cursor-pointer text-destructive hover:text-destructive"
-                                    onClick={() => handleDeactivate(staff)}
-                                    title="Nonaktifkan"
-                                >
-                                    <IconUserOff className="size-4" />
-                                    <span className="sr-only">Nonaktifkan</span>
-                                </Button>
-                            ) : (
+            ]
+            if (!readOnly) {
+                cols.push({
+                    id: "actions",
+                    header: "",
+                    cell: ({ row }) => {
+                        const staff = row.original
+                        return (
+                            <div className="flex items-center gap-1">
                                 <Button
                                     variant="ghost"
                                     size="icon"
                                     className="size-8 cursor-pointer"
-                                    onClick={() => handleActivate(staff)}
-                                    title="Aktifkan"
+                                    onClick={() => navigate(`${basePath}/${staff.id}/edit`)}
+                                    title="Edit"
                                 >
-                                    <IconUserCheck className="size-4" />
-                                    <span className="sr-only">Aktifkan</span>
+                                    <IconPencil className="size-4" />
+                                    <span className="sr-only">Edit</span>
                                 </Button>
-                            )}
-                        </div>
-                    )
-                },
-            },
-        ],
-        [basePath, navigate, handleActivate, handleDeactivate, handleCopyReferralCode]
+                                {staff.is_active ? (
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="size-8 cursor-pointer text-destructive hover:text-destructive"
+                                        onClick={() => handleDeactivate(staff)}
+                                        title="Nonaktifkan"
+                                    >
+                                        <IconUserOff className="size-4" />
+                                        <span className="sr-only">Nonaktifkan</span>
+                                    </Button>
+                                ) : (
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="size-8 cursor-pointer"
+                                        onClick={() => handleActivate(staff)}
+                                        title="Aktifkan"
+                                    >
+                                        <IconUserCheck className="size-4" />
+                                        <span className="sr-only">Aktifkan</span>
+                                    </Button>
+                                )}
+                            </div>
+                        )
+                    },
+                })
+            }
+            return cols
+        },
+        [basePath, navigate, handleActivate, handleDeactivate, handleCopyReferralCode, readOnly]
     )
 
     const table = useReactTable({
@@ -354,12 +360,14 @@ export function StaffTable({ basePath }: StaffTableProps) {
                         </Select>
                     </div>
                 </div>
-                <Button asChild className="cursor-pointer">
-                    <Link to={`${basePath}/new`} className="cursor-pointer">
-                        <IconPlus className="mr-2 size-4" />
-                        Tambah Staff
-                    </Link>
-                </Button>
+                {!readOnly && (
+                    <Button asChild className="cursor-pointer">
+                        <Link to={`${basePath}/new`} className="cursor-pointer">
+                            <IconPlus className="mr-2 size-4" />
+                            Tambah Staff
+                        </Link>
+                    </Button>
+                )}
             </div>
 
             <div className="overflow-hidden rounded-lg border">

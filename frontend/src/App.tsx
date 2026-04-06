@@ -8,6 +8,7 @@ import { toast } from "@/lib/toast"
 import { AuthProvider } from "@/contexts/auth-context"
 import { ProtectedRoute } from "@/components/protected-route"
 import { AdminLayout } from "@/components/admin-layout"
+import { AdminDashboardProvider } from "@/contexts/admin-dashboard-context"
 import { ErrorBoundary, RouteErrorBoundary } from "@/components/error-boundary"
 
 // Lazy-loaded page components for code splitting
@@ -124,8 +125,10 @@ function AppRoutes() {
       <Route
         path="/"
         element={
-          <ProtectedRoute allowedRoles={["ADMIN"]}>
-            <AdminLayout />
+          <ProtectedRoute allowedRoles={["MASTER_ADMIN"]}>
+            <AdminDashboardProvider basePath="">
+              <AdminLayout />
+            </AdminDashboardProvider>
           </ProtectedRoute>
         }
       >
@@ -138,9 +141,9 @@ function AppRoutes() {
         <Route path="berita/:id/edit" element={<AdminNewsFormPage />} />
         <Route path="lowongan-kerja" element={<AdminJobListPage />} />
         <Route path="lowongan-kerja/new" element={<AdminJobFormPage />} />
-        <Route path="lowongan-kerja/:id" element={<AdminJobDetailPage />} />
-        <Route path="lowongan-kerja/:id/edit" element={<AdminJobDetailPage />} />
         <Route path="lowongan-kerja/:id/batch/new" element={<AdminBatchFormPage />} />
+        <Route path="lowongan-kerja/:id/edit" element={<AdminJobDetailPage />} />
+        <Route path="lowongan-kerja/:id" element={<AdminJobDetailPage />} />
         <Route path="pelamar" element={<AdminPelamarListPage />} />
         <Route path="pelamar/new" element={<AdminPelamarFormPage />} />
         <Route path="pelamar/:id" element={<AdminPelamarDetailPage />} />
@@ -161,6 +164,41 @@ function AppRoutes() {
         <Route path="notifikasi" element={<NotificationsPage />} />
         <Route path="notifikasi/preferensi" element={<NotificationPreferencesPage />} />
         <Route path="hapus-akun" element={<AdminDeletionRequestsPage />} />
+        <Route path="profil" element={<ProfilePage />} />
+      </Route>
+      <Route
+        path="/admin-portal"
+        element={
+          <ProtectedRoute allowedRoles={["ADMIN"]}>
+            <AdminDashboardProvider basePath="/admin-portal">
+              <AdminLayout />
+            </AdminDashboardProvider>
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<AdminDashboardPage />} />
+        <Route path="admin" element={<AdminAdminListPage />} />
+        <Route path="berita" element={<AdminNewsListPage />} />
+        <Route path="berita/new" element={<AdminNewsFormPage />} />
+        <Route path="berita/:id/edit" element={<AdminNewsFormPage />} />
+        <Route path="lowongan-kerja" element={<AdminJobListPage />} />
+        <Route path="lowongan-kerja/:id/batch/new" element={<AdminBatchFormPage />} />
+        <Route path="lowongan-kerja/:id" element={<AdminJobDetailPage />} />
+        <Route path="pelamar" element={<AdminPelamarListPage />} />
+        <Route path="pelamar/new" element={<AdminPelamarFormPage />} />
+        <Route path="pelamar/:id" element={<AdminPelamarDetailPage />} />
+        <Route path="staff" element={<StaffStaffListPage />} />
+        <Route path="broadcasts" element={<AdminBroadcastListPage />} />
+        <Route path="broadcasts/new" element={<AdminBroadcastFormPage />} />
+        <Route path="broadcasts/:id/edit" element={<AdminBroadcastFormPage />} />
+        <Route path="laporan" element={<Navigate to="/admin-portal" replace />} />
+        <Route path="lamaran/:id" element={<AdminApplicationDetailPage />} />
+        <Route path="batch" element={<AdminBatchListPage />} />
+        <Route path="batch/:id" element={<AdminBatchDetailPage />} />
+        <Route path="chat" element={<AdminChatPage />} />
+        <Route path="notifikasi" element={<NotificationsPage />} />
+        <Route path="notifikasi/preferensi" element={<NotificationPreferencesPage />} />
+        <Route path="hapus-akun" element={<Navigate to="/admin-portal" replace />} />
         <Route path="profil" element={<ProfilePage />} />
       </Route>
       <Route

@@ -48,6 +48,8 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
 
 interface JobTableProps {
   basePath: string
+  /** Operator admin: hide create / edit / delete lowongan master data */
+  readOnly?: boolean
 }
 
 function formatDate(value: string | null) {
@@ -85,7 +87,7 @@ function employmentLabel(type: EmploymentType) {
   }
 }
 
-export function JobTable({ basePath }: JobTableProps) {
+export function JobTable({ basePath, readOnly = false }: JobTableProps) {
   const navigate = useNavigate()
   const [params, setParams] = useState<JobsListParams>({
     page: 1,
@@ -133,7 +135,8 @@ export function JobTable({ basePath }: JobTableProps) {
   )
 
   const columns = useMemo<ColumnDef<JobItem>[]>(
-    () => [
+    () => {
+      const cols: ColumnDef<JobItem>[] = [
       {
         accessorKey: "title",
         header: "Judul",
@@ -190,39 +193,43 @@ export function JobTable({ basePath }: JobTableProps) {
         header: "Batas Akhir",
         cell: ({ row }) => formatDate(row.original.deadline),
       },
-      {
-        id: "actions",
-        header: "",
-        cell: ({ row }) => {
-          const item = row.original
-          return (
-            <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-8 cursor-pointer"
-                onClick={() => navigate(`${basePath}/${item.id}/edit`)}
-                title="Edit"
-              >
-                <IconPencil className="size-4" />
-                <span className="sr-only">Edit</span>
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-8 cursor-pointer text-destructive hover:text-destructive"
-                onClick={() => handleDelete(item)}
-                title="Hapus"
-              >
-                <IconTrash className="size-4" />
-                <span className="sr-only">Hapus</span>
-              </Button>
-            </div>
-          )
-        },
-      },
-    ],
-    [basePath, navigate, handleDelete]
+      ]
+      if (!readOnly) {
+        cols.push({
+          id: "actions",
+          header: "",
+          cell: ({ row }) => {
+            const item = row.original
+            return (
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-8 cursor-pointer"
+                  onClick={() => navigate(`${basePath}/${item.id}/edit`)}
+                  title="Edit"
+                >
+                  <IconPencil className="size-4" />
+                  <span className="sr-only">Edit</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-8 cursor-pointer text-destructive hover:text-destructive"
+                  onClick={() => handleDelete(item)}
+                  title="Hapus"
+                >
+                  <IconTrash className="size-4" />
+                  <span className="sr-only">Hapus</span>
+                </Button>
+              </div>
+            )
+          },
+        })
+      }
+      return cols
+    },
+    [basePath, navigate, handleDelete, readOnly]
   )
 
   const table = useReactTable({
@@ -307,12 +314,14 @@ export function JobTable({ basePath }: JobTableProps) {
             </Select>
           </div>
         </div>
-        <Button asChild className="cursor-pointer">
-          <Link to={`${basePath}/new`} className="cursor-pointer">
-            <IconPlus className="mr-2 size-4" />
-            Tambah Lowongan
-          </Link>
-        </Button>
+        {!readOnly && (
+          <Button asChild className="cursor-pointer">
+            <Link to={`${basePath}/new`} className="cursor-pointer">
+              <IconPlus className="mr-2 size-4" />
+              Tambah Lowongan
+            </Link>
+          </Button>
+        )}
       </div>
 
       <div className="overflow-hidden rounded-lg border">

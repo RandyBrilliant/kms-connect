@@ -476,7 +476,9 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Lazy queryset for referrer/verified_by (Admin/Staff only)
-        backoffice_qs = CustomUser.objects.filter(role__in=[UserRole.STAFF, UserRole.ADMIN])
+        backoffice_qs = CustomUser.objects.filter(
+            role__in=[UserRole.STAFF, UserRole.MASTER_ADMIN, UserRole.ADMIN]
+        )
         self.fields["referrer"].queryset = backoffice_qs
         self.fields["verified_by"].queryset = backoffice_qs
         if self.context.get("is_own_profile"):
@@ -595,7 +597,7 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
             try:
                 referrer_user = CustomUser.objects.get(
                     referral_code=code,
-                    role__in=[UserRole.STAFF, UserRole.ADMIN],
+                    role__in=[UserRole.STAFF, UserRole.MASTER_ADMIN, UserRole.ADMIN],
                     is_active=True,
                 )
                 validated_data["referrer"] = referrer_user
@@ -704,6 +706,7 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
                     user = getattr(request, "user", None)
                     # Hanya Admin/Staff yang boleh menjadi verified_by
                     if user and getattr(user, "is_authenticated", False) and user.role in (
+                        UserRole.MASTER_ADMIN,
                         UserRole.ADMIN,
                         UserRole.STAFF,
                     ):
@@ -922,7 +925,9 @@ class ApplicantDocumentSerializer(serializers.ModelSerializer):
 
     document_type = serializers.PrimaryKeyRelatedField(queryset=DocumentType.objects.all())
     reviewed_by = serializers.PrimaryKeyRelatedField(
-        queryset=CustomUser.objects.filter(role__in=[UserRole.STAFF, UserRole.ADMIN]),
+        queryset=CustomUser.objects.filter(
+            role__in=[UserRole.STAFF, UserRole.MASTER_ADMIN, UserRole.ADMIN]
+        ),
         required=False,
         allow_null=True,
     )
@@ -1015,7 +1020,8 @@ class ApplicantDocumentSerializer(serializers.ModelSerializer):
                 if (
                     user
                     and getattr(user, "is_authenticated", False)
-                    and user.role in (UserRole.ADMIN, UserRole.STAFF)
+                    and user.role
+                    in (UserRole.MASTER_ADMIN, UserRole.ADMIN, UserRole.STAFF)
                 ):
                     instance.reviewed_by = user
 
@@ -1236,6 +1242,9 @@ class AccountDeletionRequestSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         # Admin-only fields must not be set by applicants
         request = self.context.get("request")
-        if request and request.user.role != UserRole.ADMIN:
+        if request and request.user.role not in (
+            UserRole.MASTER_ADMIN,
+            UserRole.ADMIN,
+        ):
             attrs.pop("admin_notes", None)
         return attrs

@@ -13,7 +13,7 @@
  */
 
 import { type ReactNode, useState, useEffect } from "react"
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom"
+import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import { format } from "date-fns"
 import { id as idLocale } from "date-fns/locale"
@@ -50,6 +50,9 @@ import {
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { usePageTitle } from "@/hooks/use-page-title"
+import { useAdminDashboard } from "@/contexts/admin-dashboard-context"
+import { useAuth } from "@/hooks/use-auth"
+import { isRestrictedAdmin, type UserRole } from "@/types/auth"
 
 import { JobForm } from "@/components/jobs/job-form"
 import { useUpdateJobMutation } from "@/hooks/use-jobs-query"
@@ -97,7 +100,15 @@ const STATUS_TABS: { value: ApplicationStatus; label: string }[] = [
 // Sub-component: Edit form
 // ---------------------------------------------------------------------------
 
-function EditTab({ jobId, job }: { jobId: number; job: JobItem }) {
+function EditTab({
+  jobId,
+  job,
+  jobsBase,
+}: {
+  jobId: number
+  job: JobItem
+  jobsBase: string
+}) {
   const navigate = useNavigate()
   const updateMutation = useUpdateJobMutation(jobId)
 
@@ -122,7 +133,7 @@ function EditTab({ jobId, job }: { jobId: number; job: JobItem }) {
     try {
       await updateMutation.mutateAsync(values)
       toast.success("Lowongan diperbarui", "Perubahan berhasil disimpan")
-      navigate(`/lowongan-kerja/${jobId}`)
+      navigate(`${jobsBase}/${jobId}`)
     } catch (err: unknown) {
       const res = err as {
         response?: { data?: { errors?: Record<string, string[]>; detail?: string } }
@@ -153,7 +164,15 @@ function EditTab({ jobId, job }: { jobId: number; job: JobItem }) {
 // Sub-component: Batch list
 // ---------------------------------------------------------------------------
 
-function BatchListTab({ jobId }: { jobId: number }) {
+function BatchListTab({
+  jobId,
+  jobsBase,
+  batchBase,
+}: {
+  jobId: number
+  jobsBase: string
+  batchBase: string
+}) {
   const navigate = useNavigate()
 
   const { data, isLoading } = useQuery({
@@ -172,7 +191,7 @@ function BatchListTab({ jobId }: { jobId: number }) {
         <Button
           size="sm"
           className="cursor-pointer"
-          onClick={() => navigate(`/lowongan-kerja/${jobId}/batch/new`)}
+          onClick={() => navigate(`${jobsBase}/${jobId}/batch/new`)}
         >
           <IconPlus className="mr-2 size-4" />
           Buat Batch Baru
@@ -202,7 +221,7 @@ function BatchListTab({ jobId }: { jobId: number }) {
                   <TableRow
                     key={batch.id}
                     className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => navigate(`/batch/${batch.id}`)}
+                    onClick={() => navigate(`${batchBase}/${batch.id}`)}
                   >
                     <TableCell>
                       <div className="flex items-center gap-2">
@@ -234,7 +253,7 @@ function BatchListTab({ jobId }: { jobId: number }) {
                         variant="ghost"
                         size="icon"
                         className="size-8 cursor-pointer"
-                        onClick={() => navigate(`/batch/${batch.id}`)}
+                        onClick={() => navigate(`${batchBase}/${batch.id}`)}
                         title="Lihat detail batch"
                       >
                         <IconEye className="size-4" />
@@ -248,7 +267,7 @@ function BatchListTab({ jobId }: { jobId: number }) {
                     Belum ada batch untuk lowongan ini.{" "}
                     <button
                       className="text-primary underline-offset-2 hover:underline cursor-pointer"
-                      onClick={() => navigate(`/lowongan-kerja/${jobId}/batch/new`)}
+                      onClick={() => navigate(`${jobsBase}/${jobId}/batch/new`)}
                     >
                       Buat batch pertama
                     </button>
@@ -270,9 +289,15 @@ function BatchListTab({ jobId }: { jobId: number }) {
 function ApplicationsTab({
   jobId,
   status,
+  batchBase,
+  lamaranBase,
+  pelamarBase,
 }: {
   jobId: number
   status: ApplicationStatus
+  batchBase: string
+  lamaranBase: string
+  pelamarBase: string
 }) {
   const navigate = useNavigate()
 
@@ -324,7 +349,7 @@ function ApplicationsTab({
                       {app.batch ? (
                         <button
                           className="text-primary underline-offset-2 hover:underline cursor-pointer"
-                          onClick={() => navigate(`/batch/${app.batch}`)}
+                          onClick={() => navigate(`${batchBase}/${app.batch}`)}
                         >
                           {app.batch_name ?? `Batch #${app.batch}`}
                         </button>
@@ -341,7 +366,7 @@ function ApplicationsTab({
                           variant="ghost"
                           size="icon"
                           className="size-8 cursor-pointer"
-                          onClick={() => navigate(`/lamaran/${app.id}`)}
+                          onClick={() => navigate(`${lamaranBase}/${app.id}`)}
                           title="Lihat detail lamaran"
                         >
                           <IconEye className="size-4" />
@@ -350,7 +375,7 @@ function ApplicationsTab({
                           variant="ghost"
                           size="icon"
                           className="size-8 cursor-pointer"
-                          onClick={() => navigate(`/pelamar/${app.applicant}`)}
+                          onClick={() => navigate(`${pelamarBase}/${app.applicant}`)}
                           title="Edit profil pelamar"
                         >
                           <IconPencil className="size-4" />
@@ -386,14 +411,23 @@ export function AdminJobDetailPage() {
   const jobId = Number(id)
   const navigate = useNavigate()
   const location = useLocation()
-  const initialTab = location.pathname.endsWith("/edit") ? "edit" : "batch"
+  const { basePath } = useAdminDashboard()
+  const { user } = useAuth()
+  const jobsBase = `${basePath}/lowongan-kerja`
+  const batchBase = `${basePath}/batch`
+  const lamaranBase = `${basePath}/lamaran`
+  const pelamarBase = `${basePath}/pelamar`
+  const readOnlyJob = user ? isRestrictedAdmin(user.role as UserRole) : false
+  const pathIsEdit = location.pathname.endsWith("/edit")
+  const initialTab = readOnlyJob ? "batch" : pathIsEdit ? "edit" : "batch"
   const [activeTab, setActiveTab] = useState(initialTab)
 
   // Sync tab when URL changes (e.g. browser back/forward)
   useEffect(() => {
+    if (readOnlyJob) return
     setActiveTab(location.pathname.endsWith("/edit") ? "edit" : activeTab)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.pathname])
+  }, [location.pathname, readOnlyJob])
 
   const {
     data: job,
@@ -419,7 +453,7 @@ export function AdminJobDetailPage() {
       <div className="p-6">
         <p className="text-destructive">Lowongan tidak ditemukan.</p>
         <Button asChild variant="outline" className="mt-4 cursor-pointer">
-          <Link to="/lowongan-kerja">
+          <Link to={jobsBase}>
             <IconArrowLeft className="mr-2 size-4" />
             Kembali
           </Link>
@@ -428,14 +462,18 @@ export function AdminJobDetailPage() {
     )
   }
 
+  if (readOnlyJob && location.pathname.endsWith("/edit")) {
+    return <Navigate to={`${jobsBase}/${jobId}`} replace />
+  }
+
   const statusInfo = JOB_STATUS_MAP[job.status] ?? { label: job.status, variant: "outline" as const }
 
   return (
     <div className="flex flex-col gap-6 px-6 py-6 md:px-8 md:py-8">
       <BreadcrumbNav
         items={[
-          { label: "Dashboard", href: "/" },
-          { label: "Lowongan Kerja", href: "/lowongan-kerja" },
+          { label: "Dashboard", href: basePath || "/" },
+          { label: "Lowongan Kerja", href: jobsBase },
           { label: job.title },
         ]}
       />
@@ -449,7 +487,7 @@ export function AdminJobDetailPage() {
             size="icon"
             className="cursor-pointer shrink-0"
           >
-            <Link to="/lowongan-kerja">
+            <Link to={jobsBase}>
               <IconArrowLeft className="size-5" />
             </Link>
           </Button>
@@ -463,33 +501,36 @@ export function AdminJobDetailPage() {
             </p>
           </div>
         </div>
-        <Button
-          variant="outline"
-          className="cursor-pointer"
-          onClick={() => {
-            setActiveTab("edit")
-            navigate(`/lowongan-kerja/${jobId}/edit`, { replace: true })
-          }}
-        >
-          <IconPencil className="mr-2 size-4" />
-          Edit Lowongan
-        </Button>
+        {!readOnlyJob && (
+          <Button
+            variant="outline"
+            className="cursor-pointer"
+            onClick={() => {
+              setActiveTab("edit")
+              navigate(`${jobsBase}/${jobId}/edit`, { replace: true })
+            }}
+          >
+            <IconPencil className="mr-2 size-4" />
+            Edit Lowongan
+          </Button>
+        )}
 
       </div>
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={(tab) => {
         setActiveTab(tab)
+        if (readOnlyJob) return
         // keep URL in sync: edit tab → /edit path, others → base path
         if (tab === "edit") {
-          navigate(`/lowongan-kerja/${jobId}/edit`, { replace: true })
+          navigate(`${jobsBase}/${jobId}/edit`, { replace: true })
         } else if (location.pathname.endsWith("/edit")) {
-          navigate(`/lowongan-kerja/${jobId}`, { replace: true })
+          navigate(`${jobsBase}/${jobId}`, { replace: true })
         }
       }}>
         <TabsList className="h-auto flex-wrap gap-1">
           <TabsTrigger value="info">Info</TabsTrigger>
-          <TabsTrigger value="edit">Edit</TabsTrigger>
+          {!readOnlyJob && <TabsTrigger value="edit">Edit</TabsTrigger>}
           <TabsTrigger value="batch">Batch</TabsTrigger>
           {STATUS_TABS.map((t) => (
             <TabsTrigger key={t.value} value={t.value}>
@@ -573,18 +614,24 @@ export function AdminJobDetailPage() {
 
         {/* ── Edit tab ──────────────────────────────────────────────────── */}
         <TabsContent value="edit" className="mt-4">
-          <EditTab jobId={jobId} job={job} />
+          <EditTab jobId={jobId} job={job} jobsBase={jobsBase} />
         </TabsContent>
 
         {/* ── Batch tab ─────────────────────────────────────────────────── */}
         <TabsContent value="batch" className="mt-4">
-          <BatchListTab jobId={jobId} />
+          <BatchListTab jobId={jobId} jobsBase={jobsBase} batchBase={batchBase} />
         </TabsContent>
 
         {/* ── Per-status tabs ────────────────────────────────────────────── */}
         {STATUS_TABS.map((t) => (
           <TabsContent key={t.value} value={t.value} className="mt-4">
-            <ApplicationsTab jobId={jobId} status={t.value} />
+            <ApplicationsTab
+              jobId={jobId}
+              status={t.value}
+              batchBase={batchBase}
+              lamaranBase={lamaranBase}
+              pelamarBase={pelamarBase}
+            />
           </TabsContent>
         ))}
       </Tabs>

@@ -5,17 +5,19 @@
 import { BroadcastTable } from "@/components/broadcasts/broadcast-table"
 import { BreadcrumbNav } from "@/components/breadcrumb-nav"
 import { usePageTitle } from "@/hooks/use-page-title"
-
-const BASE_PATH = "/broadcasts"
+import { joinAdminPath, useAdminDashboard } from "@/contexts/admin-dashboard-context"
 
 export function AdminBroadcastListPage() {
+  const { basePath } = useAdminDashboard()
+  const BASE_PATH = joinAdminPath(basePath, "/broadcasts")
+
   usePageTitle("Kelola Broadcast")
-  
+
   return (
     <div className="flex flex-col gap-4 px-6 py-6 md:px-8 md:py-8">
       <BreadcrumbNav
         items={[
-          { label: "Dashboard", href: "/" },
+          { label: "Dashboard", href: basePath || "/" },
           { label: "Broadcast" },
         ]}
       />

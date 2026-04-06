@@ -23,7 +23,7 @@ import { toast } from "@/lib/toast"
 import { usePageTitle } from "@/hooks/use-page-title"
 import { changePassword } from "@/api/auth"
 
-type Role = "ADMIN" | "STAFF" | "COMPANY" | "APPLICANT"
+import type { UserRole } from "@/types/auth"
 
 function AdminProfileForm({ profile }: { profile: AdminUser }) {
   const [values, setValues] = useState({
@@ -330,7 +330,7 @@ export function ProfilePage() {
     return null
   }
 
-  const role = user.role as Role
+  const role = user.role as UserRole
 
   if (isLoading) {
     return (
@@ -350,8 +350,16 @@ export function ProfilePage() {
     )
   }
 
+  const dashboardHref =
+    role === "MASTER_ADMIN"
+      ? "/"
+      : role === "ADMIN"
+        ? "/admin-portal"
+        : role === "STAFF"
+          ? "/staff-portal"
+          : "/company"
   const breadcrumbItems = [
-    { label: "Dashboard", href: role === "ADMIN" ? "/" : role === "STAFF" ? "/staff-portal" : "/company" },
+    { label: "Dashboard", href: dashboardHref },
     { label: "Profil Saya" },
   ]
 
@@ -366,7 +374,9 @@ export function ProfilePage() {
           </p>
         </div>
 
-        {role === "ADMIN" && <AdminProfileForm profile={data as AdminUser} />}
+        {(role === "MASTER_ADMIN" || role === "ADMIN") && (
+          <AdminProfileForm profile={data as AdminUser} />
+        )}
         {role === "STAFF" && <StaffProfileForm profile={data as StaffUser} />}
         {role === "COMPANY" && <CompanyProfileForm profile={data as CompanyUser} />}
 

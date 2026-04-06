@@ -31,6 +31,7 @@ import { usePageTitle } from "@/hooks/use-page-title"
 import { getBatches } from "@/api/batches"
 import type { BatchListParams } from "@/types/lamaran-batch"
 import { CreateBatchDialog } from "@/components/batches/create-batch-dialog"
+import { joinAdminPath, useAdminDashboard } from "@/contexts/admin-dashboard-context"
 
 function formatDate(value: string | null | undefined) {
   if (!value) return "-"
@@ -38,6 +39,9 @@ function formatDate(value: string | null | undefined) {
 }
 
 export function AdminBatchListPage() {
+  const { basePath } = useAdminDashboard()
+  const batchBase = joinAdminPath(basePath, "/batch")
+
   usePageTitle("Kelola Batch Lamaran")
   const navigate = useNavigate()
   const [params, setParams] = useState<BatchListParams>({
@@ -63,7 +67,7 @@ export function AdminBatchListPage() {
     <div className="flex flex-col gap-4 px-6 py-6 md:px-8 md:py-8">
       <BreadcrumbNav
         items={[
-          { label: "Dashboard", href: "/" },
+          { label: "Dashboard", href: basePath || "/" },
           { label: "Batch Lamaran" },
         ]}
       />
@@ -126,7 +130,7 @@ export function AdminBatchListPage() {
                   <TableRow
                     key={batch.id}
                     className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => navigate(`/batch/${batch.id}`)}
+                    onClick={() => navigate(`${batchBase}/${batch.id}`)}
                   >
                     <TableCell>
                       <div className="flex items-center gap-2">
@@ -146,7 +150,7 @@ export function AdminBatchListPage() {
                         variant="ghost"
                         size="icon"
                         className="size-8 cursor-pointer"
-                        onClick={() => navigate(`/batch/${batch.id}`)}
+                        onClick={() => navigate(`${batchBase}/${batch.id}`)}
                         title="Lihat detail batch"
                       >
                         <IconEye className="size-4" />
@@ -203,7 +207,7 @@ export function AdminBatchListPage() {
         onOpenChange={setCreateOpen}
         onSuccess={(batch) => {
           setCreateOpen(false)
-          navigate(`/batch/${batch.id}`)
+          navigate(`${batchBase}/${batch.id}`)
         }}
       />
     </div>

@@ -106,6 +106,11 @@ applicant_self_service_router.register(
 # Applicant self-service non-router paths
 applicant_self_service_paths = [
     path(
+        "applicants/me/document-types/",
+        applicant_self_service_views.ApplicantDocumentTypesChecklistView.as_view(),
+        name="applicant-me-document-types",
+    ),
+    path(
         "applicants/me/change-password/",
         applicant_self_service_views.ApplicantChangePasswordView.as_view(),
         name="applicant-me-change-password",

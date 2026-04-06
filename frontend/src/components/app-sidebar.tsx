@@ -29,8 +29,7 @@ import {
 
 function getNavItems(basePath: string, role?: string) {
   const dashboardUrl = basePath || "/"
-  
-  // Company role: only dashboard, job listings, applicants
+
   if (role === "COMPANY") {
     return [
       { title: "Dashboard", url: dashboardUrl, icon: IconDashboard },
@@ -38,8 +37,7 @@ function getNavItems(basePath: string, role?: string) {
       { title: "Pelamar", url: `${basePath}/pelamar`, icon: IconUsers },
     ]
   }
-  
-  // Staff role: only dashboard, job listings, referred applicants, and reports
+
   if (role === "STAFF") {
     return [
       { title: "Dashboard", url: dashboardUrl, icon: IconDashboard },
@@ -48,8 +46,27 @@ function getNavItems(basePath: string, role?: string) {
       { title: "Laporan", url: `${basePath}/laporan`, icon: IconChartBar },
     ]
   }
-  
-  // Admin role (default): full access
+
+  // Admin operator (restricted): no Perusahaan; read-only daftar admin/staff di UI
+  if (role === "ADMIN") {
+    return [
+      { title: "Dashboard", url: dashboardUrl, icon: IconDashboard },
+      { title: "Pelamar", url: `${basePath}/pelamar`, icon: IconUsers },
+      { title: "Staff", url: `${basePath}/staff`, icon: IconUsersGroup },
+      { title: "Admin", url: `${basePath}/admin`, icon: IconShield },
+      {
+        title: "Lowongan Kerja",
+        url: `${basePath}/lowongan-kerja`,
+        icon: IconBriefcase,
+        matchPaths: [`${basePath}/batch`, `${basePath}/lamaran`],
+      },
+      { title: "Berita", url: `${basePath}/berita`, icon: IconNews },
+      { title: "Kirim Broadcast", url: `${basePath}/broadcasts`, icon: IconSend },
+      { title: "Chat", url: `${basePath}/chat`, icon: IconMessage },
+    ]
+  }
+
+  // Admin Utama (MASTER_ADMIN): full access
   return [
     { title: "Dashboard", url: dashboardUrl, icon: IconDashboard },
     { title: "Pelamar", url: `${basePath}/pelamar`, icon: IconUsers },
@@ -73,13 +90,15 @@ function getNavItems(basePath: string, role?: string) {
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { user } = useAuth()
   const basePath =
-    user?.role === "ADMIN"
+    user?.role === "MASTER_ADMIN"
       ? ""
-      : user?.role === "STAFF"
-        ? "/staff-portal"
-        : user?.role === "COMPANY"
-          ? "/company"
-          : ""
+      : user?.role === "ADMIN"
+        ? "/admin-portal"
+        : user?.role === "STAFF"
+          ? "/staff-portal"
+          : user?.role === "COMPANY"
+            ? "/company"
+            : ""
   const navItems = getNavItems(basePath, user?.role)
   const displayName =
     (user?.full_name && user.full_name.trim()) ||
@@ -87,11 +106,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     "User"
   const userForNav = user
     ? {
-      name: displayName,
-      email: user.email,
-      avatar: "",
-      role: user.role,
-    }
+        name: displayName,
+        email: user.email,
+        avatar: "",
+        role: user.role,
+      }
     : { name: "", email: "", avatar: "" }
 
   return (

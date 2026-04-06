@@ -2,11 +2,13 @@
  * Admin user type - matches backend AdminUserSerializer.
  */
 
+import type { UserRole } from "@/types/auth"
+
 export interface AdminUser {
   id: number
   email: string
   full_name: string
-  role: string
+  role: UserRole
   is_active: boolean
   email_verified: boolean
   email_verified_at: string | null

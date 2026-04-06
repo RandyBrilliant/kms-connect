@@ -101,10 +101,12 @@ export function NavUser({
                 onClick={() => {
                   const profilePath =
                     user.role === "STAFF"
-                      ? "/staff/profil"
+                      ? "/staff-portal/profil"
                       : user.role === "COMPANY"
                         ? "/company/profil"
-                        : "/profil"
+                        : user.role === "ADMIN"
+                          ? "/admin-portal/profil"
+                          : "/profil"
                   navigate(profilePath)
                 }}
               >

@@ -46,14 +46,28 @@ import { useAdminsQuery, useDeactivateAdminMutation, useActivateAdminMutation } 
 import { toast } from "@/lib/toast"
 import type { AdminUser } from "@/types/admin"
 import type { AdminsListParams } from "@/types/admin"
+import type { UserRole } from "@/types/auth"
+import { isMasterAdmin } from "@/types/auth"
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
 
-interface AdminTableProps {
-  basePath: string
+function adminRoleLabel(role: UserRole): string {
+  switch (role) {
+    case "MASTER_ADMIN":
+      return "Admin Utama"
+    case "ADMIN":
+      return "Admin operator"
+    default:
+      return role
+  }
 }
 
-export function AdminTable({ basePath }: AdminTableProps) {
+interface AdminTableProps {
+  basePath: string
+  readOnly?: boolean
+}
+
+export function AdminTable({ basePath, readOnly = false }: AdminTableProps) {
   const navigate = useNavigate()
   const [params, setParams] = useState<AdminsListParams>({
     page: 1,
@@ -111,7 +125,8 @@ export function AdminTable({ basePath }: AdminTableProps) {
   )
 
   const columns = useMemo<ColumnDef<AdminUser>[]>(
-    () => [
+    () => {
+      const cols: ColumnDef<AdminUser>[] = [
       {
         accessorKey: "full_name",
         header: "Nama",
@@ -127,6 +142,27 @@ export function AdminTable({ basePath }: AdminTableProps) {
         cell: ({ row }) => (
           <span>{row.original.email}</span>
         ),
+      },
+      {
+        accessorKey: "role",
+        header: "Tipe",
+        cell: ({ row }) => {
+          const role = row.original.role
+          const master = isMasterAdmin(role)
+          return (
+            <Badge
+              variant={master ? "default" : "secondary"}
+              className="font-normal"
+              title={
+                master
+                  ? "Akses penuh (master dashboard)"
+                  : "Akses terbatas (portal admin operator)"
+              }
+            >
+              {adminRoleLabel(role)}
+            </Badge>
+          )
+        },
       },
       {
         accessorKey: "is_active",
@@ -172,52 +208,56 @@ export function AdminTable({ basePath }: AdminTableProps) {
             locale: id,
           }),
       },
-      {
-        id: "actions",
-        header: "",
-        cell: ({ row }) => {
-          const admin = row.original
-          return (
-            <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-8 cursor-pointer"
-                onClick={() => navigate(`${basePath}/${admin.id}/edit`)}
-                title="Edit"
-              >
-                <IconPencil className="size-4" />
-                <span className="sr-only">Edit</span>
-              </Button>
-              {admin.is_active ? (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-8 cursor-pointer text-destructive hover:text-destructive"
-                  onClick={() => handleDeactivate(admin)}
-                  title="Nonaktifkan"
-                >
-                  <IconUserOff className="size-4" />
-                  <span className="sr-only">Nonaktifkan</span>
-                </Button>
-              ) : (
+      ]
+      if (!readOnly) {
+        cols.push({
+          id: "actions",
+          header: "",
+          cell: ({ row }) => {
+            const admin = row.original
+            return (
+              <div className="flex items-center gap-1">
                 <Button
                   variant="ghost"
                   size="icon"
                   className="size-8 cursor-pointer"
-                  onClick={() => handleActivate(admin)}
-                  title="Aktifkan"
+                  onClick={() => navigate(`${basePath}/${admin.id}/edit`)}
+                  title="Edit"
                 >
-                  <IconUserCheck className="size-4" />
-                  <span className="sr-only">Aktifkan</span>
+                  <IconPencil className="size-4" />
+                  <span className="sr-only">Edit</span>
                 </Button>
-              )}
-            </div>
-          )
-        },
-      },
-    ],
-    [basePath, navigate, handleActivate, handleDeactivate]
+                {admin.is_active ? (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8 cursor-pointer text-destructive hover:text-destructive"
+                    onClick={() => handleDeactivate(admin)}
+                    title="Nonaktifkan"
+                  >
+                    <IconUserOff className="size-4" />
+                    <span className="sr-only">Nonaktifkan</span>
+                  </Button>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8 cursor-pointer"
+                    onClick={() => handleActivate(admin)}
+                    title="Aktifkan"
+                  >
+                    <IconUserCheck className="size-4" />
+                    <span className="sr-only">Aktifkan</span>
+                  </Button>
+                )}
+              </div>
+            )
+          },
+        })
+      }
+      return cols
+    },
+    [basePath, navigate, handleActivate, handleDeactivate, readOnly]
   )
 
   const table = useReactTable({
@@ -309,12 +349,14 @@ export function AdminTable({ basePath }: AdminTableProps) {
             </Select>
           </div>
         </div>
-        <Button asChild className="cursor-pointer">
-          <Link to={`${basePath}/new`} className="cursor-pointer">
-            <IconPlus className="mr-2 size-4" />
-            Tambah Admin
-          </Link>
-        </Button>
+        {!readOnly && (
+          <Button asChild className="cursor-pointer">
+            <Link to={`${basePath}/new`} className="cursor-pointer">
+              <IconPlus className="mr-2 size-4" />
+              Tambah Admin
+            </Link>
+          </Button>
+        )}
       </div>
 
       <div className="overflow-hidden rounded-lg border">

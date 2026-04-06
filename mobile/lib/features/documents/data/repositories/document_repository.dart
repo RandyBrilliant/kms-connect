@@ -10,10 +10,10 @@ import '../../domain/models/applicant_document.dart';
 class DocumentRepository {
   final ApiClient _apiClient = ApiClient();
 
-  /// Get public document types
+  /// Document types for upload checklist (auth required; INITIAL-only until INTERVIEW+).
   Future<List<DocumentType>> getDocumentTypes() async {
     try {
-      final response = await _apiClient.dio.get(ApiEndpoints.publicDocumentTypes);
+      final response = await _apiClient.dio.get(ApiEndpoints.myDocumentTypes);
       final apiResponse = ApiResponse<List<dynamic>>.fromJson(
         response.data,
         (data) => data as List<dynamic>,

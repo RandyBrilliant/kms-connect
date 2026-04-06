@@ -18,6 +18,20 @@
 
 import { api } from "@/lib/api"
 import type { PaginatedResponse } from "@/types/admin"
+
+function unwrapPaginated<T>(raw: unknown): PaginatedResponse<T> {
+  if (
+    raw &&
+    typeof raw === "object" &&
+    "data" in raw &&
+    (raw as { data?: unknown }).data != null &&
+    typeof (raw as { data: unknown }).data === "object" &&
+    "results" in ((raw as { data: object }).data as object)
+  ) {
+    return (raw as { data: PaginatedResponse<T> }).data
+  }
+  return raw as PaginatedResponse<T>
+}
 import type {
   LamaranBatch,
   ApplicantSearchRow,
@@ -64,8 +78,13 @@ export async function getBatch(id: number): Promise<LamaranBatch> {
 
 /** POST /api/batches/ — admin creates a batch */
 export async function createBatch(input: CreateBatchInput): Promise<LamaranBatch> {
-  const { data } = await api.post<{ data: LamaranBatch }>("/api/batches/", input)
-  return data.data
+  const { data: body } = await api.post<
+    { data: LamaranBatch } | (LamaranBatch & { data?: LamaranBatch })
+  >("/api/batches/", input)
+  if (body && typeof body === "object" && "data" in body && body.data != null) {
+    return body.data
+  }
+  return body as LamaranBatch
 }
 
 /** PATCH /api/batches/:id/ — update name / notes */
@@ -100,10 +119,9 @@ export async function getEligibleApplicants(
   if (params.page != null) search.set("page", String(params.page))
   if (params.page_size != null) search.set("page_size", String(params.page_size))
   const qs = search.toString()
-  const { data } = await api.get<PaginatedResponse<ApplicantSearchRow>>(
-    `/api/batches/${batchId}/eligible-applicants/${qs ? `?${qs}` : ""}`
-  )
-  return data
+  const path = `/api/batches/${batchId}/eligible-applicants/${qs ? `?${qs}` : ""}`
+  const { data } = await api.get<unknown>(path)
+  return unwrapPaginated<ApplicantSearchRow>(data)
 }
 
 // ---------------------------------------------------------------------------

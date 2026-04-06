@@ -99,7 +99,9 @@ class News(models.Model):
         null=True,
         blank=True,
         related_name="news_created",
-        limit_choices_to={"role__in": [UserRole.ADMIN, UserRole.STAFF]},
+        limit_choices_to={
+            "role__in": [UserRole.MASTER_ADMIN, UserRole.ADMIN, UserRole.STAFF]
+        },
         verbose_name=_("dibuat oleh"),
         help_text=_("Admin/Staf yang membuat berita ini."),
     )
@@ -256,7 +258,14 @@ class LowonganKerja(models.Model):
         null=True,
         blank=True,
         related_name="job_listings_created",
-        limit_choices_to={"role__in": [UserRole.ADMIN, UserRole.STAFF, UserRole.COMPANY]},
+        limit_choices_to={
+            "role__in": [
+                UserRole.MASTER_ADMIN,
+                UserRole.ADMIN,
+                UserRole.STAFF,
+                UserRole.COMPANY,
+            ]
+        },
         verbose_name=_("dibuat oleh"),
         help_text=_("Admin/Staf/Perusahaan yang membuat lowongan ini."),
     )
@@ -414,7 +423,9 @@ class LamaranBatch(models.Model):
         null=True,
         blank=True,
         related_name="batches_created",
-        limit_choices_to={"role__in": [UserRole.ADMIN, UserRole.STAFF]},
+        limit_choices_to={
+            "role__in": [UserRole.MASTER_ADMIN, UserRole.ADMIN, UserRole.STAFF]
+        },
         verbose_name=_("dibuat oleh"),
         help_text=_("Admin/Staf yang membuat batch ini."),
     )
@@ -570,7 +581,9 @@ class JobApplication(models.Model):
         null=True,
         blank=True,
         related_name="reviewed_applications",
-        limit_choices_to={"role__in": [UserRole.ADMIN, UserRole.STAFF]},
+        limit_choices_to={
+            "role__in": [UserRole.MASTER_ADMIN, UserRole.ADMIN, UserRole.STAFF]
+        },
         verbose_name=_("direview oleh"),
         help_text=_("Admin atau Staff yang terakhir mengubah status lamaran ini."),
     )
@@ -580,7 +593,9 @@ class JobApplication(models.Model):
         null=True,
         blank=True,
         related_name="assigned_applications",
-        limit_choices_to={"role__in": [UserRole.ADMIN, UserRole.STAFF]},
+        limit_choices_to={
+            "role__in": [UserRole.MASTER_ADMIN, UserRole.ADMIN, UserRole.STAFF]
+        },
         verbose_name=_("ditugaskan oleh"),
         help_text=_("Admin atau Staff yang memasukkan pelamar ke batch ini."),
     )
@@ -724,7 +739,9 @@ class BatchAnnouncement(models.Model):
         null=True,
         blank=True,
         related_name="batch_announcements_created",
-        limit_choices_to={"role__in": [UserRole.ADMIN, UserRole.STAFF]},
+        limit_choices_to={
+            "role__in": [UserRole.MASTER_ADMIN, UserRole.ADMIN, UserRole.STAFF]
+        },
         verbose_name=_("dibuat oleh"),
     )
     created_at = models.DateTimeField(_("dibuat pada"), auto_now_add=True, db_index=True)

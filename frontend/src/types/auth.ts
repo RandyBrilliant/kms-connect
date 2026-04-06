@@ -1,9 +1,13 @@
 /**
  * User roles from backend (CustomUser.role).
- * Only ADMIN, STAFF, COMPANY can access the dashboard.
- * APPLICANT uses a separate mobile/applicant portal.
+ * MASTER_ADMIN and ADMIN use the web dashboard; APPLICANT uses mobile portal.
  */
-export type UserRole = "ADMIN" | "STAFF" | "COMPANY" | "APPLICANT"
+export type UserRole =
+  | "MASTER_ADMIN"
+  | "ADMIN"
+  | "STAFF"
+  | "COMPANY"
+  | "APPLICANT"
 
 /** User summary returned by login and /api/me/ */
 export interface User {
@@ -15,15 +19,21 @@ export interface User {
   email_verified: boolean
 }
 
-/** Roles allowed to access the backoffice dashboard */
-export const DASHBOARD_ROLES: UserRole[] = ["ADMIN", "STAFF", "COMPANY"]
+/** Roles allowed to access the backoffice web dashboard */
+export const DASHBOARD_ROLES: UserRole[] = [
+  "MASTER_ADMIN",
+  "ADMIN",
+  "STAFF",
+  "COMPANY",
+]
 
 /** Route prefix per role (dashboard / home) */
 export const ROLE_ROUTE: Record<UserRole, string> = {
-  ADMIN: "/",
+  MASTER_ADMIN: "/",
+  ADMIN: "/admin-portal",
   STAFF: "/staff-portal",
   COMPANY: "/company",
-  APPLICANT: "/login", // Applicants redirect to login with error
+  APPLICANT: "/login",
 }
 
 export function getDashboardRouteForRole(role: UserRole): string {
@@ -32,4 +42,16 @@ export function getDashboardRouteForRole(role: UserRole): string {
 
 export function canAccessDashboard(role: UserRole): boolean {
   return DASHBOARD_ROLES.includes(role)
+}
+
+export function isMasterAdmin(role: UserRole): boolean {
+  return role === "MASTER_ADMIN"
+}
+
+export function isRestrictedAdmin(role: UserRole): boolean {
+  return role === "ADMIN"
+}
+
+export function isAnyWebAdmin(role: UserRole): boolean {
+  return role === "MASTER_ADMIN" || role === "ADMIN"
 }

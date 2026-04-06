@@ -193,7 +193,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         except ChatThread.DoesNotExist:
             return False
 
-        if user.role in ("ADMIN", "STAFF"):
+        if user.role in ("MASTER_ADMIN", "ADMIN", "STAFF"):
             return True
 
         # Applicant must own the application

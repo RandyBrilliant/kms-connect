@@ -40,10 +40,12 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { IconLoader, IconUsers, IconDeviceFloppy, IconArrowLeft } from "@tabler/icons-react"
 import { toast } from "@/lib/toast"
-
-const BASE_PATH = "/broadcasts"
+import { joinAdminPath, useAdminDashboard } from "@/contexts/admin-dashboard-context"
 
 export function AdminBroadcastFormPage() {
+  const { basePath } = useAdminDashboard()
+  const BASE_PATH = joinAdminPath(basePath, "/broadcasts")
+
   const { id } = useParams<{ id: string }>()
   const isEdit = Boolean(id)
   usePageTitle(isEdit ? "Edit Broadcast" : "Buat Broadcast Baru")
@@ -115,12 +117,12 @@ export function AdminBroadcastFormPage() {
   const pageTitle = isEdit ? "Edit Broadcast" : "Buat Broadcast Baru"
   const breadcrumbItems = isEdit
     ? [
-        { label: "Dashboard", href: "/" },
+        { label: "Dashboard", href: basePath || "/" },
         { label: "Broadcasts", href: BASE_PATH },
         { label: "Edit" },
       ]
     : [
-        { label: "Dashboard", href: "/" },
+        { label: "Dashboard", href: basePath || "/" },
         { label: "Broadcasts", href: BASE_PATH },
         { label: "Buat Baru" },
       ]
@@ -280,7 +282,7 @@ export function AdminBroadcastFormPage() {
                       <div className="ml-6 space-y-2">
                         <Label>Pilih Role</Label>
                         <div className="space-y-2">
-                          {["ADMIN", "STAFF", "COMPANY", "APPLICANT"].map((role) => (
+                          {["MASTER_ADMIN", "ADMIN", "STAFF", "COMPANY", "APPLICANT"].map((role) => (
                             <div key={role} className="flex items-center space-x-2">
                               <Checkbox
                                 id={`role-${role}`}

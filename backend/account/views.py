@@ -37,7 +37,7 @@ from .models import (
     NotificationPreference,
     AccountDeletionRequest,
 )
-from .permissions import IsBackofficeAdmin, IsApplicant
+from .permissions import IsBackofficeAdmin, IsMasterAdmin, IsApplicant
 from .throttles import AuthPublicRateThrottle
 from .email_utils import (
     send_verification_email,
@@ -83,6 +83,7 @@ logger = logging.getLogger(__name__)
 def _get_serializer_class_for_role(role):
     """Return the user serializer class for the given role (for /api/me/)."""
     return {
+        UserRole.MASTER_ADMIN: AdminUserSerializer,
         UserRole.ADMIN: AdminUserSerializer,
         UserRole.STAFF: StaffUserSerializer,
         UserRole.COMPANY: CompanyUserSerializer,
@@ -263,8 +264,8 @@ class NotificationPreferenceView(APIView):
 
 class AdminUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
     """
-    CRUD untuk pengguna Admin (CustomUser role=ADMIN).
-    List, create, retrieve, update, partial_update. Tidak ada delete; gunakan deactivate.
+    CRUD untuk pengguna Admin Utama / Admin (operator).
+    List & retrieve: kedua jenis admin. Tulis & deactivate: hanya Admin Utama / superuser.
     """
 
     http_method_names = ["get", "post", "put", "patch", "head", "options"]
@@ -276,8 +277,15 @@ class AdminUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
     ordering_fields = ["email", "full_name", "date_joined", "updated_at"]
     ordering = ["email"]
 
+    def get_permissions(self):
+        if self.action in ("list", "retrieve"):
+            return [IsBackofficeAdmin()]
+        return [IsMasterAdmin()]
+
     def get_queryset(self):
-        return CustomUser.objects.filter(role=UserRole.ADMIN)
+        return CustomUser.objects.filter(
+            role__in=[UserRole.MASTER_ADMIN, UserRole.ADMIN]
+        )
 
     def destroy(self, request, *args, **kwargs):
         return destroy_disallowed_response()
@@ -298,6 +306,11 @@ class StaffUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
     ordering_fields = ["email", "date_joined", "updated_at", "staff_profile__user__full_name"]
     ordering = ["email"]
 
+    def get_permissions(self):
+        if self.action in ("list", "retrieve"):
+            return [IsBackofficeAdmin()]
+        return [IsMasterAdmin()]
+
     def get_queryset(self):
         return (
             CustomUser.objects.filter(role=UserRole.STAFF)
@@ -316,7 +329,7 @@ class CompanyUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
 
     http_method_names = ["get", "post", "put", "patch", "head", "options"]
     serializer_class = CompanyUserSerializer
-    permission_classes = [IsBackofficeAdmin]
+    permission_classes = [IsMasterAdmin]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ["is_active", "email_verified"]
     search_fields = [
@@ -370,6 +383,11 @@ class ApplicantUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
         "applicant_profile__score",
     ]
     ordering = ["-applicant_profile__created_at"]
+
+    def get_permissions(self):
+        if self.action in ("deactivate", "activate"):
+            return [IsMasterAdmin()]
+        return [IsBackofficeAdmin()]
 
     def get_queryset(self):
         return (
@@ -881,7 +899,9 @@ class ReferrerListView(APIView):
 
     def get(self, request):
         qs = (
-            CustomUser.objects.filter(role__in=[UserRole.STAFF, UserRole.ADMIN])
+            CustomUser.objects.filter(
+                role__in=[UserRole.STAFF, UserRole.MASTER_ADMIN, UserRole.ADMIN]
+            )
             .order_by("full_name", "email")
         )
         serializer = ReferrerListSerializer(qs, many=True)
@@ -913,7 +933,7 @@ class PublicStaffReferrersView(APIView):
         if data is None:
             data = list(
                 CustomUser.objects.filter(
-                    role__in=[UserRole.STAFF, UserRole.ADMIN],
+                    role__in=[UserRole.STAFF, UserRole.MASTER_ADMIN, UserRole.ADMIN],
                     is_active=True,
                     referral_code__isnull=False,
                 )
@@ -940,8 +960,10 @@ class DocumentTypeViewSet(viewsets.ReadOnlyModelViewSet):
 
 class DocumentTypePublicListView(APIView):
     """
-    Public read-only list of document types (for mobile/applicant upload checklist).
-    Cached to reduce DB hits. GET only; no auth required.
+    Public read-only list of all document types (cached). GET only; no auth.
+
+    For the applicant upload checklist, prefer GET /api/applicants/me/document-types/
+    (authenticated) so INITIAL vs POST_INTERVIEW can follow lamaran progress.
     """
 
     permission_classes = [AllowAny]
@@ -1141,11 +1163,12 @@ class AdminReportView(APIView):
     """
     Laporan statistik pelamar dengan filter rentang tanggal.
     Default: bulan berjalan jika start_date dan end_date tidak diberikan.
-    
+    Hanya Admin Utama / superuser (bukan Admin operator).
+
     Query params:
     - start_date: YYYY-MM-DD (default: first day of current month)
     - end_date: YYYY-MM-DD (default: today)
-    
+
     Response:
     - summary: total counts and growth
     - by_status: breakdown by verification status
@@ -1156,7 +1179,7 @@ class AdminReportView(APIView):
     - timeline: daily registrations within date range
     """
 
-    permission_classes = [IsBackofficeAdmin]
+    permission_classes = [IsMasterAdmin]
 
     def get(self, request):
         # Parse date range from query params
@@ -1714,7 +1737,7 @@ class AccountDeletionRequestViewSet(viewsets.GenericViewSet):
     """
     Admin CRUD + applicant self-service for account deletion requests.
 
-    Admin endpoints (require IsBackofficeAdmin):
+    Admin endpoints (require IsMasterAdmin — operator Admin cannot access):
       GET    /api/deletion-requests/          – list all requests (filterable by status)
       GET    /api/deletion-requests/<id>/     – retrieve one request
       POST   /api/deletion-requests/<id>/approve/ – approve (triggers user deactivation)
@@ -1731,7 +1754,7 @@ class AccountDeletionRequestViewSet(viewsets.GenericViewSet):
     def get_permissions(self):
         if self.action in ("my_request", "submit", "cancel"):
             return [IsAuthenticated(), IsApplicant()]
-        return [IsBackofficeAdmin()]
+        return [IsMasterAdmin()]
 
     # ------------------------------------------------------------------ admin
 

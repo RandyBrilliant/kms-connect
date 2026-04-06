@@ -452,12 +452,12 @@ class LamaranBatchCreateSerializer(serializers.Serializer):
     """
 
     job = serializers.PrimaryKeyRelatedField(
-        queryset=LowonganKerja.objects.filter(status="OPEN"),
-        help_text="ID lowongan kerja (harus berstatus OPEN).",
+        queryset=LowonganKerja.objects.all(),
+        help_text="ID lowongan kerja (semua status kecuali draf dapat dipakai operasional).",
     )
     name = serializers.CharField(
-        max_length=200,
-        help_text="Nama batch, misalnya 'Batch Maret 2026'.",
+        max_length=100,
+        help_text="Nama batch, misalnya 'Batch Maret 2026' (maks. 100 karakter).",
     )
     notes = serializers.CharField(
         required=False,

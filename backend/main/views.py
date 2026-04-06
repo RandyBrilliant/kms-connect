@@ -6,6 +6,7 @@ Public endpoints: published news, OPEN jobs.
 Company/Staff self-service: read-only views of their own data.
 """
 
+from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -14,7 +15,13 @@ from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.filters import SearchFilter, OrderingFilter
 
-from account.permissions import IsBackofficeAdmin, IsApplicant, IsCompany, IsStaff
+from account.permissions import (
+    IsBackofficeAdmin,
+    IsMasterAdmin,
+    IsApplicant,
+    IsCompany,
+    IsStaff,
+)
 from account.api_responses import success_response, error_response, ApiCode
 from account.models import ApplicantProfile, ApplicantVerificationStatus, CustomUser, UserRole
 from account.pagination import StandardResultsSetPagination
@@ -72,7 +79,7 @@ class NewsViewSet(viewsets.ModelViewSet):
 class LowonganKerjaViewSet(viewsets.ModelViewSet):
     """
     CRUD lowongan kerja untuk admin/backoffice.
-    Admin mengelola lowongan yang nantinya dapat dilihat publik/pelamar.
+    Admin Utama mengubah master data; Admin operator hanya baca (list/detail).
     """
 
     http_method_names = ["get", "post", "put", "patch", "delete", "head", "options"]
@@ -83,6 +90,11 @@ class LowonganKerjaViewSet(viewsets.ModelViewSet):
     search_fields = ["title", "description", "requirements", "company__company_name"]
     ordering_fields = ["posted_at", "deadline", "created_at", "updated_at", "title"]
     ordering = ["-posted_at", "-created_at"]
+
+    def get_permissions(self):
+        if self.action in ("list", "retrieve"):
+            return [IsBackofficeAdmin()]
+        return [IsMasterAdmin()]
 
     def get_queryset(self):
         return (
@@ -143,6 +155,28 @@ class PublicJobsListViewSet(viewsets.ReadOnlyModelViewSet):
 # ---------------------------------------------------------------------------
 
 
+def _first_serializer_error_detail(errors: dict) -> str | None:
+    """Return the first string message from DRF serializer.errors for API detail."""
+    if not errors:
+        return None
+    for val in errors.values():
+        if isinstance(val, list) and val:
+            first = val[0]
+            if isinstance(first, dict):
+                sub = _first_serializer_error_detail(first)
+                if sub:
+                    return sub
+            else:
+                return str(first)
+        elif isinstance(val, str):
+            return val
+        elif isinstance(val, dict):
+            sub = _first_serializer_error_detail(val)
+            if sub:
+                return sub
+    return None
+
+
 class LamaranBatchViewSet(viewsets.ModelViewSet):
     """
     CRUD + custom actions untuk LamaranBatch (admin/backoffice).
@@ -180,12 +214,28 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
             .prefetch_related("applications")
         )
 
+    def _get_batch_for_action(self, pk):
+        """
+        Resolve the batch by primary key without applying filter_queryset().
+
+        Custom actions receive the same query params as list views (e.g. search,
+        ordering, job). SearchFilter/OrderingFilter/DjangoFilterBackend would
+        narrow LamaranBatch.objects and make get_object() return 404 even when
+        the batch exists — breaking endpoints like eligible-applicants?q=...
+        """
+        return get_object_or_404(
+            LamaranBatch.objects.select_related("job", "job__company", "created_by")
+            .prefetch_related("applications"),
+            pk=pk,
+        )
+
     def create(self, request, *args, **kwargs):
         serializer = LamaranBatchCreateSerializer(data=request.data)
         if not serializer.is_valid():
+            msg = _first_serializer_error_detail(serializer.errors) or "Data tidak valid."
             return Response(
                 error_response(
-                    detail="Data tidak valid.",
+                    detail=msg,
                     code=ApiCode.VALIDATION_ERROR,
                     errors=serializer.errors,
                 ),
@@ -219,7 +269,7 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
         The admin uses this table to select applicants (checkboxes) before
         calling the `assign` or `check-eligibility` endpoints.
         """
-        batch = self.get_object()
+        self._get_batch_for_action(pk)
         q = request.query_params.get("q", "").strip()
 
         qs = (
@@ -283,7 +333,7 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
         No applications are created. Use this before calling `assign/` to
         preview which applicants will be skipped due to ineligibility.
         """
-        batch = self.get_object()
+        self._get_batch_for_action(pk)
         serializer = BatchCheckEligibilitySerializer(data=request.data)
         if not serializer.is_valid():
             return Response(
@@ -298,7 +348,6 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
         profiles = serializer.validated_data["applicant_ids"]
         results = ApplicationService.bulk_check_eligibility(
             applicant_profiles=profiles,
-            job=batch.job,
         )
 
         data = [
@@ -324,7 +373,7 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
 
         Response includes how many were assigned and which were skipped.
         """
-        batch = self.get_object()
+        batch = self._get_batch_for_action(pk)
         serializer = GroupAssignSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(
@@ -381,7 +430,7 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
         Admin sets the date, location, and notes for either the pra-seleksi
         or interview stage so applicants know when/where to show up.
         """
-        batch = self.get_object()
+        batch = self._get_batch_for_action(pk)
         serializer = BatchScheduleSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(
@@ -422,7 +471,7 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
         Advance ALL eligible applications in this batch to the next status at once.
         Useful for moving the entire batch from PRA_SELEKSI → INTERVIEW etc.
         """
-        batch = self.get_object()
+        batch = self._get_batch_for_action(pk)
         serializer = ApplicationTransitionSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(
@@ -465,7 +514,7 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
         in this batch. Used for early-stage communication (PRA_SELEKSI / INTERVIEW)
         instead of individual chat threads.
         """
-        batch = self.get_object()
+        batch = self._get_batch_for_action(pk)
 
         if request.method == "GET":
             qs = (
@@ -516,7 +565,7 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
         """
         from django.http import HttpResponse
 
-        batch = self.get_object()
+        batch = self._get_batch_for_action(pk)
 
         # Ambil semua user pelamar yang termasuk dalam batch ini
         applications = (
@@ -582,6 +631,11 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
     search_fields = ["applicant__user__full_name", "applicant__user__email", "job__title"]
     ordering_fields = ["applied_at", "status"]
     ordering = ["-applied_at"]
+
+    def get_permissions(self):
+        if self.action == "destroy":
+            return [IsMasterAdmin()]
+        return [IsBackofficeAdmin()]
 
     def get_queryset(self):
         return (

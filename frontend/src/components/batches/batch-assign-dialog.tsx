@@ -63,7 +63,7 @@ export function BatchAssignDialog({
 
   const PAGE_SIZE = 20
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ["eligible-applicants", batchId, searchQuery, page],
     queryFn: () =>
       getEligibleApplicants(batchId, { q: searchQuery, page, page_size: PAGE_SIZE }),
@@ -159,6 +159,10 @@ export function BatchAssignDialog({
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            </div>
+          ) : isError ? (
+            <div className="flex items-center justify-center py-12 px-4 text-center text-sm text-destructive">
+              Gagal memuat daftar pelamar. Tutup dialog dan coba lagi, atau cek koneksi Anda.
             </div>
           ) : (
             <Table>

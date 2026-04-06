@@ -23,6 +23,7 @@ from .serializers import (
     ApplicantProfileSerializer,
     WorkExperienceSerializer,
     ApplicantDocumentSerializer,
+    DocumentTypeSerializer,
 )
 from django.http import HttpResponse
 from .permissions import IsApplicant
@@ -395,6 +396,63 @@ class ApplicantDocumentSelfServiceViewSet(ApplicantSelfServiceMixin, viewsets.Mo
 # Ahli waris (next of kin) is now stored as flat fields on ApplicantProfile:
 #   heir_name, heir_relationship, heir_contact_phone
 # Update them via PATCH /api/applicants/me/profile/
+
+
+class ApplicantDocumentTypesChecklistView(APIView):
+    """
+    GET /api/applicants/me/document-types/
+
+    Daftar tipe dokumen untuk checklist unggah (mobile), disesuaikan dengan
+    progres lamaran:
+
+    - Hanya fase INITIAL sampai pelamar punya minimal satu lamaran dengan status
+      INTERVIEW, DITERIMA, BERANGKAT, atau SELESAI.
+    - Setelah itu: semua tipe (INITIAL + POST_INTERVIEW).
+    """
+
+    permission_classes = [IsAuthenticated, IsApplicant]
+
+    def get(self, request):
+        from main.models import JobApplication, ApplicationStatus
+
+        profile = getattr(request.user, "applicant_profile", None)
+        if profile is None:
+            try:
+                profile = ApplicantProfile.objects.get(user=request.user)
+            except ApplicantProfile.DoesNotExist:
+                profile = None
+        if profile is None:
+            return Response(
+                error_response(
+                    detail="Profil pelamar tidak ditemukan.",
+                    code=ApiCode.NOT_FOUND,
+                ),
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        post_interview_onwards = [
+            ApplicationStatus.INTERVIEW,
+            ApplicationStatus.DITERIMA,
+            ApplicationStatus.BERANGKAT,
+            ApplicationStatus.SELESAI,
+        ]
+        has_reached_interview_or_later = JobApplication.objects.filter(
+            applicant=profile,
+            status__in=post_interview_onwards,
+        ).exists()
+
+        if has_reached_interview_or_later:
+            qs = DocumentType.objects.all().order_by("sort_order", "code")
+        else:
+            qs = DocumentType.objects.filter(phase=DocumentType.PHASE_INITIAL).order_by(
+                "sort_order", "code"
+            )
+
+        serializer = DocumentTypeSerializer(qs, many=True)
+        return Response(
+            success_response(data=serializer.data),
+            status=status.HTTP_200_OK,
+        )
 
 
 class ApplicantChangePasswordView(APIView):

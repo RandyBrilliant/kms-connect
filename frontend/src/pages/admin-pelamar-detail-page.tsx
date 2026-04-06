@@ -49,12 +49,20 @@ import { toast } from "@/lib/toast"
 import { viewBiodataPdf, viewInbondPdf } from "@/api/applicants"
 import type { ApplicantUser, ApplicantVerificationStatus, ApplicantProfile } from "@/types/applicant"
 import { usePageTitle } from "@/hooks/use-page-title"
+import {
+  joinAdminPath,
+  useAdminDashboard,
+} from "@/contexts/admin-dashboard-context"
+import { useAuth } from "@/hooks/use-auth"
+import { isRestrictedAdmin, type UserRole } from "@/types/auth"
 
-const APPLICATIONS_BASE = "/lamaran"
-
-const BASE_PATH = "/pelamar"
-
-function ApplicantSidebar({ applicant }: { applicant: ApplicantUser }) {
+function ApplicantSidebar({
+  applicant,
+  hideAccountToggle,
+}: {
+  applicant: ApplicantUser
+  hideAccountToggle?: boolean
+}) {
   const deactivateMutation = useDeactivateApplicantMutation()
   const activateMutation = useActivateApplicantMutation()
   const sendVerificationMutation = useSendVerificationEmailMutation()
@@ -332,34 +340,36 @@ function ApplicantSidebar({ applicant }: { applicant: ApplicantUser }) {
         </Card>
       )}
 
-      {/* Status: Aktif / Nonaktif */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Status Akun</CardTitle>
-          <CardDescription>
-            {applicant.is_active
-              ? "Akun aktif dan dapat login"
-              : "Akun nonaktif dan tidak dapat login"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button
-            type="button"
-            variant={applicant.is_active ? "destructive" : "default"}
-            className={
-              applicant.is_active
-                ? "cursor-pointer"
-                : "cursor-pointer border-green-600 bg-green-600 hover:bg-green-700 hover:text-white"
-            }
-            onClick={handleToggleActive}
-            disabled={
-              deactivateMutation.isPending || activateMutation.isPending
-            }
-          >
-            {applicant.is_active ? "Nonaktifkan" : "Aktifkan"}
-          </Button>
-        </CardContent>
-      </Card>
+      {/* Status: Aktif / Nonaktif — hanya Admin Utama */}
+      {!hideAccountToggle && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Status Akun</CardTitle>
+            <CardDescription>
+              {applicant.is_active
+                ? "Akun aktif dan dapat login"
+                : "Akun nonaktif dan tidak dapat login"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button
+              type="button"
+              variant={applicant.is_active ? "destructive" : "default"}
+              className={
+                applicant.is_active
+                  ? "cursor-pointer"
+                  : "cursor-pointer border-green-600 bg-green-600 hover:bg-green-700 hover:text-white"
+              }
+              onClick={handleToggleActive}
+              disabled={
+                deactivateMutation.isPending || activateMutation.isPending
+              }
+            >
+              {applicant.is_active ? "Nonaktifkan" : "Aktifkan"}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Metadata & audit info */}
       {profile && (
@@ -514,7 +524,13 @@ function ApplicantSidebar({ applicant }: { applicant: ApplicantUser }) {
   )
 }
 
-function ApplicantApplicationsTab({ profileId }: { profileId?: number }) {
+function ApplicantApplicationsTab({
+  profileId,
+  lamaranBase,
+}: {
+  profileId?: number
+  lamaranBase: string
+}) {
   const { data, isLoading } = useApplicationsQuery(
     profileId ? { applicant: profileId, page_size: 50 } : {},
     !!profileId
@@ -582,7 +598,7 @@ function ApplicantApplicationsTab({ profileId }: { profileId?: number }) {
                 size="sm"
                 className="cursor-pointer"
               >
-                <Link to={`${APPLICATIONS_BASE}/${app.id}?tab=chat`}>
+                <Link to={`${lamaranBase}/${app.id}?tab=chat`}>
                   <IconMessage className="mr-2 size-4" />
                   Chat
                 </Link>
@@ -593,7 +609,7 @@ function ApplicantApplicationsTab({ profileId }: { profileId?: number }) {
                 size="sm"
                 className="cursor-pointer"
               >
-                <Link to={`${APPLICATIONS_BASE}/${app.id}`}>
+                <Link to={`${lamaranBase}/${app.id}`}>
                   <IconExternalLink className="mr-2 size-4" />
                   Detail
                 </Link>
@@ -609,6 +625,13 @@ function ApplicantApplicationsTab({ profileId }: { profileId?: number }) {
 export function AdminPelamarDetailPage() {
   const { id } = useParams<{ id: string }>()
   const applicantId = id ? parseInt(id, 10) : null
+  const { basePath } = useAdminDashboard()
+  const { user } = useAuth()
+  const BASE_PATH = joinAdminPath(basePath, "/pelamar")
+  const lamaranBase = joinAdminPath(basePath, "/lamaran")
+  const hideAccountToggle = user
+    ? isRestrictedAdmin(user.role as UserRole)
+    : false
 
   usePageTitle("Detail Pelamar")
 
@@ -694,7 +717,7 @@ export function AdminPelamarDetailPage() {
         <div className="flex flex-col gap-2">
           <BreadcrumbNav
             items={[
-              { label: "Dashboard", href: "/" },
+              { label: "Dashboard", href: basePath || "/" },
               { label: "Daftar Pelamar", href: BASE_PATH },
               { label: displayName },
             ]}
@@ -747,7 +770,10 @@ export function AdminPelamarDetailPage() {
               />
             </div>
             <div className="flex flex-col gap-6">
-              <ApplicantSidebar applicant={applicant} />
+              <ApplicantSidebar
+                applicant={applicant}
+                hideAccountToggle={hideAccountToggle}
+              />
             </div>
           </div>
         </TabsContent>
@@ -776,7 +802,10 @@ export function AdminPelamarDetailPage() {
         </TabsContent>
 
         <TabsContent value="lamaran">
-          <ApplicantApplicationsTab profileId={applicant.applicant_profile?.id} />
+          <ApplicantApplicationsTab
+            profileId={applicant.applicant_profile?.id}
+            lamaranBase={lamaranBase}
+          />
         </TabsContent>
       </Tabs>
     </div>

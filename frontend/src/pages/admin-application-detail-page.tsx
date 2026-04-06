@@ -27,8 +27,7 @@ import { ChatPanel } from "@/components/chat/chat-panel"
 import { useApplicationQuery } from "@/hooks/use-applications-query"
 import { useChatThreadsQuery } from "@/hooks/use-chat-query"
 import { useAuth } from "@/hooks/use-auth"
-
-const BASE_PATH = "/lowongan-kerja"
+import { joinAdminPath, useAdminDashboard } from "@/contexts/admin-dashboard-context"
 
 const CHAT_ALLOWED_STATUSES = new Set(["DITERIMA", "BERANGKAT", "SELESAI"])
 
@@ -51,6 +50,8 @@ export function AdminApplicationDetailPage() {
   const appId = Number(id)
   const [searchParams, setSearchParams] = useSearchParams()
   const activeTab = searchParams.get("tab") ?? "info"
+  const { basePath } = useAdminDashboard()
+  const BASE_PATH = joinAdminPath(basePath, "/lowongan-kerja")
 
   const { data: application, isLoading, isError } = useApplicationQuery(appId)
   const { data: threadsPage } = useChatThreadsQuery(
@@ -88,6 +89,7 @@ export function AdminApplicationDetailPage() {
     <div className="flex flex-col gap-6 p-6">
       <BreadcrumbNav
         items={[
+          { label: "Dashboard", href: basePath || "/" },
           { label: "Lowongan Kerja", href: BASE_PATH },
           { label: application.job_title, href: `${BASE_PATH}/${application.job}` },
           { label: application.applicant_name },

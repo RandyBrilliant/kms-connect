@@ -1,7 +1,7 @@
 """
 Account models for the TKI recruitment platform.
 
-- CustomUser: email-based auth with role (Admin, Staff, Company, Applicant).
+- CustomUser: email-based auth with role (Master Admin, Admin, Staff, Company, Applicant).
 - StaffProfile: extended profile for Staff users.
 - ApplicantProfile: extended profile for Applicants (pelamar / TKI).
 - CompanyProfile: extended profile for Company users (pihak perusahaan).
@@ -35,13 +35,23 @@ from .document_specs import validate_document_file
 class UserRole(models.TextChoices):
     """Peran pengguna untuk akses dan tipe profil."""
 
+    MASTER_ADMIN = "MASTER_ADMIN", _("Admin Utama")
     ADMIN = "ADMIN", _("Admin")
     STAFF = "STAFF", _("Staf")
     COMPANY = "COMPANY", _("Perusahaan")
     APPLICANT = "APPLICANT", _("Pelamar")
 
 # Longest choice value length for CharField max_length
-USER_ROLE_MAX_LENGTH = 9
+USER_ROLE_MAX_LENGTH = 12
+
+
+# Roles that use the admin web dashboard (master or restricted operator).
+BACKOFFICE_ADMIN_ROLES = frozenset({UserRole.MASTER_ADMIN, UserRole.ADMIN})
+
+# Admin or Staff (referral, reviewer FKs, operational actors).
+ADMIN_OR_STAFF_ROLES = frozenset(
+    {UserRole.MASTER_ADMIN, UserRole.ADMIN, UserRole.STAFF}
+)
 
 
 class Gender(models.TextChoices):
@@ -175,7 +185,7 @@ NEXT_OF_KIN_RELATIONSHIP_MAX_LENGTH = 7  # LAINNYA
 
 class CustomUser(AbstractUser):
     """
-    Email-based user with a single role: Admin, Staff, Company, or Applicant.
+    Email-based user with a single role: Master Admin, Admin, Staff, Company, or Applicant.
     Username/first_name/last_name are unused; email is the sole identifier.
     """
 
@@ -257,8 +267,18 @@ class CustomUser(AbstractUser):
     # ---- Role helpers (single role per user) ----
 
     @property
-    def is_admin(self) -> bool:
+    def is_master_admin(self) -> bool:
+        return self.role == UserRole.MASTER_ADMIN
+
+    @property
+    def is_restricted_admin(self) -> bool:
+        """Operator admin (bukan Admin Utama)."""
         return self.role == UserRole.ADMIN
+
+    @property
+    def is_admin(self) -> bool:
+        """True for Master Admin atau Admin (operator)."""
+        return self.role in BACKOFFICE_ADMIN_ROLES
 
     @property
     def is_staff_role(self) -> bool:
@@ -275,8 +295,12 @@ class CustomUser(AbstractUser):
 
     @property
     def is_backoffice(self) -> bool:
-        """True for Admin or Staff (dashboard / internal use)."""
-        return self.role in (UserRole.ADMIN, UserRole.STAFF)
+        """True for Admin (both), Master Admin, or Staff (dashboard / internal use)."""
+        return self.role in (
+            UserRole.MASTER_ADMIN,
+            UserRole.ADMIN,
+            UserRole.STAFF,
+        )
 
     def has_applicant_profile(self) -> bool:
         return hasattr(self, "applicant_profile")
@@ -293,7 +317,11 @@ class CustomUser(AbstractUser):
         import random
         import string
 
-        prefix = "A" if self.role == UserRole.ADMIN else "S"
+        prefix = (
+            "A"
+            if self.role in (UserRole.MASTER_ADMIN, UserRole.ADMIN)
+            else "S"
+        )
         chars = string.ascii_uppercase + string.digits
         
         # Try up to 10 times to generate a unique code
@@ -315,7 +343,7 @@ class CustomUser(AbstractUser):
         Only applicable for STAFF and ADMIN roles.
         Returns the referral code.
         """
-        if self.role not in (UserRole.STAFF, UserRole.ADMIN):
+        if self.role not in (UserRole.STAFF, UserRole.MASTER_ADMIN, UserRole.ADMIN):
             return ""
         
         if not self.referral_code:
@@ -403,7 +431,9 @@ class ApplicantProfile(models.Model):
         null=True,
         blank=True,
         related_name="referred_applicants",
-        limit_choices_to={"role__in": [UserRole.STAFF, UserRole.ADMIN]},
+        limit_choices_to={
+            "role__in": [UserRole.STAFF, UserRole.MASTER_ADMIN, UserRole.ADMIN]
+        },
         verbose_name=_("perujuk"),
         help_text=_("Staf atau Admin yang merujuk pelamar ini. Jika kosong, dianggap Admin."),
     )
@@ -919,7 +949,9 @@ class ApplicantProfile(models.Model):
         null=True,
         blank=True,
         related_name="verified_applicants",
-        limit_choices_to={"role__in": [UserRole.STAFF, UserRole.ADMIN]},
+        limit_choices_to={
+            "role__in": [UserRole.STAFF, UserRole.MASTER_ADMIN, UserRole.ADMIN]
+        },
         verbose_name=_("diverifikasi oleh"),
         help_text=_("Admin atau Staf yang memverifikasi pelamar ini."),
     )
@@ -1003,6 +1035,7 @@ class ApplicantProfile(models.Model):
             )
         if self.referrer_id and self.referrer.role not in (
             UserRole.STAFF,
+            UserRole.MASTER_ADMIN,
             UserRole.ADMIN,
         ):
             raise ValidationError(
@@ -1662,7 +1695,9 @@ class ApplicantDocument(models.Model):
         null=True,
         blank=True,
         related_name="reviewed_documents",
-        limit_choices_to={"role__in": [UserRole.STAFF, UserRole.ADMIN]},
+        limit_choices_to={
+            "role__in": [UserRole.STAFF, UserRole.MASTER_ADMIN, UserRole.ADMIN]
+        },
         verbose_name=_("direview oleh"),
         help_text=_("Admin atau Staff yang mereview dokumen ini."),
     )
@@ -1910,7 +1945,9 @@ class Broadcast(models.Model):
         null=True,
         blank=True,
         related_name="broadcasts_created",
-        limit_choices_to={"role__in": [UserRole.ADMIN, UserRole.STAFF]},
+        limit_choices_to={
+            "role__in": [UserRole.MASTER_ADMIN, UserRole.ADMIN, UserRole.STAFF]
+        },
         verbose_name=_("dibuat oleh"),
     )
     scheduled_at = models.DateTimeField(
@@ -2375,7 +2412,7 @@ class AccountDeletionRequest(models.Model):
         null=True,
         blank=True,
         related_name="reviewed_deletion_requests",
-        limit_choices_to={"role": UserRole.ADMIN},
+        limit_choices_to={"role__in": [UserRole.MASTER_ADMIN, UserRole.ADMIN]},
         verbose_name=_("ditinjau oleh"),
         help_text=_("Admin yang menyetujui atau menolak permintaan."),
     )

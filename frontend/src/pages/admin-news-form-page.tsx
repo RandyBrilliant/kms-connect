@@ -17,11 +17,12 @@ import {
 import { toast } from "@/lib/toast"
 import type { NewsStatus } from "@/types/news"
 import { usePageTitle } from "@/hooks/use-page-title"
-
-// Admin sidebar "Berita" menu points to "/berita"
-const BASE_PATH = "/berita"
+import { joinAdminPath, useAdminDashboard } from "@/contexts/admin-dashboard-context"
 
 export function AdminNewsFormPage() {
+  const { basePath } = useAdminDashboard()
+  const BASE_PATH = joinAdminPath(basePath, "/berita")
+
   const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
   const isEdit = id !== "new" && id != null
@@ -96,12 +97,12 @@ export function AdminNewsFormPage() {
   const pageTitle = isEdit ? "Edit Berita" : "Tambah Berita"
   const breadcrumbItems = isEdit
     ? [
-        { label: "Dashboard", href: "/" },
+        { label: "Dashboard", href: basePath || "/" },
         { label: "Berita", href: BASE_PATH },
         { label: "Edit" },
       ]
     : [
-        { label: "Dashboard", href: "/" },
+        { label: "Dashboard", href: basePath || "/" },
         { label: "Berita", href: BASE_PATH },
         { label: "Tambah Baru" },
       ]

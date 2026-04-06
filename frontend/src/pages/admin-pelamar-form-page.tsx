@@ -12,10 +12,12 @@ import { useCreateApplicantMutation } from "@/hooks/use-applicants-query"
 import { toast } from "@/lib/toast"
 import { usePageTitle } from "@/hooks/use-page-title"
 import type { ApplicantUserCreateInput } from "@/types/applicant"
-
-const BASE_PATH = "/pelamar"
+import { joinAdminPath, useAdminDashboard } from "@/contexts/admin-dashboard-context"
 
 export function AdminPelamarFormPage() {
+  const { basePath } = useAdminDashboard()
+  const BASE_PATH = joinAdminPath(basePath, "/pelamar")
+
   usePageTitle("Tambah Pelamar")
 
   const navigate = useNavigate()
@@ -56,7 +58,7 @@ export function AdminPelamarFormPage() {
           <div className="flex flex-col gap-2">
             <BreadcrumbNav
               items={[
-                { label: "Dashboard", href: "/" },
+                { label: "Dashboard", href: basePath || "/" },
                 { label: "Daftar Pelamar", href: BASE_PATH },
                 { label: "Tambah Baru" },
               ]}

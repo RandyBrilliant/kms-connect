@@ -18,9 +18,12 @@ import { toast } from "@/lib/toast"
 import type { JobStatus, EmploymentType } from "@/types/jobs"
 import { usePageTitle } from "@/hooks/use-page-title"
 
-const BASE_PATH = "/lowongan-kerja"
+import { joinAdminPath, useAdminDashboard } from "@/contexts/admin-dashboard-context"
 
 export function AdminJobFormPage() {
+  const { basePath } = useAdminDashboard()
+  const BASE_PATH = joinAdminPath(basePath, "/lowongan-kerja")
+
   const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
   const isEdit = id !== "new" && id != null
@@ -102,12 +105,12 @@ export function AdminJobFormPage() {
   const pageTitle = isEdit ? "Edit Lowongan" : "Tambah Lowongan"
   const breadcrumbItems = isEdit
     ? [
-        { label: "Dashboard", href: "/" },
+        { label: "Dashboard", href: basePath || "/" },
         { label: "Lowongan Kerja", href: BASE_PATH },
         { label: "Edit" },
       ]
     : [
-        { label: "Dashboard", href: "/" },
+        { label: "Dashboard", href: basePath || "/" },
         { label: "Lowongan Kerja", href: BASE_PATH },
         { label: "Tambah Baru" },
       ]

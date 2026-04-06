@@ -41,7 +41,9 @@ if TYPE_CHECKING:
 # Key: (current_status, actor_role) → list[allowed_next_status]
 # ---------------------------------------------------------------------------
 
-_ADMIN_ROLES = frozenset({UserRole.ADMIN, UserRole.STAFF})
+_ADMIN_ROLES = frozenset(
+    {UserRole.MASTER_ADMIN, UserRole.ADMIN, UserRole.STAFF}
+)
 
 TRANSITIONS: dict[tuple[str, str], list[str]] = {
     ("PRA_SELEKSI", "admin"): ["INTERVIEW", "DITOLAK"],

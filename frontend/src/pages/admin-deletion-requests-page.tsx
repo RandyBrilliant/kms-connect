@@ -30,6 +30,7 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { toast } from "@/lib/toast"
+import { joinAdminPath, useAdminDashboard } from "@/contexts/admin-dashboard-context"
 import {
     getDeletionRequests,
     approveDeletionRequest,
@@ -56,6 +57,7 @@ const STATUS_VARIANTS: Record<
 
 export function AdminDeletionRequestsPage() {
     usePageTitle("Permintaan Penghapusan Akun")
+    const { basePath } = useAdminDashboard()
 
     const queryClient = useQueryClient()
     const [statusFilter, setStatusFilter] = useState<DeletionRequestStatus | "ALL">("ALL")
@@ -122,8 +124,8 @@ export function AdminDeletionRequestsPage() {
             <div>
                 <BreadcrumbNav
                     items={[
-                        { label: "Dashboard", href: "/" },
-                        { label: "Permintaan Hapus Akun", href: "/hapus-akun" },
+                        { label: "Dashboard", href: basePath || "/" },
+                        { label: "Permintaan Hapus Akun", href: joinAdminPath(basePath, "/hapus-akun") },
                     ]}
                 />
                 <h1 className="mt-2 text-xl font-bold sm:text-2xl">Permintaan Penghapusan Akun</h1>

@@ -429,7 +429,7 @@ def send_admin_daily_digest(self):
 
         recipients = list(
             CustomUser.objects.filter(
-                role__in=[UserRole.ADMIN, UserRole.STAFF],
+                role__in=[UserRole.MASTER_ADMIN, UserRole.ADMIN, UserRole.STAFF],
                 is_active=True,
             ).values_list("email", flat=True)
         )

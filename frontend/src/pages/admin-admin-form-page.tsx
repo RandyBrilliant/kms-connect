@@ -21,8 +21,7 @@ import {
 import { toast } from "@/lib/toast"
 import type { AdminUser } from "@/types/admin"
 import { usePageTitle } from "@/hooks/use-page-title"
-
-const BASE_PATH = "/admin"
+import { joinAdminPath, useAdminDashboard } from "@/contexts/admin-dashboard-context"
 
 function formatDate(value: string | null) {
   if (!value) return "-"
@@ -156,6 +155,9 @@ function AdminEditSidebar({ admin }: { admin: AdminUser }) {
 }
 
 export function AdminAdminFormPage() {
+  const { basePath } = useAdminDashboard()
+  const BASE_PATH = joinAdminPath(basePath, "/admin")
+
   const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
   const isEdit = id !== "new" && id != null
@@ -235,12 +237,12 @@ export function AdminAdminFormPage() {
   const pageTitle = isEdit ? "Edit Admin" : "Tambah Admin"
   const breadcrumbItems = isEdit
     ? [
-        { label: "Dashboard", href: "/" },
+        { label: "Dashboard", href: basePath || "/" },
         { label: "Daftar Admin", href: BASE_PATH },
         { label: "Edit" },
       ]
     : [
-        { label: "Dashboard", href: "/" },
+        { label: "Dashboard", href: basePath || "/" },
         { label: "Daftar Admin", href: BASE_PATH },
         { label: "Tambah Baru" },
       ]

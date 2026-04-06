@@ -64,6 +64,7 @@ import {
 } from "@/types/job-applications"
 import type { BatchAnnouncement, BatchStage } from "@/types/lamaran-batch"
 import { usePageTitle } from "@/hooks/use-page-title"
+import { joinAdminPath, useAdminDashboard } from "@/contexts/admin-dashboard-context"
 
 function formatDate(value: string | null | undefined) {
   if (!value) return "-"
@@ -269,6 +270,7 @@ function BatchStatusTab({
   apps: JobApplication[]
 }) {
   const navigate = useNavigate()
+  const { basePath } = useAdminDashboard()
   const queryClient = useQueryClient()
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [note, setNote] = useState("")
@@ -452,7 +454,9 @@ function BatchStatusTab({
                       variant="ghost"
                       size="sm"
                       className="cursor-pointer"
-                      onClick={() => navigate(`/lamaran/${app.id}`)}
+                      onClick={() =>
+                        navigate(joinAdminPath(basePath, `/lamaran/${app.id}`))
+                      }
                     >
                       Detail
                     </Button>
@@ -484,6 +488,7 @@ export function AdminBatchDetailPage() {
   const { id } = useParams<{ id: string }>()
   const batchId = Number(id)
   const queryClient = useQueryClient()
+  const { basePath } = useAdminDashboard()
 
   const [assignOpen, setAssignOpen] = useState(false)
   const [annoTitle, setAnnoTitle] = useState("")
@@ -566,7 +571,7 @@ export function AdminBatchDetailPage() {
       <div className="p-6">
         <p className="text-destructive">Batch tidak ditemukan.</p>
         <Button asChild variant="outline" className="mt-4 cursor-pointer">
-          <Link to="/lowongan-kerja">
+          <Link to={joinAdminPath(basePath, "/lowongan-kerja")}>
             <IconArrowLeft className="mr-2 size-4" />
             Kembali
           </Link>
@@ -579,8 +584,8 @@ export function AdminBatchDetailPage() {
     <div className="flex flex-col gap-6 px-6 py-6 md:px-8 md:py-8">
       <BreadcrumbNav
         items={[
-          { label: "Lowongan Kerja", href: "/lowongan-kerja" },
-          { label: batch.job_title, href: `/lowongan-kerja/${batch.job}` },
+          { label: "Lowongan Kerja", href: joinAdminPath(basePath, "/lowongan-kerja") },
+          { label: batch.job_title, href: joinAdminPath(basePath, `/lowongan-kerja/${batch.job}`) },
           { label: batch.name },
         ]}
       />
@@ -594,7 +599,7 @@ export function AdminBatchDetailPage() {
             size="icon"
             className="cursor-pointer"
           >
-            <Link to={`/lowongan-kerja/${batch.job}`}>
+            <Link to={joinAdminPath(basePath, `/lowongan-kerja/${batch.job}`)}>
               <IconArrowLeft className="size-5" />
             </Link>
           </Button>

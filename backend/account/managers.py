@@ -42,9 +42,11 @@ class CustomUserManager(BaseUserManager):
     def create_superuser(self, email: str, password: str | None = None, **extra_fields):
         """
         Create and save a superuser with the given email and password.
-        Forces role=ADMIN, is_staff=True, is_superuser=True.
+        Forces role=MASTER_ADMIN, is_staff=True, is_superuser=True.
         """
-        extra_fields.setdefault("role", "ADMIN")
+        from .models import UserRole
+
+        extra_fields.setdefault("role", UserRole.MASTER_ADMIN)
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
         extra_fields.setdefault("is_active", True)
@@ -54,8 +56,8 @@ class CustomUserManager(BaseUserManager):
             raise ValueError(_("Superuser harus is_staff=True."))
         if extra_fields.get("is_superuser") is not True:
             raise ValueError(_("Superuser harus is_superuser=True."))
-        if extra_fields.get("role") != "ADMIN":
-            raise ValueError(_("Superuser harus role=ADMIN."))
+        if extra_fields.get("role") != UserRole.MASTER_ADMIN:
+            raise ValueError(_("Superuser harus role=MASTER_ADMIN."))
         return self.create_user(email, password, **extra_fields)
 
 

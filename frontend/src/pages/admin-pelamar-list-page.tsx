@@ -5,17 +5,19 @@
 import { ApplicantTable } from "@/components/applicants/applicant-table"
 import { BreadcrumbNav } from "@/components/breadcrumb-nav"
 import { usePageTitle } from "@/hooks/use-page-title"
-
-const BASE_PATH = "/pelamar"
+import { joinAdminPath, useAdminDashboard } from "@/contexts/admin-dashboard-context"
 
 export function AdminPelamarListPage() {
+  const { basePath } = useAdminDashboard()
+  const BASE_PATH = joinAdminPath(basePath, "/pelamar")
+
   usePageTitle("Daftar Pelamar")
   return (
     <div className="flex flex-col gap-4 px-4 py-4 sm:gap-6 sm:px-6 sm:py-6 md:px-8 md:py-8">
       <div>
         <BreadcrumbNav
           items={[
-            { label: "Dashboard", href: "/" },
+            { label: "Dashboard", href: basePath || "/" },
             { label: "Daftar Pelamar", href: BASE_PATH },
           ]}
         />

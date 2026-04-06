@@ -21,6 +21,8 @@ static const String ocrPreview = '$baseUrl/auth/ocr-preview/';
   static const String myProfile = '$baseUrl/applicants/me/profile/';
   static const String myWorkExperiences = '$baseUrl/applicants/me/work_experiences/';
   static const String myDocuments = '$baseUrl/applicants/me/documents/';
+  /// Checklist tipe dokumen (INITIAL saja sampai lamaran capai INTERVIEW+).
+  static const String myDocumentTypes = '$baseUrl/applicants/me/document-types/';
   static const String myApplications = '$baseUrl/applicants/me/applications/';
   static const String changePassword = '$baseUrl/applicants/me/change-password/';
   static const String myBiodataPdf = '$baseUrl/applicants/me/biodata-pdf/';
