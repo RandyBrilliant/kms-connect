@@ -43,6 +43,38 @@ def validate_nik(value: str) -> None:
         )
 
 
+def normalize_indonesian_phone(value: str) -> str:
+    """
+    Normalize an Indonesian phone number to E.164 format (+62xxx).
+
+    Handles all common input forms including bare local digits sent by
+    the mobile app's formatter (e.g. "812 6318 xxxx").
+
+    Returns the normalized string, or the cleaned input unchanged when
+    the format is unrecognisable (let the validator raise the error).
+    """
+    if not value:
+        return value
+
+    cleaned = value.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
+
+    if cleaned.startswith('+62'):
+        local = cleaned[3:]
+    elif cleaned.startswith('62') and len(cleaned) > 9:
+        local = cleaned[2:]
+    elif cleaned.startswith('0'):
+        local = cleaned[1:]
+    elif cleaned.isdigit() and 8 <= len(cleaned) <= 13:
+        local = cleaned
+    else:
+        return cleaned
+
+    local = local.lstrip('0')
+    if local and local.isdigit():
+        return '+62' + local
+    return cleaned
+
+
 def validate_indonesian_phone(value: str) -> None:
     """
     Validate Indonesian phone number format.
@@ -51,6 +83,7 @@ def validate_indonesian_phone(value: str) -> None:
     - 08xxxxxxxxxx (10-13 digits starting with 08)
     - +628xxxxxxxxx (starts with +62)
     - 628xxxxxxxxx (starts with 62)
+    - 8xxxxxxxxx (bare local digits, as sent by mobile formatter)
     - With or without spaces/dashes
     
     Args:
@@ -62,31 +95,24 @@ def validate_indonesian_phone(value: str) -> None:
     if not value:
         return  # Allow blank if field allows it
     
-    # Remove common formatting characters
-    cleaned = value.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
+    normalized = normalize_indonesian_phone(value)
     
-    # Remove country code prefix if present
-    if cleaned.startswith('+62'):
-        cleaned = '0' + cleaned[3:]
-    elif cleaned.startswith('62'):
-        cleaned = '0' + cleaned[2:]
-    
-    # Check if contains only digits after cleaning
-    if not cleaned.isdigit():
+    if not normalized.startswith('+62'):
         raise ValidationError(
             _("Nomor telepon harus berisi angka saja (boleh dengan +, -, spasi)."),
             code='phone_invalid_characters'
         )
     
-    # Must start with 0
-    if not cleaned.startswith('0'):
+    local = normalized[3:]
+    
+    if not local.isdigit():
         raise ValidationError(
-            _("Nomor telepon harus dimulai dengan 0 atau +62."),
-            code='phone_invalid_prefix'
+            _("Nomor telepon harus berisi angka saja (boleh dengan +, -, spasi)."),
+            code='phone_invalid_characters'
         )
     
-    # Check length (Indonesian mobile: 10-13 digits)
-    if len(cleaned) < 10 or len(cleaned) > 13:
+    # Indonesian mobile/landline local part: 9-12 digits (total national 10-13 with leading 0)
+    if len(local) < 9 or len(local) > 12:
         raise ValidationError(
             _("Nomor telepon harus 10-13 digit."),
             code='phone_invalid_length'

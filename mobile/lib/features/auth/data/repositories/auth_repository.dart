@@ -8,6 +8,7 @@ import '../../../../core/api/api_client.dart';
 import '../../../../core/api/endpoints.dart';
 import '../../../../core/models/api_response.dart';
 import '../../../../core/utils/image_compressor.dart';
+import '../../../../core/widgets/professional_phone_field.dart';
 import '../../domain/models/user.dart';
 import '../../domain/models/auth_response.dart';
 import '../../domain/models/ktp_data.dart';
@@ -256,7 +257,7 @@ class AuthRepository {
         if (fullName != null && fullName.trim().isNotEmpty)
           'full_name': fullName.trim(),
         if (phoneNumber != null && phoneNumber.trim().isNotEmpty)
-          'phone_number': phoneNumber.trim(),
+          'phone_number': ProfessionalPhoneField.toIndonesiaE164(phoneNumber),
         'birth_place': ?birthPlaceId,
         'birth_date': ?birthDateIso,
         'data_declaration_confirmed': ?dataDeclarationConfirmed,

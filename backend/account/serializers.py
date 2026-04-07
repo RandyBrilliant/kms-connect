@@ -35,6 +35,7 @@ from .api_responses import (
     validate_nik_format,
     validate_nik_unique,
 )
+from .validators import normalize_indonesian_phone
 def _regency_queryset():
     from regions.models import Regency
     return Regency.objects.all()
@@ -578,6 +579,18 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
         if not obj:
             return None
         return getattr(obj, "score_breakdown", {}) or {}
+
+    def validate_contact_phone(self, value):
+        return normalize_indonesian_phone(value) if value else value
+
+    def validate_father_phone(self, value):
+        return normalize_indonesian_phone(value) if value else value
+
+    def validate_mother_phone(self, value):
+        return normalize_indonesian_phone(value) if value else value
+
+    def validate_heir_contact_phone(self, value):
+        return normalize_indonesian_phone(value) if value else value
 
     def validate_nik(self, value):
         """Format 16 digit; uniqueness dicek di parent ApplicantUserSerializer (supaya punya akses profile instance)."""

@@ -455,7 +455,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
       if (_province != null) 'province': _province!.id,
       if (_kabupaten != null) 'district': _kabupaten!.id,
       if (_kelurahan != null) 'village': _kelurahan!.id,
-      if (_phone.text.trim().isNotEmpty) 'contact_phone': _phone.text.trim(),
+      if (_phone.text.trim().isNotEmpty)
+        'contact_phone': ProfessionalPhoneField.toIndonesiaE164(_phone.text),
 
       // ── New: Data Pribadi dropdowns ──────────────────────────────────
       if (_religion != null) 'religion': _religion,
@@ -518,9 +519,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
       if (_familyKabupaten != null) 'family_district': _familyKabupaten!.id,
       if (_familyKelurahan != null) 'family_village': _familyKelurahan!.id,
       if (_fatherPhone.text.trim().isNotEmpty)
-        'father_phone': _fatherPhone.text.trim(),
+        'father_phone': ProfessionalPhoneField.toIndonesiaE164(_fatherPhone.text),
       if (_motherPhone.text.trim().isNotEmpty)
-        'mother_phone': _motherPhone.text.trim(),
+        'mother_phone': ProfessionalPhoneField.toIndonesiaE164(_motherPhone.text),
       if (_selectedStaff != null)
         'referral_code_input': _selectedStaff!.referralCode,
       if (_spouseName.text.trim().isNotEmpty)
@@ -532,7 +533,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
       if (_heirName.text.trim().isNotEmpty) 'heir_name': _heirName.text.trim(),
       if (_heirRelationship != null) 'heir_relationship': _heirRelationship,
       if (_heirContactPhone.text.trim().isNotEmpty)
-        'heir_contact_phone': _heirContactPhone.text.trim(),
+        'heir_contact_phone': ProfessionalPhoneField.toIndonesiaE164(_heirContactPhone.text),
     };
 
     final success = await ref
@@ -778,8 +779,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     validator: (v) {
                                       final s = (v ?? '').trim();
                                       if (s.isEmpty) return 'Nama wajib diisi';
-                                      if (s.length < 2)
+                                      if (s.length < 2) {
                                         return 'Nama terlalu pendek';
+                                      }
                                       return null;
                                     },
                                   ),
@@ -846,8 +848,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     label: 'Nomor Telepon',
                                     hint: '812xxxxxxxx',
                                     validator: (v) {
-                                      if (v == null || v.trim().isEmpty)
+                                      if (v == null || v.trim().isEmpty) {
                                         return null;
+                                      }
                                       return validatePhoneNumber(v);
                                     },
                                   ),
@@ -1380,8 +1383,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     label: 'No. Telepon Ayah',
                                     hint: '812xxxxxxxx',
                                     validator: (v) {
-                                      if (v == null || v.trim().isEmpty)
+                                      if (v == null || v.trim().isEmpty) {
                                         return null;
+                                      }
                                       return validatePhoneNumber(v);
                                     },
                                   ),
@@ -1424,8 +1428,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     label: 'No. Telepon Ibu',
                                     hint: '812xxxxxxxx',
                                     validator: (v) {
-                                      if (v == null || v.trim().isEmpty)
+                                      if (v == null || v.trim().isEmpty) {
                                         return null;
+                                      }
                                       return validatePhoneNumber(v);
                                     },
                                   ),
@@ -1657,8 +1662,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     label: 'No. Telepon Ahli Waris',
                                     hint: '812xxxxxxxx',
                                     validator: (v) {
-                                      if (v == null || v.trim().isEmpty)
+                                      if (v == null || v.trim().isEmpty) {
                                         return null;
+                                      }
                                       return validatePhoneNumber(v);
                                     },
                                   ),

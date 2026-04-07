@@ -27,7 +27,7 @@ from .api_responses import (
 from .throttles import AuthPublicRateThrottle
 from .document_specs import validate_document_file, compress_image_file
 from .tasks import process_document_ocr
-from .validators import validate_indonesian_phone
+from .validators import validate_indonesian_phone, normalize_indonesian_phone
 
 
 def _resolve_birth_place(birth_place_id):
@@ -133,8 +133,9 @@ class ApplicantRegistrationView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-        # Validasi phone number (optional but validated if provided)
+        # Normalize & validate phone number (optional but validated if provided)
         if phone_number:
+            phone_number = normalize_indonesian_phone(phone_number)
             try:
                 validate_indonesian_phone(phone_number)
             except Exception:
@@ -504,6 +505,7 @@ class GoogleCompleteRegistrationView(APIView):
     def post(self, request):
         from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
         from .validators import validate_indonesian_phone as _validate_phone
+        from .validators import normalize_indonesian_phone as _normalize_phone
 
         user = request.user
         nik = request.data.get("nik", "").strip()
@@ -550,8 +552,9 @@ class GoogleCompleteRegistrationView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-        # Validasi phone (optional)
+        # Normalize & validate phone (optional)
         if phone_number:
+            phone_number = _normalize_phone(phone_number)
             try:
                 _validate_phone(phone_number)
             except Exception:
