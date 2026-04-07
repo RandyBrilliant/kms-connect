@@ -184,8 +184,10 @@ class LowonganKerja(models.Model):
         CompanyProfile,
         on_delete=models.PROTECT,
         related_name="job_listings",
+        null=True,
+        blank=True,
         verbose_name=_("perusahaan"),
-        help_text=_("Perusahaan yang membuka lowongan."),
+        help_text=_("Perusahaan yang membuka lowongan (opsional)."),
     )
     location_country = models.CharField(
         _("negara penempatan"),
@@ -310,7 +312,8 @@ class LowonganKerja(models.Model):
                 )
 
     def __str__(self) -> str:
-        return f"{self.title} – {self.company.company_name}"
+        company_name = self.company.company_name if self.company else "-"
+        return f"{self.title} – {company_name}"
 
 
 # ---------------------------------------------------------------------------

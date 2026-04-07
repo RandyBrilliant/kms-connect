@@ -41,7 +41,7 @@ export function AdminJobFormPage() {
   const handleSubmit = async (values: {
     title: string
     slug: string
-    company: number
+    company: number | null
     location_country: string
     location_city: string
     description: string

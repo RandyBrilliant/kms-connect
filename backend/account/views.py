@@ -1402,7 +1402,7 @@ class AdminInbondPdfView(APIView):
             )
 
         safe_name = (applicant.user.full_name or "cpmi").replace(" ", "_")
-        filename = f"InbondCost_{safe_name}.pdf"
+        filename = f"InboundCost_{safe_name}.pdf"
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
         response["Content-Disposition"] = f'inline; filename="{filename}"'
         return response

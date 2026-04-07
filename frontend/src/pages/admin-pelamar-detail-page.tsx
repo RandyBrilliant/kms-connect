@@ -501,7 +501,7 @@ function ApplicantSidebar({
       {/* Inbond Cost PDF */}
       <Card>
         <CardHeader>
-          <CardTitle>Inbond Cost PDF</CardTitle>
+          <CardTitle>Inbound Cost PDF</CardTitle>
           <CardDescription>
             Tanda terima pengembalian biaya transportasi CPMI.
           </CardDescription>
@@ -516,7 +516,7 @@ function ApplicantSidebar({
             disabled={isViewingInbond}
           >
             <IconFileTypePdf className="mr-2 size-4" />
-            {isViewingInbond ? "Memproses..." : "Lihat Inbond Cost PDF"}
+            {isViewingInbond ? "Memproses..." : "Lihat Inbound Cost PDF"}
           </Button>
         </CardContent>
       </Card>

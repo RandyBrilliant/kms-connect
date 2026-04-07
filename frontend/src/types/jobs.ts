@@ -9,7 +9,7 @@ export interface JobItem {
   id: number
   title: string
   slug: string
-  company: number
+  company: number | null
   company_name?: string | null
   location_country: string
   location_city: string

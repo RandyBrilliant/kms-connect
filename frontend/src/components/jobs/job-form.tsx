@@ -35,7 +35,7 @@ interface JobFormProps {
   onSubmit: (values: {
     title: string
     slug: string
-    company: number
+    company: number | null
     location_country: string
     location_city: string
     description: string
@@ -135,7 +135,6 @@ export function JobForm({
       const newErrors: Partial<Record<keyof JobFormValues, string>> = {}
       if (!value.title.trim()) newErrors.title = "Judul wajib diisi"
       if (!value.slug.trim()) newErrors.slug = "Slug wajib diisi"
-      if (!value.company_profile_id) newErrors.company_profile_id = "Perusahaan wajib dipilih"
       if (!value.description.trim()) newErrors.description = "Deskripsi wajib diisi"
       if (value.posted_at && value.deadline && value.deadline < value.posted_at) {
         newErrors.deadline = "Batas akhir tidak boleh sebelum tanggal mulai diposting"
@@ -152,7 +151,7 @@ export function JobForm({
       await onSubmit({
         title: value.title.trim(),
         slug: value.slug.trim(),
-        company: value.company_profile_id!,
+        company: value.company_profile_id,
         location_country: value.location_country.trim(),
         location_city: value.location_city.trim(),
         description: value.description,
@@ -248,16 +247,19 @@ export function JobForm({
               {(field) => (
                 <Field>
                   <FieldLabel htmlFor={field.name}>
-                    Perusahaan <span className="text-destructive">*</span>
+                    Perusahaan
                   </FieldLabel>
                   <Select
                     value={field.state.value ? String(field.state.value) : ""}
-                    onValueChange={(v) => field.handleChange(Number(v))}
+                    onValueChange={(v) =>
+                      field.handleChange(v === "__none__" ? null : Number(v))
+                    }
                   >
                     <SelectTrigger id={field.name} className="w-full cursor-pointer">
-                      <SelectValue placeholder="Pilih perusahaan" />
+                      <SelectValue placeholder="Pilih perusahaan (opsional)" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="__none__">Tanpa perusahaan</SelectItem>
                       {companyOptions.map((company) => (
                         <SelectItem
                           key={company.company_profile.id}
