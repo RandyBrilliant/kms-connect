@@ -7,11 +7,14 @@ Uses Celery for async email and push delivery.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 from django.utils import timezone
 
 from ..models import CustomUser, Broadcast, Notification, NotificationType, NotificationPriority
 from .notification_recipients import get_recipients_by_config
+
+logger = logging.getLogger(__name__)
 
 
 def create_notification(
@@ -61,8 +64,11 @@ def create_notification(
     
     # Queue email delivery if requested
     if send_email:
-        from ..tasks import send_notification_email_task
-        send_notification_email_task.delay(notification.id)
+        try:
+            from ..tasks import send_notification_email_task
+            send_notification_email_task.delay(notification.id)
+        except Exception:
+            logger.exception("Failed to queue notification email for notification_id=%s", notification.id)
     
     # Push is sent automatically by the post_save signal in signals.py.
     

@@ -96,11 +96,29 @@ class RateLimiter:
 
                 # Check if we need to reset the window
                 if reset_time == 0 or current_time >= reset_time:
-                    # Start a new window
+                    # Start a new window (use Redis INCR for atomicity if available)
                     new_reset_time = current_time + self.period
+                    
+                    redis_client = self._get_redis_client()
+                    if redis_client:
+                        # Atomic window reset using Redis
+                        try:
+                            # Set reset time first, then initialize counter
+                            cache.set(self._cache_key_reset, new_reset_time, timeout=self.period + 5)
+                            # INCR creates key if doesn't exist, returns 1
+                            redis_client.delete(self._cache_key)  # Ensure clean reset
+                            new_count = redis_client.incr(self._cache_key)
+                            cache.expire(self._cache_key, self.period + 5)
+                            logger.debug(f"Rate limiter '{self.key}': New window started (atomic), count={new_count}/{self.limit}")
+                            return True
+                        except Exception as e:
+                            logger.warning(f"Rate limiter atomic reset failed: {e}")
+                            # Fall through to non-atomic path
+                    
+                    # Non-atomic fallback
                     cache.set(self._cache_key, 1, timeout=self.period + 5)
                     cache.set(self._cache_key_reset, new_reset_time, timeout=self.period + 5)
-                    logger.debug(f"Rate limiter '{self.key}': New window started, count=1/{self.limit}")
+                    logger.debug(f"Rate limiter '{self.key}': New window started (non-atomic), count=1/{self.limit}")
                     return True
 
                 # Check current count

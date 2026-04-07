@@ -145,12 +145,17 @@ def notify_on_batch_announcement(
         .filter(applicant__user__is_active=True)
     )
 
-    for application in applications:
-        dispatch(
+    # OPTIMIZED: Use dispatch_bulk() instead of looping
+    from account.services.notification_dispatcher import dispatch_bulk
+    
+    users = [app.applicant.user for app in applications]
+    
+    if users:
+        dispatch_bulk(
             event=NotificationEvent.BATCH_ANNOUNCEMENT,
-            user=application.applicant.user,
+            users=users,
             context=ctx,
-            action_url=f"/lamaran/{application.pk}",
+            action_url=f"/batch/{batch.pk}/announcements",
             action_label="Lihat Pengumuman",
             deduplicate=False,
         )

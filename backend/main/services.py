@@ -401,8 +401,9 @@ class ApplicationService:
 
         # bulk_create does NOT fire post_save signals, so we dispatch
         # APPLICATION_ASSIGNED notifications manually for each new applicant.
+        # OPTIMIZED: Use dispatch_bulk() for better performance
         try:
-            from account.services.notification_dispatcher import dispatch, build_application_context
+            from account.services.notification_dispatcher import dispatch_bulk, build_application_context
             from account.services.notification_events import NotificationEvent
 
             # Reload with all related objects needed for context in one query
@@ -412,17 +413,25 @@ class ApplicationService:
                 .select_related("job__company", "batch", "applicant__user",
                                 "applicant__user__notification_preference")
             )
+            
+            # Collect active users and build shared context
+            users = []
             for app in loaded_apps:
                 user = app.applicant.user
-                if not user or not user.is_active:
-                    continue
-                ctx = build_application_context(app)
-                ctx["user_name"] = user.full_name or user.email
-                dispatch(
+                if user and user.is_active:
+                    users.append(user)
+            
+            if users:
+                # Use first app for shared context (same batch/job for all)
+                first_app = loaded_apps[0]
+                ctx = build_application_context(first_app)
+                
+                # Dispatch to all users at once
+                dispatch_bulk(
                     event=NotificationEvent.APPLICATION_ASSIGNED,
-                    user=user,
+                    users=users,
                     context=ctx,
-                    action_url=f"/lamaran/{app.pk}",
+                    action_url=f"/batch/{batch.pk}",
                     action_label="Lihat Detail",
                     deduplicate=False,
                 )

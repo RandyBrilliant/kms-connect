@@ -236,16 +236,20 @@ def notify_on_verification_status_change(
 
     elif new_status == ApplicantVerificationStatus.SUBMITTED:
         # Notify all Admin and Staff users about the new submission
+        # OPTIMIZED: Use dispatch_bulk() instead of looping
+        from .services.notification_dispatcher import dispatch_bulk
+        
         admins_staff = list(
             CustomUser.objects.filter(
                 role__in=[UserRole.MASTER_ADMIN, UserRole.ADMIN, UserRole.STAFF],
                 is_active=True,
             ).select_related("notification_preference")
         )
-        for admin_user in admins_staff:
-            dispatch(
+        
+        if admins_staff:
+            dispatch_bulk(
                 event=NotificationEvent.PROFILE_SUBMITTED,
-                user=admin_user,
+                users=admins_staff,
                 context=ctx,
                 action_url=f"/pelamar/{instance.pk}",
                 action_label="Review Profil",

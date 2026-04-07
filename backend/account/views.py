@@ -1812,17 +1812,15 @@ class AccountDeletionRequestViewSet(viewsets.GenericViewSet):
             "admin_notes": admin_notes or "",
         }
         try:
-            send_event_email_task.apply(
-                args=[
-                    user.pk,
-                    NotificationEvent.ACCOUNT_DELETION_APPROVED.value,
-                    email_ctx,
-                    "",
-                ],
+            send_event_email_task.delay(
+                user.pk,
+                NotificationEvent.ACCOUNT_DELETION_APPROVED.value,
+                email_ctx,
+                "",
             )
         except Exception:
             logger.exception(
-                "Failed to send account deletion approval email user_id=%s", user.pk
+                "Failed to queue account deletion approval email user_id=%s", user.pk
             )
 
         user.delete()
