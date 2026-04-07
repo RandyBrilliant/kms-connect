@@ -120,33 +120,39 @@ def optimize_document_image(self, document_id: int):
     doc.file.save(name, ContentFile(buf.read()), save=True)
 
 
-@shared_task
-def send_email_async(to_email: str, subject: str, body: str, html_message: str = None):
+@shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=5)
+def send_email_async(self, to_email: str, subject: str, body: str, html_message: str = None):
     """
     Kirim email di background via Django (Mailgun API bila MAILGUN_API_KEY diset).
+    Rate-limited to prevent Mailgun API errors.
     """
-    from django.core.mail import send_mail
-    from django.conf import settings
+    from .services.email_service import send_email
+    from .services.rate_limiter import RateLimitExceeded
 
-    send_mail(
-        subject=subject,
-        message=body,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[to_email],
-        html_message=html_message,
-        fail_silently=False,
-    )
+    try:
+        send_email(
+            to=to_email,
+            subject=subject,
+            body=body,
+            html=html_message,
+            fail_silently=False,
+        )
+    except RateLimitExceeded as e:
+        # Retry with delay when rate limited
+        raise self.retry(exc=e, countdown=e.retry_after + 1)
 
 
-@shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=2)
+@shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=5)
 def send_verification_email_task(self, user_id: int, logo_url: str = "", verification_code: str = ""):
     """
     Kirim email verifikasi dengan 6-digit kode ke user.
     verification_code: 6-digit kode verifikasi.
+    Rate-limited to prevent Mailgun API errors.
     """
-    from django.conf import settings
     from .models import CustomUser
     from .email_utils import render_email, COMPANY_NAME
+    from .services.email_service import send_email
+    from .services.rate_limiter import RateLimitExceeded
 
     user = CustomUser.objects.filter(pk=user_id).first()
     if not user or not verification_code:
@@ -166,25 +172,29 @@ def send_verification_email_task(self, user_id: int, logo_url: str = "", verific
         ),
     }
     html, plain = render_email("account/emails/verification_email.html", context)
-    from django.core.mail import send_mail
-    send_mail(
-        subject=context["subject"],
-        message=plain,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[user.email],
-        html_message=html,
-        fail_silently=False,
-    )
+    
+    try:
+        send_email(
+            to=user.email,
+            subject=context["subject"],
+            body=plain,
+            html=html,
+            fail_silently=False,
+        )
+    except RateLimitExceeded as e:
+        raise self.retry(exc=e, countdown=e.retry_after + 1)
 
 
-@shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=2)
+@shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=5)
 def send_password_reset_email_task(self, user_id: int, logo_url: str = ""):
     """
     Kirim email reset password ke user. Dipanggil oleh admin (send-password-reset).
+    Rate-limited to prevent Mailgun API errors.
     """
-    from django.conf import settings
     from .models import CustomUser
     from .email_utils import render_email, make_password_reset_link, COMPANY_NAME
+    from .services.email_service import send_email
+    from .services.rate_limiter import RateLimitExceeded
 
     user = CustomUser.objects.filter(pk=user_id).first()
     if not user:
@@ -202,27 +212,31 @@ def send_password_reset_email_task(self, user_id: int, logo_url: str = ""):
         "body_text": f"Halo,\n\nAnda meminta reset password. Klik tautan berikut untuk mengatur ulang kata sandi:\n{reset_url}\n\nJika Anda tidak meminta ini, abaikan email ini.\n\nSalam,\n{COMPANY_NAME}",
     }
     html, plain = render_email("account/emails/password_reset_email.html", context)
-    from django.core.mail import send_mail
-    send_mail(
-        subject=context["subject"],
-        message=plain,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[user.email],
-        html_message=html,
-        fail_silently=False,
-    )
+    
+    try:
+        send_email(
+            to=user.email,
+            subject=context["subject"],
+            body=plain,
+            html=html,
+            fail_silently=False,
+        )
+    except RateLimitExceeded as e:
+        raise self.retry(exc=e, countdown=e.retry_after + 1)
 
 
-@shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=2)
+@shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=5)
 def send_notification_email_task(self, notification_id: int):
     """
     Kirim email untuk notifikasi.
     Dipanggil saat membuat notifikasi dengan send_email=True.
+    Rate-limited to prevent Mailgun API errors.
     """
-    from django.conf import settings
     from django.utils import timezone
     from .models import Notification
     from .email_utils import render_email, COMPANY_NAME
+    from .services.email_service import send_email
+    from .services.rate_limiter import RateLimitExceeded
 
     notification = Notification.objects.filter(pk=notification_id).select_related("user").first()
     if not notification or not notification.user:
@@ -247,20 +261,21 @@ def send_notification_email_task(self, notification_id: int):
     # Render email template (create a simple notification email template)
     html, plain = render_email("account/emails/notification_email.html", context)
     
-    from django.core.mail import send_mail
-    send_mail(
-        subject=context["subject"],
-        message=plain,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[notification.user.email],
-        html_message=html,
-        fail_silently=False,
-    )
-    
-    # Mark as sent
-    notification.email_sent = True
-    notification.email_sent_at = timezone.now()
-    notification.save(update_fields=["email_sent", "email_sent_at"])
+    try:
+        send_email(
+            to=notification.user.email,
+            subject=context["subject"],
+            body=plain,
+            html=html,
+            fail_silently=False,
+        )
+        
+        # Mark as sent
+        notification.email_sent = True
+        notification.email_sent_at = timezone.now()
+        notification.save(update_fields=["email_sent", "email_sent_at"])
+    except RateLimitExceeded as e:
+        raise self.retry(exc=e, countdown=e.retry_after + 1)
 
 
 @shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=2)
@@ -317,7 +332,7 @@ def send_notification_push_task(self, notification_id: int):
 # Event-driven email task (dispatched by notification_dispatcher.dispatch())
 # ---------------------------------------------------------------------------
 
-@shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=3)
+@shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=5)
 def send_event_email_task(
     self,
     user_id: int,
@@ -330,6 +345,7 @@ def send_event_email_task(
 
     Uses per-event HTML templates when available, falls back to the generic
     notification_email.html template.
+    Rate-limited to prevent Mailgun API errors.
 
     Template lookup order:
       1. account/emails/events/<event_snake>.html  (per-event template)
@@ -337,13 +353,14 @@ def send_event_email_task(
     """
     import re
     from django.conf import settings
-    from django.core.mail import send_mail
     from django.template.loader import get_template
     from django.template.exceptions import TemplateDoesNotExist
 
     from .models import CustomUser
     from .email_utils import render_email, COMPANY_NAME
     from .services.notification_events import NotificationEvent, render_event_message
+    from .services.email_service import send_email
+    from .services.rate_limiter import RateLimitExceeded
 
     user = CustomUser.objects.filter(pk=user_id, is_active=True).first()
     if not user or not user.email:
@@ -384,21 +401,23 @@ def send_event_email_task(
 
     html, plain = render_email(template_name, ctx)
 
-    send_mail(
-        subject=ctx["subject"],
-        message=plain,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[user.email],
-        html_message=html,
-        fail_silently=False,
-    )
+    try:
+        send_email(
+            to=user.email,
+            subject=ctx["subject"],
+            body=plain,
+            html=html,
+            fail_silently=False,
+        )
+    except RateLimitExceeded as e:
+        raise self.retry(exc=e, countdown=e.retry_after + 1)
 
 
 # ---------------------------------------------------------------------------
 # Scheduled: Admin daily digest
 # ---------------------------------------------------------------------------
 
-@shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=2)
+@shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=5)
 def send_admin_daily_digest(self):
     """
     Send a daily digest email to all Admin and Staff users summarising:
@@ -406,14 +425,16 @@ def send_admin_daily_digest(self):
     - Number of new applicants registered today
 
     Scheduled via CELERY_BEAT_SCHEDULE (see backend/settings.py).
+    Rate-limited to prevent Mailgun API errors.
     """
     from django.conf import settings
-    from django.core.mail import send_mail
     from django.utils import timezone
     from django.db.utils import ProgrammingError
 
     from .models import CustomUser, UserRole, ApplicantProfile, ApplicantVerificationStatus
     from .email_utils import render_email, COMPANY_NAME
+    from .services.email_service import send_email_bulk
+    from .services.rate_limiter import RateLimitExceeded
 
     try:
         now = timezone.now()
@@ -450,14 +471,16 @@ def send_admin_daily_digest(self):
         }
         html, plain = render_email("account/emails/events/admin_daily_digest.html", ctx)
 
-        send_mail(
-            subject=ctx["subject"],
-            message=plain,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=recipients,
-            html_message=html,
-            fail_silently=False,
-        )
+        try:
+            send_email_bulk(
+                recipients=recipients,
+                subject=ctx["subject"],
+                body=plain,
+                html=html,
+                fail_silently=False,
+            )
+        except RateLimitExceeded as e:
+            raise self.retry(exc=e, countdown=e.retry_after + 1)
 
     except ProgrammingError as e:
         if "does not exist" in str(e):

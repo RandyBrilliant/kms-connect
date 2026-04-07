@@ -359,6 +359,11 @@ if MAILGUN_API_KEY:
 else:
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
+# Email rate limiting (to prevent Mailgun API rate limit errors)
+# Mailgun Foundation plan: ~100-300/minute, we use 60/minute as safe default
+EMAIL_RATE_LIMIT = int(_env("EMAIL_RATE_LIMIT", "60"))  # Max emails per window
+EMAIL_RATE_LIMIT_WINDOW = int(_env("EMAIL_RATE_LIMIT_WINDOW", "60"))  # Window in seconds
+
 # -----------------------------------------------------------------------------
 # Celery (background tasks: email, OCR, export, push)
 # -----------------------------------------------------------------------------
