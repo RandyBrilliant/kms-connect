@@ -60,6 +60,7 @@ static const String ocrPreview = '$baseUrl/auth/ocr-preview/';
 
   // Notifications
   static const String notifications = '$baseUrl/notifications/';
+  static String notificationDetail(int id) => '$baseUrl/notifications/$id/';
   static String markNotificationRead(int id) => '$baseUrl/notifications/$id/mark-read/';
   static const String markAllNotificationsRead = '$baseUrl/notifications/mark-all-read/';
 

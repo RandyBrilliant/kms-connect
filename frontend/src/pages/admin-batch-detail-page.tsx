@@ -9,7 +9,7 @@
  * 5. Bulk Transition — move all eligible applicants to next stage at once.
  */
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { useParams, Link, useNavigate } from "react-router-dom"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { format } from "date-fns"
@@ -21,6 +21,7 @@ import {
   IconChevronRight,
   IconFileSpreadsheet,
   IconMapPin,
+  IconSearch,
   IconSend,
   IconUserPlus,
   IconUsers,
@@ -247,6 +248,21 @@ const NEXT_FORWARD: Partial<Record<ApplicationStatus, ApplicationStatus>> = {
 }
 const CAN_REJECT: ApplicationStatus[] = ["PRA_SELEKSI", "INTERVIEW", "DITERIMA"]
 
+function applicationMatchesStageSearch(app: JobApplication, q: string): boolean {
+  const needle = q.trim().toLowerCase()
+  if (!needle) return true
+  const hay = [
+    app.applicant_name,
+    app.applicant_email,
+    app.applicant_nik,
+    app.referrer_display_name,
+    app.referrer_code,
+  ]
+    .map((s) => (s || "").toLowerCase())
+    .join(" ")
+  return hay.includes(needle)
+}
+
 const STATUS_TABS: { value: ApplicationStatus; label: string }[] = [
   { value: "PRA_SELEKSI", label: "Pra-Seleksi" },
   { value: "INTERVIEW",   label: "Interview" },
@@ -273,6 +289,7 @@ function BatchStatusTab({
   const { basePath } = useAdminDashboard()
   const queryClient = useQueryClient()
   const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [stageSearch, setStageSearch] = useState("")
   const [note, setNote] = useState("")
   const [placementDate, setPlacementDate] = useState("")
   const [loading, setLoading] = useState(false)
@@ -281,8 +298,23 @@ function BatchStatusTab({
   const canReject  = CAN_REJECT.includes(status)
   const needsPlacementDate = nextStatus === "SELESAI"
 
-  const pageIds = apps.map((a) => a.id)
+  const filteredApps = useMemo(
+    () => apps.filter((a) => applicationMatchesStageSearch(a, stageSearch)),
+    [apps, stageSearch]
+  )
+
+  const pageIds = filteredApps.map((a) => a.id)
   const allSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id))
+
+  const hiddenSelectedCount = useMemo(() => {
+    if (selected.size === 0) return 0
+    const visible = new Set(pageIds)
+    let n = 0
+    for (const id of selected) {
+      if (!visible.has(id)) n++
+    }
+    return n
+  }, [pageIds, selected])
 
   const toggleAll = () => {
     setSelected((prev) => {
@@ -330,10 +362,26 @@ function BatchStatusTab({
     if (fail > 0) toast.error(`${fail} pelamar gagal dipindahkan.`)
   }
 
+  const showCheckboxCol = apps.length > 0 && !!(nextStatus || canReject)
+  const tableColSpan = (showCheckboxCol ? 1 : 0) + 7
+
   return (
     <div className="flex flex-col gap-4">
+      {apps.length > 0 && (
+        <div className="relative max-w-md">
+          <IconSearch className="text-muted-foreground absolute left-3 top-1/2 size-4 -translate-y-1/2" />
+          <Input
+            placeholder="Cari nama, email, NIK, atau rujukan..."
+            value={stageSearch}
+            onChange={(e) => setStageSearch(e.target.value)}
+            className="pl-9 h-9 text-sm"
+            aria-label="Filter pelamar di tahap ini"
+          />
+        </div>
+      )}
+
       {/* Action bar — only shown when there are selectable apps */}
-      {apps.length > 0 && (nextStatus || canReject) && (
+      {filteredApps.length > 0 && (nextStatus || canReject) && (
         <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-muted/30 p-3">
           <div className="flex flex-col gap-1 flex-1 min-w-[160px]">
             <Label className="text-xs">Catatan transisi <span className="text-muted-foreground">(opsional)</span></Label>
@@ -357,7 +405,14 @@ function BatchStatusTab({
           )}
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             {selected.size > 0 ? (
-              <span className="font-medium text-foreground">{selected.size} dipilih</span>
+              <span className="font-medium text-foreground">
+                {selected.size} dipilih
+                {hiddenSelectedCount > 0 ? (
+                  <span className="ml-1 font-normal text-muted-foreground">
+                    ({hiddenSelectedCount} tidak terlihat di filter)
+                  </span>
+                ) : null}
+              </span>
             ) : (
               <span>Pilih pelamar dulu</span>
             )}
@@ -393,7 +448,7 @@ function BatchStatusTab({
         <Table>
           <TableHeader>
             <TableRow>
-              {apps.length > 0 && (nextStatus || canReject) && (
+              {showCheckboxCol && (
                 <TableHead className="w-10">
                   <Checkbox
                     checked={allSelected}
@@ -403,6 +458,8 @@ function BatchStatusTab({
                 </TableHead>
               )}
               <TableHead>Pelamar</TableHead>
+              <TableHead>NIK</TableHead>
+              <TableHead>Rujukan</TableHead>
               <TableHead>Konfirmasi Pra-Sel.</TableHead>
               <TableHead>Konfirmasi Interview</TableHead>
               <TableHead>Tanggal Ditambahkan</TableHead>
@@ -411,13 +468,14 @@ function BatchStatusTab({
           </TableHeader>
           <TableBody>
             {apps.length ? (
-              apps.map((app) => (
+              filteredApps.length ? (
+              filteredApps.map((app) => (
                 <TableRow
                   key={app.id}
                   className="hover:bg-muted/50 cursor-pointer"
                   onClick={() => toggleOne(app.id)}
                 >
-                  {(nextStatus || canReject) && (
+                  {showCheckboxCol && (
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       <Checkbox
                         checked={selected.has(app.id)}
@@ -431,6 +489,23 @@ function BatchStatusTab({
                       <span className="font-medium">{app.applicant_name}</span>
                       <span className="text-xs text-muted-foreground">{app.applicant_email}</span>
                     </div>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {app.applicant_nik || "—"}
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {app.referrer_display_name || app.referrer_code ? (
+                      <div className="flex flex-col gap-0.5">
+                        {app.referrer_display_name ? (
+                          <span>{app.referrer_display_name}</span>
+                        ) : null}
+                        {app.referrer_code ? (
+                          <span className="text-xs text-muted-foreground">{app.referrer_code}</span>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-sm">
                     {app.pra_seleksi_confirmed_at ? (
@@ -463,10 +538,20 @@ function BatchStatusTab({
                   </TableCell>
                 </TableRow>
               ))
+              ) : (
+                <TableRow>
+                  <TableCell
+                    colSpan={tableColSpan}
+                    className="h-20 text-center text-muted-foreground"
+                  >
+                    Tidak ada pelamar yang cocok dengan pencarian.
+                  </TableCell>
+                </TableRow>
+              )
             ) : (
               <TableRow>
                 <TableCell
-                  colSpan={6}
+                  colSpan={tableColSpan}
                   className="h-20 text-center text-muted-foreground"
                 >
                   Tidak ada pelamar dengan status ini.

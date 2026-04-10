@@ -49,6 +49,12 @@ export interface JobApplication {
   applicant: number
   applicant_name: string
   applicant_email: string
+  /** NIK from applicant profile — for admin search/display in batch tahapan tables */
+  applicant_nik: string
+  /** Staff rujukan display label (same logic as daftar pelamar) */
+  referrer_display_name: string
+  /** Referrer referral code when set */
+  referrer_code: string
   job: number
   job_title: string
   company_name: string

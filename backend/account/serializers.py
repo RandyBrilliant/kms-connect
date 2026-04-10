@@ -324,6 +324,23 @@ class CompanyUserSerializer(serializers.ModelSerializer):
 # Applicant (CustomUser + ApplicantProfile) – admin review & backdoor create
 # ---------------------------------------------------------------------------
 
+
+def _staff_rujukan_display_name(*, full_name: str, email: str) -> str:
+    """
+    Label for daftar pelamar "Rujukan" column: DB full_name when set; otherwise a
+    short name from the email local-part (not the full address, not referral_code).
+    """
+    raw = (full_name or "").strip()
+    if raw:
+        return raw
+    em = (email or "").strip()
+    if "@" in em:
+        local = em.split("@", 1)[0].strip()
+        if local:
+            return " ".join(local.replace("_", " ").replace(".", " ").split()).title()
+    return ""
+
+
 class ReferrerListSerializer(serializers.ModelSerializer):
     """Minimal serializer for referrer dropdown (Staff + Admin users)."""
 
@@ -352,6 +369,9 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True,
     )
+    # SerializerMethodField: nested serializer + same source as `referrer` did not reliably
+    # appear in list/retrieve JSON in all DRF versions; explicit method is stable.
+    referrer_display = serializers.SerializerMethodField(read_only=True)
     verified_by = serializers.PrimaryKeyRelatedField(
         queryset=CustomUser.objects.none(),
         required=False,
@@ -376,6 +396,7 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "referrer",
+            "referrer_display",
             "referral_code_input",
             "registration_date",
             "destination_country",
@@ -395,13 +416,16 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
             "father_age",
             "father_occupation",
             "father_phone",
+            "father_almarhum",
             "mother_name",
             "mother_age",
             "mother_occupation",
             "mother_phone",
+            "mother_almarhum",
             "spouse_name",
             "spouse_age",
             "spouse_occupation",
+            "spouse_almarhum",
             "family_address",
             "family_district",
             "family_province",
@@ -473,6 +497,23 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
         if not obj.heir_relationship:
             return ""
         return NextOfKinRelationship(obj.heir_relationship).label if obj.heir_relationship in NextOfKinRelationship.values else obj.heir_relationship
+
+    def get_referrer_display(self, obj):
+        """Staff/admin perujuk: raw full_name + display_name for tables (never referral_code as name)."""
+        if not obj or not getattr(obj, "referrer_id", None):
+            return None
+        ref = getattr(obj, "referrer", None)
+        if ref is None:
+            return None
+        raw_name = (getattr(ref, "full_name", None) or "").strip()
+        email = getattr(ref, "email", None) or ""
+        return {
+            "id": ref.pk,
+            "full_name": raw_name,
+            "display_name": _staff_rujukan_display_name(full_name=raw_name, email=email),
+            "email": email,
+            "referral_code": ref.referral_code,
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

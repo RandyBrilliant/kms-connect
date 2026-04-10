@@ -65,12 +65,15 @@ class ApplicantProfile {
   final String? fatherName;
   final int? fatherAge;
   final String? fatherOccupation;
+  final bool fatherAlmarhum;
   final String? motherName;
   final int? motherAge;
   final String? motherOccupation;
+  final bool motherAlmarhum;
   final String? spouseName;
   final int? spouseAge;
   final String? spouseOccupation;
+  final bool spouseAlmarhum;
   final String? familyAddress;
   final int? familyProvinceId;
   final String? familyProvinceName;
@@ -140,12 +143,15 @@ class ApplicantProfile {
     this.fatherName,
     this.fatherAge,
     this.fatherOccupation,
+    this.fatherAlmarhum = false,
     this.motherName,
     this.motherAge,
     this.motherOccupation,
+    this.motherAlmarhum = false,
     this.spouseName,
     this.spouseAge,
     this.spouseOccupation,
+    this.spouseAlmarhum = false,
     this.familyAddress,
     this.familyProvinceId,
     this.familyProvinceName,
@@ -240,12 +246,15 @@ class ApplicantProfile {
       fatherName: _str(json['father_name']),
       fatherAge: _parseId(json['father_age']),
       fatherOccupation: _str(json['father_occupation']),
+      fatherAlmarhum: json['father_almarhum'] == true,
       motherName: _str(json['mother_name']),
       motherAge: _parseId(json['mother_age']),
       motherOccupation: _str(json['mother_occupation']),
+      motherAlmarhum: json['mother_almarhum'] == true,
       spouseName: _str(json['spouse_name']),
       spouseAge: _parseId(json['spouse_age']),
       spouseOccupation: _str(json['spouse_occupation']),
+      spouseAlmarhum: json['spouse_almarhum'] == true,
       familyAddress: _str(json['family_address']),
       familyProvinceId: _idFromField(json['family_province']),
       familyProvinceName: _str(fvd?['province']) ?? _nameFromField(json['family_province']),
@@ -291,12 +300,15 @@ class ApplicantProfile {
         'father_name': fatherName,
         'father_age': fatherAge,
         'father_occupation': fatherOccupation,
+        'father_almarhum': fatherAlmarhum,
         'mother_name': motherName,
         'mother_age': motherAge,
         'mother_occupation': motherOccupation,
+        'mother_almarhum': motherAlmarhum,
         'spouse_name': spouseName,
         'spouse_age': spouseAge,
         'spouse_occupation': spouseOccupation,
+        'spouse_almarhum': spouseAlmarhum,
         'family_address': familyAddress,
         'family_province': familyProvinceId,
         'family_district': familyDistrictId,

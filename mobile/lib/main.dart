@@ -42,6 +42,14 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
           importance: Importance.high,
         ));
 
+    // Must initialize before calling show() — background isolate has a
+    // fresh plugin instance that hasn't been set up yet.
+    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const iosSettings = DarwinInitializationSettings();
+    await plugin.initialize(
+      const InitializationSettings(android: androidSettings, iOS: iosSettings),
+    );
+
     final title = message.data['title'] ?? 'KMS Connect';
     final body = message.data['body'] ?? 'Anda memiliki pesan baru';
 

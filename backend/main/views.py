@@ -24,6 +24,7 @@ from account.permissions import (
 )
 from account.api_responses import success_response, error_response, ApiCode
 from account.models import ApplicantProfile, ApplicantVerificationStatus, CustomUser, UserRole
+from account.serializers import _staff_rujukan_display_name
 from account.pagination import StandardResultsSetPagination
 from account.services.export import generate_applicants_excel
 
@@ -262,7 +263,8 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
         GET /api/batches/{id}/eligible-applicants/?q=...
 
         Returns a paginated table of ApplicantProfiles filtered by the search
-        query `q` (searches full_name, email, NIK).  Each row includes an
+        query `q` (searches full_name, email, NIK, referrer name/email/code).
+        Each row includes an
         `is_eligible` flag and an `ineligible_reason` computed via the service
         layer so the admin can see at a glance who can be added to this batch.
 
@@ -273,7 +275,7 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
         q = request.query_params.get("q", "").strip()
 
         qs = (
-            ApplicantProfile.objects.select_related("user")
+            ApplicantProfile.objects.select_related("user", "referrer")
             .filter(
                 user__is_active=True,
                 verification_status=ApplicantVerificationStatus.ACCEPTED,
@@ -286,6 +288,9 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
                 DQ(user__full_name__icontains=q)
                 | DQ(user__email__icontains=q)
                 | DQ(nik__icontains=q)
+                | DQ(referrer__full_name__icontains=q)
+                | DQ(referrer__email__icontains=q)
+                | DQ(referrer__referral_code__icontains=q)
             )
 
         qs = qs.order_by("user__full_name")
@@ -306,6 +311,15 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
         rows = []
         for profile in profiles_on_page:
             result = eligibility_map.get(profile.pk)
+            ref = profile.referrer if getattr(profile, "referrer_id", None) else None
+            ref_name = ""
+            ref_code = ""
+            if ref:
+                ref_name = _staff_rujukan_display_name(
+                    full_name=(getattr(ref, "full_name", None) or "").strip(),
+                    email=getattr(ref, "email", None) or "",
+                )
+                ref_code = (getattr(ref, "referral_code", None) or "").strip()
             rows.append({
                 "id": profile.pk,
                 "nik": profile.nik or "",
@@ -317,6 +331,8 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
                     getattr(profile, "domicile_kecamatan", None),
                     getattr(profile, "domicile_city", None),
                 ])),
+                "referrer_display_name": ref_name,
+                "referrer_code": ref_code,
                 "is_eligible": result.eligible if result else True,
                 "ineligible_reason": result.reason if result and not result.eligible else None,
             })
@@ -628,7 +644,15 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
     permission_classes = [IsBackofficeAdmin]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ["status", "job", "applicant", "batch"]
-    search_fields = ["applicant__user__full_name", "applicant__user__email", "job__title"]
+    search_fields = [
+        "applicant__user__full_name",
+        "applicant__user__email",
+        "applicant__nik",
+        "applicant__referrer__full_name",
+        "applicant__referrer__email",
+        "applicant__referrer__referral_code",
+        "job__title",
+    ]
     ordering_fields = ["applied_at", "status"]
     ordering = ["-applied_at"]
 
@@ -641,7 +665,9 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
         return (
             JobApplication.objects
             .select_related(
-                "applicant", "applicant__user",
+                "applicant",
+                "applicant__user",
+                "applicant__referrer",
                 "job", "job__company",
                 "batch",
                 "assigned_by",
@@ -723,7 +749,15 @@ class ApplicantJobApplicationViewSet(viewsets.ReadOnlyModelViewSet):
         return (
             JobApplication.objects
             .filter(applicant=applicant_profile)
-            .select_related("job", "job__company", "batch", "assigned_by")
+            .select_related(
+                "applicant",
+                "applicant__user",
+                "applicant__referrer",
+                "job",
+                "job__company",
+                "batch",
+                "assigned_by",
+            )
             .prefetch_related("status_history__changed_by")
         )
 

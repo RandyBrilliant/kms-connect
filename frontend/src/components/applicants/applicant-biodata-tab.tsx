@@ -14,6 +14,7 @@ import {
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -60,13 +61,16 @@ type BiodataFormValues = {
   father_age: string
   father_occupation: string
   father_phone: string
+  father_almarhum: boolean
   mother_name: string
   mother_age: string
   mother_occupation: string
   mother_phone: string
+  mother_almarhum: boolean
   spouse_name: string
   spouse_age: string
   spouse_occupation: string
+  spouse_almarhum: boolean
   family_address: string
   heir_name: string
   heir_relationship: string
@@ -109,13 +113,16 @@ function toFormValues(p: ApplicantProfile): BiodataFormValues {
     father_age: p.father_age != null ? String(p.father_age) : "",
     father_occupation: p.father_occupation || "",
     father_phone: p.father_phone || "",
+    father_almarhum: p.father_almarhum ?? false,
     mother_name: p.mother_name || "",
     mother_age: p.mother_age != null ? String(p.mother_age) : "",
     mother_occupation: p.mother_occupation || "",
     mother_phone: p.mother_phone || "",
+    mother_almarhum: p.mother_almarhum ?? false,
     spouse_name: p.spouse_name || "",
     spouse_age: p.spouse_age != null ? String(p.spouse_age) : "",
     spouse_occupation: p.spouse_occupation || "",
+    spouse_almarhum: p.spouse_almarhum ?? false,
     family_address: p.family_address || "",
     heir_name: p.heir_name || "",
     heir_relationship: p.heir_relationship || "",
@@ -177,13 +184,16 @@ export function ApplicantBiodataTab({
         father_age: toNum(value.father_age),
         father_occupation: value.father_occupation || undefined,
         father_phone: value.father_phone || undefined,
+        father_almarhum: value.father_almarhum,
         mother_name: value.mother_name || undefined,
         mother_age: toNum(value.mother_age),
         mother_occupation: value.mother_occupation || undefined,
         mother_phone: value.mother_phone || undefined,
+        mother_almarhum: value.mother_almarhum,
         spouse_name: value.spouse_name || undefined,
         spouse_age: toNum(value.spouse_age),
         spouse_occupation: value.spouse_occupation || undefined,
+        spouse_almarhum: value.spouse_almarhum,
         family_address: value.family_address || undefined,
         heir_name: value.heir_name || undefined,
         heir_relationship: value.heir_relationship || undefined,
@@ -808,6 +818,21 @@ export function ApplicantBiodataTab({
         </CardHeader>
         <CardContent className="space-y-6">
           <FieldGroup>
+            <form.Field name="father_almarhum">
+              {(field) => (
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id={field.name}
+                    checked={field.state.value}
+                    onCheckedChange={(c) => field.handleChange(!!c)}
+                    disabled={isSubmitting}
+                  />
+                  <FieldLabel htmlFor={field.name} className="cursor-pointer font-normal">
+                    Ayah Almarhum
+                  </FieldLabel>
+                </div>
+              )}
+            </form.Field>
             <div className="grid gap-6 sm:grid-cols-3">
               <form.Field name="father_name">
                 {(field) => (
@@ -867,6 +892,21 @@ export function ApplicantBiodataTab({
               )}
             </form.Field>
 
+            <form.Field name="mother_almarhum">
+              {(field) => (
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id={field.name}
+                    checked={field.state.value}
+                    onCheckedChange={(c) => field.handleChange(!!c)}
+                    disabled={isSubmitting}
+                  />
+                  <FieldLabel htmlFor={field.name} className="cursor-pointer font-normal">
+                    Ibu Almarhumah
+                  </FieldLabel>
+                </div>
+              )}
+            </form.Field>
             <div className="grid gap-6 sm:grid-cols-3">
               <form.Field name="mother_name">
                 {(field) => (
@@ -926,6 +966,21 @@ export function ApplicantBiodataTab({
               )}
             </form.Field>
 
+            <form.Field name="spouse_almarhum">
+              {(field) => (
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id={field.name}
+                    checked={field.state.value}
+                    onCheckedChange={(c) => field.handleChange(!!c)}
+                    disabled={isSubmitting}
+                  />
+                  <FieldLabel htmlFor={field.name} className="cursor-pointer font-normal">
+                    Suami/Istri Almarhum / Almarhumah
+                  </FieldLabel>
+                </div>
+              )}
+            </form.Field>
             <div className="grid gap-6 sm:grid-cols-3">
               <form.Field name="spouse_name">
                 {(field) => (

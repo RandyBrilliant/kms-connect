@@ -3,14 +3,14 @@
  *
  * Workflow:
  * 1. Dialog opens for a specific batch.
- * 2. Admin types a search term (name, email, or NIK) → paginated results load.
+ * 2. Admin types a search term (name, email, NIK, or rujukan) → paginated results load.
  * 3. Each row shows is_eligible flag and ineligible_reason.
  * 4. Admin selects one or more rows with checkboxes.
  * 5. Admin clicks "Tambah ke Batch" → calls POST /api/batches/{id}/assign/.
  * 6. Response shows how many were added and how many were skipped.
  */
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect, useMemo } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { IconSearch, IconUserCheck } from "@tabler/icons-react"
 import { toast } from "@/lib/toast"
@@ -63,6 +63,16 @@ export function BatchAssignDialog({
 
   const PAGE_SIZE = 20
 
+  useEffect(() => {
+    if (!open) {
+      setSearchInput("")
+      setSearchQuery("")
+      setPage(1)
+      setSelected(new Set())
+      setNote("")
+    }
+  }, [open])
+
   const { data, isLoading, isError } = useQuery({
     queryKey: ["eligible-applicants", batchId, searchQuery, page],
     queryFn: () =>
@@ -97,7 +107,6 @@ export function BatchAssignDialog({
   const handleSearch = useCallback(() => {
     setSearchQuery(searchInput.trim())
     setPage(1)
-    setSelected(new Set())
   }, [searchInput])
 
   const toggleRow = (id: number) => {
@@ -112,15 +121,25 @@ export function BatchAssignDialog({
   const rows = data?.results ?? []
   const pageCount = data ? Math.ceil(data.count / PAGE_SIZE) : 0
 
-  // Select all / deselect all on current page
-  const pageIds = rows.map((r) => r.id)
-  const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id))
+  const selectedIdsNotOnCurrentPage = useMemo(() => {
+    if (selected.size === 0) return 0
+    const onPage = new Set(rows.map((r) => r.id))
+    let n = 0
+    for (const id of selected) {
+      if (!onPage.has(id)) n++
+    }
+    return n
+  }, [rows, selected])
+
+  const eligiblePageIds = rows.filter((r) => r.is_eligible).map((r) => r.id)
+  const allPageSelected =
+    eligiblePageIds.length > 0 && eligiblePageIds.every((id) => selected.has(id))
 
   const togglePage = () => {
     setSelected((prev) => {
       const next = new Set(prev)
-      if (allPageSelected) pageIds.forEach((id) => next.delete(id))
-      else pageIds.forEach((id) => next.add(id))
+      if (allPageSelected) eligiblePageIds.forEach((id) => next.delete(id))
+      else eligiblePageIds.forEach((id) => next.add(id))
       return next
     })
   }
@@ -131,9 +150,11 @@ export function BatchAssignDialog({
         <DialogHeader>
           <DialogTitle>Tambah Pelamar ke Batch</DialogTitle>
           <DialogDescription>
-            Cari pelamar berdasarkan nama, email, atau NIK. Pilih satu atau
-            beberapa pelamar dengan centang, lalu klik "Tambah ke Batch".
-            Hanya pelamar yang memenuhi syarat yang akan berhasil ditambahkan.
+            Cari pelamar berdasarkan nama, email, NIK, atau rujukan (nama staf,
+            email, kode rujukan). Pilih satu atau beberapa pelamar dengan centang,
+            lalu klik "Tambah ke Batch". Centangan tetap tersimpan jika Anda
+            mencari nama lain. Hanya pelamar yang memenuhi syarat yang akan
+            berhasil ditambahkan.
           </DialogDescription>
         </DialogHeader>
 
@@ -142,7 +163,7 @@ export function BatchAssignDialog({
           <div className="relative flex-1">
             <IconSearch className="text-muted-foreground absolute left-3 top-1/2 size-4 -translate-y-1/2" />
             <Input
-              placeholder="Cari nama, email, atau NIK..."
+              placeholder="Cari nama, email, NIK, atau rujukan..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
@@ -172,12 +193,14 @@ export function BatchAssignDialog({
                     <Checkbox
                       checked={allPageSelected}
                       onCheckedChange={togglePage}
-                      aria-label="Pilih semua di halaman ini"
+                      disabled={eligiblePageIds.length === 0}
+                      aria-label="Pilih semua pelamar memenuhi syarat di halaman ini"
                     />
                   </TableHead>
                   <TableHead>Nama</TableHead>
                   <TableHead>NIK</TableHead>
                   <TableHead>Email</TableHead>
+                  <TableHead>Rujukan</TableHead>
                   <TableHead>Domisili</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
@@ -212,6 +235,20 @@ export function BatchAssignDialog({
                       </TableCell>
                       <TableCell className="text-sm">{row.nik || "-"}</TableCell>
                       <TableCell className="text-sm">{row.email}</TableCell>
+                      <TableCell className="text-sm">
+                        {row.referrer_display_name || row.referrer_code ? (
+                          <div className="flex flex-col gap-0.5">
+                            {row.referrer_display_name ? (
+                              <span>{row.referrer_display_name}</span>
+                            ) : null}
+                            {row.referrer_code ? (
+                              <span className="text-xs text-muted-foreground">{row.referrer_code}</span>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-sm text-muted-foreground">{row.domicile || "-"}</TableCell>
                       <TableCell>
                         {row.is_eligible ? (
@@ -226,10 +263,10 @@ export function BatchAssignDialog({
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-20 text-center text-muted-foreground">
+                    <TableCell colSpan={7} className="h-20 text-center text-muted-foreground">
                       {searchQuery
                         ? "Tidak ada pelamar yang cocok dengan pencarian."
-                        : "Ketik nama, email, atau NIK untuk mencari pelamar."}
+                        : "Ketik nama, email, NIK, atau rujukan untuk mencari pelamar."}
                     </TableCell>
                   </TableRow>
                 )}
@@ -271,6 +308,13 @@ export function BatchAssignDialog({
         {/* Note field + selection count */}
         {selected.size > 0 && (
           <div className="flex flex-col gap-1.5 shrink-0">
+            {selectedIdsNotOnCurrentPage > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {selectedIdsNotOnCurrentPage} pelamar terpilih tidak tampil di
+                halaman hasil ini — centangan tetap aktif jika Anda mencari lagi
+                atau mengganti halaman.
+              </p>
+            )}
             <Label>
               Catatan penugasan
               <span className="ml-1 text-muted-foreground text-xs">(opsional)</span>

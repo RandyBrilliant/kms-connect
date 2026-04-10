@@ -127,10 +127,14 @@ def send_fcm_notification(
             ),
         ),
         apns=messaging.APNSConfig(
+            headers={
+                "apns-priority": "10",
+            },
             payload=messaging.APNSPayload(
                 aps=messaging.Aps(
                     sound="default",
                     badge=1,
+                    content_available=True,
                 ),
             ),
         ),

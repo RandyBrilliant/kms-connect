@@ -16,6 +16,7 @@ import {
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { PhoneInput } from "@/components/ui/phone-input"
 import { DatePicker } from "@/components/ui/date-picker"
@@ -62,7 +63,7 @@ function toNum(v: string): number | null {
 const PROFILE_KEYS = [
   "full_name", "nik", "birth_place", "birth_date", "address", "province", "district", "village",
   "contact_phone", "gender", "sibling_count", "birth_order", "father_name", "father_age", "father_occupation",
-  "mother_name", "mother_age", "mother_occupation", "spouse_name", "spouse_age", "spouse_occupation",
+  "father_almarhum", "mother_name", "mother_age", "mother_occupation", "mother_almarhum", "spouse_name", "spouse_age", "spouse_occupation", "spouse_almarhum",
   "family_address", "family_province", "family_district", "family_village", "father_phone", "mother_phone",
   "heir_name", "heir_relationship", "heir_contact_phone",
   "religion", "education_level", "education_major", "marital_status", "height_cm", "weight_kg", "wears_glasses", "writing_hand",
@@ -134,12 +135,15 @@ const defaultBiodata = {
   father_name: "",
   father_age: "",
   father_occupation: "",
+  father_almarhum: false,
   mother_name: "",
   mother_age: "",
   mother_occupation: "",
+  mother_almarhum: false,
   spouse_name: "",
   spouse_age: "",
   spouse_occupation: "",
+  spouse_almarhum: false,
   family_address: "",
   father_phone: "",
   mother_phone: "",
@@ -603,6 +607,21 @@ export function ApplicantForm({
                 </Field>
               )}
             </form.Field>
+            <form.Field name="mother_almarhum">
+              {(field) => (
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id={field.name}
+                    checked={field.state.value}
+                    onCheckedChange={(c) => field.handleChange(!!c)}
+                    disabled={isSubmitting}
+                  />
+                  <FieldLabel htmlFor={field.name} className="cursor-pointer font-normal">
+                    Ibu Almarhumah
+                  </FieldLabel>
+                </div>
+              )}
+            </form.Field>
             <div className="grid gap-6 sm:grid-cols-3">
               <form.Field name="mother_name">
                 {(field) => (
@@ -635,6 +654,21 @@ export function ApplicantForm({
                   <FieldLabel htmlFor={field.name}>No. HP / WA Ibu</FieldLabel>
                   <PhoneInput id={field.name} value={field.state.value} onChange={(val) => field.handleChange(val)} disabled={isSubmitting} placeholder="No. HP aktif" />
                 </Field>
+              )}
+            </form.Field>
+            <form.Field name="spouse_almarhum">
+              {(field) => (
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id={field.name}
+                    checked={field.state.value}
+                    onCheckedChange={(c) => field.handleChange(!!c)}
+                    disabled={isSubmitting}
+                  />
+                  <FieldLabel htmlFor={field.name} className="cursor-pointer font-normal">
+                    Suami/Istri Almarhum / Almarhumah
+                  </FieldLabel>
+                </div>
               )}
             </form.Field>
             <div className="grid gap-6 sm:grid-cols-3">

@@ -9,6 +9,8 @@ Serializers untuk konten main app:
 from rest_framework import serializers
 from django.utils import timezone
 
+from account.serializers import _staff_rujukan_display_name
+
 from .models import (
     ApplicationStatus,
     ApplicationStatusHistory,
@@ -252,6 +254,9 @@ class JobApplicationSerializer(serializers.ModelSerializer):
     )
     cooldown_eligible_date = serializers.SerializerMethodField(read_only=True)
     status_history = ApplicationStatusHistorySerializer(many=True, read_only=True)
+    applicant_nik = serializers.SerializerMethodField(read_only=True)
+    referrer_display_name = serializers.SerializerMethodField(read_only=True)
+    referrer_code = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = JobApplication
@@ -260,6 +265,9 @@ class JobApplicationSerializer(serializers.ModelSerializer):
             "applicant",
             "applicant_name",
             "applicant_email",
+            "applicant_nik",
+            "referrer_display_name",
+            "referrer_code",
             "job",
             "job_title",
             "company_name",
@@ -286,6 +294,9 @@ class JobApplicationSerializer(serializers.ModelSerializer):
             "id",
             "applicant_name",
             "applicant_email",
+            "applicant_nik",
+            "referrer_display_name",
+            "referrer_code",
             "job_title",
             "company_name",
             "batch_name",
@@ -321,6 +332,32 @@ class JobApplicationSerializer(serializers.ModelSerializer):
         if not user:
             return ""
         return user.email or ""
+
+    def get_applicant_nik(self, obj) -> str:
+        applicant = getattr(obj, "applicant", None)
+        if not applicant:
+            return ""
+        return (getattr(applicant, "nik", None) or "").strip()
+
+    def get_referrer_display_name(self, obj) -> str:
+        applicant = getattr(obj, "applicant", None)
+        if not applicant or not getattr(applicant, "referrer_id", None):
+            return ""
+        ref = applicant.referrer
+        if not ref:
+            return ""
+        raw_name = (getattr(ref, "full_name", None) or "").strip()
+        email = getattr(ref, "email", None) or ""
+        return _staff_rujukan_display_name(full_name=raw_name, email=email)
+
+    def get_referrer_code(self, obj) -> str:
+        applicant = getattr(obj, "applicant", None)
+        if not applicant or not getattr(applicant, "referrer_id", None):
+            return ""
+        ref = applicant.referrer
+        if not ref:
+            return ""
+        return (getattr(ref, "referral_code", None) or "").strip()
 
     def get_job_title(self, obj) -> str:
         job = getattr(obj, "job", None)

@@ -59,17 +59,84 @@ import {
   VERIFICATION_STATUS_COLORS,
   getVerificationStatusLabel,
 } from "@/constants/applicant"
-import { formatDate, formatNIK } from "@/lib/formatters"
+import { formatDate } from "@/lib/formatters"
 import { isSubmittedStatus } from "@/lib/type-guards"
 import { VerificationModal } from "./verification-modal"
 import { exportApplicants } from "@/api/applicants"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { type DateRange } from "react-day-picker"
+import { useReferrersQuery } from "@/hooks/use-referrers-query"
 import { format } from "date-fns"
 import type { ApplicantUser } from "@/types/applicant"
 import type { ApplicantsListParams, ApplicantVerificationStatus } from "@/types/applicant"
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
+
+/** Kolom Rujukan: pakai display_name dari API (nama DB atau label dari email lokal), bukan kode. */
+function staffRujukanDisplayName(
+  profile: ApplicantUser["applicant_profile"] | undefined
+): string {
+  const r = profile?.referrer_display
+  if (!r) return ""
+  const label = (r.display_name ?? r.full_name ?? "").trim()
+  return label
+}
+
+function PelamarIdentityBlock({ applicant }: { applicant: ApplicantUser }) {
+  const profile = applicant.applicant_profile
+
+  return (
+    <div className="flex min-w-0 flex-col gap-0.5 py-0.5">
+      <span className="font-medium leading-tight break-words">
+        {profile?.full_name || "—"}
+      </span>
+      <span className="text-muted-foreground text-sm break-all leading-tight">
+        {applicant.email}
+      </span>
+    </div>
+  )
+}
+
+/** Nama rujukan + kode di baris kedua (desktop & mobile). */
+function RujukanBlock({
+  profile,
+}: {
+  profile: ApplicantUser["applicant_profile"] | undefined
+}) {
+  const r = profile?.referrer_display
+  const name = staffRujukanDisplayName(profile)
+  const code = (r?.referral_code ?? "").trim()
+  if (!name && !code) {
+    return <span className="text-muted-foreground">—</span>
+  }
+  return (
+    <div className="flex min-w-0 flex-col gap-0.5">
+      {name ? (
+        <span className="font-medium leading-tight break-words">{name}</span>
+      ) : null}
+      {code ? (
+        <span
+          className={
+            name
+              ? "text-muted-foreground text-xs tabular-nums leading-tight"
+              : "font-medium tabular-nums leading-tight"
+          }
+        >
+          {code}
+        </span>
+      ) : null}
+    </div>
+  )
+}
+
+function RujukanCell({ applicant }: { applicant: ApplicantUser }) {
+  return (
+    <div className="min-w-0 py-0.5">
+      <RujukanBlock profile={applicant.applicant_profile} />
+    </div>
+  )
+}
 
 interface ApplicantTableProps {
   basePath: string
@@ -113,6 +180,7 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
   }, [params.created_at_after, params.created_at_before])
 
   const { data, isLoading, isError, error } = useApplicantsQuery(params)
+  const { data: referrers = [], isPending: referrersLoading } = useReferrersQuery()
   const deactivateMutation = useDeactivateApplicantMutation()
   const activateMutation = useActivateApplicantMutation()
   const bulkApproveMutation = useBulkApproveApplicantsMutation()
@@ -219,6 +287,7 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
         is_active: params.is_active,
         email_verified: params.email_verified,
         verification_status: params.verification_status,
+        referrer: params.referrer,
         created_at_after: params.created_at_after,
         created_at_before: params.created_at_before,
         ordering: params.ordering,
@@ -315,25 +384,16 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
         enableHiding: false,
       },
       {
+        id: "pelamar",
         accessorKey: "applicant_profile.full_name",
-        header: "Nama",
-        cell: ({ row }) => (
-          <span className="font-medium">
-            {row.original.applicant_profile?.full_name || "-"}
-          </span>
-        ),
+        header: "Pelamar",
+        cell: ({ row }) => <PelamarIdentityBlock applicant={row.original} />,
       },
       {
-        accessorKey: "email",
-        header: "Email",
-        cell: ({ row }) => <span>{row.original.email}</span>,
-      },
-      {
-        accessorKey: "applicant_profile.nik",
-        header: "NIK",
-        cell: ({ row }) => (
-          <span>{formatNIK(row.original.applicant_profile?.nik)}</span>
-        ),
+        id: "rujukan",
+        accessorFn: (row) => staffRujukanDisplayName(row.applicant_profile),
+        header: "Rujukan",
+        cell: ({ row }) => <RujukanCell applicant={row.original} />,
       },
       {
         accessorKey: "applicant_profile.score",
@@ -468,7 +528,7 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
           <div className="relative flex-1">
             <IconSearch className="text-muted-foreground absolute left-3 top-1/2 size-4 -translate-y-1/2" />
             <Input
-              placeholder="Cari nama, email, NIK..."
+              placeholder="Cari nama, email, NIK, HP, staff rujukan..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
@@ -511,6 +571,24 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
               ))}
             </SelectContent>
           </Select>
+          <SearchableSelect
+            className="min-w-0 w-full sm:w-[min(100%,280px)] sm:max-w-[320px]"
+            items={referrers.map((r) => {
+              const label = (r.full_name ?? "").trim() || r.email
+              return {
+                id: r.id,
+                name: r.referral_code ? `${label} · ${r.referral_code}` : label,
+              }
+            })}
+            value={params.referrer ?? null}
+            onChange={(id) =>
+              handleFilterChange("referrer", id ?? undefined)
+            }
+            placeholder="Semua rujukan"
+            clearLabel="Semua rujukan"
+            loading={referrersLoading}
+            emptyMessage="Tidak ada Staff/Admin"
+          />
           <Select
             value={
               params.is_active === undefined
@@ -681,21 +759,19 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
                           aria-label="Pilih pelamar"
                           className="mt-1"
                         />
-                        <div className="flex-1">
-                          <h3 className="font-semibold text-base">
-                            {profile?.full_name || "-"}
-                          </h3>
-                          <p className="text-muted-foreground text-sm">
-                            {applicant.email}
-                          </p>
+                        <div className="flex-1 min-w-0">
+                          <PelamarIdentityBlock applicant={applicant} />
                         </div>
                       </div>
 
+                      <div className="text-sm leading-relaxed">
+                        <span className="text-muted-foreground">Rujukan:</span>{" "}
+                        <span className="inline-block min-w-0 align-top">
+                          <RujukanBlock profile={profile} />
+                        </span>
+                      </div>
+
                       <div className="grid grid-cols-2 gap-2 text-sm">
-                        <div>
-                          <span className="text-muted-foreground">NIK:</span>{" "}
-                          <span>{formatNIK(profile?.nik)}</span>
-                        </div>
                         <div>
                           <span className="text-muted-foreground">HP:</span>{" "}
                           <span>{profile?.contact_phone || "-"}</span>

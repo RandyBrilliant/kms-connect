@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
@@ -56,9 +57,9 @@ class NotificationsPage extends ConsumerWidget {
                             final n = state.notifications[i];
                             return _ProfessionalNotificationCard(
                               notification: n,
-                              onTap: () => ref
-                                  .read(notificationProvider.notifier)
-                                  .markRead(n.id),
+                              onTap: () {
+                                context.push('/notifications/${n.id}');
+                              },
                             );
                           },
                         ),

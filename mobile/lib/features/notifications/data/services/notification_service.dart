@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:go_router/go_router.dart';
 
@@ -58,54 +59,77 @@ class NotificationService {
       return;
     }
 
-    NotificationSettings settings = await fcm.requestPermission(
+    // Create the Android notification channel BEFORE any notifications arrive.
+    // This must happen regardless of permission status — when permission is
+    // granted later the channel must already exist or FCM notifications
+    // targeting it will be silently dropped.
+    await _localNotifications
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(_androidChannel);
+
+    // Initialize local notifications (needed for foreground display + tap handling).
+    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const iosSettings = DarwinInitializationSettings();
+    const initSettings = InitializationSettings(
+      android: androidSettings,
+      iOS: iosSettings,
+    );
+
+    await _localNotifications.initialize(
+      initSettings,
+      onDidReceiveNotificationResponse: _onNotificationTapped,
+    );
+
+    // Request OS permission (shows the prompt on iOS; on Android 13+ triggers
+    // the POST_NOTIFICATIONS runtime dialog).
+    await fcm.requestPermission(
       alert: true,
       badge: true,
       sound: true,
     );
 
-    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-      // Create the Android notification channel BEFORE any notifications arrive.
-      // On Android 8+ this is required; on older versions it's a no-op.
-      await _localNotifications
-          .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>()
-          ?.createNotificationChannel(_androidChannel);
+    // iOS: tell the OS to show the system banner, badge, and sound even when
+    // the app is in the foreground. Without this, iOS silently delivers the
+    // message to onMessage but never shows a visible notification.
+    await fcm.setForegroundNotificationPresentationOptions(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
 
-      // Initialize local notifications
-      const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-      const iosSettings = DarwinInitializationSettings();
-      const initSettings = InitializationSettings(
-        android: androidSettings,
-        iOS: iosSettings,
-      );
+    // Always attach message handlers — even if permission is currently denied
+    // the user may grant it later via system settings. Handlers must be ready.
+    FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
 
-      await _localNotifications.initialize(
-        initSettings,
-        onDidReceiveNotificationResponse: _onNotificationTapped,
-      );
+    // Background messages are handled by top-level function in main.dart
 
-      // Handle foreground messages
-      FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
+    // Handle notification taps when app is in background
+    FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationOpened);
 
-      // Background messages are handled by top-level function in main.dart
-
-      // Handle notification taps when app is in background
-      FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationOpened);
-
-      // Get FCM token and register with backend
-      final token = await fcm.getToken();
-      if (token != null) {
-        if (kDebugMode) debugPrint('FCM Token: $token');
-        await _registerTokenWithBackend(token);
-      }
-
-      // Listen for token refresh
-      fcm.onTokenRefresh.listen((newToken) {
-        if (kDebugMode) debugPrint('New FCM Token: $newToken');
-        _registerTokenWithBackend(newToken);
+    // Handle cold-start: if the app was terminated and launched via a
+    // notification tap, getInitialMessage() returns that message once.
+    final initialMessage = await fcm.getInitialMessage();
+    if (initialMessage != null) {
+      // Defer until the first frame so [rootNavigatorKey] has a context.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _handleNotificationOpened(initialMessage);
       });
     }
+
+    // Always register the FCM token with the backend so push can be
+    // delivered as soon as permission is granted.
+    final token = await fcm.getToken();
+    if (token != null) {
+      if (kDebugMode) debugPrint('FCM Token: $token');
+      await _registerTokenWithBackend(token);
+    }
+
+    // Listen for token refresh
+    fcm.onTokenRefresh.listen((newToken) {
+      if (kDebugMode) debugPrint('New FCM Token: $newToken');
+      _registerTokenWithBackend(newToken);
+    });
   }
 
   /// Register/update the FCM device token with the backend.
@@ -156,7 +180,13 @@ class NotificationService {
   }
 
   Future<void> _handleForegroundMessage(RemoteMessage message) async {
-    // Show local notification when app is in foreground
+    // On iOS, setForegroundNotificationPresentationOptions already tells the
+    // OS to display the banner for messages that include a notification
+    // payload. Showing a local notification on top of that would duplicate it.
+    // On Android, the OS does NOT show foreground notifications, so we still
+    // need to surface them via flutter_local_notifications.
+    if (Platform.isIOS && message.notification != null) return;
+
     await _localNotifications.show(
       message.hashCode,
       message.notification?.title ?? 'Notifikasi',
@@ -201,6 +231,16 @@ class NotificationService {
     if (context == null) return;
 
     final router = GoRouter.of(context);
+
+    final rawNotificationId = data['notification_id'];
+    if (rawNotificationId != null) {
+      final id = int.tryParse(rawNotificationId.toString());
+      if (id != null && id > 0) {
+        router.push('/notifications/$id');
+        return;
+      }
+    }
+
     final type = data['type'] as String?;
     switch (type) {
       case 'job':

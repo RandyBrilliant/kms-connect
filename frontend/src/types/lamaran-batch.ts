@@ -50,6 +50,8 @@ export interface ApplicantSearchRow {
   email: string
   phone: string
   domicile: string
+  referrer_display_name: string
+  referrer_code: string
   is_eligible: boolean
   /** Filled when is_eligible=false so admin knows why */
   ineligible_reason: string | null

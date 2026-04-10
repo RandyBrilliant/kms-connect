@@ -50,6 +50,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   final _familyAddress = TextEditingController();
   final _fatherPhone = TextEditingController();
   final _motherPhone = TextEditingController();
+  bool _fatherAlmarhum = false;
+  bool _motherAlmarhum = false;
+  bool _spouseAlmarhum = false;
   final _spouseName = TextEditingController();
   final _spouseAge = TextEditingController();
   final _spouseOccupation = TextEditingController();
@@ -311,6 +314,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     _familyAddress.text = (p.familyAddress ?? '').toUpperCase();
     _fatherPhone.text = p.fatherPhone ?? '';
     _motherPhone.text = p.motherPhone ?? '';
+    _fatherAlmarhum = p.fatherAlmarhum;
+    _motherAlmarhum = p.motherAlmarhum;
+    _spouseAlmarhum = p.spouseAlmarhum;
     _spouseName.text = (p.spouseName ?? '').toUpperCase();
     _spouseAge.text = p.spouseAge?.toString() ?? '';
     if (p.spouseAge != null) {
@@ -501,6 +507,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
       // ── Keluarga ────────────────────────────────────────────────────
       'sibling_count': ?int.tryParse(_siblingCount.text.trim()),
       'birth_order': ?int.tryParse(_birthOrder.text.trim()),
+      'father_almarhum': _fatherAlmarhum,
+      'mother_almarhum': _motherAlmarhum,
+      'spouse_almarhum': _spouseAlmarhum,
       if (_fatherName.text.trim().isNotEmpty)
         'father_name': _fatherName.text.trim(),
       if (_pickedFatherBirthDate != null)
@@ -1347,6 +1356,23 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                   const SizedBox(height: 18),
                                   _SubLabel('Ayah'),
                                   const SizedBox(height: 8),
+                                  CheckboxListTile(
+                                    value: _fatherAlmarhum,
+                                    onChanged: (v) => setState(
+                                      () => _fatherAlmarhum = v ?? false,
+                                    ),
+                                    title: Text(
+                                      'Ayah Almarhum',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    controlAffinity:
+                                        ListTileControlAffinity.leading,
+                                    contentPadding: EdgeInsets.zero,
+                                    dense: true,
+                                  ),
                                   M3TextField(
                                     controller: _fatherName,
                                     label: 'Nama Ayah',
@@ -1392,6 +1418,23 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                   const SizedBox(height: 18),
                                   _SubLabel('Ibu'),
                                   const SizedBox(height: 8),
+                                  CheckboxListTile(
+                                    value: _motherAlmarhum,
+                                    onChanged: (v) => setState(
+                                      () => _motherAlmarhum = v ?? false,
+                                    ),
+                                    title: Text(
+                                      'Ibu Almarhumah',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    controlAffinity:
+                                        ListTileControlAffinity.leading,
+                                    contentPadding: EdgeInsets.zero,
+                                    dense: true,
+                                  ),
                                   M3TextField(
                                     controller: _motherName,
                                     label: 'Nama Ibu',
@@ -1602,6 +1645,23 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                 label: 'Data Pasangan',
                                 subtitle: 'Isi jika sudah menikah',
                                 children: [
+                                  CheckboxListTile(
+                                    value: _spouseAlmarhum,
+                                    onChanged: (v) => setState(
+                                      () => _spouseAlmarhum = v ?? false,
+                                    ),
+                                    title: Text(
+                                      'Suami/Istri Almarhum / Almarhumah',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    controlAffinity:
+                                        ListTileControlAffinity.leading,
+                                    contentPadding: EdgeInsets.zero,
+                                    dense: true,
+                                  ),
                                   M3TextField(
                                     controller: _spouseName,
                                     label: 'Nama Pasangan',

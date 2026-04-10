@@ -540,6 +540,11 @@ class ApplicantProfile(models.Model):
         blank=True,
         help_text=_("Nomor HP/WA ayah yang aktif."),
     )
+    father_almarhum = models.BooleanField(
+        _("ayah almarhum"),
+        default=False,
+        help_text=_("Centang jika ayah kandung sudah meninggal."),
+    )
     mother_name = models.CharField(
         _("nama ibu"),
         max_length=255,
@@ -562,6 +567,11 @@ class ApplicantProfile(models.Model):
         blank=True,
         help_text=_("Nomor HP/WA ibu yang aktif."),
     )
+    mother_almarhum = models.BooleanField(
+        _("ibu almarhumah"),
+        default=False,
+        help_text=_("Centang jika ibu kandung sudah meninggal (Almarhumah)."),
+    )
     spouse_name = models.CharField(
         _("nama suami / istri"),
         max_length=255,
@@ -577,6 +587,11 @@ class ApplicantProfile(models.Model):
         _("pekerjaan suami / istri"),
         max_length=255,
         blank=True,
+    )
+    spouse_almarhum = models.BooleanField(
+        _("suami / istri almarhum"),
+        default=False,
+        help_text=_("Centang jika pasangan (suami/istri) sudah meninggal."),
     )
     family_address = models.TextField(
         _("alamat orangtua / keluarga"),

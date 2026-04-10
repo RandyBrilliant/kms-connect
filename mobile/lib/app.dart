@@ -28,6 +28,7 @@ import 'features/chat/presentation/pages/chat_thread_page.dart';
 import 'features/news/presentation/pages/news_list_page.dart';
 import 'features/news/presentation/pages/news_detail_page.dart';
 import 'features/notifications/presentation/pages/notifications_page.dart';
+import 'features/notifications/presentation/pages/notification_detail_page.dart';
 import 'features/notifications/presentation/pages/notification_settings_page.dart';
 import 'features/auth/data/providers/auth_provider.dart';
 import 'features/profile/data/providers/profile_provider.dart';
@@ -181,6 +182,15 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/home',
         name: 'home',
         builder: (context, state) => const HomePage(),
+      ),
+      GoRoute(
+        path: '/notifications/:notificationId',
+        name: 'notification-detail',
+        builder: (context, state) {
+          final id =
+              int.tryParse(state.pathParameters['notificationId'] ?? '') ?? 0;
+          return NotificationDetailPage(notificationId: id);
+        },
       ),
       GoRoute(
         path: '/notifications',

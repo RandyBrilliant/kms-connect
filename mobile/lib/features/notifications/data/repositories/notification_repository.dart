@@ -42,6 +42,33 @@ class NotificationRepository {
     }
   }
 
+  /// Fetch a single notification by id (GET /api/notifications/{id}/).
+  Future<AppNotification> getNotification(int id) async {
+    try {
+      final response =
+          await _apiClient.dio.get(ApiEndpoints.notificationDetail(id));
+      final raw = response.data;
+      Map<String, dynamic> map;
+      if (raw is Map<String, dynamic>) {
+        if (raw['data'] is Map<String, dynamic>) {
+          map = raw['data'] as Map<String, dynamic>;
+        } else {
+          map = raw;
+        }
+      } else {
+        throw DioException(
+          requestOptions: response.requestOptions,
+          response: response,
+          type: DioExceptionType.badResponse,
+          message: 'Format respons tidak valid',
+        );
+      }
+      return AppNotification.fromJson(map);
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
   /// Mark a single notification as read.
   Future<AppNotification> markRead(int id) async {
     try {

@@ -172,7 +172,7 @@ def dispatch(
     notification: Notification | None = None
     if send_inapp:
         try:
-            notification = Notification.objects.create(
+            notification = Notification(
                 user=user,
                 title=title,
                 message=message,
@@ -181,12 +181,9 @@ def dispatch(
                 action_url=action_url,
                 action_label=action_label,
             )
-            # The post_save signal in account/signals.py handles push automatically.
-            # We still honour the per-user push preference by passing it via a thread-local
-            # flag stored on the notification instance (checked in the signal).
             if not send_push:
-                # Tag the notification so the push signal skips it.
                 notification._skip_push = True
+            notification.save()
 
         except Exception:
             logger.exception("dispatch: failed to create Notification for event=%s user=%s", event.value, user.pk)

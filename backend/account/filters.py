@@ -15,7 +15,7 @@ class ApplicantUserFilterSet(django_filters.FilterSet):
     Custom filterset for ApplicantUserViewSet.
     
     Supports:
-    - Basic filters: is_active, email_verified, verification_status
+    - Basic filters: is_active, email_verified, verification_status, referrer (perujuk id)
     - Date range filter: applicant_profile__created_at (bergabung date)
     """
     
@@ -38,6 +38,12 @@ class ApplicantUserFilterSet(django_filters.FilterSet):
         field_name="applicant_profile__verification_status",
         choices=ApplicantVerificationStatus.choices,
     )
+    # Staff/admin pemberi rujukan (FK id on ApplicantProfile)
+    referrer = django_filters.NumberFilter(
+        field_name="applicant_profile__referrer",
+        lookup_expr="exact",
+        help_text="Filter pelamar by perujuk (CustomUser id — Staf/Admin).",
+    )
 
     class Meta:
         model = CustomUser
@@ -45,6 +51,7 @@ class ApplicantUserFilterSet(django_filters.FilterSet):
             "is_active",
             "email_verified",
             "verification_status",
+            "referrer",
             "created_at_after",
             "created_at_before",
         ]

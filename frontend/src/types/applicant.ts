@@ -74,10 +74,23 @@ export interface ScoreBreakdown {
   missing_required_document_codes: string[]
 }
 
+/** Staff/admin pemberi rujukan (embedded in profile JSON). */
+export interface ApplicantReferrerDisplay {
+  id: number
+  /** Nama di DB (boleh kosong). */
+  full_name: string
+  /** Nama untuk UI: full_name atau turunan dari bagian lokal email (bukan kode rujukan). */
+  display_name?: string
+  email: string
+  referral_code: string | null
+}
+
 export interface ApplicantProfile {
   id: number
   register_number: string | null
   referrer: number | null
+  /** Resolved staff/admin rujukan for display (read-only from API). */
+  referrer_display?: ApplicantReferrerDisplay | null
   registration_date: string | null
   destination_country: DestinationCountry
   full_name: string
@@ -98,13 +111,19 @@ export interface ApplicantProfile {
   father_age: number | null
   father_occupation: string
   father_phone: string
+  /** Ayah kandung sudah meninggal */
+  father_almarhum?: boolean
   mother_name: string
   mother_age: number | null
   mother_occupation: string
   mother_phone: string
+  /** Ibu kandung sudah meninggal (Almarhumah) */
+  mother_almarhum?: boolean
   spouse_name: string
   spouse_age: number | null
   spouse_occupation: string
+  /** Pasangan (suami/istri) sudah meninggal */
+  spouse_almarhum?: boolean
   family_address: string
   family_province: number | null
   family_district: number | null
@@ -277,6 +296,8 @@ export interface ApplicantsListParams {
   is_active?: boolean
   email_verified?: boolean
   verification_status?: ApplicantVerificationStatus
+  /** Filter by staff/admin referrer user id (GET ?referrer=) */
+  referrer?: number
   created_at_after?: string // Date string (YYYY-MM-DD) for filtering applicants who joined on or after this date
   created_at_before?: string // Date string (YYYY-MM-DD) for filtering applicants who joined on or before this date
   ordering?: string // e.g., "applicant_profile__score", "-applicant_profile__score", "applicant_profile__created_at", etc.

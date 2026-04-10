@@ -372,6 +372,9 @@ class ApplicantUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
         "full_name",
         "applicant_profile__nik",
         "applicant_profile__contact_phone",
+        "applicant_profile__referrer__full_name",
+        "applicant_profile__referrer__email",
+        "applicant_profile__referrer__referral_code",
     ]
     ordering_fields = [
         "email",
@@ -411,10 +414,11 @@ class ApplicantUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
         GET /api/applicants/export/?search=...&is_active=...&verification_status=...
         
         Supports the same filters as the list endpoint:
-        - search: search in email, full_name, nik, contact_phone
+        - search: search in email, full_name, nik, contact_phone, staff rujukan (nama, email, kode)
         - is_active: filter by active status
         - email_verified: filter by email verification status
         - applicant_profile__verification_status: filter by verification status
+        - referrer: filter by staff/admin referrer user id (same as list)
         - ordering: sort order (default: -applicant_profile__created_at)
         
         Returns Excel file (.xlsx) with all matching applicants.

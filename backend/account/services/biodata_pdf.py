@@ -245,14 +245,40 @@ def generate_biodata_pdf(profile) -> bytes:
         ayah_name = _str(profile.spouse_name)
         ayah_age  = _str(profile.spouse_age, "")
         ayah_pkj  = _str(profile.spouse_occupation)
+        if getattr(profile, "spouse_almarhum", False):
+            g = _str(getattr(profile, "gender", "") or "")
+            if ayah_name:
+                if g == "M":
+                    ayah_name = f"{ayah_name} (Almarhumah)"
+                elif g == "F":
+                    ayah_name = f"{ayah_name} (Almarhum)"
+                else:
+                    ayah_name = f"{ayah_name} (Almarhum/Almarhumah)"
+            else:
+                if g == "M":
+                    ayah_name = "Almarhumah"
+                elif g == "F":
+                    ayah_name = "Almarhum"
+                else:
+                    ayah_name = "Almarhum/Almarhumah"
     else:
         ayah_name = _str(profile.father_name)
         ayah_age  = _str(profile.father_age, "")
         ayah_pkj  = _str(profile.father_occupation)
+        if getattr(profile, "father_almarhum", False):
+            if ayah_name:
+                ayah_name = f"{ayah_name} (Almarhum)"
+            else:
+                ayah_name = "Almarhum"
 
     ibu_name = _str(profile.mother_name)
     ibu_age  = _str(profile.mother_age, "")
     ibu_pkj  = _str(profile.mother_occupation)
+    if getattr(profile, "mother_almarhum", False):
+        if ibu_name:
+            ibu_name = f"{ibu_name} (Almarhumah)"
+        else:
+            ibu_name = "Almarhumah"
 
     family_parts = [
         _str(profile.family_village.name   if profile.family_village   else ""),
