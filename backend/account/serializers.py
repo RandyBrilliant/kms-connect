@@ -155,9 +155,10 @@ class StaffUserSerializer(serializers.ModelSerializer):
             "updated_at",
             "referral_code",
             "google_id",
+            "apple_id",
             "staff_profile",
         ]
-        read_only_fields = ["id", "role", "email_verified_at", "date_joined", "last_login", "updated_at", "referral_code", "google_id"]
+        read_only_fields = ["id", "role", "email_verified_at", "date_joined", "last_login", "updated_at", "referral_code", "google_id", "apple_id"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

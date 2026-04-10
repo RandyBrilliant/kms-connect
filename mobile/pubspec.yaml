@@ -76,6 +76,11 @@ dependencies:
   
   google_fonts: ^8.0.2
 
+  # Social Sign-In
+  google_sign_in: ^6.2.2
+  sign_in_with_apple: ^6.1.4
+  crypto: ^3.0.6
+
   # Image optimization
   flutter_image_compress: ^2.3.0
 

@@ -6,6 +6,7 @@ class User {
   final bool isActive;
   final bool emailVerified;
   final String? googleId;
+  final String? appleId;
 
   User({
     required this.id,
@@ -15,7 +16,12 @@ class User {
     required this.isActive,
     required this.emailVerified,
     this.googleId,
+    this.appleId,
   });
+
+  bool get hasGoogle => googleId != null && googleId!.isNotEmpty;
+  bool get hasApple => appleId != null && appleId!.isNotEmpty;
+  bool get hasPassword => !hasGoogle && !hasApple;
 
   factory User.fromJson(Map<String, dynamic> json) {
     final idRaw = json['id'];
@@ -34,6 +40,7 @@ class User {
       isActive: json['is_active'] as bool? ?? true,
       emailVerified: json['email_verified'] as bool? ?? false,
       googleId: json['google_id'] as String?,
+      appleId: json['apple_id'] as String?,
     );
   }
 
@@ -46,6 +53,7 @@ class User {
       'is_active': isActive,
       'email_verified': emailVerified,
       'google_id': googleId,
+      'apple_id': appleId,
     };
   }
 
@@ -57,6 +65,7 @@ class User {
     bool? isActive,
     bool? emailVerified,
     String? googleId,
+    String? appleId,
   }) {
     return User(
       id: id ?? this.id,
@@ -66,6 +75,7 @@ class User {
       isActive: isActive ?? this.isActive,
       emailVerified: emailVerified ?? this.emailVerified,
       googleId: googleId ?? this.googleId,
+      appleId: appleId ?? this.appleId,
     );
   }
 }

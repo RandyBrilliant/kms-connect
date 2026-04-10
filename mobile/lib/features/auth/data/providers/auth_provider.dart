@@ -3,8 +3,10 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../domain/models/auth_response.dart';
 import '../../domain/models/user.dart';
 import '../repositories/auth_repository.dart';
+import '../services/social_auth_service.dart';
 import '../../../../core/api/interceptors.dart';
 import '../../../../core/widgets/custom_toast.dart';
 import '../../../notifications/data/services/notification_service.dart';
@@ -212,6 +214,105 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
+  /// Google Sign-In: trigger native flow, send token to backend.
+  /// Returns the AuthResponse on success (caller checks needsRegistration).
+  Future<AuthResponse?> googleSignIn() async {
+    state = state.copyWith(isLoading: true, error: null, errorCode: null);
+    try {
+      final result = await SocialAuthService.signInWithGoogle();
+      if (result == null) {
+        state = state.copyWith(isLoading: false);
+        return null;
+      }
+
+      final authResponse = await _repository.googleSignIn(result.idToken);
+      await _repository.persistCachedUser(authResponse.user);
+      state = state.copyWith(user: authResponse.user, isLoading: false);
+      NotificationService().registerToken();
+      return authResponse;
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: _extractErrorMessage(e, 'Google Sign-In gagal'),
+        errorCode: _extractErrorCode(e),
+      );
+      return null;
+    }
+  }
+
+  /// Apple Sign-In: trigger native flow, send token to backend.
+  /// Returns the AuthResponse on success (caller checks needsRegistration).
+  Future<AuthResponse?> appleSignIn() async {
+    state = state.copyWith(isLoading: true, error: null, errorCode: null);
+    try {
+      final result = await SocialAuthService.signInWithApple();
+      if (result == null) {
+        state = state.copyWith(isLoading: false);
+        return null;
+      }
+
+      final authResponse = await _repository.appleSignIn(
+        result.identityToken,
+        fullName: result.fullName,
+      );
+      await _repository.persistCachedUser(authResponse.user);
+      state = state.copyWith(user: authResponse.user, isLoading: false);
+      NotificationService().registerToken();
+      return authResponse;
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: _extractErrorMessage(e, 'Apple Sign-In gagal'),
+        errorCode: _extractErrorCode(e),
+      );
+      return null;
+    }
+  }
+
+  /// Link Google account to current user's profile.
+  Future<bool> linkGoogle() async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final result = await SocialAuthService.signInWithGoogle();
+      if (result == null) {
+        state = state.copyWith(isLoading: false);
+        return false;
+      }
+      await _repository.linkGoogleAccount(result.idToken);
+      await refreshUser();
+      state = state.copyWith(isLoading: false);
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: _extractErrorMessage(e, 'Gagal menghubungkan akun Google'),
+      );
+      return false;
+    }
+  }
+
+  /// Link Apple account to current user's profile.
+  Future<bool> linkApple() async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final result = await SocialAuthService.signInWithApple();
+      if (result == null) {
+        state = state.copyWith(isLoading: false);
+        return false;
+      }
+      await _repository.linkAppleAccount(result.identityToken);
+      await refreshUser();
+      state = state.copyWith(isLoading: false);
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: _extractErrorMessage(e, 'Gagal menghubungkan akun Apple'),
+      );
+      return false;
+    }
+  }
+
   /// Called after successful registration to set the authenticated user
   /// directly from the registration response (avoids a redundant network call).
   void setAuthenticatedUser(User user) {
@@ -264,6 +365,23 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<bool> resendVerificationEmail(String email) async {
     try {
       await _repository.resendVerificationEmail(email);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> updateUnverifiedEmail({
+    required String currentEmail,
+    required String newEmail,
+    required String password,
+  }) async {
+    try {
+      await _repository.updateUnverifiedEmail(
+        currentEmail: currentEmail,
+        newEmail: newEmail,
+        password: password,
+      );
       return true;
     } catch (_) {
       return false;

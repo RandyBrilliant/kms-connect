@@ -5,15 +5,15 @@ class AuthResponse {
   final String accessToken;
   final String refreshToken;
 
-  /// True when the backend says this Google account needs profile completion.
-  /// Always false for email/password registration responses.
-  final bool isNewGoogleUser;
+  /// True when the backend says this social account needs profile completion
+  /// (KTP upload, NIK, etc.). Set for both Google and Apple flows.
+  final bool needsRegistration;
 
   AuthResponse({
     required this.user,
     required this.accessToken,
     required this.refreshToken,
-    this.isNewGoogleUser = false,
+    this.needsRegistration = false,
   });
 
   factory AuthResponse.fromJson(Map<String, dynamic> json) {
@@ -28,7 +28,7 @@ class AuthResponse {
       user: User.fromJson(userData),
       accessToken: json['access'] as String? ?? '',
       refreshToken: json['refresh'] as String? ?? '',
-      isNewGoogleUser: json['needs_registration'] == true,
+      needsRegistration: json['needs_registration'] == true,
     );
   }
 }

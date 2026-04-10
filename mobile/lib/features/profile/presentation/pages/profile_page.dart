@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -268,18 +270,32 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                   if (profile?.verificationStatus == 'ACCEPTED')
                     const SizedBox(height: 20),
 
+                  // Linked Accounts
+                  _animated(
+                    _LinkedAccountsSection(
+                      hasGoogle: authState.user?.hasGoogle ?? false,
+                      hasApple: authState.user?.hasApple ?? false,
+                    ),
+                    0.55,
+                    0.88,
+                  ),
+
+                  const SizedBox(height: 20),
+
                   // Account
                   _animated(
                     _ProfessionalMenuSection(
                       title: 'Akun',
                       items: [
-                        _ProfessionalMenuItem(
-                          icon: Icons.lock_outline_rounded,
-                          color: const Color(0xFF0891B2),
-                          title: 'Ganti Password',
-                          subtitle: 'Ubah password akun kamu',
-                          onTap: () => context.push('/profile/change-password'),
-                        ),
+                        if (!(authState.user?.hasGoogle == true && authState.user?.hasApple == false && authState.user?.hasPassword == false) &&
+                            !(authState.user?.hasApple == true && authState.user?.hasGoogle == false && authState.user?.hasPassword == false))
+                          _ProfessionalMenuItem(
+                            icon: Icons.lock_outline_rounded,
+                            color: const Color(0xFF0891B2),
+                            title: 'Ganti Password',
+                            subtitle: 'Ubah password akun kamu',
+                            onTap: () => context.push('/profile/change-password'),
+                          ),
                         _ProfessionalMenuItem(
                           icon: Icons.delete_outline_rounded,
                           color: AppColors.error,
@@ -837,6 +853,221 @@ class _ProfessionalMenuItem extends StatelessWidget {
                   Icons.arrow_forward_ios_rounded,
                   size: 16,
                   color: AppColors.textLight,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Linked Accounts Section
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _LinkedAccountsSection extends ConsumerWidget {
+  const _LinkedAccountsSection({
+    required this.hasGoogle,
+    required this.hasApple,
+  });
+
+  final bool hasGoogle;
+  final bool hasApple;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isLoading = ref.watch(authStateProvider).isLoading;
+    final tt = Theme.of(context).textTheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 4,
+              height: 16,
+              decoration: BoxDecoration(
+                color: AppColors.primaryDarkGreen,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Akun Terhubung',
+              style: tt.titleMedium?.copyWith(
+                color: AppColors.textDark,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppColors.divider.withValues(alpha: 0.3),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              _LinkedAccountTile(
+                provider: 'Google',
+                icon: Icons.g_mobiledata_rounded,
+                iconColor: const Color(0xFFDB4437),
+                isLinked: hasGoogle,
+                isLoading: isLoading,
+                onLink: () async {
+                  final ok = await ref.read(authStateProvider.notifier).linkGoogle();
+                  if (!context.mounted) return;
+                  if (ok) {
+                    CustomToast.show(context, message: 'Akun Google berhasil dihubungkan', type: ToastType.success);
+                  } else {
+                    final err = ref.read(authStateProvider).error;
+                    if (err != null) CustomToast.show(context, message: err, type: ToastType.error);
+                  }
+                },
+              ),
+              if (Platform.isIOS) ...[
+                Divider(color: AppColors.divider.withValues(alpha: 0.2), height: 1, indent: 20, endIndent: 20),
+                _LinkedAccountTile(
+                  provider: 'Apple',
+                  icon: Icons.apple_rounded,
+                  iconColor: Colors.black,
+                  isLinked: hasApple,
+                  isLoading: isLoading,
+                  onLink: () async {
+                    final ok = await ref.read(authStateProvider.notifier).linkApple();
+                    if (!context.mounted) return;
+                    if (ok) {
+                      CustomToast.show(context, message: 'Akun Apple berhasil dihubungkan', type: ToastType.success);
+                    } else {
+                      final err = ref.read(authStateProvider).error;
+                      if (err != null) CustomToast.show(context, message: err, type: ToastType.error);
+                    }
+                  },
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _LinkedAccountTile extends StatelessWidget {
+  const _LinkedAccountTile({
+    required this.provider,
+    required this.icon,
+    required this.iconColor,
+    required this.isLinked,
+    required this.isLoading,
+    required this.onLink,
+  });
+
+  final String provider;
+  final IconData icon;
+  final Color iconColor;
+  final bool isLinked;
+  final bool isLoading;
+  final VoidCallback onLink;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: isLinked || isLoading ? null : onLink,
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: iconColor, size: 24),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      provider,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textDark,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      isLinked ? 'Terhubung' : 'Belum terhubung',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: isLinked
+                            ? AppColors.primaryDarkGreen
+                            : AppColors.textMedium,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (isLinked)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryDarkGreen.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.check_circle_rounded, size: 16, color: AppColors.primaryDarkGreen),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Aktif',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primaryDarkGreen,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryDarkGreen,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    'Hubungkan',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
                 ),
             ],
           ),

@@ -39,19 +39,34 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
 
   bool _isVerifying = false;
   bool _isResending = false;
+  bool _isUpdatingEmail = false;
   bool _isSuccess = false;
   int _resendCountdown = _kResendSeconds;
   Timer? _countdownTimer;
+  late String _verificationEmail;
 
   late final AnimationController _animCtrl;
   late final Animation<double> _fadeIn;
   late final Animation<double> _slideUp;
 
   String get _code => _controllers.map((c) => c.text).join();
+  String get _maskedVerificationEmail => _maskEmail(_verificationEmail);
+
+  String _maskEmail(String email) {
+    final value = email.trim().toLowerCase();
+    final parts = value.split('@');
+    if (parts.length != 2) return value;
+    final local = parts[0];
+    final domain = parts[1];
+    if (local.isEmpty) return value;
+    if (local.length <= 2) return '${local[0]}***@$domain';
+    return '${local.substring(0, 2)}***@$domain';
+  }
 
   @override
   void initState() {
     super.initState();
+    _verificationEmail = widget.email.trim().toLowerCase();
     _startCountdown();
 
     _animCtrl = AnimationController(
@@ -151,7 +166,7 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
     try {
       final response = await ApiClient().dio.post(
         ApiEndpoints.verifyEmailCode,
-        data: {'email': widget.email, 'code': code},
+        data: {'email': _verificationEmail, 'code': code},
       );
 
       final apiResp = ApiResponse<Map<String, dynamic>>.fromJson(
@@ -213,7 +228,7 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
 
     final ok = await ref
         .read(authStateProvider.notifier)
-        .resendVerificationEmail(widget.email);
+        .resendVerificationEmail(_verificationEmail);
 
     if (!mounted) return;
     setState(() => _isResending = false);
@@ -229,6 +244,147 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
           message: 'Gagal mengirim ulang kode. Silakan coba lagi.',
           type: ToastType.error);
     }
+  }
+
+  Future<void> _showUpdateEmailBottomSheet() async {
+    final newEmailCtrl = TextEditingController();
+    final passwordCtrl = TextEditingController();
+    bool obscurePassword = true;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            return SafeArea(
+              top: false,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: 24,
+                  right: 24,
+                  top: 24,
+                  bottom: MediaQuery.viewInsetsOf(ctx).bottom + 24,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Ubah Email Verifikasi',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textDark,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Masukkan email baru dan password akun Anda.',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 13,
+                        color: AppColors.textMedium,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      initialValue: _verificationEmail,
+                      enabled: false,
+                      decoration: const InputDecoration(
+                        labelText: 'Email saat ini',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: newEmailCtrl,
+                      keyboardType: TextInputType.emailAddress,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(
+                        labelText: 'Email baru',
+                        hintText: 'contoh@email.com',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: passwordCtrl,
+                      obscureText: obscurePassword,
+                      decoration: InputDecoration(
+                        labelText: 'Password akun',
+                        suffixIcon: IconButton(
+                          onPressed: () => setModalState(() => obscurePassword = !obscurePassword),
+                          icon: Icon(
+                            obscurePassword ? Icons.visibility_off : Icons.visibility,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ProfessionalButton(
+                      label: _isUpdatingEmail ? 'Menyimpan...' : 'Simpan Email Baru',
+                      isLoading: _isUpdatingEmail,
+                      onPressed: _isUpdatingEmail
+                          ? null
+                          : () async {
+                              final nextEmail = newEmailCtrl.text.trim().toLowerCase();
+                              final password = passwordCtrl.text;
+                              if (nextEmail.isEmpty || password.isEmpty) {
+                                CustomToast.show(
+                                  context,
+                                  message: 'Email baru dan password wajib diisi.',
+                                  type: ToastType.error,
+                                );
+                                return;
+                              }
+
+                              setState(() => _isUpdatingEmail = true);
+                              final ok = await ref.read(authStateProvider.notifier).updateUnverifiedEmail(
+                                    currentEmail: _verificationEmail,
+                                    newEmail: nextEmail,
+                                    password: password,
+                                  );
+                              if (!mounted) return;
+                              setState(() => _isUpdatingEmail = false);
+
+                              if (!ok) {
+                                CustomToast.show(
+                                  context,
+                                  message: 'Gagal mengubah email. Periksa kembali data Anda.',
+                                  type: ToastType.error,
+                                );
+                                return;
+                              }
+
+                              setState(() {
+                                _verificationEmail = nextEmail;
+                              });
+                              _clearCode();
+                              _startCountdown();
+                              if (ctx.mounted) Navigator.of(ctx).pop();
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                if (mounted) _focusNodes[0].requestFocus();
+                              });
+                              CustomToast.show(
+                                context,
+                                message: 'Email diperbarui. Kode verifikasi baru sudah dikirim.',
+                                type: ToastType.success,
+                              );
+                            },
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    newEmailCtrl.dispose();
+    passwordCtrl.dispose();
   }
 
   @override
@@ -414,7 +570,7 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
             ),
             const SizedBox(height: 4),
             Text(
-              widget.email,
+              _maskedVerificationEmail,
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
@@ -456,6 +612,20 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
 
             // Resend section
             _buildResendSection(),
+            const SizedBox(height: 12),
+            GestureDetector(
+              onTap: _isUpdatingEmail ? null : _showUpdateEmailBottomSheet,
+              child: Text(
+                'Email salah? Ubah email',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primaryDarkGreen,
+                  decoration: TextDecoration.underline,
+                  decorationColor: AppColors.primaryDarkGreen,
+                ),
+              ),
+            ),
             const SizedBox(height: 20),
 
             // Tips

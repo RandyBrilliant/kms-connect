@@ -343,12 +343,119 @@ class AuthRepository {
     await clearCachedUser();
   }
 
+  /// Sign in with Google (send ID token to backend)
+  Future<AuthResponse> googleSignIn(String idToken) async {
+    try {
+      final response = await _apiClient.dio.post(
+        ApiEndpoints.googleSignIn,
+        data: {'id_token': idToken},
+      );
+
+      final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
+        response.data,
+        (data) => data as Map<String, dynamic>,
+      );
+
+      if (!apiResponse.isSuccess || apiResponse.data == null) {
+        throw DioException(
+          requestOptions: response.requestOptions,
+          response: response,
+          type: DioExceptionType.badResponse,
+          message: apiResponse.detail ?? 'Google Sign-In gagal',
+        );
+      }
+
+      final authResponse = AuthResponse.fromJson(apiResponse.data!);
+      await _apiClient.setTokens(authResponse.accessToken, authResponse.refreshToken);
+      return authResponse;
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  /// Sign in with Apple (send identity token to backend)
+  Future<AuthResponse> appleSignIn(String identityToken, {String? fullName}) async {
+    try {
+      final response = await _apiClient.dio.post(
+        ApiEndpoints.appleSignIn,
+        data: {
+          'identity_token': identityToken,
+          if (fullName != null && fullName.isNotEmpty) 'full_name': fullName,
+        },
+      );
+
+      final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
+        response.data,
+        (data) => data as Map<String, dynamic>,
+      );
+
+      if (!apiResponse.isSuccess || apiResponse.data == null) {
+        throw DioException(
+          requestOptions: response.requestOptions,
+          response: response,
+          type: DioExceptionType.badResponse,
+          message: apiResponse.detail ?? 'Apple Sign-In gagal',
+        );
+      }
+
+      final authResponse = AuthResponse.fromJson(apiResponse.data!);
+      await _apiClient.setTokens(authResponse.accessToken, authResponse.refreshToken);
+      return authResponse;
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  /// Link Google account to current user
+  Future<void> linkGoogleAccount(String idToken) async {
+    try {
+      await _apiClient.dio.post(
+        ApiEndpoints.linkGoogle,
+        data: {'id_token': idToken},
+      );
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  /// Link Apple account to current user
+  Future<void> linkAppleAccount(String identityToken) async {
+    try {
+      await _apiClient.dio.post(
+        ApiEndpoints.linkApple,
+        data: {'identity_token': identityToken},
+      );
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
   /// Resend verification email for the given email address.
   Future<void> resendVerificationEmail(String email) async {
     try {
       await _apiClient.dio.post(
         ApiEndpoints.resendVerificationEmail,
         data: {'email': email.trim().toLowerCase()},
+      );
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  /// Update email for an unverified account, then trigger a new verification email.
+  Future<void> updateUnverifiedEmail({
+    required String currentEmail,
+    required String newEmail,
+    required String password,
+  }) async {
+    try {
+      await _apiClient.dio.post(
+        ApiEndpoints.updateUnverifiedEmail,
+        data: {
+          'current_email': currentEmail.trim().toLowerCase(),
+          'new_email': newEmail.trim().toLowerCase(),
+          'password': password,
+        },
       );
     } on DioException catch (e) {
       throw _handleError(e);

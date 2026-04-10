@@ -327,8 +327,17 @@ SIMPLE_JWT = {
     "AUTH_COOKIE_PATH": "/",
 }
 
+# Mobile clients receive longer-lived refresh tokens so sessions persist
+# indefinitely (like Instagram, WhatsApp, etc.). With ROTATE_REFRESH_TOKENS
+# enabled, each refresh resets the clock — the user only gets logged out if
+# they don't open the app for this many days. Default: 365 days (1 year).
+JWT_MOBILE_REFRESH_DAYS = int(_env("JWT_MOBILE_REFRESH_DAYS", "365"))
+
 # Google Login: Client ID untuk verifikasi ID token (google-auth)
 GOOGLE_CLIENT_ID = _env("GOOGLE_CLIENT_ID", "")
+
+# Apple Sign-In: Bundle ID (iOS) used as audience when verifying Apple identity tokens.
+APPLE_CLIENT_ID = _env("APPLE_CLIENT_ID", "")
 
 # -----------------------------------------------------------------------------
 # Google Cloud Vision (OCR dokumen: KTP, dll.)

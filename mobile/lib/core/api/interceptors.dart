@@ -1,20 +1,82 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'api_client.dart';
 import 'endpoints.dart';
 
-/// Authentication interceptor - adds JWT token to requests and handles refresh
+/// Authentication interceptor - adds JWT token to requests and handles refresh.
+///
+/// Two-layer refresh strategy for seamless persistent sessions:
+///   1. **Proactive**: before each request, decode the access token's `exp`
+///      claim.  If it expires within [_refreshThreshold], silently obtain a
+///      new token pair *before* the request is sent — no 401 needed.
+///   2. **Reactive** (fallback): if a 401 still arrives (clock skew, revoked
+///      token, etc.), the existing error-handler refreshes and retries once.
 class AuthInterceptor extends Interceptor {
   final ApiClient _apiClient;
   final Dio _dio;
   bool _isRefreshing = false;
+  bool _isProactivelyRefreshing = false;
   final List<({RequestOptions options, ErrorInterceptorHandler handler})>
   _pendingRequests = [];
+
+  static const _refreshThreshold = Duration(minutes: 2);
 
   /// Set this from outside (e.g. authStateProvider) so that when the
   /// interceptor invalidates tokens it can force GoRouter to redirect to login.
   static void Function()? onForceLogout;
 
   AuthInterceptor(this._apiClient, this._dio);
+
+  /// Decode a JWT payload without verification to read the `exp` claim.
+  static bool _isTokenExpiringSoon(String token) {
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return true;
+      final normalized = base64Url.normalize(parts[1]);
+      final payload = utf8.decode(base64Url.decode(normalized));
+      final data = jsonDecode(payload) as Map<String, dynamic>;
+      final exp = data['exp'] as int;
+      final expiresAt = DateTime.fromMillisecondsSinceEpoch(exp * 1000);
+      return DateTime.now().isAfter(expiresAt.subtract(_refreshThreshold));
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Best-effort preemptive refresh — keeps its own lock so it doesn't
+  /// interfere with the reactive 401 refresh flow.
+  Future<String?> _tryProactiveRefresh() async {
+    if (_isProactivelyRefreshing || _isRefreshing) return null;
+    _isProactivelyRefreshing = true;
+    try {
+      final refreshToken = await _apiClient.getRefreshToken();
+      if (refreshToken == null) return null;
+
+      final response = await _dio.post(
+        ApiEndpoints.refreshToken,
+        data: {'refresh': refreshToken},
+      );
+
+      if (response.statusCode == 200) {
+        final payload = response.data is Map ? response.data as Map : null;
+        final inner = payload?['data'] as Map?;
+        final newAccess = inner?['access'] as String?;
+        final newRefresh = inner?['refresh'] as String?;
+
+        if (newAccess != null) {
+          await _apiClient.setTokens(newAccess, newRefresh ?? refreshToken);
+          return newAccess;
+        }
+      }
+    } catch (_) {
+      // Proactive refresh is best-effort; a failure here is harmless —
+      // the reactive 401 handler will pick it up if needed.
+    } finally {
+      _isProactivelyRefreshing = false;
+    }
+    return null;
+  }
 
   @override
   void onRequest(
@@ -30,8 +92,18 @@ class AuthInterceptor extends Interceptor {
       return;
     }
 
-    final token = await _apiClient.getAccessToken();
+    String? token = await _apiClient.getAccessToken();
     if (token != null) {
+      // Proactively refresh if the access token is about to expire,
+      // avoiding a 401 round-trip entirely.
+      if (_isTokenExpiringSoon(token)) {
+        if (const bool.fromEnvironment('dart.vm.product') == false) {
+          print('TOKEN EXPIRING SOON — proactive refresh for: ${options.path}');
+        }
+        final refreshed = await _tryProactiveRefresh();
+        if (refreshed != null) token = refreshed;
+      }
+
       options.headers['Authorization'] = 'Bearer $token';
       if (const bool.fromEnvironment('dart.vm.product') == false) {
         print('AUTH HEADER ADDED for: ${options.path}');

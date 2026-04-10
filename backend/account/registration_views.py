@@ -295,11 +295,17 @@ class ApplicantRegistrationView(APIView):
         except Exception:
             pass  # Jangan gagalkan registrasi jika email gagal dikirim
 
-        # Generate JWT tokens
+        # Generate JWT tokens — mobile clients get longer-lived refresh tokens
         try:
-            token_serializer = TokenObtainPairSerializer()
-            token_serializer.user = user
-            tokens = token_serializer.get_token(user)
+            from .auth_cookie_views import _is_mobile_client, _mobile_refresh_token_for_user
+
+            if _is_mobile_client(request):
+                tokens = _mobile_refresh_token_for_user(user)
+            else:
+                token_serializer = TokenObtainPairSerializer()
+                token_serializer.user = user
+                tokens = token_serializer.get_token(user)
+
             access_token = str(tokens.access_token)
             refresh_token = str(tokens)
         except Exception as e:
@@ -449,11 +455,17 @@ class GoogleOAuthView(APIView):
                     submitted_at=timezone.now(),
                 )
 
-        # Generate JWT tokens
+        # Generate JWT tokens — mobile clients get longer-lived refresh tokens
         try:
-            token_serializer = TokenObtainPairSerializer()
-            token_serializer.user = user
-            tokens = token_serializer.get_token(user)
+            from .auth_cookie_views import _is_mobile_client, _mobile_refresh_token_for_user
+
+            if _is_mobile_client(request):
+                tokens = _mobile_refresh_token_for_user(user)
+            else:
+                token_serializer = TokenObtainPairSerializer()
+                token_serializer.user = user
+                tokens = token_serializer.get_token(user)
+
             access_token = str(tokens.access_token)
             refresh_token = str(tokens)
         except Exception as e:
@@ -775,3 +787,324 @@ class KTPOcrPreviewView(APIView):
                 ),
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+
+# ---------------------------------------------------------------------------
+# Apple Sign-In
+# ---------------------------------------------------------------------------
+
+def _verify_apple_identity_token(identity_token: str) -> dict | None:
+    """
+    Verify an Apple identity token (JWT) against Apple's public JWKS.
+    Returns the decoded payload dict on success, None on failure.
+    """
+    import json
+    import jwt as pyjwt
+    from urllib.request import urlopen
+
+    APPLE_JWKS_URL = "https://appleid.apple.com/auth/keys"
+
+    try:
+        jwks_data = json.loads(urlopen(APPLE_JWKS_URL).read())
+        public_keys = {}
+        for key_data in jwks_data["keys"]:
+            public_key = pyjwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(key_data))
+            public_keys[key_data["kid"]] = public_key
+
+        unverified_header = pyjwt.get_unverified_header(identity_token)
+        kid = unverified_header.get("kid")
+        if kid not in public_keys:
+            return None
+
+        apple_client_id = getattr(django_settings, "APPLE_CLIENT_ID", "")
+        payload = pyjwt.decode(
+            identity_token,
+            key=public_keys[kid],
+            algorithms=["RS256"],
+            audience=apple_client_id,
+            issuer="https://appleid.apple.com",
+        )
+        return payload
+    except Exception:
+        return None
+
+
+class AppleOAuthView(APIView):
+    """
+    POST { "identity_token": "...", "full_name": "..." }
+    Verify Apple identity token, create or login user.
+    Apple only sends the user's name on the FIRST authorization — the client
+    must forward it. On subsequent logins only `sub` and `email` are available.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [AuthPublicRateThrottle]
+
+    def post(self, request):
+        from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+
+        identity_token = (request.data.get("identity_token") or "").strip()
+        client_full_name = (request.data.get("full_name") or "").strip()
+
+        if not identity_token:
+            return Response(
+                error_response(
+                    detail="Apple identity token wajib diisi.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        apple_client_id = getattr(django_settings, "APPLE_CLIENT_ID", "")
+        if not apple_client_id:
+            return Response(
+                error_response(
+                    detail="Apple Sign-In tidak dikonfigurasi di server.",
+                    code=ApiCode.INTERNAL_ERROR,
+                ),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        payload = _verify_apple_identity_token(identity_token)
+        if payload is None:
+            return Response(
+                error_response(
+                    detail="Apple identity token tidak valid.",
+                    code=ApiCode.PERMISSION_DENIED,
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                ),
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        apple_sub = payload.get("sub", "")
+        email = (payload.get("email") or "").strip().lower()
+
+        if not apple_sub:
+            return Response(
+                error_response(
+                    detail="Apple token tidak berisi subject ID.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user = None
+        created = False
+
+        # Look up by apple_id first
+        if apple_sub:
+            try:
+                user = CustomUser.objects.get(apple_id=apple_sub)
+            except CustomUser.DoesNotExist:
+                pass
+
+        # Fall back to email match
+        if not user and email:
+            try:
+                user = CustomUser.objects.get(email=email)
+                if not user.apple_id:
+                    user.apple_id = apple_sub
+                    user.save(update_fields=["apple_id"])
+            except CustomUser.DoesNotExist:
+                pass
+
+        # Create new user
+        if not user:
+            if not email:
+                return Response(
+                    error_response(
+                        detail="Email tidak ditemukan di Apple account. Pastikan Anda mengizinkan berbagi email.",
+                        code=ApiCode.VALIDATION_ERROR,
+                    ),
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if CustomUser.objects.filter(email=email).exists():
+                return Response(
+                    error_response(
+                        detail="Email sudah terdaftar dengan metode login lain. Silakan login dengan email/password atau Google.",
+                        code=ApiCode.VALIDATION_ERROR,
+                    ),
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            user = CustomUser.objects.create_user(
+                email=email,
+                password=None,
+                role=UserRole.APPLICANT,
+                is_active=True,
+                email_verified=True,
+                apple_id=apple_sub,
+                full_name=client_full_name or "",
+            )
+            created = True
+
+            ApplicantProfile.objects.create(
+                user=user,
+                nik=f"A{user.pk:015d}",
+                verification_status=ApplicantVerificationStatus.SUBMITTED,
+                submitted_at=timezone.now(),
+            )
+
+        # Generate JWT tokens
+        try:
+            from .auth_cookie_views import _is_mobile_client, _mobile_refresh_token_for_user
+
+            if _is_mobile_client(request):
+                tokens = _mobile_refresh_token_for_user(user)
+            else:
+                token_serializer = TokenObtainPairSerializer()
+                token_serializer.user = user
+                tokens = token_serializer.get_token(user)
+
+            access_token = str(tokens.access_token)
+            refresh_token = str(tokens)
+        except Exception as e:
+            return Response(
+                error_response(
+                    detail=f"Gagal membuat token: {str(e)}",
+                    code=ApiCode.INTERNAL_ERROR,
+                ),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        needs_registration = created
+        if not needs_registration:
+            try:
+                profile = user.applicant_profile
+                if profile.nik and (profile.nik.startswith("A") or profile.nik.startswith("G")):
+                    needs_registration = True
+            except ApplicantProfile.DoesNotExist:
+                needs_registration = True
+
+        serializer = ApplicantUserSerializer(instance=user, context={"request": request})
+        return Response(
+            success_response(
+                data={
+                    "user": serializer.data,
+                    "access": access_token,
+                    "refresh": refresh_token,
+                    "needs_registration": needs_registration,
+                },
+                detail="Login dengan Apple berhasil." if not needs_registration else "Akun baru dibuat. Silakan lengkapi profil Anda.",
+            ),
+            status=status.HTTP_200_OK if not created else status.HTTP_201_CREATED,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Account Linking (bind Google/Apple to existing authenticated account)
+# ---------------------------------------------------------------------------
+
+class LinkGoogleAccountView(APIView):
+    """
+    Authenticated. POST { "id_token": "..." }
+    Link a Google account to the current user.
+    """
+    throttle_classes = [AuthPublicRateThrottle]
+
+    def post(self, request):
+        user = request.user
+        id_token_raw = (request.data.get("id_token") or "").strip()
+
+        if not id_token_raw:
+            return Response(
+                error_response(detail="Google ID token wajib diisi.", code=ApiCode.VALIDATION_ERROR),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            from google.auth.transport import requests as google_requests
+            from google.oauth2 import id_token as google_id_token
+
+            google_client_id = getattr(django_settings, "GOOGLE_CLIENT_ID", "")
+            if not google_client_id:
+                return Response(
+                    error_response(detail="Google OAuth tidak dikonfigurasi.", code=ApiCode.INTERNAL_ERROR),
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+            idinfo = google_id_token.verify_oauth2_token(
+                id_token_raw, google_requests.Request(), google_client_id,
+            )
+            google_sub = idinfo.get("sub")
+        except (ValueError, ImportError):
+            return Response(
+                error_response(detail="Google ID token tidak valid.", code=ApiCode.PERMISSION_DENIED),
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        if user.google_id:
+            return Response(
+                error_response(detail="Akun Google sudah terhubung.", code=ApiCode.VALIDATION_ERROR),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if CustomUser.objects.filter(google_id=google_sub).exclude(pk=user.pk).exists():
+            return Response(
+                error_response(detail="Akun Google ini sudah digunakan oleh akun lain.", code=ApiCode.VALIDATION_ERROR),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user.google_id = google_sub
+        user.save(update_fields=["google_id"])
+
+        return Response(
+            success_response(detail="Akun Google berhasil dihubungkan.", code=ApiCode.SUCCESS),
+            status=status.HTTP_200_OK,
+        )
+
+
+class LinkAppleAccountView(APIView):
+    """
+    Authenticated. POST { "identity_token": "..." }
+    Link an Apple account to the current user.
+    """
+    throttle_classes = [AuthPublicRateThrottle]
+
+    def post(self, request):
+        user = request.user
+        identity_token = (request.data.get("identity_token") or "").strip()
+
+        if not identity_token:
+            return Response(
+                error_response(detail="Apple identity token wajib diisi.", code=ApiCode.VALIDATION_ERROR),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        apple_client_id = getattr(django_settings, "APPLE_CLIENT_ID", "")
+        if not apple_client_id:
+            return Response(
+                error_response(detail="Apple Sign-In tidak dikonfigurasi.", code=ApiCode.INTERNAL_ERROR),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        payload = _verify_apple_identity_token(identity_token)
+        if payload is None:
+            return Response(
+                error_response(detail="Apple identity token tidak valid.", code=ApiCode.PERMISSION_DENIED),
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        apple_sub = payload.get("sub", "")
+
+        if user.apple_id:
+            return Response(
+                error_response(detail="Akun Apple sudah terhubung.", code=ApiCode.VALIDATION_ERROR),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if CustomUser.objects.filter(apple_id=apple_sub).exclude(pk=user.pk).exists():
+            return Response(
+                error_response(detail="Akun Apple ini sudah digunakan oleh akun lain.", code=ApiCode.VALIDATION_ERROR),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user.apple_id = apple_sub
+        user.save(update_fields=["apple_id"])
+
+        return Response(
+            success_response(detail="Akun Apple berhasil dihubungkan.", code=ApiCode.SUCCESS),
+            status=status.HTTP_200_OK,
+        )

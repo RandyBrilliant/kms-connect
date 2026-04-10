@@ -30,6 +30,7 @@ from account.auth_cookie_views import (
     RequestPasswordResetView,
     ConfirmResetPasswordView,
     ResendVerificationEmailView,
+    UpdateUnverifiedEmailView,
     ChangePasswordView,
 )
 from account.registration_views import (
@@ -37,6 +38,9 @@ from account.registration_views import (
     GoogleOAuthView,
     GoogleCompleteRegistrationView,
     KTPOcrPreviewView,
+    AppleOAuthView,
+    LinkGoogleAccountView,
+    LinkAppleAccountView,
 )
 
 urlpatterns = [
@@ -49,12 +53,16 @@ urlpatterns = [
     path("api/auth/verify-email/", VerifyEmailView.as_view(), name="verify_email"),
     path("api/auth/verify-email-code/", VerifyEmailCodeView.as_view(), name="verify_email_code"),
     path("api/auth/resend-verification-email/", ResendVerificationEmailView.as_view(), name="resend_verification_email"),
+    path("api/auth/update-unverified-email/", UpdateUnverifiedEmailView.as_view(), name="update_unverified_email"),
     path("api/auth/request-password-reset/", RequestPasswordResetView.as_view(), name="request_password_reset"),
     path("api/auth/confirm-reset-password/", ConfirmResetPasswordView.as_view(), name="confirm_reset_password"),
     path("api/auth/change-password/", ChangePasswordView.as_view(), name="change_password"),
     path("api/auth/register/", ApplicantRegistrationView.as_view(), name="applicant_register"),
     path("api/auth/google/", GoogleOAuthView.as_view(), name="google_oauth"),
+    path("api/auth/apple/", AppleOAuthView.as_view(), name="apple_oauth"),
     path("api/auth/google-complete/", GoogleCompleteRegistrationView.as_view(), name="google_complete_registration"),
+    path("api/auth/link-google/", LinkGoogleAccountView.as_view(), name="link_google"),
+    path("api/auth/link-apple/", LinkAppleAccountView.as_view(), name="link_apple"),
     path("api/auth/ocr-preview/", KTPOcrPreviewView.as_view(), name="ktp_ocr_preview"),
     path("api/", include("regions.urls")),
     path("api/", include("account.urls")),

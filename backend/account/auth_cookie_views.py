@@ -3,6 +3,8 @@ Auth views that set JWT in HTTP-only cookies (web) and return user data.
 Login and refresh set cookies; logout clears them.
 CSRF exempt so SPA can POST without CSRF token (auth is JWT, not session).
 """
+from datetime import timedelta
+
 from django.conf import settings as django_settings
 from django.utils import timezone
 from django.utils.decorators import method_decorator
@@ -15,6 +17,7 @@ from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.settings import api_settings as jwt_api_settings
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from .api_responses import ApiCode, ApiMessage, error_response, success_response
 from .throttles import AuthRateThrottle, AuthPublicRateThrottle
@@ -55,6 +58,8 @@ def _user_summary(user):
         "role": user.role,
         "is_active": user.is_active,
         "email_verified": user.email_verified,
+        "google_id": getattr(user, "google_id", None) or None,
+        "apple_id": getattr(user, "apple_id", None) or None,
     }
 
 
@@ -76,6 +81,29 @@ def _delete_cookie(response, key, cookie_settings):
         path=cookie_settings["path"],
         samesite=cookie_settings["samesite"],
     )
+
+
+def _is_mobile_client(request):
+    """Detect mobile app via X-Client-Type header sent by the Flutter client."""
+    return request.META.get("HTTP_X_CLIENT_TYPE", "").lower() == "mobile"
+
+
+def _mobile_refresh_lifetime():
+    return timedelta(days=getattr(django_settings, "JWT_MOBILE_REFRESH_DAYS", 365))
+
+
+def _mobile_refresh_token_for_user(user):
+    """Create a long-lived refresh token for persistent mobile sessions."""
+    token = RefreshToken.for_user(user)
+    token.set_exp(lifetime=_mobile_refresh_lifetime())
+    return token
+
+
+def _extend_refresh_token(token_str):
+    """Re-sign an existing refresh token with the mobile-length lifetime."""
+    token = RefreshToken(token_str)
+    token.set_exp(lifetime=_mobile_refresh_lifetime())
+    return str(token)
 
 
 @method_decorator(csrf_exempt, name="dispatch")
@@ -135,6 +163,14 @@ class CookieTokenObtainPairView(APIView):
 
         access = data["access"]
         refresh = data["refresh"]
+
+        # Mobile clients get a longer-lived refresh token so the session
+        # persists indefinitely (like Instagram, WhatsApp, etc.).
+        if _is_mobile_client(request):
+            mobile_token = _mobile_refresh_token_for_user(user)
+            access = str(mobile_token.access_token)
+            refresh = str(mobile_token)
+
         cookie_settings = _cookie_settings()
 
         response = Response(
@@ -215,8 +251,12 @@ class CookieTokenRefreshView(APIView):
         # clients can persist the rotated token and extend their session.
         new_refresh = data.get("refresh")
 
+        # Mobile clients: extend the rotated refresh token to the mobile
+        # lifetime so the session clock resets on every refresh.
+        if new_refresh and _is_mobile_client(request):
+            new_refresh = _extend_refresh_token(new_refresh)
+
         # Get user from the (original) refresh token payload for user summary.
-        from rest_framework_simplejwt.tokens import RefreshToken
         from django.contrib.auth import get_user_model
         try:
             refresh_token = RefreshToken(refresh_raw)
@@ -625,6 +665,103 @@ class ResendVerificationEmailView(APIView):
             success_response(
                 detail="Jika email terdaftar dan belum terverifikasi, kode verifikasi akan dikirim.",
                 code=ApiCode.EMAIL_SENT,
+            ),
+            status=status.HTTP_200_OK,
+        )
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class UpdateUnverifiedEmailView(APIView):
+    """
+    Public. POST {
+      "current_email": "...",
+      "new_email": "...",
+      "password": "..."
+    }
+    Update an unverified account's email and resend verification code.
+    """
+    permission_classes = ()
+    authentication_classes = ()
+    throttle_classes = [AuthPublicRateThrottle]
+
+    def post(self, request):
+        from django.contrib.auth import get_user_model
+        from .email_utils import send_verification_email
+
+        User = get_user_model()
+        current_email = (request.data.get("current_email") or "").strip().lower()
+        new_email = (request.data.get("new_email") or "").strip().lower()
+        password = (request.data.get("password") or "").strip()
+
+        field_errors: dict[str, list[str]] = {}
+        if not current_email:
+            field_errors.setdefault("current_email", []).append("Email saat ini wajib diisi.")
+        if not new_email:
+            field_errors.setdefault("new_email", []).append("Email baru wajib diisi.")
+        if not password:
+            field_errors.setdefault("password", []).append("Password wajib diisi.")
+        if field_errors:
+            return Response(
+                error_response(
+                    detail=ApiMessage.VALIDATION_ERROR,
+                    code=ApiCode.VALIDATION_ERROR,
+                    errors=field_errors,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user = User.objects.filter(email__iexact=current_email, is_active=True).first()
+        if not user or not user.check_password(password):
+            return Response(
+                error_response(
+                    detail="Email saat ini atau password tidak valid.",
+                    code=ApiCode.PERMISSION_DENIED,
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                ),
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        if user.email_verified:
+            return Response(
+                error_response(
+                    detail="Email akun ini sudah terverifikasi dan tidak dapat diubah lewat menu ini.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if current_email == new_email:
+            return Response(
+                error_response(
+                    detail="Email baru harus berbeda dari email saat ini.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if User.objects.filter(email__iexact=new_email).exclude(pk=user.pk).exists():
+            return Response(
+                error_response(
+                    detail=ApiMessage.EMAIL_TAKEN,
+                    code=ApiCode.EMAIL_TAKEN,
+                    errors={"new_email": [ApiMessage.EMAIL_TAKEN]},
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user.email = new_email
+        user.email_verified = False
+        user.email_verified_at = None
+        user.save(update_fields=["email", "email_verified", "email_verified_at"])
+
+        logo_url = getattr(django_settings, "LOGO_URL", "") or ""
+        send_verification_email(user, logo_url=logo_url)
+
+        return Response(
+            success_response(
+                data={"email": user.email},
+                detail="Email berhasil diperbarui. Kode verifikasi telah dikirim ke email baru.",
+                code=ApiCode.SUCCESS,
             ),
             status=status.HTTP_200_OK,
         )

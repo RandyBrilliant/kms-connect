@@ -5,14 +5,24 @@ class ApiEndpoints {
   // Authentication
   static const String login = '$baseUrl/auth/token/';
   static const String register = '$baseUrl/auth/register/';
-static const String ocrPreview = '$baseUrl/auth/ocr-preview/';
+  static const String ocrPreview = '$baseUrl/auth/ocr-preview/';
   static const String refreshToken = '$baseUrl/auth/token/refresh/';
   static const String logout = '$baseUrl/auth/logout/';
   static const String verifyEmail = '$baseUrl/auth/verify-email/';
   static const String verifyEmailCode = '$baseUrl/auth/verify-email-code/';
   static const String resendVerificationEmail = '$baseUrl/auth/resend-verification-email/';
+  static const String updateUnverifiedEmail = '$baseUrl/auth/update-unverified-email/';
   static const String requestPasswordReset = '$baseUrl/auth/request-password-reset/';
   static const String confirmPasswordReset = '$baseUrl/auth/confirm-reset-password/';
+
+  // Social Sign-In
+  static const String googleSignIn = '$baseUrl/auth/google/';
+  static const String appleSignIn = '$baseUrl/auth/apple/';
+  static const String googleComplete = '$baseUrl/auth/google-complete/';
+
+  // Account Linking
+  static const String linkGoogle = '$baseUrl/auth/link-google/';
+  static const String linkApple = '$baseUrl/auth/link-apple/';
 
   // Current User
   static const String me = '$baseUrl/me/';

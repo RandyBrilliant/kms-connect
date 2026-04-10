@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -96,7 +98,6 @@ class _LoginPageNewState extends ConsumerState<LoginPageNew>
     if (success) {
       context.go('/home');
     } else {
-      // Clear password for security purposes on login failure
       _passwordCtrl.clear();
       
       final authState = ref.read(authStateProvider);
@@ -110,6 +111,44 @@ class _LoginPageNewState extends ConsumerState<LoginPageNew>
           type: ToastType.error,
         );
       }
+    }
+  }
+
+  Future<void> _handleGoogleSignIn() async {
+    final authResponse = await ref.read(authStateProvider.notifier).googleSignIn();
+    if (!mounted) return;
+
+    if (authResponse == null) {
+      final error = ref.read(authStateProvider).error;
+      if (error != null) {
+        CustomToast.show(context, message: error, type: ToastType.error);
+      }
+      return;
+    }
+
+    if (authResponse.needsRegistration) {
+      context.go('/register');
+    } else {
+      context.go('/home');
+    }
+  }
+
+  Future<void> _handleAppleSignIn() async {
+    final authResponse = await ref.read(authStateProvider.notifier).appleSignIn();
+    if (!mounted) return;
+
+    if (authResponse == null) {
+      final error = ref.read(authStateProvider).error;
+      if (error != null) {
+        CustomToast.show(context, message: error, type: ToastType.error);
+      }
+      return;
+    }
+
+    if (authResponse.needsRegistration) {
+      context.go('/register');
+    } else {
+      context.go('/home');
     }
   }
 
@@ -336,7 +375,53 @@ class _LoginPageNewState extends ConsumerState<LoginPageNew>
                                         horizontal: 16,
                                       ),
                                       child: Text(
-                                        'atau',
+                                        'atau masuk dengan',
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                          color: AppColors.textLight,
+                                        ),
+                                      ),
+                                    ),
+                                    const Expanded(child: Divider()),
+                                  ],
+                                ),
+
+                                const SizedBox(height: 20),
+
+                                // Social sign-in buttons
+                                _SocialSignInButton(
+                                  onPressed: isLoading ? null : _handleGoogleSignIn,
+                                  label: 'Lanjutkan dengan Google',
+                                  assetIcon: 'assets/images/google_logo.png',
+                                  backgroundColor: Colors.white,
+                                  textColor: AppColors.textDark,
+                                  borderColor: AppColors.divider,
+                                ),
+
+                                if (Platform.isIOS) ...[
+                                  const SizedBox(height: 12),
+                                  _SocialSignInButton(
+                                    onPressed: isLoading ? null : _handleAppleSignIn,
+                                    label: 'Lanjutkan dengan Apple',
+                                    icon: Icons.apple_rounded,
+                                    backgroundColor: Colors.black,
+                                    textColor: Colors.white,
+                                  ),
+                                ],
+
+                                const SizedBox(height: 20),
+
+                                // Divider before register
+                                Row(
+                                  children: [
+                                    const Expanded(child: Divider()),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                      ),
+                                      child: Text(
+                                        'belum punya akun?',
                                         style: GoogleFonts.plusJakartaSans(
                                           fontSize: 12,
                                           fontWeight: FontWeight.w500,
@@ -447,6 +532,76 @@ class _LoginPageNewState extends ConsumerState<LoginPageNew>
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Reusable social sign-in button with icon (asset image or IconData) + label.
+class _SocialSignInButton extends StatelessWidget {
+  const _SocialSignInButton({
+    required this.onPressed,
+    required this.label,
+    required this.backgroundColor,
+    required this.textColor,
+    this.assetIcon,
+    this.icon,
+    this.borderColor,
+  });
+
+  final VoidCallback? onPressed;
+  final String label;
+  final String? assetIcon;
+  final IconData? icon;
+  final Color backgroundColor;
+  final Color textColor;
+  final Color? borderColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: OutlinedButton(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          backgroundColor: backgroundColor,
+          side: BorderSide(
+            color: borderColor ?? backgroundColor,
+            width: 1,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          elevation: 0,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (assetIcon != null)
+              Image.asset(
+                assetIcon!,
+                width: 22,
+                height: 22,
+                errorBuilder: (_, __, ___) => Icon(
+                  Icons.g_mobiledata_rounded,
+                  size: 24,
+                  color: textColor,
+                ),
+              )
+            else if (icon != null)
+              Icon(icon, size: 24, color: textColor),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: textColor,
+              ),
+            ),
+          ],
         ),
       ),
     );

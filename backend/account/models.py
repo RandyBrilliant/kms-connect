@@ -230,6 +230,15 @@ class CustomUser(AbstractUser):
         db_index=True,
         help_text=_("ID subjek Google OAuth untuk login sosial."),
     )
+    apple_id = models.CharField(
+        _("Apple ID"),
+        max_length=255,
+        null=True,
+        blank=True,
+        unique=True,
+        db_index=True,
+        help_text=_("ID subjek Apple Sign-In untuk login sosial."),
+    )
     referral_code = models.CharField(
         _("kode rujukan"),
         max_length=16,

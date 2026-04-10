@@ -36,7 +36,7 @@ class CustomUserAdmin(BaseUserAdmin):
         (_("Peran & status"), {"fields": ("role", "is_active", "is_staff", "is_superuser")}),
         (_("Kode Rujukan"), {"fields": ("referral_code",)}),
         (_("Verifikasi email"), {"fields": ("email_verified", "email_verified_at")}),
-        (_("OAuth"), {"fields": ("google_id",)}),
+        (_("OAuth"), {"fields": ("google_id", "apple_id")}),
         (_("Tanggal penting"), {"fields": ("date_joined", "last_login", "updated_at")}),
     )
 
