@@ -203,6 +203,10 @@ export interface ApplicantUser {
   email_verified_at: string | null
   date_joined: string
   updated_at: string
+  /** Google OAuth subject (`sub`); absent or null if not linked */
+  google_id?: string | null
+  /** Apple Sign-In subject; absent or null if not linked */
+  apple_id?: string | null
   applicant_profile: ApplicantProfile
 }
 

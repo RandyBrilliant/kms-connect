@@ -20,6 +20,7 @@ from django.shortcuts import get_object_or_404
 from django.http import HttpResponse
 from datetime import timedelta, datetime
 
+from django.db import transaction
 from django.db.models import Count, F, Q
 from django.db.models.functions import TruncDate
 from django.utils import timezone
@@ -359,7 +360,8 @@ class ApplicantUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
     """
     CRUD untuk pelamar (CustomUser + ApplicantProfile).
     Admin: list, create (backdoor), retrieve, update, partial_update. Review data pelamar.
-    Tidak ada delete; gunakan deactivate/activate.
+    Tidak ada DELETE HTTP biasa; gunakan deactivate/activate.
+    Admin Utama: POST .../permanent-delete/ untuk menghapus pelamar beserta seluruh data terkait.
     """
 
     http_method_names = ["get", "post", "put", "patch", "head", "options"]
@@ -388,7 +390,7 @@ class ApplicantUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
     ordering = ["-applicant_profile__created_at"]
 
     def get_permissions(self):
-        if self.action in ("deactivate", "activate"):
+        if self.action in ("deactivate", "activate", "permanent_delete"):
             return [IsMasterAdmin()]
         return [IsBackofficeAdmin()]
 
@@ -555,6 +557,37 @@ class ApplicantUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
         if missing:
             response["X-Missing-Files"] = ",".join(missing)
         return response
+
+    @action(detail=True, methods=["post"], url_path="permanent-delete")
+    def permanent_delete(self, request, pk=None):
+        """
+        Hapus permanen akun pelamar beserta seluruh data terkait (tidak dapat dibatalkan).
+
+        Hanya Admin Utama / superuser. Menghapus berkas dokumen dari storage, lalu
+        pengguna (CASCADE: profil, lamaran, chat, notifikasi, dll.).
+
+        POST /api/applicants/{id}/permanent-delete/
+        """
+        applicant = self.get_object()
+        profile = getattr(applicant, "applicant_profile", None)
+        snapshot_id = applicant.id
+        snapshot_email = applicant.email
+
+        with transaction.atomic():
+            if profile is not None:
+                # Pastikan berkas dokumen dihapus dari storage (CASCADE SQL tidak memanggil delete() per objek).
+                for doc in list(profile.documents.all()):
+                    doc.delete()
+            applicant.delete()
+
+        return Response(
+            success_response(
+                data={"id": snapshot_id, "email": snapshot_email},
+                detail="Pelamar dan seluruh data terkait telah dihapus permanen.",
+                code=ApiCode.SUCCESS,
+            ),
+            status=status.HTTP_200_OK,
+        )
 
 
 # ---------------------------------------------------------------------------

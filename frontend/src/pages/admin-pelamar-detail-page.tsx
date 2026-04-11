@@ -4,7 +4,7 @@
  * Lamaran tab shows all applications with a direct "Buka Chat" link per application.
  */
 
-import { Link, useParams } from "react-router-dom"
+import { Link, useNavigate, useParams } from "react-router-dom"
 import { useState } from "react"
 import { format } from "date-fns"
 import { id as idLocale } from "date-fns/locale"
@@ -17,11 +17,21 @@ import {
   IconExternalLink,
   IconAlertCircle,
   IconFileTypePdf,
+  IconTrash,
 } from "@tabler/icons-react"
 
 import { BreadcrumbNav } from "@/components/breadcrumb-nav"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ApplicantBiodataTab } from "@/components/applicants/applicant-biodata-tab"
 import { ApplicantWorkExperienceTab } from "@/components/applicants/applicant-work-experience-tab"
@@ -43,6 +53,7 @@ import {
   useActivateApplicantMutation,
   useSendVerificationEmailMutation,
   useSendPasswordResetMutation,
+  usePermanentDeleteApplicantMutation,
 } from "@/hooks/use-applicants-query"
 import { useApplicationsQuery } from "@/hooks/use-applications-query"
 import { toast } from "@/lib/toast"
@@ -54,7 +65,7 @@ import {
   useAdminDashboard,
 } from "@/contexts/admin-dashboard-context"
 import { useAuth } from "@/hooks/use-auth"
-import { isRestrictedAdmin, type UserRole } from "@/types/auth"
+import { isMasterAdmin, isRestrictedAdmin, type UserRole } from "@/types/auth"
 
 function ApplicantSidebar({
   applicant,
@@ -371,6 +382,32 @@ function ApplicantSidebar({
         </Card>
       )}
 
+      {/* Login sosial (Google / Apple) */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Login sosial</CardTitle>
+          <CardDescription>
+            ID yang dipakai untuk Google Sign-In atau Apple (jika akun pernah dihubungkan).
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <dl className="space-y-3 text-xs">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-2">
+              <dt className="shrink-0 text-muted-foreground">Google Sign-In</dt>
+              <dd className="min-w-0 break-all font-mono font-medium sm:text-right">
+                {applicant.google_id?.trim() ? applicant.google_id : "—"}
+              </dd>
+            </div>
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-2">
+              <dt className="shrink-0 text-muted-foreground">Apple Sign-In</dt>
+              <dd className="min-w-0 break-all font-mono font-medium sm:text-right">
+                {applicant.apple_id?.trim() ? applicant.apple_id : "—"}
+              </dd>
+            </div>
+          </dl>
+        </CardContent>
+      </Card>
+
       {/* Metadata & audit info */}
       {profile && (
         <Card>
@@ -627,11 +664,17 @@ export function AdminPelamarDetailPage() {
   const applicantId = id ? parseInt(id, 10) : null
   const { basePath } = useAdminDashboard()
   const { user } = useAuth()
+  const navigate = useNavigate()
   const BASE_PATH = joinAdminPath(basePath, "/pelamar")
   const lamaranBase = joinAdminPath(basePath, "/lamaran")
   const hideAccountToggle = user
     ? isRestrictedAdmin(user.role as UserRole)
     : false
+  const canPermanentDelete =
+    !!user && isMasterAdmin(user.role as UserRole)
+
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const permanentDeleteMutation = usePermanentDeleteApplicantMutation()
 
   usePageTitle("Detail Pelamar")
 
@@ -688,6 +731,25 @@ export function AdminPelamarDetailPage() {
     }
   }
 
+  const handleConfirmPermanentDelete = async () => {
+    if (!applicantId) return
+    try {
+      await permanentDeleteMutation.mutateAsync(applicantId)
+      toast.success(
+        "Pelamar dihapus",
+        "Akun dan seluruh data terkait telah dihapus permanen."
+      )
+      setDeleteDialogOpen(false)
+      navigate(BASE_PATH)
+    } catch (err: unknown) {
+      const res = err as { response?: { data?: { detail?: string } } }
+      toast.error(
+        "Gagal menghapus",
+        res?.response?.data?.detail ?? "Coba lagi nanti"
+      )
+    }
+  }
+
   if (isLoading || !applicantId) {
     return (
       <div className="flex min-h-50 items-center justify-center px-6 py-8">
@@ -733,13 +795,71 @@ export function AdminPelamarDetailPage() {
             </p>
           )}
         </div>
-        <Button variant="ghost" size="sm" className="w-fit cursor-pointer" asChild>
-          <Link to={BASE_PATH}>
-            <IconArrowLeft className="mr-2 size-4" />
-            Kembali
-          </Link>
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {canPermanentDelete && (
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              className="cursor-pointer"
+              onClick={() => setDeleteDialogOpen(true)}
+            >
+              <IconTrash className="mr-2 size-4" />
+              Hapus pelamar
+            </Button>
+          )}
+          <Button variant="ghost" size="sm" className="w-fit cursor-pointer" asChild>
+            <Link to={BASE_PATH}>
+              <IconArrowLeft className="mr-2 size-4" />
+              Kembali
+            </Link>
+          </Button>
+        </div>
       </div>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Hapus pelamar permanen?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-muted-foreground text-sm">
+                <p>
+                  Tindakan ini tidak dapat dibatalkan. Seluruh data yang terhubung ke{" "}
+                  <span className="font-medium text-foreground">{displayName}</span> akan
+                  dihapus, termasuk:
+                </p>
+                <ul className="list-disc space-y-1 pl-4">
+                  <li>Akun login dan profil biodata</li>
+                  <li>Dokumen unggahan (berkas disimpan ikut dihapus)</li>
+                  <li>Riwayat pengalaman kerja</li>
+                  <li>Semua lamaran, status batch, dan riwayat tahapan</li>
+                  <li>Pesan chat pada setiap lamaran</li>
+                  <li>Notifikasi dan preferensi notifikasi akun ini</li>
+                  <li>Permintaan penghapusan akun (jika ada)</li>
+                </ul>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              type="button"
+              className="cursor-pointer"
+              disabled={permanentDeleteMutation.isPending}
+            >
+              Batal
+            </AlertDialogCancel>
+            <Button
+              type="button"
+              variant="destructive"
+              className="cursor-pointer"
+              disabled={permanentDeleteMutation.isPending}
+              onClick={handleConfirmPermanentDelete}
+            >
+              {permanentDeleteMutation.isPending ? "Menghapus..." : "Ya, hapus semuanya"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Tabs defaultValue="biodata" className="space-y-6">
         <TabsList className="justify-start">

@@ -25,7 +25,9 @@ import {
   getDocumentTypes,
   sendVerificationEmail,
   sendPasswordResetEmail,
+  permanentDeleteApplicant,
 } from "@/api/applicants"
+import { applicationsKeys } from "@/hooks/use-applications-query"
 import type {
   ApplicantsListParams,
   ApplicantUserCreateInput,
@@ -105,6 +107,19 @@ export function useActivateApplicantMutation() {
     onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: applicantsKeys.lists() })
       queryClient.invalidateQueries({ queryKey: applicantsKeys.detail(id) })
+    },
+  })
+}
+
+/** Master admin: POST /api/applicants/:id/permanent-delete/ */
+export function usePermanentDeleteApplicantMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => permanentDeleteApplicant(id),
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: applicantsKeys.lists() })
+      queryClient.removeQueries({ queryKey: applicantsKeys.detail(id) })
+      queryClient.invalidateQueries({ queryKey: applicationsKeys.all })
     },
   })
 }

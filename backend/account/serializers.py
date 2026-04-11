@@ -697,9 +697,19 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
             "email_verified_at",
             "date_joined",
             "updated_at",
+            "google_id",
+            "apple_id",
             "applicant_profile",
         ]
-        read_only_fields = ["id", "role", "email_verified_at", "date_joined", "updated_at"]
+        read_only_fields = [
+            "id",
+            "role",
+            "email_verified_at",
+            "date_joined",
+            "updated_at",
+            "google_id",
+            "apple_id",
+        ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

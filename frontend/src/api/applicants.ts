@@ -110,6 +110,17 @@ export async function activateApplicant(id: number): Promise<ApplicantUser> {
   return data.data
 }
 
+/** POST /api/applicants/:id/permanent-delete/ — Admin Utama only; irreversible. */
+export async function permanentDeleteApplicant(
+  id: number
+): Promise<{ id: number; email: string }> {
+  const { data } = await api.post<{
+    data: { id: number; email: string }
+    detail?: string
+  }>(`/api/applicants/${id}/permanent-delete/`)
+  return data.data
+}
+
 /** POST /api/applicants/:id/send_verification_email/ */
 export async function sendVerificationEmail(
   userId: number

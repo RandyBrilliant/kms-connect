@@ -9,7 +9,6 @@ from rest_framework.routers import DefaultRouter
 
 from . import views
 from . import applicant_self_service_views
-from .views import AdminBiodataPdfView, AdminInbondPdfView
 from .applicant_self_service_views import ApplicantBiodataPdfView
 
 app_name = "account"
@@ -150,12 +149,12 @@ report_paths = [
     ),
     path(
         "applicants/<int:pk>/biodata-pdf/",
-        AdminBiodataPdfView.as_view(),
+        views.AdminBiodataPdfView.as_view(),
         name="applicant-biodata-pdf",
     ),
     path(
         "applicants/<int:pk>/inbond-pdf/",
-        AdminInbondPdfView.as_view(),
+        views.AdminInbondPdfView.as_view(),
         name="applicant-inbond-pdf",
     ),
 ]
