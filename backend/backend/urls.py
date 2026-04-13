@@ -61,6 +61,7 @@ urlpatterns = [
     path("api/auth/google/", GoogleOAuthView.as_view(), name="google_oauth"),
     path("api/auth/apple/", AppleOAuthView.as_view(), name="apple_oauth"),
     path("api/auth/google-complete/", GoogleCompleteRegistrationView.as_view(), name="google_complete_registration"),
+    path("api/auth/social-complete/", GoogleCompleteRegistrationView.as_view(), name="social_complete_registration"),
     path("api/auth/link-google/", LinkGoogleAccountView.as_view(), name="link_google"),
     path("api/auth/link-apple/", LinkAppleAccountView.as_view(), name="link_apple"),
     path("api/auth/ocr-preview/", KTPOcrPreviewView.as_view(), name="ktp_ocr_preview"),

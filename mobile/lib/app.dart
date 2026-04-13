@@ -8,6 +8,7 @@ import 'core/widgets/custom_toast.dart';
 import 'features/auth/presentation/pages/splash_page.dart';
 import 'features/auth/presentation/pages/login_page_new.dart';
 import 'features/auth/presentation/pages/registration_page_new.dart';
+import 'features/auth/presentation/pages/social_complete_profile_page.dart';
 import 'features/auth/presentation/pages/email_verification_page.dart';
 import 'features/auth/presentation/pages/forgot_password_page.dart';
 import 'features/auth/presentation/pages/reset_password_page.dart';
@@ -107,6 +108,9 @@ final routerProvider = Provider<GoRouter>((ref) {
         return isPreAuthRoute ? null : '/login';
       }
 
+      // Social-complete is a post-auth onboarding route — allow it.
+      if (loc == '/social-complete') return null;
+
       // Authenticated but email not verified — must verify before accessing app.
       final emailVerified = authState.user?.emailVerified ?? true;
       if (!emailVerified) {
@@ -155,6 +159,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/register',
         name: 'register',
         builder: (context, state) => const RegistrationPageNew(),
+      ),
+      GoRoute(
+        path: '/social-complete',
+        name: 'social-complete',
+        builder: (context, state) => const SocialCompleteProfilePage(),
       ),
       GoRoute(
         path: '/email-verification',

@@ -244,7 +244,17 @@ class AuthInterceptor extends Interceptor {
     handler.next(err);
   }
 
+  static const _authenticatedAuthPaths = [
+    '/auth/social-complete/',
+    '/auth/google-complete/',
+    '/auth/link-google/',
+    '/auth/link-apple/',
+    '/auth/change-password/',
+    '/auth/logout/',
+  ];
+
   bool _isPublicEndpoint(String path) {
+    if (_authenticatedAuthPaths.any((p) => path.contains(p))) return false;
     return path.contains('/auth/') ||
         path.contains('/public/') ||
         path.contains('/provinces/') ||

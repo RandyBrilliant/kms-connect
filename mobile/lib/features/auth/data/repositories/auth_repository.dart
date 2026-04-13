@@ -326,6 +326,65 @@ class AuthRepository {
     }
   }
 
+  /// Complete social auth profile (upload KTP + basic identity fields).
+  /// Called after Google/Apple Sign-In when needs_registration is true.
+  Future<User> socialComplete({
+    required String nik,
+    required File ktpFile,
+    String? fullName,
+    int? birthPlaceId,
+    String? birthDateIso,
+  }) async {
+    try {
+      final compressed = await ImageCompressor.compressDocument(ktpFile);
+      final formData = FormData.fromMap({
+        'nik': nik.trim(),
+        'ktp': await MultipartFile.fromFile(
+          compressed.path,
+          filename: 'ktp.jpg',
+        ),
+        if (fullName != null && fullName.trim().isNotEmpty)
+          'full_name': fullName.trim(),
+        if (birthPlaceId != null) 'birth_place': birthPlaceId,
+        if (birthDateIso != null) 'birth_date': birthDateIso,
+      });
+
+      final response = await _apiClient.dio.post(
+        ApiEndpoints.socialComplete,
+        data: formData,
+        options: Options(headers: {'Content-Type': 'multipart/form-data'}),
+      );
+
+      final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
+        response.data,
+        (data) => data as Map<String, dynamic>,
+      );
+
+      if (!apiResponse.isSuccess) {
+        throw DioException(
+          requestOptions: response.requestOptions,
+          response: response,
+          type: DioExceptionType.badResponse,
+          message: apiResponse.detail ?? 'Gagal melengkapi profil',
+        );
+      }
+
+      final userData = apiResponse.data!['user'];
+      if (userData == null || userData is! Map<String, dynamic>) {
+        throw DioException(
+          requestOptions: response.requestOptions,
+          response: response,
+          type: DioExceptionType.badResponse,
+          message: 'Profil berhasil disimpan tetapi data respons tidak valid.',
+        );
+      }
+
+      return User.fromJson(userData);
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
   /// Logout - invalidate refresh token on backend, unregister FCM, then clear local tokens
   Future<void> logout() async {
     try {

@@ -185,7 +185,7 @@ class _LoginPageNewState extends ConsumerState<LoginPageNew>
       }
       return;
     }
-    context.go(resp.needsRegistration ? '/register' : '/home');
+    context.go(resp.needsRegistration ? '/social-complete' : '/home');
   }
 
   Future<void> _handleAppleSignIn() async {
@@ -198,7 +198,7 @@ class _LoginPageNewState extends ConsumerState<LoginPageNew>
       }
       return;
     }
-    context.go(resp.needsRegistration ? '/register' : '/home');
+    context.go(resp.needsRegistration ? '/social-complete' : '/home');
   }
 
   // ── Validators ─────────────────────────────────────────────────────────────

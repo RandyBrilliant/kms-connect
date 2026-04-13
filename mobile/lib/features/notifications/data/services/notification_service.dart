@@ -117,12 +117,17 @@ class NotificationService {
       });
     }
 
-    // Always register the FCM token with the backend so push can be
-    // delivered as soon as permission is granted.
+    // Only register the FCM token if the user is already authenticated.
+    // If not logged in, registerToken() will be called after login instead.
     final token = await fcm.getToken();
     if (token != null) {
       if (kDebugMode) debugPrint('FCM Token: $token');
-      await _registerTokenWithBackend(token);
+      final authToken = await ApiClient().getAccessToken();
+      if (authToken != null) {
+        await _registerTokenWithBackend(token);
+      } else {
+        if (kDebugMode) debugPrint('FCM: skipping backend registration — not logged in yet');
+      }
     }
 
     // Listen for token refresh

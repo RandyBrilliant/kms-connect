@@ -19,6 +19,7 @@ class ApiEndpoints {
   static const String googleSignIn = '$baseUrl/auth/google/';
   static const String appleSignIn = '$baseUrl/auth/apple/';
   static const String googleComplete = '$baseUrl/auth/google-complete/';
+  static const String socialComplete = '$baseUrl/auth/social-complete/';
 
   // Account Linking
   static const String linkGoogle = '$baseUrl/auth/link-google/';
