@@ -47,6 +47,8 @@ export interface ApplicationStatusHistoryEntry {
 export interface JobApplication {
   id: number
   applicant: number
+  /** CustomUser id for PATCH /api/applicants/:id/ (admin pelamar) */
+  applicant_user?: number | null
   applicant_name: string
   applicant_email: string
   /** NIK from applicant profile — for admin search/display in batch tahapan tables */

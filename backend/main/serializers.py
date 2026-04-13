@@ -257,12 +257,14 @@ class JobApplicationSerializer(serializers.ModelSerializer):
     applicant_nik = serializers.SerializerMethodField(read_only=True)
     referrer_display_name = serializers.SerializerMethodField(read_only=True)
     referrer_code = serializers.SerializerMethodField(read_only=True)
+    applicant_user = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = JobApplication
         fields = [
             "id",
             "applicant",
+            "applicant_user",
             "applicant_name",
             "applicant_email",
             "applicant_nik",
@@ -292,6 +294,7 @@ class JobApplicationSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             "id",
+            "applicant_user",
             "applicant_name",
             "applicant_email",
             "applicant_nik",
@@ -308,6 +311,13 @@ class JobApplicationSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+    def get_applicant_user(self, obj) -> int | None:
+        applicant = getattr(obj, "applicant", None)
+        if not applicant:
+            return None
+        uid = getattr(applicant, "user_id", None)
+        return int(uid) if uid is not None else None
 
     def get_applicant_name(self, obj) -> str:
         applicant = getattr(obj, "applicant", None)
@@ -667,6 +677,7 @@ class BatchAnnouncementSerializer(serializers.ModelSerializer):
             "batch",
             "title",
             "body",
+            "recipient_config",
             "created_by",
             "created_by_name",
             "created_at",
@@ -692,3 +703,25 @@ class BatchAnnouncementCreateSerializer(serializers.Serializer):
     body = serializers.CharField(
         help_text="Isi lengkap pengumuman yang akan dibaca pelamar.",
     )
+    recipient_config = serializers.JSONField(
+        required=False,
+        help_text=(
+            'Penerima: {"selection_type":"all_active"} atau '
+            '{"selection_type":"statuses","statuses":["PRA_SELEKSI","INTERVIEW"]}.'
+        ),
+    )
+
+    def validate(self, attrs):
+        from .batch_announcement_recipients import (
+            default_recipient_config,
+            validate_recipient_config,
+        )
+
+        config = attrs.get("recipient_config")
+        if config is None:
+            attrs["recipient_config"] = default_recipient_config()
+        else:
+            ok, err = validate_recipient_config(config)
+            if not ok:
+                raise serializers.ValidationError({"recipient_config": err})
+        return attrs

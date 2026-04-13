@@ -250,7 +250,7 @@ function ApplicantSidebar({
     "ijasah": "Ijazah",
     "kartu-bpjs": "Kartu BPJS Kesehatan",
     "paspor": "Paspor",
-    "photo-tki": "Photo PMI",
+    "pas-foto": "Pas Foto",
   }
 
   return (

@@ -39,7 +39,6 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
 
   bool _isVerifying = false;
   bool _isResending = false;
-  bool _isUpdatingEmail = false;
   bool _isSuccess = false;
   int _resendCountdown = _kResendSeconds;
   Timer? _countdownTimer;
@@ -146,6 +145,12 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
       _controllers[index].text = value.substring(value.length - 1);
     }
 
+    // Backspace cleared this digit — move focus to the previous cell so the
+    // user can edit it (no KeyboardListener / no orphan FocusNodes).
+    if (value.isEmpty && index > 0) {
+      _focusNodes[index - 1].requestFocus();
+    }
+
     setState(() {}); // Rebuild to update cell colors
 
     if (value.isNotEmpty && index < _kDigitCount - 1) {
@@ -250,6 +255,7 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
     final newEmailCtrl = TextEditingController();
     final passwordCtrl = TextEditingController();
     bool obscurePassword = true;
+    var saving = false;
 
     await showModalBottomSheet<void>(
       context: context,
@@ -261,19 +267,20 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setModalState) {
+            final bottomInset = MediaQuery.viewInsetsOf(ctx).bottom;
             return SafeArea(
               top: false,
-              child: Padding(
-                padding: EdgeInsets.only(
-                  left: 24,
-                  right: 24,
-                  top: 24,
-                  bottom: MediaQuery.viewInsetsOf(ctx).bottom + 24,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+              child: AnimatedPadding(
+                padding: EdgeInsets.only(bottom: bottomInset),
+                duration: const Duration(milliseconds: 120),
+                curve: Curves.easeOut,
+                child: SingleChildScrollView(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                     Text(
                       'Ubah Email Verifikasi',
                       style: GoogleFonts.plusJakartaSans(
@@ -324,57 +331,63 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
                     ),
                     const SizedBox(height: 16),
                     ProfessionalButton(
-                      label: _isUpdatingEmail ? 'Menyimpan...' : 'Simpan Email Baru',
-                      isLoading: _isUpdatingEmail,
-                      onPressed: _isUpdatingEmail
+                      label: saving ? 'Menyimpan...' : 'Simpan Email Baru',
+                      isLoading: saving,
+                      onPressed: saving
                           ? null
                           : () async {
                               final nextEmail = newEmailCtrl.text.trim().toLowerCase();
                               final password = passwordCtrl.text;
                               if (nextEmail.isEmpty || password.isEmpty) {
                                 CustomToast.show(
-                                  context,
+                                  ctx,
                                   message: 'Email baru dan password wajib diisi.',
                                   type: ToastType.error,
                                 );
                                 return;
                               }
 
-                              setState(() => _isUpdatingEmail = true);
+                              saving = true;
+                              setModalState(() {});
+
                               final ok = await ref.read(authStateProvider.notifier).updateUnverifiedEmail(
                                     currentEmail: _verificationEmail,
                                     newEmail: nextEmail,
                                     password: password,
                                   );
-                              if (!mounted) return;
-                              setState(() => _isUpdatingEmail = false);
+
+                              if (!ctx.mounted) return;
+                              saving = false;
+                              setModalState(() {});
 
                               if (!ok) {
                                 CustomToast.show(
-                                  context,
+                                  ctx,
                                   message: 'Gagal mengubah email. Periksa kembali data Anda.',
                                   type: ToastType.error,
                                 );
                                 return;
                               }
 
+                              if (!mounted) return;
                               setState(() {
                                 _verificationEmail = nextEmail;
                               });
                               _clearCode();
                               _startCountdown();
-                              if (ctx.mounted) Navigator.of(ctx).pop();
+                              Navigator.of(ctx).pop();
                               WidgetsBinding.instance.addPostFrameCallback((_) {
                                 if (mounted) _focusNodes[0].requestFocus();
                               });
-                              CustomToast.show(
-                                context,
+                              CustomToast.showGlobal(
                                 message: 'Email diperbarui. Kode verifikasi baru sudah dikirim.',
                                 type: ToastType.success,
                               );
                             },
                     ),
-                  ],
+                      ],
+                    ),
+                  ),
                 ),
               ),
             );
@@ -614,7 +627,7 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
             _buildResendSection(),
             const SizedBox(height: 12),
             GestureDetector(
-              onTap: _isUpdatingEmail ? null : _showUpdateEmailBottomSheet,
+              onTap: _showUpdateEmailBottomSheet,
               child: Text(
                 'Email salah? Ubah email',
                 style: GoogleFonts.plusJakartaSans(
@@ -644,59 +657,45 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
     return SizedBox(
       width: width,
       height: height,
-      child: KeyboardListener(
-        focusNode: FocusNode(),
-        onKeyEvent: (event) {
-          if (event is KeyDownEvent &&
-              event.logicalKey == LogicalKeyboardKey.backspace) {
-            // If current field is empty and backspace is pressed, go to previous and clear it
-            if (_controllers[index].text.isEmpty && index > 0) {
-              _controllers[index - 1].clear();
-              _focusNodes[index - 1].requestFocus();
-              setState(() {});
-            }
-          }
-        },
-        child: TextField(
-          controller: _controllers[index],
-          focusNode: _focusNodes[index],
-          textAlign: TextAlign.center,
-          keyboardType: TextInputType.number,
-          maxLength: 2,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          onChanged: (v) => _onDigitChanged(index, v),
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: fontSize,
-            fontWeight: FontWeight.w700,
-            color: AppColors.textDark,
+      child: TextField(
+        controller: _controllers[index],
+        focusNode: _focusNodes[index],
+        textAlign: TextAlign.center,
+        keyboardType: TextInputType.number,
+        maxLength: 2,
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        onChanged: (v) => _onDigitChanged(index, v),
+        style: GoogleFonts.plusJakartaSans(
+          fontSize: fontSize,
+          fontWeight: FontWeight.w700,
+          color: AppColors.textDark,
+        ),
+        decoration: InputDecoration(
+          counterText: '',
+          contentPadding: EdgeInsets.symmetric(vertical: height * 0.2),
+          filled: true,
+          fillColor: Colors.white,
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(
+              color: hasValue
+                  ? AppColors.primaryDarkGreen
+                  : AppColors.divider,
+              width: 1.5,
+            ),
           ),
-          decoration: InputDecoration(
-            counterText: '',
-            contentPadding: EdgeInsets.symmetric(vertical: height * 0.2),
-            filled: true,
-            fillColor: Colors.white,
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: hasValue 
-                    ? AppColors.primaryDarkGreen 
-                    : AppColors.divider,
-                width: 1.5,
-              ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(
+              color: AppColors.primaryDarkGreen,
+              width: 2.5,
             ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: AppColors.primaryDarkGreen,
-                width: 2.5,
-              ),
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: AppColors.divider,
-                width: 1.5,
-              ),
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(
+              color: AppColors.divider,
+              width: 1.5,
             ),
           ),
         ),

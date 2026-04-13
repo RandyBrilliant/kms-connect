@@ -1757,12 +1757,10 @@ def unregister_fcm_token(request):
         )
     else:
         return Response(
-            error_response(
-                detail="Token tidak ditemukan.",
-                code=ApiCode.NOT_FOUND,
-                status_code=status.HTTP_404_NOT_FOUND,
+            success_response(
+                detail="Token already unregistered or not found.",
             ),
-            status=status.HTTP_404_NOT_FOUND
+            status=status.HTTP_200_OK
         )
 
 

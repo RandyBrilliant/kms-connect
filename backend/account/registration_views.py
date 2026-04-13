@@ -346,9 +346,9 @@ class GoogleOAuthView(APIView):
     def post(self, request):
         from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-        id_token = request.data.get("id_token", "").strip()
+        id_token_raw = request.data.get("id_token", "").strip()
 
-        if not id_token:
+        if not id_token_raw:
             return Response(
                 error_response(
                     detail="Google ID token wajib diisi.",
@@ -359,8 +359,8 @@ class GoogleOAuthView(APIView):
 
         # Verifikasi Google ID token
         try:
-            from google.auth.transport import requests
-            from google.oauth2 import id_token
+            from google.auth.transport import requests as google_requests
+            from google.oauth2 import id_token as google_id_token
 
             google_client_id = getattr(django_settings, "GOOGLE_CLIENT_ID", "")
             if not google_client_id:
@@ -374,7 +374,9 @@ class GoogleOAuthView(APIView):
 
             # Verifikasi token
             try:
-                idinfo = id_token.verify_oauth2_token(id_token, requests.Request(), google_client_id)
+                idinfo = google_id_token.verify_oauth2_token(
+                    id_token_raw, google_requests.Request(), google_client_id
+                )
             except ValueError:
                 return Response(
                     error_response(

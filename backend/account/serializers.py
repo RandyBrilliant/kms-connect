@@ -678,6 +678,36 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
         return instance
 
 
+# Admin-only process & finance fields (same set as ApplicantAdminProcessTab / mobile).
+# When a PATCH only touches these keys, skip ApplicantProfile.full_clean() so unrelated
+# model.clean() rules (e.g. age 18–45) do not block saving medical / visa progress.
+_ADMIN_PROCESS_PROFILE_FIELDS = frozenset(
+    {
+        "tgl_medical",
+        "hasil_medical",
+        "tgl_bayar_sml",
+        "tgl_fwcm_psikotes",
+        "tgl_bayar_psikotes",
+        "tgl_bayar_bpjs_pra",
+        "tgl_bayar_bpjs_purna",
+        "no_id_sisko",
+        "disnaker",
+        "no_sip",
+        "no_jo",
+        "biaya_ready_paspor",
+        "pengembalian_biaya",
+        "tgl_pengembalian",
+        "jlh_uang_transport",
+        "bank",
+        "no_rek",
+        "tanggal_pengembalian",
+        "tgl_kirim_bio_ke_mly",
+        "tgl_calling_visa",
+        "no_calling_visa",
+    }
+)
+
+
 class ApplicantUserSerializer(serializers.ModelSerializer):
     """CRUD untuk pelamar: user + profil pelamar (nested). Admin review & backdoor create."""
 
@@ -713,6 +743,13 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # PATCH on the user must partially validate nested profile; DRF does not
+        # propagate partial=True to nested serializers by default, which makes every
+        # required ApplicantProfile field appear missing → 400 on small updates.
+        if self.partial:
+            nested = self.fields.get("applicant_profile")
+            if nested is not None:
+                nested.partial = True
         if self.context.get("is_own_profile"):
             for f in ("is_active", "email_verified"):
                 if f in self.fields:
@@ -849,6 +886,11 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
 
             profile = getattr(instance, "applicant_profile", None)
             if profile:
+                profile_keys = set(profile_data.keys())
+                skip_profile_full_clean = bool(profile_keys) and profile_keys.issubset(
+                    _ADMIN_PROCESS_PROFILE_FIELDS
+                )
+
                 # Capture previous status/timestamps to detect transitions
                 old_status = profile.verification_status
                 old_submitted_at = profile.submitted_at
@@ -878,12 +920,15 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
                 ):
                     profile.verified_at = timezone.now()
 
-                try:
-                    profile.full_clean()
-                except DjangoValidationError as e:
-                    raise serializers.ValidationError(
-                        e.message_dict if hasattr(e, "message_dict") else {"applicant_profile": e.messages}
-                    )
+                if not skip_profile_full_clean:
+                    try:
+                        profile.full_clean()
+                    except DjangoValidationError as e:
+                        raise serializers.ValidationError(
+                            e.message_dict
+                            if hasattr(e, "message_dict")
+                            else {"applicant_profile": e.messages}
+                        )
                 profile.save()
             else:
                 ApplicantProfile.objects.create(user=instance, **profile_data)

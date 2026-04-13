@@ -17,13 +17,17 @@ import { Button } from "@/components/ui/button"
 import { DatePicker } from "@/components/ui/date-picker"
 import type { ApplicantProfile } from "@/types/applicant"
 import { applicantProfileUpdateSchema } from "@/schemas/applicant"
+import { formatApiValidationErrors } from "@/lib/format-api-validation-errors"
 import { toast } from "@/lib/toast"
 import { format } from "date-fns"
+import type { AxiosError } from "axios"
 
 interface ApplicantAdminProcessTabProps {
   profile: ApplicantProfile
   onSubmit: (data: Partial<ApplicantProfile>) => Promise<void>
   isSubmitting?: boolean
+  /** Narrow modals: responsive columns + min-w-0 so fields do not overlap */
+  compactLayout?: boolean
 }
 
 type AdminProcessFormValues = {
@@ -83,11 +87,21 @@ function toNumber(value: string): number | null {
   return Number.isNaN(n) ? null : n
 }
 
+const grid3 =
+  "grid gap-4 grid-cols-1 sm:grid-cols-3 [&>*]:min-w-0 [&>*]:max-w-full"
+const grid3Compact =
+  "grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 [&>*]:min-w-0 [&>*]:max-w-full"
+const grid2 =
+  "grid gap-4 grid-cols-1 sm:grid-cols-2 [&>*]:min-w-0 [&>*]:max-w-full"
+
 export function ApplicantAdminProcessTab({
   profile,
   onSubmit,
   isSubmitting = false,
+  compactLayout = false,
 }: ApplicantAdminProcessTabProps) {
+  const g3 = compactLayout ? grid3Compact : grid3
+  const g2 = grid2
   const form = useForm({
     defaultValues: toFormValues(profile),
     onSubmit: async ({ value }) => {
@@ -126,8 +140,13 @@ export function ApplicantAdminProcessTab({
         await onSubmit(parsed.data as Partial<ApplicantProfile>)
         toast.success("Data proses & biaya diperbarui")
       } catch (e: unknown) {
-        const err = e as { response?: { data?: { detail?: string } } }
-        toast.error("Gagal menyimpan", err.response?.data?.detail ?? "Coba lagi nanti")
+        const ax = e as AxiosError<{ detail?: string; errors?: unknown }>
+        const payload = ax.response?.data
+        const fieldDetail = formatApiValidationErrors(payload)
+        toast.error(
+          "Gagal menyimpan",
+          fieldDetail ?? payload?.detail ?? "Coba lagi nanti"
+        )
       }
     },
   })
@@ -164,18 +183,18 @@ export function ApplicantAdminProcessTab({
         e.stopPropagation()
         void form.handleSubmit()
       }}
-      className="flex flex-col gap-6"
+      className="flex min-w-0 flex-col gap-6"
     >
-      <Card>
+      <Card className="min-w-0 overflow-hidden shadow-sm">
         <CardHeader>
           <CardTitle>Proses Medical &amp; Pembayaran</CardTitle>
           <CardDescription>
             Tahapan medical dan pembayaran terkait proses penempatan.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="min-w-0 space-y-6">
           <FieldGroup>
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className={g3}>
               {renderDateField("tgl_medical", "Tgl. Medical", "Pilih tanggal medical")}
               <form.Field name="hasil_medical">
                 {(field) => (
@@ -195,13 +214,13 @@ export function ApplicantAdminProcessTab({
               {renderDateField("tgl_bayar_sml", "Tgl. Bayar SML", "Pilih tanggal bayar SML")}
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className={g3}>
               {renderDateField("tgl_fwcm_psikotes", "Tgl. FWCMS & Psikotes", "Pilih tanggal FWCMS & psikotes")}
               {renderDateField("tgl_bayar_psikotes", "Tgl. Bayar Psikotes", "Pilih tanggal bayar psikotes")}
               {renderDateField("tgl_bayar_bpjs_pra", "Tgl. Bayar BPJS Pra", "Pilih tanggal bayar BPJS pra")}
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className={g3}>
               {renderDateField("tgl_bayar_bpjs_purna", "Tgl. Bayar BPJS Purna", "Pilih tanggal bayar BPJS purna")}
               <form.Field name="no_id_sisko">
                 {(field) => (
@@ -233,7 +252,7 @@ export function ApplicantAdminProcessTab({
               </form.Field>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className={g2}>
               <form.Field name="no_sip">
                 {(field) => (
                   <Field>
@@ -267,16 +286,16 @@ export function ApplicantAdminProcessTab({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="min-w-0 overflow-hidden shadow-sm">
         <CardHeader>
           <CardTitle>Biaya &amp; Pengembalian</CardTitle>
           <CardDescription>
             Ringkasan biaya, pengembalian, dan data rekening.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="min-w-0 space-y-6">
           <FieldGroup>
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className={g3}>
               <form.Field name="biaya_ready_paspor">
                 {(field) => (
                   <Field>
@@ -312,7 +331,7 @@ export function ApplicantAdminProcessTab({
               {renderDateField("tgl_pengembalian", "Tgl. Pengembalian", "Pilih tanggal pengembalian")}
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className={g3}>
               <form.Field name="jlh_uang_transport">
                 {(field) => (
                   <Field>
@@ -369,16 +388,16 @@ export function ApplicantAdminProcessTab({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="min-w-0 overflow-hidden shadow-sm">
         <CardHeader>
           <CardTitle>Calling Visa &amp; Keberangkatan</CardTitle>
           <CardDescription>
             Informasi pengiriman biodata dan calling visa.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="min-w-0 space-y-6">
           <FieldGroup>
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className={g3}>
               {renderDateField(
                 "tgl_kirim_bio_ke_mly",
                 "Tgl. Kirim Bio ke MY",

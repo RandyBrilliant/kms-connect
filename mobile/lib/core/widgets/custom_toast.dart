@@ -83,7 +83,7 @@ class CustomToast {
         type: type,
         duration: duration,
         onDismiss: () {
-          if (entry.mounted) entry.remove();
+          _safeRemoveOverlayEntry(entry);
         },
       ),
     );
@@ -91,8 +91,19 @@ class CustomToast {
     overlay.insert(entry);
     // Safety net: force-remove after animation window closes.
     Future.delayed(duration + const Duration(milliseconds: 500), () {
-      if (entry.mounted) entry.remove();
+      _safeRemoveOverlayEntry(entry);
     });
+  }
+
+  /// [OverlayEntry.remove] asserts the overlay still exists; after a route pop
+  /// or navigator rebuild the entry can be orphaned — never crash the isolate.
+  static void _safeRemoveOverlayEntry(OverlayEntry entry) {
+    if (!entry.mounted) return;
+    try {
+      entry.remove();
+    } catch (_) {
+      // Overlay already torn down (e.g. user closed modal / navigated away).
+    }
   }
 }
 

@@ -7,6 +7,8 @@ class BatchAnnouncement {
   final int batch;
   final String title;
   final String body;
+  /// Optional targeting metadata from admin (e.g. tahapan); may be null for older rows.
+  final Map<String, dynamic>? recipientConfig;
   final int? createdBy;
   final String? createdByName;
   final DateTime createdAt;
@@ -16,6 +18,7 @@ class BatchAnnouncement {
     required this.batch,
     required this.title,
     required this.body,
+    this.recipientConfig,
     this.createdBy,
     this.createdByName,
     required this.createdAt,
@@ -37,11 +40,13 @@ class BatchAnnouncement {
   }
 
   factory BatchAnnouncement.fromJson(Map<String, dynamic> json) {
+    final rc = json['recipient_config'];
     return BatchAnnouncement(
       id: _safeInt(json['id']),
       batch: _safeInt(json['batch']),
       title: (json['title'] ?? '') as String,
       body: (json['body'] ?? '') as String,
+      recipientConfig: rc is Map<String, dynamic> ? rc : null,
       createdBy: _safeIntOrNull(json['created_by']),
       createdByName: json['created_by_name']?.toString(),
       createdAt: DateTime.parse(json['created_at'] as String),

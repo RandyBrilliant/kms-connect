@@ -523,12 +523,11 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get", "post"], url_path="announcements")
     def announcements(self, request, pk=None):
         """
-        GET  /api/batches/{id}/announcements/  — list all announcements for this batch.
-        POST /api/batches/{id}/announcements/  — admin creates a new broadcast announcement.
+        GET  /api/batches/{id}/announcements/  — list announcements for this batch (admin).
+        POST /api/batches/{id}/announcements/  — create announcement + optional recipient_config.
 
-        Announcements are batch-level broadcast messages visible to all applicants
-        in this batch. Used for early-stage communication (PRA_SELEKSI / INTERVIEW)
-        instead of individual chat threads.
+        Pelamar hanya melihat pengumuman yang ditujukan ke tahapan mereka
+        (GET /api/applicants/me/applications/{id}/announcements/).
         """
         batch = self._get_batch_for_action(pk)
 
@@ -554,18 +553,68 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        vd = serializer.validated_data
         announcement = BatchAnnouncement.objects.create(
             batch=batch,
-            title=serializer.validated_data["title"],
-            body=serializer.validated_data["body"],
+            title=vd["title"],
+            body=vd["body"],
+            recipient_config=vd["recipient_config"],
             created_by=request.user,
+        )
+        from .batch_announcement_recipients import recipient_user_count
+
+        n = recipient_user_count(batch, announcement.recipient_config)
+        detail_msg = (
+            f"Pengumuman dibuat dan dikirim ke {n} pelamar."
+            if n
+            else (
+                "Pengumuman dibuat. Tidak ada pelamar yang cocok dengan filter penerima "
+                "(notifikasi tidak dikirim)."
+            )
         )
         return Response(
             success_response(
                 data=BatchAnnouncementSerializer(announcement, context={"request": request}).data,
-                detail="Pengumuman berhasil dibuat dan dikirim ke semua pelamar dalam batch ini.",
+                detail=detail_msg,
             ),
             status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["post"], url_path="announcements/preview-recipients")
+    def announcements_preview_recipients(self, request, pk=None):
+        """
+        POST /api/batches/{id}/announcements/preview-recipients/
+        Body: { "recipient_config": { "selection_type": "all_active" | "statuses", ... } }
+
+        Returns how many distinct pelamar would receive the announcement for this batch.
+        """
+        batch = self._get_batch_for_action(pk)
+        from .batch_announcement_recipients import (
+            recipient_user_count,
+            validate_recipient_config,
+        )
+
+        config = request.data.get("recipient_config")
+        if config is None:
+            return Response(
+                error_response(
+                    detail="recipient_config diperlukan.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        ok, err = validate_recipient_config(config)
+        if not ok:
+            return Response(
+                error_response(detail=err, code=ApiCode.VALIDATION_ERROR),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        count = recipient_user_count(batch, config)
+        return Response(
+            success_response(
+                data={"recipient_count": count},
+                detail=f"Preview: {count} pelamar akan menerima pengumuman.",
+            )
         )
 
     @action(detail=True, methods=["get"], url_path="export-excel")
@@ -813,13 +862,17 @@ class ApplicantJobApplicationViewSet(viewsets.ReadOnlyModelViewSet):
         if application.batch_id is None:
             return Response(success_response(data=[]))
 
+        from .batch_announcement_recipients import announcement_visible_for_application
+
         qs = (
-            BatchAnnouncement.objects
-            .filter(batch_id=application.batch_id)
+            BatchAnnouncement.objects.filter(batch_id=application.batch_id)
             .select_related("created_by")
             .order_by("-created_at")
         )
-        serializer = BatchAnnouncementSerializer(qs, many=True, context={"request": request})
+        visible = [a for a in qs if announcement_visible_for_application(a, application)]
+        serializer = BatchAnnouncementSerializer(
+            visible, many=True, context={"request": request}
+        )
         return Response(success_response(data=serializer.data))
 
 

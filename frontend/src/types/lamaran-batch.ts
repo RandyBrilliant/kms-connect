@@ -139,16 +139,28 @@ export interface EligibleApplicantsParams {
 // BatchAnnouncement — broadcast pesan admin ke seluruh batch
 // ---------------------------------------------------------------------------
 
+import type { ApplicationStatus } from "@/types/job-applications"
+
 /**
  * Admin broadcast announcement for all applicants in a batch.
  * Used for early-stage communication (PRA_SELEKSI / INTERVIEW)
  * instead of individual chat threads.
  */
+export type BatchAnnouncementRecipientSelection = "all_active" | "statuses"
+
+export interface BatchAnnouncementRecipientConfig {
+  selection_type: BatchAnnouncementRecipientSelection
+  /** Required when selection_type is "statuses" */
+  statuses?: ApplicationStatus[]
+}
+
 export interface BatchAnnouncement {
   id: number
   batch: number
   title: string
   body: string
+  /** Present after backend migration; default to all_active when missing. */
+  recipient_config?: BatchAnnouncementRecipientConfig
   created_by: number | null
   created_by_name: string | null
   created_at: string
@@ -158,4 +170,5 @@ export interface BatchAnnouncement {
 export interface CreateAnnouncementInput {
   title: string
   body: string
+  recipient_config?: BatchAnnouncementRecipientConfig
 }

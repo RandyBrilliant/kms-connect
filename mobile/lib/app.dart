@@ -96,7 +96,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       final isAuthenticated = authState.isAuthenticated;
 
       // Pre-auth routes: login, register, email verification, and password reset.
-      final isPreAuthRoute = loc == '/login' || 
+      final isPreAuthRoute = loc == '/login' ||
                             loc == '/register' || 
                             loc.startsWith('/email-verification') ||
                             loc == '/forgot-password' ||

@@ -114,15 +114,15 @@ def notify_on_batch_announcement(
     sender, instance: BatchAnnouncement, created: bool, **kwargs
 ):
     """
-    When a new BatchAnnouncement is posted, notify all active applicants
-    in the batch with an in-app + push notification.
+    When a new BatchAnnouncement is posted, notify applicants selected by
+    recipient_config (in-app + push).
     """
     if not created:
         return
 
-    from account.services.notification_dispatcher import dispatch
+    from account.services.notification_dispatcher import dispatch_bulk
     from account.services.notification_events import NotificationEvent
-    from .models import ApplicationStatus
+    from .batch_announcement_recipients import applications_for_recipient_config
 
     try:
         batch = instance.batch
@@ -137,19 +137,14 @@ def notify_on_batch_announcement(
         "announcement_body": instance.body,
     }
 
-    # Get all non-terminal applicants in the batch
-    applications = (
-        batch.applications
-        .exclude(status__in=ApplicationStatus.values[-2:])  # exclude SELESAI
-        .select_related("applicant__user", "applicant__user__notification_preference")
-        .filter(applicant__user__is_active=True)
+    config = instance.recipient_config or {}
+    applications = applications_for_recipient_config(batch, config).select_related(
+        "applicant__user",
+        "applicant__user__notification_preference",
     )
 
-    # OPTIMIZED: Use dispatch_bulk() instead of looping
-    from account.services.notification_dispatcher import dispatch_bulk
-    
     users = [app.applicant.user for app in applications]
-    
+
     if users:
         dispatch_bulk(
             event=NotificationEvent.BATCH_ANNOUNCEMENT,

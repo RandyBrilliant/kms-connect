@@ -16,6 +16,7 @@ import {
 import type {
   NotificationType,
   NotificationPriority,
+  RecipientConfig,
   RecipientSelectionType,
 } from "@/types/notification"
 import { Button } from "@/components/ui/button"
@@ -96,12 +97,32 @@ export function AdminBroadcastFormPage() {
   })
 
   const handlePreviewRecipients = async () => {
-    const recipientConfig = form.getFieldValue("recipient_config")
+    const raw = form.state.values.recipient_config as RecipientConfig | undefined
+    let recipientConfig: RecipientConfig =
+      raw && typeof raw === "object" && raw.selection_type
+        ? raw
+        : { selection_type: "all" }
+
+    if (recipientConfig.selection_type === "roles") {
+      const roles = (recipientConfig.roles ?? []).filter(Boolean)
+      if (roles.length === 0) {
+        toast.warning(
+          "Pilih role",
+          "Pilih minimal satu role sebelum preview jumlah penerima."
+        )
+        return
+      }
+      recipientConfig = { selection_type: "roles", roles }
+    }
+
     try {
       const result = await previewMutation.mutateAsync(recipientConfig)
       setRecipientCount(result.recipient_count)
-    } catch (error) {
-      toast.error("Gagal Preview", "Gagal menghitung jumlah penerima")
+    } catch (error: unknown) {
+      const message =
+        (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
+        "Gagal menghitung jumlah penerima"
+      toast.error("Gagal Preview", message)
     }
   }
 

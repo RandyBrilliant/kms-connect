@@ -36,6 +36,7 @@ import type {
   LamaranBatch,
   ApplicantSearchRow,
   BatchAnnouncement,
+  BatchAnnouncementRecipientConfig,
   BatchListParams,
   CreateAnnouncementInput,
   CreateBatchInput,
@@ -221,17 +222,46 @@ export async function getBatchAnnouncements(
 
 /**
  * POST /api/batches/{id}/announcements/
- * Admin creates a broadcast announcement for all applicants in this batch.
+ * Admin creates a broadcast announcement for applicants in this batch (see recipient_config).
  */
 export async function createBatchAnnouncement(
   batchId: number,
   input: CreateAnnouncementInput
-): Promise<BatchAnnouncement> {
-  const { data } = await api.post<{ data: BatchAnnouncement }>(
-    `/api/batches/${batchId}/announcements/`,
-    input
+): Promise<{ announcement: BatchAnnouncement; detail?: string }> {
+  const { data } = await api.post<{
+    data: BatchAnnouncement
+    detail?: string
+    code?: string
+  }>(`/api/batches/${batchId}/announcements/`, input)
+  return { announcement: data.data, detail: data.detail }
+}
+
+/**
+ * POST /api/batches/{id}/announcements/preview-recipients/
+ * Preview how many pelamar would receive the announcement for the given recipient_config.
+ */
+export async function previewBatchAnnouncementRecipients(
+  batchId: number,
+  recipientConfig: BatchAnnouncementRecipientConfig
+): Promise<{ recipient_count: number }> {
+  const { data } = await api.post<unknown>(
+    `/api/batches/${batchId}/announcements/preview-recipients/`,
+    { recipient_config: recipientConfig }
   )
-  return data.data
+  if (
+    data &&
+    typeof data === "object" &&
+    "data" in data &&
+    (data as { data?: { recipient_count?: number } }).data &&
+    typeof (data as { data: { recipient_count?: number } }).data.recipient_count ===
+      "number"
+  ) {
+    return {
+      recipient_count: (data as { data: { recipient_count: number } }).data
+        .recipient_count,
+    }
+  }
+  return data as { recipient_count: number }
 }
 
 // ---------------------------------------------------------------------------

@@ -140,11 +140,20 @@ export async function sendBroadcast(id: number): Promise<Broadcast> {
 export async function previewRecipients(
   recipientConfig: RecipientConfig
 ): Promise<{ recipient_count: number }> {
-  const { data } = await api.post<{ recipient_count: number }>(
-    `/api/broadcasts/preview-recipients/`,
-    { recipient_config: recipientConfig }
-  )
-  return data
+  const { data } = await api.post<unknown>(`/api/broadcasts/preview-recipients/`, {
+    recipient_config: recipientConfig,
+  })
+  // Backend returns success_response({ data: { recipient_count } })
+  if (
+    data &&
+    typeof data === "object" &&
+    "data" in data &&
+    (data as { data?: { recipient_count?: number } }).data &&
+    typeof (data as { data: { recipient_count?: number } }).data.recipient_count === "number"
+  ) {
+    return { recipient_count: (data as { data: { recipient_count: number } }).data.recipient_count }
+  }
+  return data as { recipient_count: number }
 }
 
 // ---------------------------------------------------------------------------

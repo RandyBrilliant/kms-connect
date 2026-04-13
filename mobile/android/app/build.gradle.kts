@@ -7,13 +7,14 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-// Load key.properties (required for release signing)
+// Release keystore — optional so `./gradlew signingReport` and debug builds work
+// without key.properties (e.g. to copy debug SHA-1 for Firebase). Release APK/AAB
+// still requires this file; see ANDROID_BUILD_GUIDE.md.
 val keyPropertiesFile = rootProject.file("key.properties")
-if (!keyPropertiesFile.exists()) {
-    error("key.properties not found at ${keyPropertiesFile.path}. Please create it as per ANDROID_BUILD_GUIDE.md.")
-}
-val keyProperties = Properties().apply {
-    load(keyPropertiesFile.inputStream())
+val keyProperties = Properties()
+val hasReleaseKeystore = keyPropertiesFile.exists()
+if (hasReleaseKeystore) {
+    keyProperties.load(keyPropertiesFile.inputStream())
 }
 
 android {
@@ -42,26 +43,30 @@ android {
     }
 
     signingConfigs {
-        create("release") {
-            val alias = keyProperties["keyAlias"]?.toString()
-                ?: error("Missing 'keyAlias' in key.properties")
-            val keyPass = keyProperties["keyPassword"]?.toString()
-                ?: error("Missing 'keyPassword' in key.properties")
-            val storePass = keyProperties["storePassword"]?.toString()
-                ?: error("Missing 'storePassword' in key.properties")
-            val storePath = keyProperties["storeFile"]?.toString()
-                ?: error("Missing 'storeFile' in key.properties")
+        if (hasReleaseKeystore) {
+            create("release") {
+                val alias = keyProperties["keyAlias"]?.toString()
+                    ?: error("Missing 'keyAlias' in key.properties")
+                val keyPass = keyProperties["keyPassword"]?.toString()
+                    ?: error("Missing 'keyPassword' in key.properties")
+                val storePass = keyProperties["storePassword"]?.toString()
+                    ?: error("Missing 'storePassword' in key.properties")
+                val storePath = keyProperties["storeFile"]?.toString()
+                    ?: error("Missing 'storeFile' in key.properties")
 
-            keyAlias = alias
-            keyPassword = keyPass
-            storeFile = file(storePath)
-            storePassword = storePass
+                keyAlias = alias
+                keyPassword = keyPass
+                storeFile = file(storePath)
+                storePassword = storePass
+            }
         }
     }
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release")
+            if (hasReleaseKeystore) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

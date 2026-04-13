@@ -9,7 +9,7 @@
  * 5. Bulk Transition — move all eligible applicants to next stage at once.
  */
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useParams, Link, useNavigate } from "react-router-dom"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { format } from "date-fns"
@@ -19,12 +19,15 @@ import {
   IconBell,
   IconCalendar,
   IconChevronRight,
+  IconClipboardList,
+  IconExternalLink,
   IconFileSpreadsheet,
   IconMapPin,
   IconSearch,
   IconSend,
   IconUserPlus,
   IconUsers,
+  IconLoader,
   IconX,
 } from "@tabler/icons-react"
 import { toast } from "@/lib/toast"
@@ -50,26 +53,49 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
+import { ApplicantAdminProcessDialog } from "@/components/applicants/applicant-admin-process-dialog"
 import { BatchAssignDialog } from "@/components/batches/batch-assign-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DatePicker } from "@/components/ui/date-picker"
 
-import { getBatch, scheduleBatchStage, getBatchAnnouncements, createBatchAnnouncement, exportBatchExcel } from "@/api/batches"
+import {
+  getBatch,
+  scheduleBatchStage,
+  getBatchAnnouncements,
+  createBatchAnnouncement,
+  previewBatchAnnouncementRecipients,
+  exportBatchExcel,
+} from "@/api/batches"
 import { getApplications, transitionApplication } from "@/api/applications"
 import {
   APPLICATION_STATUS_LABELS,
   type ApplicationStatus,
   type JobApplication,
 } from "@/types/job-applications"
-import type { BatchAnnouncement, BatchStage } from "@/types/lamaran-batch"
+import type {
+  BatchAnnouncement,
+  BatchAnnouncementRecipientConfig,
+  BatchStage,
+} from "@/types/lamaran-batch"
 import { usePageTitle } from "@/hooks/use-page-title"
 import { joinAdminPath, useAdminDashboard } from "@/contexts/admin-dashboard-context"
 
 function formatDate(value: string | null | undefined) {
   if (!value) return "-"
   return format(new Date(value), "dd MMM yyyy HH:mm", { locale: idLocale })
+}
+
+function announcementRecipientSummary(
+  cfg?: BatchAnnouncementRecipientConfig | null
+): string {
+  if (!cfg || cfg.selection_type === "all_active") {
+    return "Semua pelamar aktif (bukan Ditolak/Selesai)"
+  }
+  const labels = (cfg.statuses ?? []).map((s) => APPLICATION_STATUS_LABELS[s] ?? s)
+  return labels.length ? `Tahapan: ${labels.join(", ")}` : "Tahapan terpilih"
 }
 
 // ---------------------------------------------------------------------------
@@ -293,6 +319,8 @@ function BatchStatusTab({
   const [note, setNote] = useState("")
   const [placementDate, setPlacementDate] = useState("")
   const [loading, setLoading] = useState(false)
+  const [processUserId, setProcessUserId] = useState<number | null>(null)
+  const [processUserLabel, setProcessUserLabel] = useState("")
 
   const nextStatus = NEXT_FORWARD[status]
   const canReject  = CAN_REJECT.includes(status)
@@ -463,7 +491,7 @@ function BatchStatusTab({
               <TableHead>Konfirmasi Pra-Sel.</TableHead>
               <TableHead>Konfirmasi Interview</TableHead>
               <TableHead>Tanggal Ditambahkan</TableHead>
-              <TableHead />
+              <TableHead className="w-[88px] text-right">Aksi</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -525,16 +553,37 @@ function BatchStatusTab({
                     {formatDate(app.applied_at)}
                   </TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="cursor-pointer"
-                      onClick={() =>
-                        navigate(joinAdminPath(basePath, `/lamaran/${app.id}`))
-                      }
-                    >
-                      Detail
-                    </Button>
+                    <div className="flex items-center justify-end gap-0.5">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 shrink-0 cursor-pointer text-muted-foreground"
+                        title="Buka halaman lamaran"
+                        onClick={() =>
+                          navigate(joinAdminPath(basePath, `/lamaran/${app.id}`))
+                        }
+                      >
+                        <IconExternalLink className="size-4" />
+                        <span className="sr-only">Buka halaman lamaran</span>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 shrink-0 cursor-pointer text-muted-foreground"
+                        title="Edit data proses"
+                        disabled={!app.applicant_user}
+                        onClick={() => {
+                          if (!app.applicant_user) return
+                          setProcessUserId(app.applicant_user)
+                          setProcessUserLabel(app.applicant_name)
+                        }}
+                      >
+                        <IconClipboardList className="size-4" />
+                        <span className="sr-only">Edit data proses</span>
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -561,6 +610,18 @@ function BatchStatusTab({
           </TableBody>
         </Table>
       </div>
+
+      <ApplicantAdminProcessDialog
+        applicantUserId={processUserId}
+        open={processUserId != null}
+        onOpenChange={(next) => {
+          if (!next) {
+            setProcessUserId(null)
+            setProcessUserLabel("")
+          }
+        }}
+        applicantLabel={processUserLabel}
+      />
     </div>
   )
 }
@@ -578,7 +639,16 @@ export function AdminBatchDetailPage() {
   const [assignOpen, setAssignOpen] = useState(false)
   const [annoTitle, setAnnoTitle] = useState("")
   const [annoBody, setAnnoBody] = useState("")
+  const [annoRecipientMode, setAnnoRecipientMode] = useState<"all_active" | "statuses">(
+    "all_active"
+  )
+  const [annoSelectedStatuses, setAnnoSelectedStatuses] = useState<ApplicationStatus[]>([])
+  const [annoPreviewCount, setAnnoPreviewCount] = useState<number | null>(null)
   const [isExporting, setIsExporting] = useState(false)
+
+  useEffect(() => {
+    setAnnoPreviewCount(null)
+  }, [annoRecipientMode, annoSelectedStatuses])
 
   async function handleExportExcel() {
     if (!batch) return
@@ -609,15 +679,60 @@ export function AdminBatchDetailPage() {
     enabled: !!batch,
   })
 
-  const createAnno = useMutation({    mutationFn: () =>
-      createBatchAnnouncement(batchId, { title: annoTitle.trim(), body: annoBody.trim() }),
-    onSuccess: () => {
+  const buildAnnouncementRecipientConfig = (): BatchAnnouncementRecipientConfig => {
+    if (annoRecipientMode === "all_active") {
+      return { selection_type: "all_active" }
+    }
+    return { selection_type: "statuses", statuses: [...annoSelectedStatuses] }
+  }
+
+  const previewAnno = useMutation({
+    mutationFn: () =>
+      previewBatchAnnouncementRecipients(batchId, buildAnnouncementRecipientConfig()),
+    onSuccess: (data) => setAnnoPreviewCount(data.recipient_count),
+    onError: (err: unknown) => {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data
+        ?.detail
+      toast.error("Preview gagal", detail ?? "Tidak dapat menghitung jumlah penerima.")
+    },
+  })
+
+  const createAnno = useMutation({
+    mutationFn: () => {
+      const recipient_config = buildAnnouncementRecipientConfig()
+      if (
+        recipient_config.selection_type === "statuses" &&
+        (!recipient_config.statuses || recipient_config.statuses.length === 0)
+      ) {
+        return Promise.reject(new Error("NO_STATUSES"))
+      }
+      return createBatchAnnouncement(batchId, {
+        title: annoTitle.trim(),
+        body: annoBody.trim(),
+        recipient_config,
+      })
+    },
+    onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ["batch-announcements", batchId] })
-      toast.success("Pengumuman berhasil dikirim ke semua pelamar dalam batch ini.")
+      toast.success("Pengumuman terkirim", res.detail ?? "Pengumuman berhasil dibuat.")
       setAnnoTitle("")
       setAnnoBody("")
+      setAnnoRecipientMode("all_active")
+      setAnnoSelectedStatuses([])
+      setAnnoPreviewCount(null)
     },
-    onError: () => toast.error("Gagal mengirim pengumuman."),
+    onError: (err: unknown) => {
+      if ((err as Error)?.message === "NO_STATUSES") {
+        toast.warning(
+          "Pilih tahapan",
+          "Pilih minimal satu tahapan pelamar sebelum mengirim pengumuman."
+        )
+        return
+      }
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data
+        ?.detail
+      toast.error("Gagal mengirim pengumuman.", detail ?? "Coba lagi.")
+    },
   })
 
   const bulkTransition = useMutation({
@@ -775,13 +890,14 @@ export function AdminBatchDetailPage() {
             Pengumuman Batch
           </CardTitle>
           <CardDescription>
-            Kirim pengumuman ke semua pelamar sekaligus. Digunakan pada tahap
-            Pra-Seleksi dan Interview sebagai pengganti chat individual.
+            Kirim pengumuman ke pelamar di batch ini. Batasi penerima berdasarkan tahapan
+            lamaran; pelamar hanya melihat pengumuman yang sesuai tahapan mereka. Digunakan
+            pada Pra-Seleksi dan Interview sebagai pengganti chat per-orang.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           {/* Create form */}
-          <div className="flex flex-col gap-2 rounded-lg border p-4 bg-muted/30">
+          <div className="flex flex-col gap-3 rounded-lg border p-4 bg-muted/30">
             <Label className="font-medium">Kirim Pengumuman Baru</Label>
             <Input
               placeholder="Judul pengumuman..."
@@ -794,6 +910,86 @@ export function AdminBatchDetailPage() {
               value={annoBody}
               onChange={(e) => setAnnoBody(e.target.value)}
             />
+
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
+                Penerima
+              </Label>
+              <RadioGroup
+                value={annoRecipientMode}
+                onValueChange={(v) => setAnnoRecipientMode(v as "all_active" | "statuses")}
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="all_active" id="anno-rec-all" />
+                  <Label htmlFor="anno-rec-all" className="font-normal">
+                    Semua pelamar aktif (bukan Ditolak / Selesai)
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="statuses" id="anno-rec-st" />
+                  <Label htmlFor="anno-rec-st" className="font-normal">
+                    Berdasarkan tahapan lamaran
+                  </Label>
+                </div>
+              </RadioGroup>
+              {annoRecipientMode === "statuses" && (
+                <div className="ml-1 flex flex-col gap-2 border-l pl-4">
+                  {STATUS_TABS.map((t) => (
+                    <div key={t.value} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`anno-rec-${t.value}`}
+                        checked={annoSelectedStatuses.includes(t.value)}
+                        onCheckedChange={(checked) => {
+                          const on = Boolean(checked)
+                          setAnnoSelectedStatuses((prev) =>
+                            on ? [...prev, t.value] : prev.filter((s) => s !== t.value)
+                          )
+                        }}
+                      />
+                      <Label htmlFor={`anno-rec-${t.value}`} className="font-normal">
+                        {t.label}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="cursor-pointer"
+                disabled={previewAnno.isPending}
+                onClick={() => {
+                  if (
+                    annoRecipientMode === "statuses" &&
+                    annoSelectedStatuses.length === 0
+                  ) {
+                    toast.warning(
+                      "Pilih tahapan",
+                      "Pilih minimal satu tahapan untuk preview jumlah penerima."
+                    )
+                    return
+                  }
+                  previewAnno.mutate()
+                }}
+              >
+                {previewAnno.isPending ? (
+                  <IconLoader className="mr-2 size-4 animate-spin" />
+                ) : (
+                  <IconUsers className="mr-2 size-4" />
+                )}
+                Preview jumlah penerima
+              </Button>
+              {annoPreviewCount !== null && (
+                <span className="text-muted-foreground text-sm">
+                  {annoPreviewCount} pelamar akan menerima notifikasi
+                </span>
+              )}
+            </div>
+
             <div className="flex justify-end">
               <Button
                 className="cursor-pointer"
@@ -824,6 +1020,9 @@ export function AdminBatchDetailPage() {
                       {formatDate(anno.created_at)}
                     </span>
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    {announcementRecipientSummary(anno.recipient_config)}
+                  </p>
                   <p className="text-sm text-muted-foreground whitespace-pre-wrap">{anno.body}</p>
                   {anno.created_by_name && (
                     <p className="text-xs text-muted-foreground mt-1">oleh {anno.created_by_name}</p>

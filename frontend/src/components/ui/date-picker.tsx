@@ -36,12 +36,14 @@ export function DatePicker({
           variant="outline"
           disabled={disabled}
           className={cn(
-            "w-full justify-start text-left font-normal cursor-pointer",
+            "h-9 min-w-0 w-full max-w-full justify-start gap-2 text-left font-normal cursor-pointer",
             !date && "text-muted-foreground"
           )}
         >
-          {date ? format(date, "dd MMM yyyy") : placeholder}
-          <CalendarIcon className="ml-auto size-4 opacity-50" />
+          <span className="min-w-0 flex-1 truncate">
+            {date ? format(date, "dd MMM yyyy") : placeholder}
+          </span>
+          <CalendarIcon className="size-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="p-0" align="start">

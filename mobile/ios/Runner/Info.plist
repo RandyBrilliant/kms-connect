@@ -72,6 +72,15 @@
 				<string>kmsconnect</string>
 			</array>
 		</dict>
+		<!-- Google Sign-In: must match REVERSED_CLIENT_ID in GoogleService-Info.plist -->
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.268800410479-l4los6nqd222gklfbqroa99b8ninoc10</string>
+			</array>
+		</dict>
 	</array>
 
 	<!-- Deep linking: Universal Links domain -->

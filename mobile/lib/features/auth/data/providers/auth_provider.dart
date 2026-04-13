@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/models/auth_response.dart';
 import '../../domain/models/user.dart';
@@ -146,8 +147,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
         return (data['detail'] as String?) ?? fallback;
       }
     }
-    if (const bool.fromEnvironment('dart.vm.product') == false) {
-      print('NON-DIO EXCEPTION in auth: ${e.runtimeType}: $e');
+    // PlatformException from google_sign_in / sign_in_with_apple
+    if (e.toString().contains('ApiException: 12500')) {
+      return 'Google Sign-In gagal (12500). Pastikan OAuth consent screen '
+          'sudah dikonfigurasi dan SHA-1 terdaftar di Firebase.';
+    }
+    if (e.toString().contains('ApiException: 10')) {
+      return 'Google Sign-In: konfigurasi developer error. '
+          'Periksa google-services.json dan Web Client ID.';
+    }
+    final message = e.toString();
+    if (message.isNotEmpty && message != fallback) {
+      if (kDebugMode) debugPrint('NON-DIO EXCEPTION in auth: ${e.runtimeType}: $e');
     }
     return fallback;
   }

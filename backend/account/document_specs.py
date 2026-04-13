@@ -40,7 +40,7 @@ DOCUMENT_SPECS = {
     "kartu-keluarga":         {"format": "image", "extensions": IMAGE_EXTENSIONS, "max_bytes": MAX_IMAGE_BYTES},
     "kartu-bpjs":             {"format": "image", "extensions": IMAGE_EXTENSIONS, "max_bytes": MAX_IMAGE_BYTES},
     "paspor":                 {"format": "image", "extensions": IMAGE_EXTENSIONS, "max_bytes": MAX_IMAGE_BYTES},
-    "photo-tki":              {"format": "image", "extensions": IMAGE_EXTENSIONS, "max_bytes": MAX_IMAGE_BYTES},
+    "pas-foto":              {"format": "image", "extensions": IMAGE_EXTENSIONS, "max_bytes": MAX_IMAGE_BYTES},
     "sertifikat-keterampilan":{"format": "pdf",   "extensions": PDF_EXTENSIONS,   "max_bytes": MAX_PDF_BYTES},
     # ── POST_INTERVIEW ───────────────────────────────────────────────────────
     "ijin-keluarga":                  {"format": "pdf", "extensions": PDF_EXTENSIONS, "max_bytes": MAX_PDF_BYTES},

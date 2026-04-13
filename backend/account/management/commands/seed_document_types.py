@@ -18,7 +18,7 @@ DOCUMENT_NAMES = {
     "kartu-keluarga":                 ("Kartu Keluarga",                    True,  3,  "JPG/PNG, maks. 500 KB.", INITIAL),
     "kartu-bpjs":                     ("Kartu BPJS Kesehatan",              True,  4,  "JPG/PNG, maks. 500 KB.", INITIAL),
     "paspor":                         ("Paspor",                            True,  5,  "JPG/PNG, maks. 500 KB.", INITIAL),
-    "photo-tki":                      ("Photo TKI",                         True,  6,  "JPG/PNG, maks. 500 KB.", INITIAL),
+    "pas-foto":                      ("Pas Foto",                         True,  6,  "JPG/PNG, maks. 500 KB.", INITIAL),
     "sertifikat-keterampilan":        ("Sertifikat Keterampilan",           False, 7,  "Jika ada. PDF, maks. 2 MB.", INITIAL),
     # ── POST_INTERVIEW ───────────────────────────────────────────────────────
     "ijin-keluarga":                  ("Surat Izin Keluarga (Form Biru)",   True,  8,  "PDF, maks. 2 MB.", POST),

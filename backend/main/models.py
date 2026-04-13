@@ -709,6 +709,11 @@ class ApplicationStatusHistory(models.Model):
 # ---------------------------------------------------------------------------
 
 
+def default_batch_announcement_recipient_config():
+    """Default JSON for BatchAnnouncement.recipient_config (callable for JSONField)."""
+    return {"selection_type": "all_active"}
+
+
 class BatchAnnouncement(models.Model):
     """
     Pengumuman/broadcast dari admin untuk semua pelamar dalam satu batch.
@@ -735,6 +740,15 @@ class BatchAnnouncement(models.Model):
     body = models.TextField(
         _("isi pesan"),
         help_text=_("Isi lengkap pengumuman yang akan dibaca oleh pelamar."),
+    )
+    recipient_config = models.JSONField(
+        _("konfigurasi penerima"),
+        default=default_batch_announcement_recipient_config,
+        help_text=_(
+            'Siapa yang menerima notifikasi & melihat pengumuman, mis. '
+            '{"selection_type": "all_active"} atau '
+            '{"selection_type": "statuses", "statuses": ["PRA_SELEKSI"]}.'
+        ),
     )
     created_by = models.ForeignKey(
         CustomUser,

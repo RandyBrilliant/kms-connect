@@ -257,7 +257,7 @@ def _missing_required_document_codes(applicant_profile: Any) -> list[str]:
       3. Ijazah (code: ijasah)
       4. Kartu BPJS Kesehatan (code: kartu-bpjs)
       5. Paspor (code: paspor) – ONLY if applicant_profile.has_passport is truthy
-      6. Photo TKI (code: photo-tki)
+      6. Pas Foto (code: pas-foto)
     """
     try:
         from account.models import ApplicantDocument  # type: ignore
@@ -275,7 +275,7 @@ def _missing_required_document_codes(applicant_profile: Any) -> list[str]:
         "kartu-keluarga",
         "ijasah",
         "kartu-bpjs",
-        "photo-tki",
+        "pas-foto",
     ]
 
     # Paspor only counted when applicant indicates they have a passport
