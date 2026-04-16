@@ -4,6 +4,7 @@ import 'package:camera/camera.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../config/colors.dart';
+import '../utils/ktp_image_cropper.dart';
 
 /// Custom camera screen with KTP alignment guidelines overlay.
 /// Returns `File` on successful capture, `null` on cancel.
@@ -126,8 +127,16 @@ class _KtpCameraScreenState extends State<KtpCameraScreen>
 
     try {
       final XFile image = await controller.takePicture();
+      final rawFile = File(image.path);
+      final screenSize = MediaQuery.sizeOf(context);
+      final guideRect = _ktpGuideRect(screenSize);
+      final croppedFile = await KtpImageCropper.cropFromGuide(
+        sourceFile: rawFile,
+        screenSize: screenSize,
+        guideRect: guideRect,
+      );
       if (mounted) {
-        Navigator.pop(context, File(image.path));
+        Navigator.pop(context, croppedFile);
       }
     } catch (e) {
       if (mounted) {
@@ -238,11 +247,29 @@ class _KtpCameraScreenState extends State<KtpCameraScreen>
   }
 
   Widget _buildCameraView() {
+    final preview = _controller!;
+    final previewSize = preview.value.previewSize;
+    final displaySize = previewSize == null
+        ? null
+        : Size(previewSize.height, previewSize.width);
+
     return Stack(
       fit: StackFit.expand,
       children: [
         // Camera preview — fill screen
-        Center(child: CameraPreview(_controller!)),
+        if (displaySize == null)
+          Center(child: CameraPreview(preview))
+        else
+          ClipRect(
+            child: FittedBox(
+              fit: BoxFit.cover,
+              child: SizedBox(
+                width: displaySize.width,
+                height: displaySize.height,
+                child: CameraPreview(preview),
+              ),
+            ),
+          ),
 
         // KTP frame overlay
         const _KtpOverlay(),
@@ -381,6 +408,14 @@ class _KtpCameraScreenState extends State<KtpCameraScreen>
         ],
       ),
     );
+  }
+
+  Rect _ktpGuideRect(Size size) {
+    final frameWidth = size.width * 0.85;
+    final frameHeight = frameWidth / 1.586;
+    final left = (size.width - frameWidth) / 2;
+    final top = (size.height - frameHeight) / 2;
+    return Rect.fromLTWH(left, top, frameWidth, frameHeight);
   }
 }
 

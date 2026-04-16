@@ -15,6 +15,8 @@ import '../../../notifications/data/providers/notification_settings_provider.dar
 import '../../data/providers/profile_provider.dart';
 import '../../domain/models/applicant_profile.dart';
 
+const bool _hideGoogleSignInTemporarily = true;
+
 /// Professional profile page with modern Material Design 3 styling
 class ProfilePage extends ConsumerStatefulWidget {
   const ProfilePage({super.key});
@@ -922,24 +924,26 @@ class _LinkedAccountsSection extends ConsumerWidget {
           ),
           child: Column(
             children: [
-              _LinkedAccountTile(
-                provider: 'Google',
-                icon: Icons.g_mobiledata_rounded,
-                iconColor: const Color(0xFFDB4437),
-                isLinked: hasGoogle,
-                isLoading: isLoading,
-                onLink: () async {
-                  final ok = await ref.read(authStateProvider.notifier).linkGoogle();
-                  if (!context.mounted) return;
-                  if (ok) {
-                    CustomToast.show(context, message: 'Akun Google berhasil dihubungkan', type: ToastType.success);
-                  } else {
-                    final err = ref.read(authStateProvider).error;
-                    if (err != null) CustomToast.show(context, message: err, type: ToastType.error);
-                  }
-                },
-              ),
+              if (!_hideGoogleSignInTemporarily)
+                _LinkedAccountTile(
+                  provider: 'Google',
+                  icon: Icons.g_mobiledata_rounded,
+                  iconColor: const Color(0xFFDB4437),
+                  isLinked: hasGoogle,
+                  isLoading: isLoading,
+                  onLink: () async {
+                    final ok = await ref.read(authStateProvider.notifier).linkGoogle();
+                    if (!context.mounted) return;
+                    if (ok) {
+                      CustomToast.show(context, message: 'Akun Google berhasil dihubungkan', type: ToastType.success);
+                    } else {
+                      final err = ref.read(authStateProvider).error;
+                      if (err != null) CustomToast.show(context, message: err, type: ToastType.error);
+                    }
+                  },
+                ),
               if (Platform.isIOS) ...[
+                if (!_hideGoogleSignInTemporarily)
                 Divider(color: AppColors.divider.withValues(alpha: 0.2), height: 1, indent: 20, endIndent: 20),
                 _LinkedAccountTile(
                   provider: 'Apple',

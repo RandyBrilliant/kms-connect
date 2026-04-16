@@ -29,8 +29,10 @@ class SocialAuthService {
     if (_googleSignIn != null) return _googleSignIn!;
     final webClientId = Env.googleWebClientId;
     if (kDebugMode) {
-      debugPrint('GoogleSignIn serverClientId: '
-          '${webClientId == null ? "(auto from google-services.json)" : webClientId}');
+      debugPrint(
+        'GoogleSignIn serverClientId: '
+        '${webClientId ?? "(auto from google-services.json)"}',
+      );
     }
     _googleSignIn = GoogleSignIn(
       scopes: const ['email', 'profile'],
@@ -50,8 +52,10 @@ class SocialAuthService {
     final auth = await account.authentication;
     final idToken = auth.idToken;
     if (idToken == null) {
-      throw Exception('Google Sign-In berhasil tetapi tidak menerima ID token. '
-          'Pastikan konfigurasi OAuth sudah benar.');
+      throw Exception(
+        'Google Sign-In berhasil tetapi tidak menerima ID token. '
+        'Pastikan konfigurasi OAuth sudah benar.',
+      );
     }
 
     return GoogleSignInResult(
@@ -74,14 +78,17 @@ class SocialAuthService {
 
       final identityToken = credential.identityToken;
       if (identityToken == null) {
-        throw Exception('Apple Sign-In berhasil tetapi tidak menerima identity token.');
+        throw Exception(
+          'Apple Sign-In berhasil tetapi tidak menerima identity token.',
+        );
       }
 
       String? fullName;
       if (credential.givenName != null || credential.familyName != null) {
-        fullName = [credential.givenName, credential.familyName]
-            .where((s) => s != null && s.isNotEmpty)
-            .join(' ');
+        fullName = [
+          credential.givenName,
+          credential.familyName,
+        ].where((s) => s != null && s.isNotEmpty).join(' ');
       }
 
       return AppleSignInResult(

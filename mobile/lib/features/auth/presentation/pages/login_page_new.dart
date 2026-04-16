@@ -14,6 +14,8 @@ import '../../../../core/widgets/professional_text_field.dart';
 import '../../../../core/widgets/terms_privacy_modal.dart';
 import '../../data/providers/auth_provider.dart';
 
+const bool _hideGoogleSignInTemporarily = true;
+
 /// Login page with two views managed entirely by local state:
 ///
 ///  [_LoginView.methods]  – three sign-in method buttons (Google / Apple / Email)
@@ -426,15 +428,16 @@ class _LoginPageNewState extends ConsumerState<LoginPageNew>
         ),
         const SizedBox(height: 28),
 
-        // Google
-        _AuthMethodButton(
-          onPressed: isLoading ? null : _handleGoogleSignIn,
-          label: 'Lanjutkan dengan Google',
-          assetIcon: 'assets/images/google_logo.png',
-          backgroundColor: Colors.white,
-          textColor: AppColors.textDark,
-          borderColor: AppColors.divider,
-        ),
+        // Google (temporarily hidden while verification is under review)
+        if (!_hideGoogleSignInTemporarily)
+          _AuthMethodButton(
+            onPressed: isLoading ? null : _handleGoogleSignIn,
+            label: 'Lanjutkan dengan Google',
+            assetIcon: 'assets/images/google_logo.png',
+            backgroundColor: Colors.white,
+            textColor: AppColors.textDark,
+            borderColor: AppColors.divider,
+          ),
 
         // Apple (iOS only)
         if (Platform.isIOS) ...[
