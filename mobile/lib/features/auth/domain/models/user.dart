@@ -23,6 +23,12 @@ class User {
   bool get hasApple => appleId != null && appleId!.isNotEmpty;
   bool get hasPassword => !hasGoogle && !hasApple;
 
+  /// Backend roles: APPLICANT, STAFF, ADMIN, MASTER_ADMIN, COMPANY.
+  bool get canEditApplicantStaffReferrer {
+    final r = role.toUpperCase();
+    return r == 'STAFF' || r == 'ADMIN' || r == 'MASTER_ADMIN';
+  }
+
   factory User.fromJson(Map<String, dynamic> json) {
     final idRaw = json['id'];
     final id = idRaw is int

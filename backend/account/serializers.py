@@ -634,6 +634,20 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
     def validate_heir_contact_phone(self, value):
         return normalize_indonesian_phone(value) if value else value
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        # Pelamar mengubah profil sendiri (mobile self-service / PATCH me): tidak boleh
+        # mengatur staff rujukan lewat kode — hanya petugas/backoffice.
+        if self.context.get("is_own_profile"):
+            raw = attrs.get("referral_code_input")
+            if raw is not None and str(raw).strip():
+                raise serializers.ValidationError(
+                    {
+                        "referral_code_input": "Staff rujukan hanya dapat diatur oleh petugas atau admin.",
+                    }
+                )
+        return attrs
+
     def validate_nik(self, value):
         """Format 16 digit; uniqueness dicek di parent ApplicantUserSerializer (supaya punya akses profile instance)."""
         return validate_nik_format(value) if value else value

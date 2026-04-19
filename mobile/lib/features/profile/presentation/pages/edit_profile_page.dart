@@ -14,6 +14,7 @@ import '../../../../core/widgets/custom_toast.dart';
 import '../../../../core/widgets/professional_text_field.dart';
 import '../../../../core/widgets/professional_phone_field.dart';
 import '../../../../core/widgets/professional_dropdown_field.dart';
+import '../../../auth/data/providers/auth_provider.dart';
 import '../../../auth/data/providers/regions_provider.dart';
 import '../../../auth/data/providers/staff_referrers_provider.dart';
 import '../../data/providers/profile_provider.dart';
@@ -450,6 +451,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
 
   Future<void> _handleSave() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
+    final canEditReferrer =
+        ref.read(authStateProvider).user?.canEditApplicantStaffReferrer ??
+            false;
     final data = <String, dynamic>{
       if (_fullName.text.trim().isNotEmpty) 'full_name': _fullName.text.trim(),
       if (_nik.text.trim().isNotEmpty) 'nik': _nik.text.trim(),
@@ -531,7 +535,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
         'father_phone': ProfessionalPhoneField.toIndonesiaE164(_fatherPhone.text),
       if (_motherPhone.text.trim().isNotEmpty)
         'mother_phone': ProfessionalPhoneField.toIndonesiaE164(_motherPhone.text),
-      if (_selectedStaff != null)
+      if (canEditReferrer && _selectedStaff != null)
         'referral_code_input': _selectedStaff!.referralCode,
       if (_spouseName.text.trim().isNotEmpty)
         'spouse_name': _spouseName.text.trim(),
@@ -609,6 +613,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
 
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final canEditReferrer =
+        ref.watch(authStateProvider).user?.canEditApplicantStaffReferrer ??
+            false;
 
     final bool isAccepted =
         profile?.verificationStatus.toUpperCase() == 'ACCEPTED';
@@ -1737,10 +1744,13 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                               _SectionCard(
                                 icon: Icons.person_pin_outlined,
                                 label: 'Staff Rujukan',
-                                subtitle: 'Petugas yang merujuk Anda',
+                                subtitle: canEditReferrer
+                                    ? 'Petugas yang merujuk Anda'
+                                    : 'Diisi oleh petugas atau admin. Hubungi kantor jika perlu diubah.',
                                 children: [
                                   _StaffReferrerPickerField(
                                     selected: _selectedStaff,
+                                    enabled: canEditReferrer,
                                     onTap: () async {
                                       final staffAsync = ref.read(
                                         staffReferrersProvider,
@@ -2652,10 +2662,12 @@ class _StaffReferrerPickerField extends StatelessWidget {
   const _StaffReferrerPickerField({
     required this.selected,
     required this.onTap,
+    this.enabled = true,
   });
 
   final StaffReferrer? selected;
   final VoidCallback onTap;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -2666,9 +2678,10 @@ class _StaffReferrerPickerField extends StatelessWidget {
     return ProfessionalDropdownField(
       valueText: valueText,
       label: 'Staff Penerima Rujukan',
-      hint: 'Pilih staff...',
+      hint: enabled ? 'Pilih staff...' : '—',
       prefixIcon: Icons.person_outline_rounded,
       onTap: onTap,
+      enabled: enabled,
     );
   }
 }

@@ -55,6 +55,54 @@ export interface ApplicantSearchRow {
   is_eligible: boolean
   /** Filled when is_eligible=false so admin knows why */
   ineligible_reason: string | null
+  /** Raw codes / nullable biodata for batch assignment table */
+  gender?: string
+  religion?: string
+  education_level?: string
+  marital_status?: string
+  writing_hand?: string
+  height_cm?: number | null
+  weight_kg?: number | null
+  birth_date?: string | null
+  wears_glasses?: boolean | null
+  has_passport?: boolean | null
+}
+
+/** UI + API payload for eligible-applicants filters (batch assign dialog). */
+export interface EligibleApplicantsFilterState {
+  ordering: string
+  height_cm_min: string
+  height_cm_max: string
+  weight_kg_min: string
+  weight_kg_max: string
+  birth_date_from: string
+  birth_date_to: string
+  religion: string
+  gender: string
+  education_level: string
+  marital_status: string
+  writing_hand: string
+  /** Empty = semua; API sends boolean only when set */
+  wears_glasses: "" | "true" | "false"
+  has_passport: "" | "true" | "false"
+}
+
+/** Initial filter form / committed filter for batch assign dialog. */
+export const DEFAULT_ELIGIBLE_APPLICANTS_FILTER: EligibleApplicantsFilterState = {
+  ordering: "name",
+  height_cm_min: "",
+  height_cm_max: "",
+  weight_kg_min: "",
+  weight_kg_max: "",
+  birth_date_from: "",
+  birth_date_to: "",
+  religion: "",
+  gender: "",
+  education_level: "",
+  marital_status: "",
+  writing_hand: "",
+  wears_glasses: "",
+  has_passport: "",
 }
 
 // ---------------------------------------------------------------------------
@@ -133,6 +181,20 @@ export interface EligibleApplicantsParams {
   q?: string
   page?: number
   page_size?: number
+  ordering?: string
+  height_cm_min?: number
+  height_cm_max?: number
+  weight_kg_min?: number
+  weight_kg_max?: number
+  birth_date_from?: string
+  birth_date_to?: string
+  religion?: string
+  gender?: string
+  education_level?: string
+  marital_status?: string
+  writing_hand?: string
+  wears_glasses?: boolean
+  has_passport?: boolean
 }
 
 // ---------------------------------------------------------------------------

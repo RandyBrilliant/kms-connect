@@ -41,6 +41,7 @@ import type {
   CreateAnnouncementInput,
   CreateBatchInput,
   EligibleApplicantsParams,
+  EligibleApplicantsFilterState,
   GroupAssignInput,
   GroupAssignResponse,
   CheckEligibilityInput,
@@ -49,6 +50,7 @@ import type {
   BulkTransitionInput,
   BulkTransitionResponse,
 } from "@/types/lamaran-batch"
+import type { ApplicationStatus } from "@/types/job-applications"
 
 // ---------------------------------------------------------------------------
 // CRUD
@@ -106,6 +108,96 @@ export async function deleteBatch(id: number): Promise<void> {
 // Applicant search table
 // ---------------------------------------------------------------------------
 
+/** Map batch-assign filter form → GET query params (omit unset fields). */
+export function eligibleFilterStateToParams(
+  f: EligibleApplicantsFilterState
+): Omit<EligibleApplicantsParams, "q" | "page" | "page_size"> {
+  const trimInt = (
+    raw: string,
+    min?: number,
+    max?: number
+  ): number | undefined => {
+    const t = raw.trim()
+    if (!t) return undefined
+    const n = Number.parseInt(t, 10)
+    if (!Number.isFinite(n)) return undefined
+    if (min != null && n < min) return undefined
+    if (max != null && n > max) return undefined
+    return n
+  }
+
+  const out: Omit<EligibleApplicantsParams, "q" | "page" | "page_size"> = {}
+
+  const ord = f.ordering.trim()
+  if (ord) out.ordering = ord
+
+  const hMin = trimInt(f.height_cm_min, 50, 300)
+  const hMax = trimInt(f.height_cm_max, 50, 300)
+  if (hMin !== undefined) out.height_cm_min = hMin
+  if (hMax !== undefined) out.height_cm_max = hMax
+
+  const wMin = trimInt(f.weight_kg_min, 15, 400)
+  const wMax = trimInt(f.weight_kg_max, 15, 400)
+  if (wMin !== undefined) out.weight_kg_min = wMin
+  if (wMax !== undefined) out.weight_kg_max = wMax
+
+  if (f.birth_date_from.trim()) out.birth_date_from = f.birth_date_from.trim()
+  if (f.birth_date_to.trim()) out.birth_date_to = f.birth_date_to.trim()
+
+  if (f.religion.trim()) out.religion = f.religion.trim()
+  if (f.gender.trim()) out.gender = f.gender.trim()
+  if (f.education_level.trim()) out.education_level = f.education_level.trim()
+  if (f.marital_status.trim()) out.marital_status = f.marital_status.trim()
+  if (f.writing_hand.trim()) out.writing_hand = f.writing_hand.trim()
+
+  if (f.wears_glasses === "true") out.wears_glasses = true
+  else if (f.wears_glasses === "false") out.wears_glasses = false
+
+  if (f.has_passport === "true") out.has_passport = true
+  else if (f.has_passport === "false") out.has_passport = false
+
+  return out
+}
+
+function appendEligibleApplicantsParams(
+  search: URLSearchParams,
+  params: EligibleApplicantsParams
+): void {
+  const skipEmpty = (v: unknown): v is string | number =>
+    v !== undefined &&
+    v !== null &&
+    (typeof v === "number" ||
+      (typeof v === "string" && v.trim() !== ""))
+
+  if (skipEmpty(params.q)) search.set("q", String(params.q))
+  if (params.page != null) search.set("page", String(params.page))
+  if (params.page_size != null) search.set("page_size", String(params.page_size))
+
+  if (skipEmpty(params.ordering)) search.set("ordering", String(params.ordering))
+  if (params.height_cm_min != null) search.set("height_cm_min", String(params.height_cm_min))
+  if (params.height_cm_max != null) search.set("height_cm_max", String(params.height_cm_max))
+  if (params.weight_kg_min != null) search.set("weight_kg_min", String(params.weight_kg_min))
+  if (params.weight_kg_max != null) search.set("weight_kg_max", String(params.weight_kg_max))
+  if (skipEmpty(params.birth_date_from))
+    search.set("birth_date_from", String(params.birth_date_from))
+  if (skipEmpty(params.birth_date_to))
+    search.set("birth_date_to", String(params.birth_date_to))
+  if (skipEmpty(params.religion)) search.set("religion", String(params.religion))
+  if (skipEmpty(params.gender)) search.set("gender", String(params.gender))
+  if (skipEmpty(params.education_level))
+    search.set("education_level", String(params.education_level))
+  if (skipEmpty(params.marital_status))
+    search.set("marital_status", String(params.marital_status))
+  if (skipEmpty(params.writing_hand))
+    search.set("writing_hand", String(params.writing_hand))
+  if (typeof params.wears_glasses === "boolean") {
+    search.set("wears_glasses", params.wears_glasses ? "true" : "false")
+  }
+  if (typeof params.has_passport === "boolean") {
+    search.set("has_passport", params.has_passport ? "true" : "false")
+  }
+}
+
 /**
  * GET /api/batches/{id}/eligible-applicants/?q=...
  * Returns a paginated table of applicant rows with is_eligible pre-computed.
@@ -116,9 +208,7 @@ export async function getEligibleApplicants(
   params: EligibleApplicantsParams = {}
 ): Promise<PaginatedResponse<ApplicantSearchRow>> {
   const search = new URLSearchParams()
-  if (params.q) search.set("q", params.q)
-  if (params.page != null) search.set("page", String(params.page))
-  if (params.page_size != null) search.set("page_size", String(params.page_size))
+  appendEligibleApplicantsParams(search, params)
   const qs = search.toString()
   const path = `/api/batches/${batchId}/eligible-applicants/${qs ? `?${qs}` : ""}`
   const { data } = await api.get<unknown>(path)
@@ -270,24 +360,43 @@ export async function previewBatchAnnouncementRecipients(
 
 /**
  * GET /api/batches/{id}/export-excel/
- * Downloads an .xlsx file with all applicant biodata for this batch.
+ * Downloads an .xlsx with applicant biodata for this batch.
+ * Pass `statuses` to limit rows to those lamaran tahapan (repeatable query param `status`).
+ * Omit `statuses` to include every tahapan in the batch.
  * Triggers a browser file download automatically.
  */
 export async function exportBatchExcel(
   batchId: number,
-  batchName: string
+  batchName: string,
+  statuses?: ApplicationStatus[]
 ): Promise<void> {
-  const response = await api.get(`/api/batches/${batchId}/export-excel/`, {
-    responseType: "blob",
-  })
+  const search = new URLSearchParams()
+  if (statuses?.length) {
+    for (const s of statuses) {
+      search.append("status", s)
+    }
+  }
+  const qs = search.toString()
+  const response = await api.get(
+    `/api/batches/${batchId}/export-excel/${qs ? `?${qs}` : ""}`,
+    {
+      responseType: "blob",
+    }
+  )
   const blob = new Blob([response.data], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   })
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")
   const safeName = batchName.replace(/[^a-zA-Z0-9\s_-]/g, "").trim().replace(/\s+/g, "_")
+  const stagePart =
+    statuses?.length === 1
+      ? `_${statuses[0]}`
+      : statuses?.length
+        ? `_tahapan_${statuses.length}`
+        : ""
   a.href = url
-  a.download = `pelamar_${safeName}.xlsx`
+  a.download = `pelamar_${safeName}${stagePart}.xlsx`
   a.style.display = "none"
   document.body.appendChild(a)
   a.click()

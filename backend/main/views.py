@@ -28,6 +28,10 @@ from account.serializers import _staff_rujukan_display_name
 from account.pagination import StandardResultsSetPagination
 from account.services.export import generate_applicants_excel
 
+from .eligible_applicants_query import (
+    applicant_ktp_address_line,
+    apply_eligible_applicant_filters,
+)
 from .models import (
     ApplicationStatus,
     ApplicationStatusHistory,
@@ -262,20 +266,29 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
         """
         GET /api/batches/{id}/eligible-applicants/?q=...
 
-        Returns a paginated table of ApplicantProfiles filtered by the search
-        query `q` (searches full_name, email, NIK, referrer name/email/code).
-        Each row includes an
-        `is_eligible` flag and an `ineligible_reason` computed via the service
-        layer so the admin can see at a glance who can be added to this batch.
+        Full-text search `q`: full_name, email, NIK, referrer name/email/code.
 
-        The admin uses this table to select applicants (checkboxes) before
-        calling the `assign` or `check-eligibility` endpoints.
+        Extra filters / ordering: see eligible_applicants_query.apply_eligible_applicant_filters.
+
+        Each row includes an `is_eligible` flag and `ineligible_reason`.
+
+        The admin uses this table to select applicants before `assign/` or `check-eligibility/`.
         """
         self._get_batch_for_action(pk)
         q = request.query_params.get("q", "").strip()
 
         qs = (
-            ApplicantProfile.objects.select_related("user", "referrer")
+            ApplicantProfile.objects.select_related(
+                "user",
+                "referrer",
+                "province",
+                "district",
+                "district__province",
+                "village",
+                "village__district",
+                "village__district__regency",
+                "village__district__regency__province",
+            )
             .filter(
                 user__is_active=True,
                 verification_status=ApplicantVerificationStatus.ACCEPTED,
@@ -293,7 +306,15 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
                 | DQ(referrer__referral_code__icontains=q)
             )
 
-        qs = qs.order_by("user__full_name")
+        qs, filter_err = apply_eligible_applicant_filters(qs, request)
+        if filter_err:
+            return Response(
+                error_response(
+                    detail=filter_err,
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         # Paginate
         paginator = StandardResultsSetPagination()
@@ -326,11 +347,19 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
                 "full_name": profile.user.full_name if profile.user else "",
                 "email": profile.user.email if profile.user else "",
                 "phone": profile.contact_phone or "",
-                "domicile": ", ".join(filter(None, [
-                    getattr(profile, "domicile_kelurahan", None),
-                    getattr(profile, "domicile_kecamatan", None),
-                    getattr(profile, "domicile_city", None),
-                ])),
+                "domicile": applicant_ktp_address_line(profile),
+                "gender": profile.gender or "",
+                "religion": profile.religion or "",
+                "education_level": profile.education_level or "",
+                "marital_status": profile.marital_status or "",
+                "writing_hand": profile.writing_hand or "",
+                "height_cm": profile.height_cm,
+                "weight_kg": profile.weight_kg,
+                "birth_date": profile.birth_date.isoformat()
+                if getattr(profile, "birth_date", None)
+                else None,
+                "wears_glasses": profile.wears_glasses,
+                "has_passport": profile.has_passport,
                 "referrer_display_name": ref_name,
                 "referrer_code": ref_code,
                 "is_eligible": result.eligible if result else True,
@@ -622,8 +651,13 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
         """
         GET /api/batches/{id}/export-excel/
 
-        Returns an .xlsx file containing all applicant biodata for every
-        JobApplication in this batch. Each row = one applicant.
+        Query params (optional):
+          status — repeat untuk setiap tahapan lamaran yang ingin diekspor,
+                   mis. ?status=PRA_SELEKSI&status=INTERVIEW
+          Tanpa parameter: semua lamaran di batch (semua tahapan).
+
+        Returns an .xlsx file containing applicant biodata for matching
+        JobApplications. Each row = one applicant.
 
         Kolom-kolom mengikuti format export pelamar global
         (lihat account.services.export.EXPORT_COLUMNS) supaya konsisten.
@@ -638,6 +672,20 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
             .select_related("applicant__user")
             .order_by("applicant__user__full_name")
         )
+
+        status_params = request.query_params.getlist("status")
+        if status_params:
+            valid_codes = {c[0] for c in ApplicationStatus.choices}
+            unknown = [s for s in status_params if s not in valid_codes]
+            if unknown:
+                return Response(
+                    error_response(
+                        detail=f"Parameter status tidak valid: {', '.join(unknown)}",
+                        code=ApiCode.VALIDATION_ERROR,
+                    ),
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            applications = applications.filter(status__in=status_params)
         applicant_user_ids = (
             applications.values_list("applicant__user_id", flat=True).distinct()
         )

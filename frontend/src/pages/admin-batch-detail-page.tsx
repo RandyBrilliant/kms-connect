@@ -20,6 +20,7 @@ import {
   IconCalendar,
   IconChevronRight,
   IconClipboardList,
+  IconChevronDown,
   IconExternalLink,
   IconFileSpreadsheet,
   IconMapPin,
@@ -57,6 +58,13 @@ import { ApplicantAdminProcessDialog } from "@/components/applicants/applicant-a
 import { BatchAssignDialog } from "@/components/batches/batch-assign-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DatePicker } from "@/components/ui/date-picker"
@@ -645,16 +653,18 @@ export function AdminBatchDetailPage() {
   const [annoSelectedStatuses, setAnnoSelectedStatuses] = useState<ApplicationStatus[]>([])
   const [annoPreviewCount, setAnnoPreviewCount] = useState<number | null>(null)
   const [isExporting, setIsExporting] = useState(false)
+  const [activeStatusTab, setActiveStatusTab] =
+    useState<ApplicationStatus>("PRA_SELEKSI")
 
   useEffect(() => {
     setAnnoPreviewCount(null)
   }, [annoRecipientMode, annoSelectedStatuses])
 
-  async function handleExportExcel() {
+  async function handleExportExcel(statuses?: ApplicationStatus[]) {
     if (!batch) return
     setIsExporting(true)
     try {
-      await exportBatchExcel(batchId, batch.name)
+      await exportBatchExcel(batchId, batch.name, statuses)
       toast.success("File Excel berhasil diunduh.")
     } catch {
       toast.error("Gagal mengunduh data Excel.")
@@ -809,15 +819,53 @@ export function AdminBatchDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            className="cursor-pointer"
-            onClick={handleExportExcel}
-            disabled={isExporting || (apps.length === 0)}
-          >
-            <IconFileSpreadsheet className="mr-2 size-4" />
-            {isExporting ? "Mengunduh..." : "Export Excel"}
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                className="cursor-pointer"
+                disabled={isExporting || apps.length === 0}
+              >
+                <IconFileSpreadsheet className="mr-2 size-4" />
+                {isExporting ? "Mengunduh..." : "Export Excel"}
+                <IconChevronDown className="ml-1 size-4 opacity-70" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[240px]">
+              <DropdownMenuItem
+                className="cursor-pointer flex-col items-start gap-0"
+                disabled={appsByStatus[activeStatusTab].length === 0}
+                onClick={() => handleExportExcel([activeStatusTab])}
+              >
+                <span className="font-medium">Tahapan tab saat ini</span>
+                <span className="text-muted-foreground text-xs font-normal">
+                  {APPLICATION_STATUS_LABELS[activeStatusTab]} (
+                  {appsByStatus[activeStatusTab].length} pelamar)
+                </span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {STATUS_TABS.map((t) => (
+                <DropdownMenuItem
+                  key={t.value}
+                  className="cursor-pointer justify-between gap-4"
+                  disabled={appsByStatus[t.value].length === 0}
+                  onClick={() => handleExportExcel([t.value])}
+                >
+                  <span>{t.label}</span>
+                  <span className="text-muted-foreground tabular-nums text-xs">
+                    {appsByStatus[t.value].length}
+                  </span>
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="cursor-pointer"
+                onClick={() => handleExportExcel(undefined)}
+              >
+                Semua tahapan
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button className="cursor-pointer" onClick={() => setAssignOpen(true)}>
             <IconUserPlus className="mr-2 size-4" />
             Tambah Pelamar
@@ -1035,7 +1083,10 @@ export function AdminBatchDetailPage() {
       </Card>
 
       {/* Status tabs — replace flat table + bulk transition */}
-      <Tabs defaultValue="PRA_SELEKSI">
+      <Tabs
+        value={activeStatusTab}
+        onValueChange={(v) => setActiveStatusTab(v as ApplicationStatus)}
+      >
         <TabsList className="h-auto flex-wrap gap-1">
           {STATUS_TABS.map((t) => (
             <TabsTrigger key={t.value} value={t.value}>

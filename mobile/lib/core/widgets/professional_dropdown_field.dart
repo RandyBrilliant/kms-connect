@@ -13,6 +13,7 @@ class ProfessionalDropdownField extends StatelessWidget {
     required this.prefixIcon,
     required this.onTap,
     this.validator,
+    this.enabled = true,
   }) : assert(
           controller != null || valueText != null,
           'Either controller or valueText must be provided.',
@@ -25,6 +26,7 @@ class ProfessionalDropdownField extends StatelessWidget {
   final IconData prefixIcon;
   final VoidCallback onTap;
   final String? Function(String?)? validator;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -33,11 +35,14 @@ class ProfessionalDropdownField extends StatelessWidget {
       key: controller == null ? ValueKey(valueText ?? '') : null,
       controller: controller,
       initialValue: controller == null ? (valueText ?? '') : null,
+      enabled: enabled,
       readOnly: true,
       canRequestFocus: false,
-      onTap: () {
-        runWhenNavigatorUnlocked(onTap);
-      },
+      onTap: enabled
+          ? () {
+              runWhenNavigatorUnlocked(onTap);
+            }
+          : null,
       validator: validator,
       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
             fontWeight: FontWeight.w600,
