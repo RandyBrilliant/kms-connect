@@ -121,24 +121,26 @@ export async function permanentDeleteApplicant(
   return data.data
 }
 
-/** POST /api/applicants/:id/send_verification_email/ */
+/** POST /api/admins/send-verification-email/ - Admin sends verification email to user */
 export async function sendVerificationEmail(
   userId: number
 ): Promise<{ user_id: number; email: string }> {
-  const { data } = await api.post<{ user_id: number; email: string }>(
-    `/api/applicants/${userId}/send_verification_email/`
+  const { data } = await api.post<{ data: { user_id: number; email: string } }>(
+    '/api/admins/send-verification-email/',
+    { user_id: userId }
   )
-  return data
+  return data.data
 }
 
-/** POST /api/applicants/:id/send_password_reset_email/ */
+/** POST /api/admins/send-password-reset/ - Admin sends password reset email to user */
 export async function sendPasswordResetEmail(
   userId: number
 ): Promise<{ user_id: number; email: string }> {
-  const { data } = await api.post<{ user_id: number; email: string }>(
-    `/api/applicants/${userId}/send_password_reset_email/`
+  const { data } = await api.post<{ data: { user_id: number; email: string } }>(
+    '/api/admins/send-password-reset/',
+    { user_id: userId }
   )
-  return data
+  return data.data
 }
 
 /**

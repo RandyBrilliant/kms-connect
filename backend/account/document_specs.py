@@ -8,7 +8,8 @@ Fase INITIAL (diunggah saat pendaftaran):
   4. Kartu BPJS Kesehatan
   5. Paspor
   6. Photo TKI
-  7. Sertifikat Keterampilan (opsional)
+  7. Daftar Riwayat Hidup / CV (opsional, PDF)
+  8. Sertifikat Keterampilan (opsional)
 
 Fase POST_INTERVIEW (diunggah setelah lulus interview):
   1. Surat Izin Keluarga (Form Biru)
@@ -41,6 +42,7 @@ DOCUMENT_SPECS = {
     "kartu-bpjs":             {"format": "image", "extensions": IMAGE_EXTENSIONS, "max_bytes": MAX_IMAGE_BYTES},
     "paspor":                 {"format": "image", "extensions": IMAGE_EXTENSIONS, "max_bytes": MAX_IMAGE_BYTES},
     "pas-foto":              {"format": "image", "extensions": IMAGE_EXTENSIONS, "max_bytes": MAX_IMAGE_BYTES},
+    "cv":                    {"format": "pdf",   "extensions": PDF_EXTENSIONS,   "max_bytes": MAX_PDF_BYTES},
     "sertifikat-keterampilan":{"format": "pdf",   "extensions": PDF_EXTENSIONS,   "max_bytes": MAX_PDF_BYTES},
     # ── POST_INTERVIEW ───────────────────────────────────────────────────────
     "ijin-keluarga":                  {"format": "pdf", "extensions": PDF_EXTENSIONS, "max_bytes": MAX_PDF_BYTES},

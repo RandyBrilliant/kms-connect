@@ -46,10 +46,7 @@ class AuthRepository {
     try {
       final response = await _apiClient.dio.post(
         ApiEndpoints.login,
-        data: {
-          'email': email.trim().toLowerCase(),
-          'password': password,
-        },
+        data: {'email': email.trim().toLowerCase(), 'password': password},
       );
 
       final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
@@ -75,7 +72,8 @@ class AuthRepository {
           requestOptions: response.requestOptions,
           response: response,
           type: DioExceptionType.badResponse,
-          message: 'Login berhasil di server, tetapi data respons tidak valid. Coba lagi.',
+          message:
+              'Login berhasil di server, tetapi data respons tidak valid. Coba lagi.',
         );
       }
 
@@ -94,7 +92,8 @@ class AuthRepository {
           requestOptions: response.requestOptions,
           response: response,
           type: DioExceptionType.unknown,
-          message: 'Login berhasil, tetapi gagal menyimpan sesi. '
+          message:
+              'Login berhasil, tetapi gagal menyimpan sesi. '
               'Pastikan Keychain/storage tersedia dan coba lagi.',
         );
       }
@@ -117,20 +116,13 @@ class AuthRepository {
         'email': email.trim().toLowerCase(),
         'password': password,
         'referral_code': referralCode.trim().toUpperCase(),
-        'ktp': await MultipartFile.fromFile(
-          ktpFile.path,
-          filename: 'ktp.jpg',
-        ),
+        'ktp': await MultipartFile.fromFile(ktpFile.path, filename: 'ktp.jpg'),
       });
 
       final response = await _apiClient.dio.post(
         ApiEndpoints.register,
         data: formData,
-        options: Options(
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        ),
+        options: Options(headers: {'Content-Type': 'multipart/form-data'}),
       );
 
       final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
@@ -175,7 +167,8 @@ class AuthRepository {
           requestOptions: response.requestOptions,
           response: response,
           type: DioExceptionType.unknown,
-          message: 'Registrasi berhasil, tetapi gagal menyimpan sesi. Coba login.',
+          message:
+              'Registrasi berhasil, tetapi gagal menyimpan sesi. Coba login.',
         );
       }
 
@@ -200,11 +193,7 @@ class AuthRepository {
       final response = await _apiClient.dio.post(
         ApiEndpoints.ocrPreview,
         data: formData,
-        options: Options(
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        ),
+        options: Options(headers: {'Content-Type': 'multipart/form-data'}),
       );
 
       final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
@@ -267,11 +256,7 @@ class AuthRepository {
       final response = await _apiClient.dio.post(
         ApiEndpoints.register,
         data: formData,
-        options: Options(
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        ),
+        options: Options(headers: {'Content-Type': 'multipart/form-data'}),
       );
 
       final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
@@ -316,7 +301,8 @@ class AuthRepository {
           requestOptions: response.requestOptions,
           response: response,
           type: DioExceptionType.unknown,
-          message: 'Registrasi berhasil, tetapi gagal menyimpan sesi. Coba login.',
+          message:
+              'Registrasi berhasil, tetapi gagal menyimpan sesi. Coba login.',
         );
       }
 
@@ -345,8 +331,8 @@ class AuthRepository {
         ),
         if (fullName != null && fullName.trim().isNotEmpty)
           'full_name': fullName.trim(),
-        if (birthPlaceId != null) 'birth_place': birthPlaceId,
-        if (birthDateIso != null) 'birth_date': birthDateIso,
+        'birth_place': ?birthPlaceId,
+        'birth_date': ?birthDateIso,
       });
 
       final response = await _apiClient.dio.post(
@@ -425,7 +411,10 @@ class AuthRepository {
       }
 
       final authResponse = AuthResponse.fromJson(apiResponse.data!);
-      await _apiClient.setTokens(authResponse.accessToken, authResponse.refreshToken);
+      await _apiClient.setTokens(
+        authResponse.accessToken,
+        authResponse.refreshToken,
+      );
       return authResponse;
     } on DioException catch (e) {
       throw _handleError(e);
@@ -433,7 +422,10 @@ class AuthRepository {
   }
 
   /// Sign in with Apple (send identity token to backend)
-  Future<AuthResponse> appleSignIn(String identityToken, {String? fullName}) async {
+  Future<AuthResponse> appleSignIn(
+    String identityToken, {
+    String? fullName,
+  }) async {
     try {
       final response = await _apiClient.dio.post(
         ApiEndpoints.appleSignIn,
@@ -458,7 +450,10 @@ class AuthRepository {
       }
 
       final authResponse = AuthResponse.fromJson(apiResponse.data!);
-      await _apiClient.setTokens(authResponse.accessToken, authResponse.refreshToken);
+      await _apiClient.setTokens(
+        authResponse.accessToken,
+        authResponse.refreshToken,
+      );
       return authResponse;
     } on DioException catch (e) {
       throw _handleError(e);

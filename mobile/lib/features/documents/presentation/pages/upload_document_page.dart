@@ -16,6 +16,7 @@ import '../../../../core/widgets/professional/professional_card.dart';
 import '../../../../core/widgets/professional/professional_gradient_background.dart';
 import '../../../documents/data/providers/document_provider.dart';
 import '../../../documents/domain/models/document_type.dart';
+import '../../utils/open_cv_template_pdf.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Page
@@ -31,6 +32,7 @@ class UploadDocumentPage extends ConsumerStatefulWidget {
 
 // PDF document type codes — must match backend document_specs.py
 const _pdfDocCodes = {
+  'cv',
   'sertifikat-keterampilan',
   'ijin-keluarga',
   'surat-keterangan-pemberi-ijin',
@@ -342,6 +344,13 @@ class _UploadDocumentPageState extends ConsumerState<UploadDocumentPage> {
                                 const SizedBox(height: 12),
                               ],
 
+                              if (_selectedType?.code == 'cv') ...[
+                                _CvTemplateBanner(
+                                  onOpen: () => openCvTemplatePdf(context),
+                                ),
+                                const SizedBox(height: 12),
+                              ],
+
                               // File picker area — InkWell for reliable taps; gallery opens on main tap
                               LayoutBuilder(
                                 builder: (context, constraints) {
@@ -619,6 +628,91 @@ class _UploadDocumentPageState extends ConsumerState<UploadDocumentPage> {
                       ),
                     ),
                   ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CV template (bundled asset, type code `cv`)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _CvTemplateBanner extends StatelessWidget {
+  const _CvTemplateBanner({required this.onOpen});
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+
+    return Material(
+      color: const Color(0xFFEFF6FF),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onOpen,
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDBEAFE),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.picture_as_pdf_rounded,
+                  color: Color(0xFF1D4ED8),
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Contoh format CV',
+                      style: tt.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF1E3A8A),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Buka template resmi untuk diisi, lalu unggah sebagai PDF di bawah.',
+                      style: tt.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                        height: 1.35,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Text(
+                          'Lihat template',
+                          style: tt.labelLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF2563EB),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Icon(
+                          Icons.open_in_new_rounded,
+                          size: 16,
+                          color: const Color(0xFF2563EB),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ],

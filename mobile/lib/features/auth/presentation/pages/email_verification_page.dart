@@ -100,9 +100,12 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
     super.dispose();
   }
 
-  void _handleBack() {
-    // Clear any pending state and navigate back
-    context.go('/register');
+  Future<void> _handleBack() async {
+    // User is authenticated-but-unverified on this page. If we navigate to
+    // /login without clearing auth, router redirect will push back here.
+    await ref.read(authStateProvider.notifier).logout();
+    if (!mounted) return;
+    context.go('/login');
   }
 
   void _startCountdown() {
@@ -402,12 +405,18 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      resizeToAvoidBottomInset: true,
-      body: ProfessionalGradientBackground(
-        child: SafeArea(
-          child: Column(
-            children: [
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        unawaited(_handleBack());
+      },
+      child: Scaffold(
+        resizeToAvoidBottomInset: true,
+        body: ProfessionalGradientBackground(
+          child: SafeArea(
+            child: Column(
+              children: [
               const SizedBox(height: 16),
               
               // Header
@@ -416,7 +425,7 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
                 child: Row(
                   children: [
                     GestureDetector(
-                      onTap: _handleBack,
+                      onTap: () => unawaited(_handleBack()),
                       child: Container(
                         width: 44,
                         height: 44,
@@ -475,7 +484,8 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
                   ),
                 ),
               ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

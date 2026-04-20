@@ -24,6 +24,8 @@ from django.db import transaction
 from django.db.models import Count, F, Q
 from django.db.models.functions import TruncDate
 from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
 
 from .models import (
     CustomUser,
@@ -838,6 +840,7 @@ def _admin_email_logo_url(request):
         return ""
 
 
+@method_decorator(csrf_exempt, name="dispatch")
 class SendVerificationEmailView(APIView):
     """
     Admin only. POST { "user_id": <id> } → kirim kode verifikasi email ke user.
@@ -884,6 +887,7 @@ class SendVerificationEmailView(APIView):
         )
 
 
+@method_decorator(csrf_exempt, name="dispatch")
 class SendPasswordResetEmailView(APIView):
     """
     Admin only. POST { "user_id": <id> } → kirim email reset password ke user.
