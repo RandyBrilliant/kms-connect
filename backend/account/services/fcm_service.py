@@ -5,19 +5,54 @@ Handles sending push notifications to web and mobile clients via FCM.
 from __future__ import annotations
 
 import logging
-from typing import List, Dict, Any
+from typing import Dict, List, Optional, Tuple
 
 import firebase_admin
 from firebase_admin import credentials, messaging
+from firebase_admin.exceptions import InvalidArgumentError
+from firebase_admin.messaging import UnregisteredError
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
+
+_STALE_TOKEN_EXCEPTIONS = (
+    UnregisteredError,
+    InvalidArgumentError,
+)
 
 # Initialize Firebase Admin SDK (do this once)
 _firebase_initialized = False
 
 
-def _webpush_fcm_options():
+def initialize_firebase() -> None:
+    """Initialize Firebase Admin SDK exactly once per process."""
+    global _firebase_initialized
+    if _firebase_initialized:
+        return
+
+    try:
+        firebase_admin.get_app()
+        _firebase_initialized = True
+        logger.info("Firebase Admin SDK already initialized")
+        return
+    except ValueError:
+        pass
+
+    try:
+        cred_path: Optional[str] = getattr(settings, "FIREBASE_CREDENTIALS_PATH", None)
+        if not cred_path:
+            logger.warning("FIREBASE_CREDENTIALS_PATH not set in settings")
+            return
+
+        cred = credentials.Certificate(cred_path)
+        firebase_admin.initialize_app(cred)
+        _firebase_initialized = True
+        logger.info("Firebase Admin SDK initialized successfully")
+    except Exception:
+        logger.exception("Failed to initialize Firebase")
+
+
+def _webpush_fcm_options() -> Optional[messaging.WebpushFCMOptions]:
     """
     FCM requires WebpushFCMOptions.link to be a full HTTPS URL (not a path like '/').
 
@@ -46,117 +81,127 @@ def _build_webpush_config(title: str, body: str) -> messaging.WebpushConfig:
     return messaging.WebpushConfig(notification=notification)
 
 
-def initialize_firebase():
-    """Initialize Firebase Admin SDK."""
-    global _firebase_initialized
-    if _firebase_initialized:
-        return
-    
-    try:
-        # Check if already initialized
-        firebase_admin.get_app()
-        _firebase_initialized = True
-        logger.info("Firebase Admin SDK already initialized")
-        return
-    except ValueError:
-        # Not initialized yet, proceed with initialization
-        pass
-    
-    try:
-        # Path to your Firebase service account JSON
-        cred_path = getattr(settings, 'FIREBASE_CREDENTIALS_PATH', None)
-        if not cred_path:
-            logger.warning("FIREBASE_CREDENTIALS_PATH not set in settings")
-            return
-        
-        cred = credentials.Certificate(cred_path)
-        firebase_admin.initialize_app(cred)
-        _firebase_initialized = True
-        logger.info("Firebase Admin SDK initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize Firebase: {e}")
+def _build_android_config(priority: str) -> messaging.AndroidConfig:
+    """
+    Build AndroidConfig using separate transport and notification priorities.
+    """
+    fcm_priority = "high" if priority == "high" else "normal"
+    notif_priority = "high" if priority == "high" else "default"
+    return messaging.AndroidConfig(
+        priority=fcm_priority,
+        notification=messaging.AndroidNotification(
+            channel_id="kms_connect_channel",
+            priority=notif_priority,
+        ),
+    )
+
+
+def _build_apns_config(title: str, body: str, priority: str) -> messaging.APNSConfig:
+    """
+    Build APNSConfig for a visible iOS push banner.
+    """
+    return messaging.APNSConfig(
+        headers={
+            # For visible alerts, APNs expects priority 10.
+            "apns-priority": "10",
+            # Explicit push type avoids APNs misclassification on iOS 13+.
+            "apns-push-type": "alert",
+        },
+        payload=messaging.APNSPayload(
+            aps=messaging.Aps(
+                # Explicit aps.alert is required for a visible iOS notification when
+                # customizing aps. Do not set content_available here: it can cause APNs
+                # to treat the push as background-only, so the banner may not show.
+                alert=messaging.ApsAlert(
+                    title=title,
+                    body=body,
+                ),
+                sound="default",
+                badge=1,
+                # Safe if NSE is absent; enables richer payload handling if present.
+                mutable_content=True,
+            ),
+        ),
+    )
+
+
+def _deactivate_stale_tokens(
+    tokens: List[str],
+    responses: List[messaging.SendResponse],
+) -> None:
+    """
+    Deactivate tokens that are permanently invalid and should not be retried.
+    """
+    from account.models import DeviceToken
+
+    stale_tokens: List[str] = []
+    for token, resp in zip(tokens, responses):
+        if resp.success:
+            continue
+        exc = resp.exception
+        if isinstance(exc, _STALE_TOKEN_EXCEPTIONS):
+            stale_tokens.append(token)
+            logger.info("Deactivating stale FCM token %s... (%s)", token[:20], type(exc).__name__)
+        else:
+            logger.warning("Transient FCM send failure for %s...: %s", token[:20], exc)
+
+    if stale_tokens:
+        updated = DeviceToken.objects.filter(token__in=stale_tokens).update(is_active=False)
+        logger.info("Deactivated %d stale FCM token(s)", updated)
 
 
 def send_fcm_notification(
     tokens: List[str],
     title: str,
     body: str,
-    data: Dict[str, str] | None = None,
+    data: Optional[Dict[str, str]] = None,
     notification_type: str = "INFO",
     priority: str = "high",
-) -> tuple[int, int]:
+) -> Tuple[int, int]:
     """
     Send push notification to multiple FCM tokens.
-    
-    Args:
-        tokens: List of FCM device tokens
-        title: Notification title
-        body: Notification body/message
-        data: Additional data payload (optional)
-        notification_type: Type of notification (INFO, SUCCESS, WARNING, ERROR)
-        priority: high or normal
-    
-    Returns:
-        Tuple of (success_count, failure_count)
     """
     initialize_firebase()
-    
+    if not _firebase_initialized:
+        logger.error("Firebase not initialized - skipping FCM send")
+        return 0, len(tokens)
+
     if not tokens:
         return 0, 0
-    
-    # Prepare data payload
-    data_payload = data or {}
-    data_payload.update({
+
+    data_payload: Dict[str, str] = {
         "notification_type": notification_type,
         "priority": priority,
         "click_action": "FLUTTER_NOTIFICATION_CLICK",
-    })
-    
-    # Create FCM message
+        **{str(k): str(v) for k, v in (data or {}).items()},
+    }
+
     message = messaging.MulticastMessage(
         notification=messaging.Notification(
             title=title,
             body=body,
         ),
         data=data_payload,
-        android=messaging.AndroidConfig(
-            priority=priority,
-            notification=messaging.AndroidNotification(
-                channel_id="kms_connect_channel",
-                priority="high" if priority == "high" else "default",
-            ),
-        ),
-        apns=messaging.APNSConfig(
-            headers={
-                "apns-priority": "10",
-            },
-            payload=messaging.APNSPayload(
-                aps=messaging.Aps(
-                    sound="default",
-                    badge=1,
-                    content_available=True,
-                ),
-            ),
-        ),
+        android=_build_android_config(priority),
+        apns=_build_apns_config(title, body, priority),
         webpush=_build_webpush_config(title, body),
         tokens=tokens,
     )
-    
+
     try:
         response = messaging.send_each_for_multicast(message)
         logger.info(
-            f"FCM sent: {response.success_count} success, {response.failure_count} failures"
+            "FCM sent: %d success, %d failures",
+            response.success_count,
+            response.failure_count,
         )
-        
+
         if response.failure_count > 0:
-            for idx, resp in enumerate(response.responses):
-                if not resp.success:
-                    logger.warning(f"Failed to send to token {tokens[idx][:20]}...: {resp.exception}")
-        
+            _deactivate_stale_tokens(tokens, response.responses)
+
         return response.success_count, response.failure_count
-    
-    except Exception as e:
-        logger.error(f"Failed to send FCM: {e}")
+    except Exception:
+        logger.exception("Failed to send FCM")
         return 0, len(tokens)
 
 
@@ -164,37 +209,25 @@ def send_fcm_to_user(
     user,
     title: str,
     body: str,
-    data: Dict[str, str] | None = None,
+    data: Optional[Dict[str, str]] = None,
     notification_type: str = "INFO",
     priority: str = "normal",
 ) -> bool:
     """
     Send push notification to a single user (all their active devices).
-    
-    Args:
-        user: CustomUser instance
-        title: Notification title
-        body: Notification body
-        data: Additional data payload
-        notification_type: Type of notification
-        priority: high or normal
-    
-    Returns:
-        True if sent to at least one device
     """
     from account.models import DeviceToken
-    
-    # Get active tokens for user
-    tokens = list(
+
+    tokens: List[str] = list(
         DeviceToken.objects.filter(user=user, is_active=True)
-        .values_list('token', flat=True)
+        .values_list("token", flat=True)
     )
-    
+
     if not tokens:
-        logger.info(f"No FCM tokens for user {user.email}")
+        logger.info("No FCM tokens for user %s", getattr(user, "email", user))
         return False
-    
-    success_count, failure_count = send_fcm_notification(
+
+    success_count, _ = send_fcm_notification(
         tokens=tokens,
         title=title,
         body=body,
@@ -202,9 +235,4 @@ def send_fcm_to_user(
         notification_type=notification_type,
         priority=priority,
     )
-    
-    # Deactivate failed tokens (optional - only for specific errors)
-    # You might want to check the error codes and only deactivate on specific errors
-    # like INVALID_TOKEN, UNREGISTERED, etc.
-    
     return success_count > 0
