@@ -236,3 +236,107 @@ def send_fcm_to_user(
         priority=priority,
     )
     return success_count > 0
+
+
+def _build_apns_silent_config() -> messaging.APNSConfig:
+    """
+    Build APNSConfig for an iOS silent/background push.
+    """
+    return messaging.APNSConfig(
+        headers={
+            "apns-priority": "5",
+            "apns-push-type": "background",
+        },
+        payload=messaging.APNSPayload(
+            aps=messaging.Aps(
+                # Background wake-up (no alert/sound/badge).
+                content_available=True,
+            ),
+        ),
+    )
+
+
+def _build_android_silent_config() -> messaging.AndroidConfig:
+    """
+    Build AndroidConfig for data-only silent push.
+    """
+    return messaging.AndroidConfig(
+        # High priority helps prompt delivery for background sync.
+        priority="high",
+    )
+
+
+def send_silent_fcm(
+    tokens: List[str],
+    data: Optional[Dict[str, str]] = None,
+    sync_type: str = "DATA_SYNC",
+) -> Tuple[int, int]:
+    """
+    Send a silent background push to one or more FCM tokens.
+    """
+    initialize_firebase()
+    if not _firebase_initialized:
+        logger.error("Firebase not initialized - skipping silent FCM send")
+        return 0, len(tokens)
+
+    if not tokens:
+        return 0, 0
+
+    merged_data: Dict[str, str] = {
+        "sync_type": sync_type,
+        **{str(k): str(v) for k, v in (data or {}).items()},
+    }
+
+    message = messaging.MulticastMessage(
+        # No top-level notification keeps this data-only.
+        data=merged_data,
+        android=_build_android_silent_config(),
+        apns=_build_apns_silent_config(),
+        tokens=tokens,
+    )
+
+    try:
+        response = messaging.send_each_for_multicast(message)
+        logger.info(
+            "Silent FCM sent: %d success, %d failures",
+            response.success_count,
+            response.failure_count,
+        )
+
+        if response.failure_count > 0:
+            _deactivate_stale_tokens(tokens, response.responses)
+
+        return response.success_count, response.failure_count
+    except Exception:
+        logger.exception("Failed to send silent FCM")
+        return 0, len(tokens)
+
+
+def send_silent_fcm_to_user(
+    user,
+    data: Optional[Dict[str, str]] = None,
+    sync_type: str = "DATA_SYNC",
+) -> bool:
+    """
+    Send silent background push to all active devices of a user.
+    """
+    from account.models import DeviceToken
+
+    tokens: List[str] = list(
+        DeviceToken.objects.filter(user=user, is_active=True)
+        .values_list("token", flat=True)
+    )
+
+    if not tokens:
+        logger.info(
+            "No active FCM tokens for user %s (silent push skipped)",
+            getattr(user, "email", user),
+        )
+        return False
+
+    success_count, _ = send_silent_fcm(
+        tokens=tokens,
+        data=data,
+        sync_type=sync_type,
+    )
+    return success_count > 0
