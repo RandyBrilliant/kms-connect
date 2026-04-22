@@ -45,7 +45,7 @@ export const BIODATA_SECTIONS = {
   },
   referrer: {
     title: "Informasi Rujukan",
-    description: "Staff/Admin yang merujuk pelamar (opsional).",
+    description: "Staff yang merujuk pelamar (opsional).",
   },
   notes: {
     title: "Catatan",

@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/api/api_client.dart';
 import '../../../../core/api/endpoints.dart';
 
-/// A staff/admin user that can be chosen as a referrer during registration.
+/// A staff user that can be chosen as a referrer during registration.
 class StaffReferrer {
   final int id;
   final String fullName;
@@ -25,7 +25,7 @@ class StaffReferrer {
   String toString() => fullName;
 }
 
-/// Loads active staff/admin referrers from the public backend endpoint.
+/// Loads active staff referrers from the public backend endpoint.
 /// Cached by Riverpod for the lifetime of the provider — a single network
 /// fetch per app session even if the picker is opened multiple times.
 final staffReferrersProvider = FutureProvider<List<StaffReferrer>>((ref) async {

@@ -343,7 +343,7 @@ def _staff_rujukan_display_name(*, full_name: str, email: str) -> str:
 
 
 class ReferrerListSerializer(serializers.ModelSerializer):
-    """Minimal serializer for referrer dropdown (Staff + Admin users)."""
+    """Minimal serializer for referrer dropdown (Staff users only)."""
 
     class Meta:
         model = CustomUser
@@ -437,7 +437,6 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
             "heir_relationship_display",
             "heir_contact_phone",
             "data_declaration_confirmed",
-            "zero_cost_understood",
             "nik",
             "gender",
             "religion",
@@ -518,11 +517,13 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Lazy queryset for referrer/verified_by (Admin/Staff only)
+        # Lazy queryset for referrer (staff-only) and verified_by (Admin/Staff)
         backoffice_qs = CustomUser.objects.filter(
             role__in=[UserRole.STAFF, UserRole.MASTER_ADMIN, UserRole.ADMIN]
         )
-        self.fields["referrer"].queryset = backoffice_qs
+        self.fields["referrer"].queryset = CustomUser.objects.filter(
+            role=UserRole.STAFF
+        )
         self.fields["verified_by"].queryset = backoffice_qs
         if self.context.get("is_own_profile"):
             for f in (
@@ -666,7 +667,7 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
             try:
                 referrer_user = CustomUser.objects.get(
                     referral_code=code,
-                    role__in=[UserRole.STAFF, UserRole.MASTER_ADMIN, UserRole.ADMIN],
+                    role=UserRole.STAFF,
                     is_active=True,
                 )
                 validated_data["referrer"] = referrer_user

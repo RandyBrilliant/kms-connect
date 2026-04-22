@@ -1,5 +1,5 @@
 /**
- * TanStack Query hook for referrers list (Staff + Admin for pemberi rujukan dropdown).
+ * TanStack Query hook for referrers list (Staff only for pemberi rujukan dropdown).
  */
 
 import { useQuery } from "@tanstack/react-query"

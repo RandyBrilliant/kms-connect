@@ -74,7 +74,7 @@ export interface ScoreBreakdown {
   missing_required_document_codes: string[]
 }
 
-/** Staff/admin pemberi rujukan (embedded in profile JSON). */
+/** Staff pemberi rujukan (embedded in profile JSON). */
 export interface ApplicantReferrerDisplay {
   id: number
   /** Nama di DB (boleh kosong). */
@@ -89,7 +89,7 @@ export interface ApplicantProfile {
   id: number
   register_number: string | null
   referrer: number | null
-  /** Resolved staff/admin rujukan for display (read-only from API). */
+  /** Resolved staff rujukan for display (read-only from API). */
   referrer_display?: ApplicantReferrerDisplay | null
   registration_date: string | null
   destination_country: DestinationCountry
@@ -134,7 +134,6 @@ export interface ApplicantProfile {
   heir_relationship_display?: string
   heir_contact_phone: string
   data_declaration_confirmed: boolean
-  zero_cost_understood: boolean
   nik: string
   gender: Gender
   religion: Religion
@@ -300,7 +299,7 @@ export interface ApplicantsListParams {
   is_active?: boolean
   email_verified?: boolean
   verification_status?: ApplicantVerificationStatus
-  /** Filter by staff/admin referrer user id (GET ?referrer=) */
+  /** Filter by staff referrer user id (GET ?referrer=) */
   referrer?: number
   created_at_after?: string // Date string (YYYY-MM-DD) for filtering applicants who joined on or after this date
   created_at_before?: string // Date string (YYYY-MM-DD) for filtering applicants who joined on or before this date

@@ -587,7 +587,7 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
             placeholder="Semua rujukan"
             clearLabel="Semua rujukan"
             loading={referrersLoading}
-            emptyMessage="Tidak ada Staff/Admin"
+            emptyMessage="Tidak ada staff"
           />
           <Select
             value={

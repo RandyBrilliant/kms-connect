@@ -788,7 +788,7 @@ export function ApplicantBiodataTab({
             <form.Field name="referrer">
               {(field) => (
                 <Field>
-                  <FieldLabel htmlFor={field.name}>Pemberi Rujukan (Staff/Admin)</FieldLabel>
+                  <FieldLabel htmlFor={field.name}>Pemberi Rujukan (Staff)</FieldLabel>
                   <SearchableSelect
                     items={referrers.map((r) => ({
                       id: r.id,
@@ -799,10 +799,10 @@ export function ApplicantBiodataTab({
                     value={field.state.value}
                     onChange={(id) => field.handleChange(id)}
                     placeholder="Pilih atau cari nama / email / kode rujukan"
-                    clearLabel="Tidak ada rujukan (Admin)"
+                    clearLabel="Tidak ada rujukan"
                     disabled={isSubmitting}
                     loading={referrersLoading}
-                    emptyMessage="Tidak ada Staff/Admin"
+                    emptyMessage="Tidak ada staff"
                   />
                 </Field>
               )}

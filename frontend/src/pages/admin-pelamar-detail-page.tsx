@@ -224,7 +224,6 @@ function ApplicantSidebar({
     religion: "Agama",
     education_major: "Jurusan Pendidikan",
     data_declaration_confirmed: "Pernyataan Data Benar",
-    zero_cost_understood: "Paham Zero Cost",
     // Ciri fisik
     height_cm: "Tinggi Badan (cm)",
     weight_kg: "Berat Badan (kg)",

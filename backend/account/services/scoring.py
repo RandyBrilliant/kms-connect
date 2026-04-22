@@ -56,7 +56,6 @@ PROFILE_COMPLETENESS_FIELDS: tuple[str, ...] = (
     "religion",
     "education_major",
     "data_declaration_confirmed",
-    "zero_cost_understood",
     # --- Ciri fisik ---
     "height_cm",
     "weight_kg",

@@ -440,11 +440,9 @@ class ApplicantProfile(models.Model):
         null=True,
         blank=True,
         related_name="referred_applicants",
-        limit_choices_to={
-            "role__in": [UserRole.STAFF, UserRole.MASTER_ADMIN, UserRole.ADMIN]
-        },
+        limit_choices_to={"role": UserRole.STAFF},
         verbose_name=_("perujuk"),
-        help_text=_("Staf atau Admin yang merujuk pelamar ini. Jika kosong, dianggap Admin."),
+        help_text=_("Staf yang merujuk pelamar ini."),
     )
     registration_date = models.DateField(
         _("tanggal pendaftaran"),
@@ -458,7 +456,7 @@ class ApplicantProfile(models.Model):
         choices=DestinationCountry.choices,
         default=DestinationCountry.MALAYSIA,
         blank=True,
-        help_text=_("Negara tujuan penempatan (form: RBA zero cost)."),
+        help_text=_("Negara tujuan penempatan."),
     )
     # ---- I. Data CPMI ----
     birth_place = models.ForeignKey(
@@ -659,11 +657,6 @@ class ApplicantProfile(models.Model):
         _("pernyataan data benar"),
         default=False,
         help_text=_("Apakah data yang diisi benar dan dapat dipertanggungjawabkan (YA/TIDAK)."),
-    )
-    zero_cost_understood = models.BooleanField(
-        _("paham zero cost"),
-        default=False,
-        help_text=_("Paham bahwa proses penempatan 0 (nol) biaya ditanggung perusahaan."),
     )
     # ---- Identity & profile (data lainnya - form) ----
     nik = models.CharField(
@@ -1057,13 +1050,9 @@ class ApplicantProfile(models.Model):
             raise ValidationError(
                 {"referrer": _("Pelamar tidak dapat menjadi perujuk diri sendiri.")}
             )
-        if self.referrer_id and self.referrer.role not in (
-            UserRole.STAFF,
-            UserRole.MASTER_ADMIN,
-            UserRole.ADMIN,
-        ):
+        if self.referrer_id and self.referrer.role != UserRole.STAFF:
             raise ValidationError(
-                {"referrer": _("Perujuk harus pengguna Staf atau Admin.")}
+                {"referrer": _("Perujuk harus pengguna Staf.")}
             )
         
         # Verification validation
@@ -1106,10 +1095,10 @@ class ApplicantProfile(models.Model):
                 )
 
     def get_referrer_display(self) -> str:
-        """Return referrer email, or 'Admin' when no referrer is set."""
+        """Return referrer email, or '-' when no referrer is set."""
         if self.referrer_id:
             return self.referrer.email
-        return _("Admin")
+        return "-"
 
     get_referrer_display.short_description = _("Perujuk")
 

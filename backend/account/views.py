@@ -927,12 +927,12 @@ class SendPasswordResetEmailView(APIView):
 
 
 # ---------------------------------------------------------------------------
-# Referrers (Staff + Admin for dropdown pemberi rujukan)
+# Referrers (Staff only for dropdown pemberi rujukan)
 # ---------------------------------------------------------------------------
 
 class ReferrerListView(APIView):
     """
-    List Staff and Admin users for referrer dropdown.
+    List Staff users for referrer dropdown.
     GET /api/referrers/ → [{ id, full_name, email, referral_code }, ...]
     """
 
@@ -941,7 +941,7 @@ class ReferrerListView(APIView):
     def get(self, request):
         qs = (
             CustomUser.objects.filter(
-                role__in=[UserRole.STAFF, UserRole.MASTER_ADMIN, UserRole.ADMIN]
+                role=UserRole.STAFF
             )
             .order_by("full_name", "email")
         )
@@ -951,7 +951,7 @@ class ReferrerListView(APIView):
 
 class PublicStaffReferrersView(APIView):
     """
-    Public list of active staff/admin users for the referral staff picker
+    Public list of active staff users for the referral staff picker
     shown during applicant registration (no auth required).
 
     GET /api/staff-referrers/
@@ -963,7 +963,7 @@ class PublicStaffReferrersView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []  # skip auth entirely for speed
 
-    _CACHE_KEY = "public_staff_referrers_v1"
+    _CACHE_KEY = "public_staff_referrers_v2"
     _CACHE_TTL = 300  # 5 minutes
 
     def get_authenticators(self):
@@ -974,7 +974,7 @@ class PublicStaffReferrersView(APIView):
         if data is None:
             data = list(
                 CustomUser.objects.filter(
-                    role__in=[UserRole.STAFF, UserRole.MASTER_ADMIN, UserRole.ADMIN],
+                    role=UserRole.STAFF,
                     is_active=True,
                     referral_code__isnull=False,
                 )

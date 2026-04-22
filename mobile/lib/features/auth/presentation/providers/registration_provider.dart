@@ -26,8 +26,6 @@ class RegistrationState {
   /// Pernyataan data benar (form pernyataan CPMI).
   final bool dataDeclarationConfirmed;
 
-  /// Paham zero cost (form RBA zero cost).
-  final bool zeroCostUnderstood;
 
   RegistrationState({
     this.currentStep = 0,
@@ -42,7 +40,6 @@ class RegistrationState {
     this.birthPlaceId,
     this.birthDateIso,
     this.dataDeclarationConfirmed = false,
-    this.zeroCostUnderstood = false,
   });
 
   RegistrationState copyWith({
@@ -58,7 +55,6 @@ class RegistrationState {
     int? birthPlaceId,
     String? birthDateIso,
     bool? dataDeclarationConfirmed,
-    bool? zeroCostUnderstood,
   }) {
     return RegistrationState(
       currentStep: currentStep ?? this.currentStep,
@@ -74,8 +70,6 @@ class RegistrationState {
       birthDateIso: birthDateIso ?? this.birthDateIso,
       dataDeclarationConfirmed:
           dataDeclarationConfirmed ?? this.dataDeclarationConfirmed,
-      zeroCostUnderstood:
-          zeroCostUnderstood ?? this.zeroCostUnderstood,
     );
   }
 }
@@ -126,11 +120,9 @@ class RegistrationNotifier extends StateNotifier<RegistrationState> {
 
   void setDeclarations({
     required bool dataDeclarationConfirmed,
-    required bool zeroCostUnderstood,
   }) {
     state = state.copyWith(
       dataDeclarationConfirmed: dataDeclarationConfirmed,
-      zeroCostUnderstood: zeroCostUnderstood,
     );
   }
 
@@ -188,7 +180,6 @@ class RegistrationNotifier extends StateNotifier<RegistrationState> {
         birthPlaceId: state.birthPlaceId,
         birthDateIso: state.birthDateIso,
         dataDeclarationConfirmed: state.dataDeclarationConfirmed,
-        zeroCostUnderstood: state.zeroCostUnderstood,
       );
       state = state.copyWith(isProcessing: false);
       return authResponse;

@@ -117,11 +117,11 @@ class ApplicantRegistrationView(APIView):
         # Validasi referral code (OPTIONAL - can be filled in via edit profile)
         referrer_user = None
         if referral_code:
-            # Verifikasi referral code exists and belongs to staff/admin
+            # Verifikasi referral code exists and belongs to staff
             try:
                 referrer_user = CustomUser.objects.get(
                     referral_code=referral_code,
-                    role__in=[UserRole.STAFF, UserRole.MASTER_ADMIN, UserRole.ADMIN],
+                    role=UserRole.STAFF,
                     is_active=True,
                 )
             except CustomUser.DoesNotExist:
@@ -554,7 +554,7 @@ class GoogleCompleteRegistrationView(APIView):
             try:
                 referrer_user = CustomUser.objects.get(
                     referral_code=referral_code,
-                    role__in=[UserRole.STAFF, UserRole.MASTER_ADMIN, UserRole.ADMIN],
+                    role=UserRole.STAFF,
                     is_active=True,
                 )
             except CustomUser.DoesNotExist:

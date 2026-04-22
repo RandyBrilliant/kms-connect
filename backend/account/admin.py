@@ -161,8 +161,8 @@ class ApplicantProfileAdmin(admin.ModelAdmin):
         (
             _("Pernyataan CPMI"),
             {
-                "fields": ("data_declaration_confirmed", "zero_cost_understood"),
-                "description": _("Data benar? Paham zero cost?"),
+                "fields": ("data_declaration_confirmed",),
+                "description": _("Data benar?"),
             },
         ),
         (

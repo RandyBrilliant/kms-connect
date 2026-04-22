@@ -14,7 +14,6 @@ import '../../../../core/widgets/custom_toast.dart';
 import '../../../../core/widgets/professional_text_field.dart';
 import '../../../../core/widgets/professional_phone_field.dart';
 import '../../../../core/widgets/professional_dropdown_field.dart';
-import '../../../auth/data/providers/auth_provider.dart';
 import '../../../auth/data/providers/regions_provider.dart';
 import '../../../auth/data/providers/staff_referrers_provider.dart';
 import '../../data/providers/profile_provider.dart';
@@ -451,9 +450,6 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
 
   Future<void> _handleSave() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
-    final canEditReferrer =
-        ref.read(authStateProvider).user?.canEditApplicantStaffReferrer ??
-            false;
     final data = <String, dynamic>{
       if (_fullName.text.trim().isNotEmpty) 'full_name': _fullName.text.trim(),
       if (_nik.text.trim().isNotEmpty) 'nik': _nik.text.trim(),
@@ -535,8 +531,6 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
         'father_phone': ProfessionalPhoneField.toIndonesiaE164(_fatherPhone.text),
       if (_motherPhone.text.trim().isNotEmpty)
         'mother_phone': ProfessionalPhoneField.toIndonesiaE164(_motherPhone.text),
-      if (canEditReferrer && _selectedStaff != null)
-        'referral_code_input': _selectedStaff!.referralCode,
       if (_spouseName.text.trim().isNotEmpty)
         'spouse_name': _spouseName.text.trim(),
       if (_pickedSpouseBirthDate != null)
@@ -613,9 +607,6 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
 
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final canEditReferrer =
-        ref.watch(authStateProvider).user?.canEditApplicantStaffReferrer ??
-            false;
 
     final bool isAccepted =
         profile?.verificationStatus.toUpperCase() == 'ACCEPTED';
@@ -1744,33 +1735,13 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                               _SectionCard(
                                 icon: Icons.person_pin_outlined,
                                 label: 'Staff Rujukan',
-                                subtitle: canEditReferrer
-                                    ? 'Petugas yang merujuk Anda'
-                                    : 'Diisi oleh petugas atau admin. Hubungi kantor jika perlu diubah.',
+                                subtitle:
+                                    'Informasi petugas rujukan Anda (hanya dapat diubah oleh petugas/admin).',
                                 children: [
-                                  _StaffReferrerPickerField(
+                                  _StaffReferrerInfoField(
                                     selected: _selectedStaff,
-                                    enabled: canEditReferrer,
-                                    onTap: () async {
-                                      final staffAsync = ref.read(
-                                        staffReferrersProvider,
-                                      );
-                                      final picked =
-                                          await showModalBottomSheet<
-                                            StaffReferrer
-                                          >(
-                                            context: context,
-                                            isScrollControlled: true,
-                                            backgroundColor: Colors.transparent,
-                                            builder: (_) => _StaffPickerSheet(
-                                              staffAsync: staffAsync,
-                                              initialSelected: _selectedStaff,
-                                            ),
-                                          );
-                                      if (picked != null && mounted) {
-                                        setState(() => _selectedStaff = picked);
-                                      }
-                                    },
+                                    profileReferrerName: profile?.referrerName,
+                                    profileReferrerCode: profile?.referrerCode,
                                   ),
                                 ],
                               ),
@@ -2658,39 +2629,59 @@ class _HeirRelationshipSelector extends StatelessWidget {
 // Staff referrer picker widgets
 // =============================================================================
 
-class _StaffReferrerPickerField extends StatelessWidget {
-  const _StaffReferrerPickerField({
+class _StaffReferrerInfoField extends StatelessWidget {
+  const _StaffReferrerInfoField({
     required this.selected,
-    required this.onTap,
-    this.enabled = true,
+    this.profileReferrerName,
+    this.profileReferrerCode,
   });
 
   final StaffReferrer? selected;
-  final VoidCallback onTap;
-  final bool enabled;
+  final String? profileReferrerName;
+  final String? profileReferrerCode;
 
   @override
   Widget build(BuildContext context) {
-    final hasValue = selected != null;
-    final valueText = hasValue
-        ? '${selected!.fullName} • ${selected!.referralCode}'
-        : '';
-    return ProfessionalDropdownField(
-      valueText: valueText,
-      label: 'Staff Penerima Rujukan',
-      hint: enabled ? 'Pilih staff...' : '—',
-      prefixIcon: Icons.person_outline_rounded,
-      onTap: onTap,
-      enabled: enabled,
+    final name = selected?.fullName ?? profileReferrerName;
+    final code = selected?.referralCode ?? profileReferrerCode;
+    final hasName = name != null && name.trim().isNotEmpty;
+    final hasCode = code != null && code.trim().isNotEmpty;
+    final safeName = name?.trim() ?? '';
+    final safeCode = code?.trim() ?? '';
+
+    final displayValue = hasName
+        ? (hasCode ? '$safeName • $safeCode' : safeName)
+        : (hasCode ? safeCode : 'Belum ada staff rujukan');
+
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Staff Penerima Rujukan',
+          style: tt.labelLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+            color: cs.onSurface,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          displayValue,
+          style: tt.bodyMedium?.copyWith(
+            color: hasName || hasCode ? cs.onSurface : cs.onSurfaceVariant,
+          ),
+        ),
+      ],
     );
   }
 }
 
 class _StaffPickerSheet extends ConsumerStatefulWidget {
   final AsyncValue<List<StaffReferrer>> staffAsync;
-  final StaffReferrer? initialSelected;
 
-  const _StaffPickerSheet({required this.staffAsync, this.initialSelected});
+  const _StaffPickerSheet({required this.staffAsync});
 
   @override
   ConsumerState<_StaffPickerSheet> createState() => _StaffPickerSheetState();
@@ -2842,20 +2833,15 @@ class _StaffPickerSheetState extends ConsumerState<_StaffPickerSheet> {
                     itemCount: _filtered.length,
                     itemBuilder: (_, i) {
                       final staff = _filtered[i];
-                      final isSelected = widget.initialSelected?.id == staff.id;
                       return ListTile(
                         leading: CircleAvatar(
-                          backgroundColor: isSelected
-                              ? cs.primary
-                              : cs.primaryContainer,
+                          backgroundColor: cs.primaryContainer,
                           child: Text(
                             staff.fullName.isNotEmpty
                                 ? staff.fullName[0].toUpperCase()
                                 : '?',
                             style: TextStyle(
-                              color: isSelected
-                                  ? cs.onPrimary
-                                  : cs.onPrimaryContainer,
+                              color: cs.onPrimaryContainer,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -2874,12 +2860,6 @@ class _StaffPickerSheetState extends ConsumerState<_StaffPickerSheet> {
                             color: cs.onSurfaceVariant,
                           ),
                         ),
-                        trailing: isSelected
-                            ? Icon(
-                                Icons.check_circle_rounded,
-                                color: cs.primary,
-                              )
-                            : null,
                         onTap: () => Navigator.of(context).pop(staff),
                       );
                     },

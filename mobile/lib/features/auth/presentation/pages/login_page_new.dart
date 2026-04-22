@@ -403,6 +403,10 @@ class _LoginPageNewState extends ConsumerState<LoginPageNew>
   // ── Method picker view ────────────────────────────────────────────────────
 
   Widget _buildMethodPicker(bool isLoading) {
+    final hasGoogleOption = !_hideGoogleSignInTemporarily;
+    final hasAppleOption = Platform.isIOS;
+    final hasSocialOptions = hasGoogleOption || hasAppleOption;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
@@ -429,7 +433,7 @@ class _LoginPageNewState extends ConsumerState<LoginPageNew>
         const SizedBox(height: 28),
 
         // Google (temporarily hidden while verification is under review)
-        if (!_hideGoogleSignInTemporarily)
+        if (hasGoogleOption)
           _AuthMethodButton(
             onPressed: isLoading ? null : _handleGoogleSignIn,
             label: 'Lanjutkan dengan Google',
@@ -440,7 +444,7 @@ class _LoginPageNewState extends ConsumerState<LoginPageNew>
           ),
 
         // Apple (iOS only)
-        if (Platform.isIOS) ...[
+        if (hasAppleOption) ...[
           const SizedBox(height: 12),
           _AuthMethodButton(
             onPressed: isLoading ? null : _handleAppleSignIn,
@@ -451,12 +455,11 @@ class _LoginPageNewState extends ConsumerState<LoginPageNew>
           ),
         ],
 
-        const SizedBox(height: 12),
-
-        // Divider
-        _orDivider(),
-
-        const SizedBox(height: 12),
+        if (hasSocialOptions) ...[
+          const SizedBox(height: 12),
+          _orDivider(),
+          const SizedBox(height: 12),
+        ],
 
         // Email — never disabled (not an auth operation, just a UI toggle)
         _AuthMethodButton(

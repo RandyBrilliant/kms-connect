@@ -62,7 +62,6 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
   bool _isRegistering = false;
 
   bool _dataDeclarationChecked = false;
-  bool _zeroCostChecked = false;
 
   //  Lifecycle 
 
@@ -512,11 +511,10 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
   Future<void> _handleRegister() async {
     if (!_formKey.currentState!.validate()) return;
 
-    if (!_dataDeclarationChecked || !_zeroCostChecked) {
+    if (!_dataDeclarationChecked) {
       CustomToast.show(
         context,
-        message:
-            'Anda harus menyetujui pernyataan data benar dan memahami skema zero cost sebelum melanjutkan.',
+        message: 'Anda harus menyetujui pernyataan data benar sebelum melanjutkan.',
         type: ToastType.error,
       );
       return;
@@ -565,7 +563,6 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
 
     ref.read(registrationProvider.notifier).setDeclarations(
           dataDeclarationConfirmed: _dataDeclarationChecked,
-          zeroCostUnderstood: _zeroCostChecked,
         );
 
     final email = ref.read(registrationProvider).email;
@@ -800,30 +797,6 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
                             ),
                           ],
                         ),
-                        style: tt.bodySmall?.copyWith(
-                          color: cs.onSurface,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Checkbox(
-                      value: _zeroCostChecked,
-                      onChanged: (v) {
-                        setState(() {
-                          _zeroCostChecked = v ?? false;
-                        });
-                      },
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        'Saya telah membaca dan memahami bahwa proses penempatan kerja menggunakan skema zero cost, '
-                        'di mana seluruh biaya proses resmi ditanggung oleh perusahaan sesuai ketentuan yang berlaku.',
                         style: tt.bodySmall?.copyWith(
                           color: cs.onSurface,
                         ),

@@ -15,6 +15,7 @@ import '../../../../core/widgets/custom_toast.dart';
 import '../../../../core/widgets/professional/professional_gradient_background.dart';
 import '../../../../core/widgets/professional/professional_card.dart';
 import '../../../../core/widgets/professional/professional_button.dart';
+import '../../../../core/widgets/professional_text_field.dart';
 import '../../data/providers/auth_provider.dart';
 
 const _kDigitCount = 6;
@@ -36,6 +37,9 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
   final _controllers =
       List.generate(_kDigitCount, (_) => TextEditingController());
   final _focusNodes = List.generate(_kDigitCount, (_) => FocusNode());
+  final _currentEmailCtrl = TextEditingController();
+  final _newEmailCtrl = TextEditingController();
+  final _passwordCtrl = TextEditingController();
 
   bool _isVerifying = false;
   bool _isResending = false;
@@ -66,6 +70,7 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
   void initState() {
     super.initState();
     _verificationEmail = widget.email.trim().toLowerCase();
+    _currentEmailCtrl.text = _verificationEmail;
     _startCountdown();
 
     _animCtrl = AnimationController(
@@ -91,6 +96,9 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
   void dispose() {
     _countdownTimer?.cancel();
     _animCtrl.dispose();
+    _currentEmailCtrl.dispose();
+    _newEmailCtrl.dispose();
+    _passwordCtrl.dispose();
     for (final c in _controllers) {
       c.dispose();
     }
@@ -255,8 +263,9 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
   }
 
   Future<void> _showUpdateEmailBottomSheet() async {
-    final newEmailCtrl = TextEditingController();
-    final passwordCtrl = TextEditingController();
+    _currentEmailCtrl.text = _verificationEmail;
+    _newEmailCtrl.clear();
+    _passwordCtrl.clear();
     bool obscurePassword = true;
     var saving = false;
 
@@ -301,34 +310,41 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
                       ),
                     ),
                     const SizedBox(height: 16),
-                    TextFormField(
-                      initialValue: _verificationEmail,
+                    ProfessionalTextField(
+                      controller: _currentEmailCtrl,
+                      label: 'Email saat ini',
+                      hintText: '-',
+                      prefixIcon: Icons.alternate_email_rounded,
+                      readOnly: true,
                       enabled: false,
-                      decoration: const InputDecoration(
-                        labelText: 'Email saat ini',
-                      ),
                     ),
                     const SizedBox(height: 12),
-                    TextField(
-                      controller: newEmailCtrl,
+                    ProfessionalTextField(
+                      controller: _newEmailCtrl,
+                      label: 'Email baru',
+                      hintText: 'contoh@email.com',
+                      prefixIcon: Icons.email_outlined,
                       keyboardType: TextInputType.emailAddress,
                       textInputAction: TextInputAction.next,
-                      decoration: const InputDecoration(
-                        labelText: 'Email baru',
-                        hintText: 'contoh@email.com',
-                      ),
                     ),
                     const SizedBox(height: 12),
-                    TextField(
-                      controller: passwordCtrl,
+                    ProfessionalTextField(
+                      controller: _passwordCtrl,
+                      label: 'Password akun',
+                      hintText: 'Masukkan password akun',
+                      prefixIcon: Icons.lock_outline_rounded,
                       obscureText: obscurePassword,
-                      decoration: InputDecoration(
-                        labelText: 'Password akun',
-                        suffixIcon: IconButton(
-                          onPressed: () => setModalState(() => obscurePassword = !obscurePassword),
-                          icon: Icon(
-                            obscurePassword ? Icons.visibility_off : Icons.visibility,
-                          ),
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) async {
+                        if (saving) return;
+                      },
+                      suffixIcon: IconButton(
+                        onPressed: () =>
+                            setModalState(() => obscurePassword = !obscurePassword),
+                        icon: Icon(
+                          obscurePassword
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
                         ),
                       ),
                     ),
@@ -339,8 +355,8 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
                       onPressed: saving
                           ? null
                           : () async {
-                              final nextEmail = newEmailCtrl.text.trim().toLowerCase();
-                              final password = passwordCtrl.text;
+                              final nextEmail = _newEmailCtrl.text.trim().toLowerCase();
+                              final password = _passwordCtrl.text;
                               if (nextEmail.isEmpty || password.isEmpty) {
                                 CustomToast.show(
                                   ctx,
@@ -375,6 +391,7 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
                               if (!mounted) return;
                               setState(() {
                                 _verificationEmail = nextEmail;
+                                _currentEmailCtrl.text = nextEmail;
                               });
                               _clearCode();
                               _startCountdown();
@@ -398,9 +415,6 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
         );
       },
     );
-
-    newEmailCtrl.dispose();
-    passwordCtrl.dispose();
   }
 
   @override

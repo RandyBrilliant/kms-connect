@@ -64,6 +64,9 @@ export function useApplicantQuery(id: number | null, enabled = true) {
     queryKey: applicantsKeys.detail(id ?? 0),
     queryFn: () => getApplicant(id!),
     enabled: enabled && id != null && id > 0,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
   })
 }
 

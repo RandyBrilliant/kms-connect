@@ -272,6 +272,8 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                   if (profile?.verificationStatus == 'ACCEPTED')
                     const SizedBox(height: 20),
 
+                  // Linked Accounts (hidden on Android while Google sign-in is disabled)
+                  if (Platform.isIOS || !_hideGoogleSignInTemporarily) ...[
                   // Linked Accounts
                   _animated(
                     _LinkedAccountsSection(
@@ -283,6 +285,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                   ),
 
                   const SizedBox(height: 20),
+                  ],
 
                   // Account
                   _animated(

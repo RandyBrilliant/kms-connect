@@ -86,6 +86,8 @@ class ApplicantProfile {
 
   // Referral (who referred this applicant)
   final int? referrerId;
+  final String? referrerName;
+  final String? referrerCode;
 
   // Ahli Waris (Next of Kin)
   final String? heirName;
@@ -162,6 +164,8 @@ class ApplicantProfile {
     this.fatherPhone,
     this.motherPhone,
     this.referrerId,
+    this.referrerName,
+    this.referrerCode,
     this.heirName,
     this.heirRelationship,
     this.heirContactPhone,
@@ -200,6 +204,7 @@ class ApplicantProfile {
     // Region *names* are embedded in the display helper dicts.
     final vd = json['village_display'] as Map<String, dynamic>?;
     final fvd = json['family_village_display'] as Map<String, dynamic>?;
+    final rd = json['referrer_display'] as Map<String, dynamic>?;
 
     return ApplicantProfile(
       id: _parseId(json['id'])!,
@@ -265,6 +270,8 @@ class ApplicantProfile {
       fatherPhone: _str(json['father_phone']),
       motherPhone: _str(json['mother_phone']),
       referrerId: _parseId(json['referrer']),
+      referrerName: _str(rd?['display_name']) ?? _str(rd?['full_name']),
+      referrerCode: _str(rd?['referral_code']),
       heirName: _str(json['heir_name']),
       heirRelationship: _str(json['heir_relationship']),
       heirContactPhone: _str(json['heir_contact_phone']),

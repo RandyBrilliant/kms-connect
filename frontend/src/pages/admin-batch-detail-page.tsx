@@ -29,6 +29,7 @@ import {
   IconUserPlus,
   IconUsers,
   IconLoader,
+  IconEye,
   IconX,
 } from "@tabler/icons-react"
 import { toast } from "@/lib/toast"
@@ -55,6 +56,7 @@ import {
 } from "@/components/ui/table"
 
 import { ApplicantAdminProcessDialog } from "@/components/applicants/applicant-admin-process-dialog"
+import { ApplicantDetailPreviewDialog } from "@/components/batches/applicant-detail-preview-dialog"
 import { BatchAssignDialog } from "@/components/batches/batch-assign-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -329,6 +331,8 @@ function BatchStatusTab({
   const [loading, setLoading] = useState(false)
   const [processUserId, setProcessUserId] = useState<number | null>(null)
   const [processUserLabel, setProcessUserLabel] = useState("")
+  const [previewUserId, setPreviewUserId] = useState<number | null>(null)
+  const [previewUserLabel, setPreviewUserLabel] = useState("")
 
   const nextStatus = NEXT_FORWARD[status]
   const canReject  = CAN_REJECT.includes(status)
@@ -567,6 +571,22 @@ function BatchStatusTab({
                         variant="ghost"
                         size="icon"
                         className="size-8 shrink-0 cursor-pointer text-muted-foreground"
+                        title="Lihat detail pelamar"
+                        disabled={!app.applicant_user}
+                        onClick={() => {
+                          if (!app.applicant_user) return
+                          setPreviewUserId(app.applicant_user)
+                          setPreviewUserLabel(app.applicant_name)
+                        }}
+                      >
+                        <IconEye className="size-4" />
+                        <span className="sr-only">Lihat detail pelamar</span>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 shrink-0 cursor-pointer text-muted-foreground"
                         title="Buka halaman lamaran"
                         onClick={() =>
                           navigate(joinAdminPath(basePath, `/lamaran/${app.id}`))
@@ -629,6 +649,22 @@ function BatchStatusTab({
           }
         }}
         applicantLabel={processUserLabel}
+      />
+      <ApplicantDetailPreviewDialog
+        applicantUserId={previewUserId}
+        applicantLabel={previewUserLabel}
+        applicantDetailPath={
+          previewUserId != null
+            ? joinAdminPath(basePath, `/pelamar/${previewUserId}`)
+            : joinAdminPath(basePath, "/pelamar")
+        }
+        open={previewUserId != null}
+        onOpenChange={(next) => {
+          if (!next) {
+            setPreviewUserId(null)
+            setPreviewUserLabel("")
+          }
+        }}
       />
     </div>
   )
