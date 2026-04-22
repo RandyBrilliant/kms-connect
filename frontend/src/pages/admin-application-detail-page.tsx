@@ -28,6 +28,7 @@ import { useApplicationQuery } from "@/hooks/use-applications-query"
 import { useChatThreadsQuery } from "@/hooks/use-chat-query"
 import { useAuth } from "@/hooks/use-auth"
 import { joinAdminPath, useAdminDashboard } from "@/contexts/admin-dashboard-context"
+import { APPLICATION_STATUS_LABELS, type ApplicationStatus } from "@/types/job-applications"
 
 const CHAT_ALLOWED_STATUSES = new Set(["DITERIMA", "BERANGKAT", "SELESAI"])
 
@@ -44,6 +45,15 @@ function formatDate(value: string | null | undefined) {
   if (!value) return "-"
   return format(new Date(value), "dd MMM yyyy", { locale: idLocale })
 }
+
+const ATTENDANCE_STAGES: ApplicationStatus[] = [
+  "PRA_SELEKSI",
+  "INTERVIEW",
+  "DITERIMA",
+  "BERANGKAT",
+  "SELESAI",
+  "DITOLAK",
+]
 
 export function AdminApplicationDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -192,6 +202,35 @@ export function AdminApplicationDetailPage() {
                   {application.notes && (
                     <DetailRow label="Catatan" value={application.notes} />
                   )}
+                </dl>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Kehadiran per Tahapan</CardTitle>
+                <CardDescription>
+                  Indikator hadir pelamar untuk setiap tahapan yang sudah dicapai.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <dl>
+                  {ATTENDANCE_STAGES.map((stage) => {
+                    const reached = application.reached_stages?.includes(stage) ?? false
+                    const markedAt = application.attendance_marked_at_by_stage?.[stage] ?? null
+                    const value = !reached
+                      ? "Belum mencapai tahapan"
+                      : markedAt
+                        ? `Hadir (${formatDate(markedAt)})`
+                        : "Belum hadir"
+                    return (
+                      <DetailRow
+                        key={stage}
+                        label={APPLICATION_STATUS_LABELS[stage]}
+                        value={value}
+                      />
+                    )
+                  })}
                 </dl>
               </CardContent>
             </Card>

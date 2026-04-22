@@ -59,24 +59,24 @@ class _ApplicationDetailPageState
     super.dispose();
   }
 
-  Future<void> _confirmAttendance(BuildContext ctx) async {
+  Future<void> _confirmAttendance({required String stage}) async {
     if (_isConfirming) return;
     setState(() => _isConfirming = true);
     try {
       final repo = ref.read(jobRepositoryProvider);
-      await repo.confirmAttendance(widget.applicationId);
+      await repo.confirmAttendance(widget.applicationId, stage: stage);
       ref.invalidate(applicationDetailProvider(widget.applicationId));
       if (mounted) {
-        ScaffoldMessenger.of(ctx).showSnackBar(
-          const SnackBar(
-            content: Text('Kehadiran berhasil dikonfirmasi!'),
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Kehadiran tahap ${_stageLabel(stage)} berhasil dikonfirmasi!'),
             backgroundColor: Color(0xFF28A745),
           ),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(ctx).showSnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Gagal mengkonfirmasi: $e'),
             backgroundColor: const Color(0xFFDC3545),
@@ -178,52 +178,59 @@ class _ApplicationDetailPageState
   }
 
   Widget _buildContent(BuildContext context, JobApplication application) {
-    return CustomScrollView(
-      slivers: [
-        // ── Hero header ──────────────────────────────────────────────
-        _buildSliverHeader(context, application),
+    return RefreshIndicator(
+      color: AppColors.primaryDarkGreen,
+      onRefresh: () async {
+        ref.invalidate(applicationDetailProvider(widget.applicationId));
+        ref.invalidate(applicationAnnouncementsProvider(widget.applicationId));
+        await ref.read(applicationDetailProvider(widget.applicationId).future);
+      },
+      child: CustomScrollView(
+        slivers: [
+          // ── Hero header ──────────────────────────────────────────────
+          _buildSliverHeader(context, application),
 
-        // ── Body ─────────────────────────────────────────────────────
-        SliverToBoxAdapter(
-          child: SlideTransition(
-            position: _slideContent,
-            child: FadeTransition(
-              opacity: _animCtrl,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 80),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _InfoCard(
-                    application: application,
-                    onConfirm: application.canConfirm
-                        ? () => _confirmAttendance(context)
-                        : null,
-                    isConfirming: _isConfirming,
-                  ),
-                    const SizedBox(height: 16),
-                    // Announcements section (PRA_SELEKSI / INTERVIEW only)
-                    if (!_kChatAllowedStatuses.contains(application.status)) ...[
-                      _SectionHeader(title: 'Pengumuman Batch'),
-                      const SizedBox(height: 8),
-                      _AnnouncementsSection(
-                        applicationId: widget.applicationId,
+          // ── Body ─────────────────────────────────────────────────────
+          SliverToBoxAdapter(
+            child: SlideTransition(
+              position: _slideContent,
+              child: FadeTransition(
+                opacity: _animCtrl,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 80),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _InfoCard(
+                        application: application,
+                        onConfirmStage: (stage) => _confirmAttendance(stage: stage),
+                        isConfirming: _isConfirming,
                       ),
                       const SizedBox(height: 16),
+                      // Announcements section for any application that belongs to a batch.
+                      // Some announcements are still filtered server-side by recipient_config.
+                      if (application.batch != null) ...[
+                        _SectionHeader(title: 'Pengumuman Batch'),
+                        const SizedBox(height: 8),
+                        _AnnouncementsSection(
+                          applicationId: widget.applicationId,
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                      if (application.statusHistory.isNotEmpty) ...[
+                        _SectionHeader(title: 'Riwayat Status'),
+                        const SizedBox(height: 8),
+                        _StatusTimeline(history: application.statusHistory),
+                        const SizedBox(height: 16),
+                      ],
                     ],
-                    if (application.statusHistory.isNotEmpty) ...[
-                      _SectionHeader(title: 'Riwayat Status'),
-                      const SizedBox(height: 8),
-                      _StatusTimeline(history: application.statusHistory),
-                      const SizedBox(height: 16),
-                    ],
-                  ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -294,6 +301,25 @@ class _ApplicationDetailPageState
       ),
     );
   }
+
+  String _stageLabel(String status) {
+    switch (status) {
+      case 'PRA_SELEKSI':
+        return 'Pra-Seleksi';
+      case 'INTERVIEW':
+        return 'Interview';
+      case 'DITERIMA':
+        return 'Diterima';
+      case 'BERANGKAT':
+        return 'Berangkat';
+      case 'SELESAI':
+        return 'Selesai';
+      case 'DITOLAK':
+        return 'Ditolak';
+      default:
+        return status;
+    }
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -303,12 +329,12 @@ class _ApplicationDetailPageState
 class _InfoCard extends StatelessWidget {
   const _InfoCard({
     required this.application,
-    this.onConfirm,
+    this.onConfirmStage,
     this.isConfirming = false,
   });
 
   final JobApplication application;
-  final VoidCallback? onConfirm;
+  final ValueChanged<String>? onConfirmStage;
   final bool isConfirming;
 
   @override
@@ -445,36 +471,12 @@ class _InfoCard extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 12),
-            // Confirm attendance button (PRA_SELEKSI / INTERVIEW stage)
-            if (onConfirm != null) ...[
-              FilledButton.icon(
-                onPressed: isConfirming ? null : onConfirm,
-                icon: isConfirming
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Icon(Icons.how_to_reg_outlined, size: 16),
-                label: Text(
-                  isConfirming
-                      ? 'Mengkonfirmasi...'
-                      : 'Konfirmasi Kehadiran',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF17A2B8),
-                  minimumSize: const Size.fromHeight(44),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-            ],
+            _AttendanceStageSection(
+              application: application,
+              isConfirming: isConfirming,
+              onConfirmStage: onConfirmStage,
+            ),
+            const SizedBox(height: 8),
             if (_kChatAllowedStatuses.contains(application.status))
               FilledButton.icon(
                 onPressed: () => context.push(
@@ -497,6 +499,133 @@ class _InfoCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _AttendanceStageSection extends StatelessWidget {
+  const _AttendanceStageSection({
+    required this.application,
+    required this.isConfirming,
+    required this.onConfirmStage,
+  });
+
+  final JobApplication application;
+  final bool isConfirming;
+  final ValueChanged<String>? onConfirmStage;
+
+  String _label(String status) {
+    switch (status) {
+      case 'PRA_SELEKSI':
+        return 'Pra-Seleksi';
+      case 'INTERVIEW':
+        return 'Interview';
+      case 'DITERIMA':
+        return 'Diterima';
+      case 'BERANGKAT':
+        return 'Berangkat';
+      case 'SELESAI':
+        return 'Selesai';
+      case 'DITOLAK':
+        return 'Ditolak';
+      default:
+        return status;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fmtDt = DateFormat('dd MMM yyyy, HH:mm', 'id_ID');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Kehadiran per Tahapan',
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textDark,
+          ),
+        ),
+        const SizedBox(height: 8),
+        ...JobApplication.stageOrder.map((stage) {
+          final reached =
+              application.reachedStages.contains(stage) || application.status == stage;
+          final attended = application.attendanceByStage[stage] == true;
+          final attendedAt = application.attendanceMarkedAtByStage[stage];
+          final canTap = reached && !attended && !isConfirming && onConfirmStage != null;
+
+          final subtitle = !reached
+              ? 'Belum mencapai tahapan'
+              : attended
+                  ? 'Hadir • ${attendedAt != null ? fmtDt.format(attendedAt) : "-"}'
+                  : 'Belum hadir';
+
+          return Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFB),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.divider.withValues(alpha: 0.4)),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  attended
+                      ? Icons.check_circle_rounded
+                      : (reached
+                          ? Icons.radio_button_unchecked_rounded
+                          : Icons.lock_outline_rounded),
+                  color: attended ? const Color(0xFF28A745) : AppColors.textMedium,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _label(stage),
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textDark,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.textMedium,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (canTap)
+                  FilledButton(
+                    onPressed: () => onConfirmStage!(stage),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(0, 32),
+                      backgroundColor: const Color(0xFF17A2B8),
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                    ),
+                    child: Text(
+                      'Hadir',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          );
+        }),
+      ],
     );
   }
 }
@@ -804,7 +933,7 @@ class _AnnouncementsSection extends ConsumerWidget {
           ),
         ),
       ),
-      error: (_, __) => Container(
+      error: (_, _) => Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: Colors.white,

@@ -647,12 +647,11 @@ class ApplicationService:
         cls,
         application: JobApplication,
         applicant_user: "CustomUser",
+        stage: str | None = None,
     ) -> JobApplication:
         """
-        Applicant confirms they will attend the current stage.
-
-        - At PRA_SELEKSI: sets pra_seleksi_confirmed_at
-        - At INTERVIEW:   sets interview_confirmed_at
+        Applicant confirms attendance for a stage.
+        If stage is omitted, current status is used.
 
         Raises:
           TransitionError — if wrong stage or unauthorized user.
@@ -667,24 +666,40 @@ class ApplicationService:
             raise TransitionError("Anda tidak berhak mengkonfirmasi lamaran ini.")
 
         now = timezone.now()
+        target_stage = stage or application.status
+        if target_stage not in JobApplication.ATTENDANCE_TRACKED_STATUSES:
+            raise ValueError("Tahap konfirmasi hadir tidak valid.")
 
-        if application.status == ApplicationStatus.PRA_SELEKSI:
-            if application.pra_seleksi_confirmed_at:
-                raise ValueError("Kehadiran pra-seleksi sudah dikonfirmasi sebelumnya.")
-            application.pra_seleksi_confirmed_at = now
-            application.save(update_fields=["pra_seleksi_confirmed_at", "updated_at"])
-
-        elif application.status == ApplicationStatus.INTERVIEW:
-            if application.interview_confirmed_at:
-                raise ValueError("Kehadiran interview sudah dikonfirmasi sebelumnya.")
-            application.interview_confirmed_at = now
-            application.save(update_fields=["interview_confirmed_at", "updated_at"])
-
-        else:
+        reached = set(
+            application.status_history.values_list("to_status", flat=True)
+        )
+        reached.add(application.status)
+        if target_stage not in reached:
             raise TransitionError(
-                f"Konfirmasi hanya dapat dilakukan pada tahap Pra-Seleksi atau Interview. "
-                f"Status saat ini: {application.get_status_display()}."
+                "Konfirmasi hadir hanya dapat dilakukan untuk tahapan yang sudah dicapai."
             )
+
+        attendance_map = (
+            dict(application.attendance_by_stage)
+            if isinstance(application.attendance_by_stage, dict)
+            else {}
+        )
+        if attendance_map.get(target_stage):
+            raise ValueError("Kehadiran untuk tahapan ini sudah dikonfirmasi sebelumnya.")
+        attendance_map[target_stage] = now.isoformat()
+        application.attendance_by_stage = attendance_map
+
+        update_fields = ["attendance_by_stage", "updated_at"]
+
+        # Keep legacy fields in sync for existing UI/queries.
+        if target_stage == ApplicationStatus.PRA_SELEKSI and not application.pra_seleksi_confirmed_at:
+            application.pra_seleksi_confirmed_at = now
+            update_fields.append("pra_seleksi_confirmed_at")
+        elif target_stage == ApplicationStatus.INTERVIEW and not application.interview_confirmed_at:
+            application.interview_confirmed_at = now
+            update_fields.append("interview_confirmed_at")
+
+        application.save(update_fields=update_fields)
 
         return application
 

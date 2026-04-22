@@ -247,6 +247,47 @@ class NotificationService {
     }
 
     final type = data['type'] as String?;
+    final actionUrl = data['action_url']?.toString();
+    final actionPath = actionUrl != null
+        ? (Uri.tryParse(actionUrl)?.path.isNotEmpty == true
+            ? Uri.tryParse(actionUrl)!.path
+            : actionUrl)
+        : null;
+
+    if (actionPath != null && actionPath.isNotEmpty) {
+      final chatMatch = RegExp(r'/applications/(\d+)/chat').firstMatch(actionPath);
+      if (chatMatch != null) {
+        final appId = int.tryParse(chatMatch.group(1) ?? '');
+        if (appId != null && appId > 0) {
+          router.push('/jobs/applications/$appId/chat');
+          return;
+        }
+      }
+
+      final appMatch = RegExp(r'/(?:lamaran|applications)/(\d+)').firstMatch(actionPath);
+      if (appMatch != null) {
+        final appId = int.tryParse(appMatch.group(1) ?? '');
+        if (appId != null && appId > 0) {
+          router.push('/jobs/applications/$appId');
+          return;
+        }
+      }
+
+      final jobMatch = RegExp(r'/(?:lowongan|jobs)/(\d+)').firstMatch(actionPath);
+      if (jobMatch != null) {
+        final jobId = int.tryParse(jobMatch.group(1) ?? '');
+        if (jobId != null && jobId > 0) {
+          router.push('/jobs/$jobId');
+          return;
+        }
+      }
+
+      if (RegExp(r'/batch/\d+(/announcements)?/?$').hasMatch(actionPath)) {
+        router.push('/jobs/my-applications');
+        return;
+      }
+    }
+
     switch (type) {
       case 'job':
         final jobId = data['job_id'];

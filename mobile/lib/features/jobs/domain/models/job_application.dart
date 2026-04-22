@@ -2,6 +2,15 @@ import 'package:flutter/material.dart';
 import 'application_status_history.dart';
 
 class JobApplication {
+  static const List<String> stageOrder = <String>[
+    'PRA_SELEKSI',
+    'INTERVIEW',
+    'DITERIMA',
+    'BERANGKAT',
+    'SELESAI',
+    'DITOLAK',
+  ];
+
   final int id;
   final int applicant;
   final String? applicantName;
@@ -25,6 +34,9 @@ class JobApplication {
   final String? assignedByName;
   final String? notes;
   final List<ApplicationStatusHistory> statusHistory;
+  final Map<String, bool> attendanceByStage;
+  final Map<String, DateTime?> attendanceMarkedAtByStage;
+  final List<String> reachedStages;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -52,6 +64,9 @@ class JobApplication {
     this.assignedByName,
     this.notes,
     this.statusHistory = const [],
+    this.attendanceByStage = const {},
+    this.attendanceMarkedAtByStage = const {},
+    this.reachedStages = const [],
     required this.createdAt,
     required this.updatedAt,
   });
@@ -79,6 +94,29 @@ class JobApplication {
                 e as Map<String, dynamic>))
             .toList()
         : <ApplicationStatusHistory>[];
+
+    final attendanceRaw = json['attendance_by_stage'];
+    final attendanceByStage = <String, bool>{};
+    if (attendanceRaw is Map<String, dynamic>) {
+      for (final entry in attendanceRaw.entries) {
+        attendanceByStage[entry.key] = entry.value == true;
+      }
+    }
+
+    final attendanceAtRaw = json['attendance_marked_at_by_stage'];
+    final attendanceMarkedAtByStage = <String, DateTime?>{};
+    if (attendanceAtRaw is Map<String, dynamic>) {
+      for (final entry in attendanceAtRaw.entries) {
+        final v = entry.value;
+        attendanceMarkedAtByStage[entry.key] =
+            (v is String && v.isNotEmpty) ? DateTime.tryParse(v) : null;
+      }
+    }
+
+    final reachedRaw = json['reached_stages'];
+    final reachedStages = reachedRaw is List
+        ? reachedRaw.map((e) => e.toString()).toList()
+        : <String>[];
 
     return JobApplication(
       id: _safeInt(json['id']),
@@ -116,6 +154,9 @@ class JobApplication {
       assignedByName: json['assigned_by_name']?.toString(),
       notes: json['notes'] as String?,
       statusHistory: history,
+      attendanceByStage: attendanceByStage,
+      attendanceMarkedAtByStage: attendanceMarkedAtByStage,
+      reachedStages: reachedStages,
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
     );
@@ -163,16 +204,18 @@ class JobApplication {
 
   /// Whether the applicant can still confirm attendance at current stage.
   bool get canConfirm {
-    if (status == 'PRA_SELEKSI') return praSeleksiConfirmedAt == null;
-    if (status == 'INTERVIEW') return interviewConfirmedAt == null;
-    return false;
+    return canConfirmStage(status);
   }
 
   /// Whether the current stage has been confirmed by the applicant.
   bool get isConfirmed {
-    if (status == 'PRA_SELEKSI') return praSeleksiConfirmedAt != null;
-    if (status == 'INTERVIEW') return interviewConfirmedAt != null;
-    return false;
+    return attendanceByStage[status] == true;
+  }
+
+  bool canConfirmStage(String stage) {
+    final reached = reachedStages.contains(stage) || status == stage;
+    if (!reached) return false;
+    return attendanceByStage[stage] != true;
   }
 }
 

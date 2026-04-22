@@ -258,6 +258,9 @@ class JobApplicationSerializer(serializers.ModelSerializer):
     referrer_display_name = serializers.SerializerMethodField(read_only=True)
     referrer_code = serializers.SerializerMethodField(read_only=True)
     applicant_user = serializers.SerializerMethodField(read_only=True)
+    attendance_by_stage = serializers.SerializerMethodField(read_only=True)
+    attendance_marked_at_by_stage = serializers.SerializerMethodField(read_only=True)
+    reached_stages = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = JobApplication
@@ -289,6 +292,9 @@ class JobApplicationSerializer(serializers.ModelSerializer):
             "assigned_by_name",
             "notes",
             "status_history",
+            "attendance_by_stage",
+            "attendance_marked_at_by_stage",
+            "reached_stages",
             "created_at",
             "updated_at",
         ]
@@ -307,6 +313,9 @@ class JobApplicationSerializer(serializers.ModelSerializer):
             "pra_seleksi_confirmed_at",
             "interview_confirmed_at",
             "status_history",
+            "attendance_by_stage",
+            "attendance_marked_at_by_stage",
+            "reached_stages",
             "applied_at",
             "created_at",
             "updated_at",
@@ -399,6 +408,36 @@ class JobApplicationSerializer(serializers.ModelSerializer):
         """Serializable version of the model property."""
         return obj.cooldown_eligible_date
 
+    def get_reached_stages(self, obj) -> list[str]:
+        reached: list[str] = []
+        seen = set()
+        for item in obj.status_history.all():
+            code = item.to_status
+            if code and code not in seen:
+                seen.add(code)
+                reached.append(code)
+        if obj.status and obj.status not in seen:
+            reached.append(obj.status)
+        return reached
+
+    def get_attendance_marked_at_by_stage(self, obj) -> dict[str, str | None]:
+        raw = obj.attendance_by_stage if isinstance(obj.attendance_by_stage, dict) else {}
+        out: dict[str, str | None] = {
+            code: raw.get(code) if isinstance(raw.get(code), str) else None
+            for code in JobApplication.ATTENDANCE_TRACKED_STATUSES
+        }
+
+        # Backward compatibility for historical data before JSON field existed.
+        if out.get(ApplicationStatus.PRA_SELEKSI) is None and obj.pra_seleksi_confirmed_at:
+            out[ApplicationStatus.PRA_SELEKSI] = obj.pra_seleksi_confirmed_at.isoformat()
+        if out.get(ApplicationStatus.INTERVIEW) is None and obj.interview_confirmed_at:
+            out[ApplicationStatus.INTERVIEW] = obj.interview_confirmed_at.isoformat()
+        return out
+
+    def get_attendance_by_stage(self, obj) -> dict[str, bool]:
+        marked_at = self.get_attendance_marked_at_by_stage(obj)
+        return {code: bool(marked_at.get(code)) for code in JobApplication.ATTENDANCE_TRACKED_STATUSES}
+
 
 class ApplicationTransitionSerializer(serializers.Serializer):
     """
@@ -425,6 +464,19 @@ class ApplicationTransitionSerializer(serializers.Serializer):
         required=False,
         allow_null=True,
         help_text="Wajib diisi saat transisi ke SELESAI. Default: hari ini.",
+    )
+
+
+class ApplicationAttendanceConfirmSerializer(serializers.Serializer):
+    """
+    Input serializer for POST /api/applicants/me/applications/{id}/confirm/.
+    If stage is omitted, current application status is used.
+    """
+
+    stage = serializers.ChoiceField(
+        choices=ApplicationStatus.choices,
+        required=False,
+        help_text="Tahap yang dikonfirmasi hadirnya. Default: tahap status saat ini.",
     )
 
 

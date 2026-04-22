@@ -496,6 +496,14 @@ class JobApplication(models.Model):
     ]
 
     REAPPLY_COOLDOWN_YEARS = 2
+    ATTENDANCE_TRACKED_STATUSES = [
+        ApplicationStatus.PRA_SELEKSI,
+        ApplicationStatus.INTERVIEW,
+        ApplicationStatus.DITERIMA,
+        ApplicationStatus.BERANGKAT,
+        ApplicationStatus.SELESAI,
+        ApplicationStatus.DITOLAK,
+    ]
 
     # --- Core relations ---
     applicant = models.ForeignKey(
@@ -549,6 +557,15 @@ class JobApplication(models.Model):
         help_text=_(
             "Waktu pelamar mengkonfirmasi kehadiran di tahap interview. "
             "Null berarti belum dikonfirmasi."
+        ),
+    )
+    attendance_by_stage = models.JSONField(
+        _("kehadiran per tahap"),
+        default=dict,
+        blank=True,
+        help_text=_(
+            "Peta waktu kehadiran per tahap. Format: "
+            '{"PRA_SELEKSI":"2026-01-01T10:00:00+07:00","INTERVIEW":"..."}'
         ),
     )
 

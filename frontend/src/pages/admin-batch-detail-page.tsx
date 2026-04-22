@@ -403,7 +403,7 @@ function BatchStatusTab({
   }
 
   const showCheckboxCol = apps.length > 0 && !!(nextStatus || canReject)
-  const tableColSpan = (showCheckboxCol ? 1 : 0) + 7
+  const tableColSpan = (showCheckboxCol ? 1 : 0) + 8
 
   return (
     <div className="flex flex-col gap-4">
@@ -500,6 +500,7 @@ function BatchStatusTab({
               <TableHead>Pelamar</TableHead>
               <TableHead>NIK</TableHead>
               <TableHead>Rujukan</TableHead>
+              <TableHead>Hadir Tahap Ini</TableHead>
               <TableHead>Konfirmasi Pra-Sel.</TableHead>
               <TableHead>Konfirmasi Interview</TableHead>
               <TableHead>Tanggal Ditambahkan</TableHead>
@@ -545,6 +546,13 @@ function BatchStatusTab({
                       </div>
                     ) : (
                       <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {app.attendance_by_stage?.[app.status] ? (
+                      <span className="text-green-600">Hadir</span>
+                    ) : (
+                      <span className="text-muted-foreground">Belum</span>
                     )}
                   </TableCell>
                   <TableCell className="text-sm">

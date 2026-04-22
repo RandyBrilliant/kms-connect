@@ -229,20 +229,22 @@ class _DetailBody extends StatelessWidget {
     if (url == null || url.isEmpty) return;
     final router = GoRouter.of(context);
     final u = url.trim();
+    final parsed = Uri.tryParse(u);
+    final path = parsed?.path.isNotEmpty == true ? parsed!.path : u;
 
-    if (u.contains('/profil') || u == '/profile') {
+    if (path.contains('/profil') || path == '/profile') {
       router.push('/profile');
       return;
     }
-    if (u.contains('/dokumen') || u.contains('documents')) {
+    if (path.contains('/dokumen') || path.contains('documents')) {
       router.push('/documents');
       return;
     }
-    if (u.contains('my-applications')) {
+    if (path.contains('my-applications')) {
       router.push('/jobs/my-applications');
       return;
     }
-    final chatMatch = RegExp(r'/applications/(\d+)/chat').firstMatch(u);
+    final chatMatch = RegExp(r'/applications/(\d+)/chat').firstMatch(path);
     if (chatMatch != null) {
       final id = int.tryParse(chatMatch.group(1) ?? '');
       if (id != null && id > 0) {
@@ -250,13 +252,30 @@ class _DetailBody extends StatelessWidget {
         return;
       }
     }
-    final jobMatch = RegExp(r'/jobs/(\d+)').firstMatch(u);
+    final appDetailMatch = RegExp(r'/(?:lamaran|applications)/(\d+)').firstMatch(path);
+    if (appDetailMatch != null) {
+      final id = int.tryParse(appDetailMatch.group(1) ?? '');
+      if (id != null && id > 0) {
+        router.push('/jobs/applications/$id');
+        return;
+      }
+    }
+    final jobMatch = RegExp(r'/(?:lowongan|jobs)/(\d+)').firstMatch(path);
     if (jobMatch != null) {
       final id = int.tryParse(jobMatch.group(1) ?? '');
       if (id != null && id > 0) {
         router.push('/jobs/$id');
         return;
       }
+    }
+    final batchAnnouncementsMatch =
+        RegExp(r'/batch/\d+/announcements/?$').firstMatch(path);
+    final batchMatch = RegExp(r'/batch/\d+/?$').firstMatch(path);
+    if (batchAnnouncementsMatch != null || batchMatch != null) {
+      // Applicant does not have a direct batch-detail route; announcements are shown
+      // in each application detail page.
+      router.push('/jobs/my-applications');
+      return;
     }
   }
 

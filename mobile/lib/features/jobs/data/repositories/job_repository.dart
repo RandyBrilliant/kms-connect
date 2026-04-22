@@ -150,11 +150,15 @@ class JobRepository {
     }
   }
 
-  /// Confirm attendance at the current stage (PRA_SELEKSI or INTERVIEW).
-  Future<JobApplication> confirmAttendance(int applicationId) async {
+  /// Confirm attendance for a stage.
+  /// If stage is null, backend uses current stage.
+  Future<JobApplication> confirmAttendance(int applicationId, {String? stage}) async {
     try {
       final response = await _apiClient.dio.post(
         ApiEndpoints.confirmAttendance(applicationId),
+        data: {
+          if (stage != null && stage.isNotEmpty) 'stage': stage,
+        },
       );
       final data = response.data;
       if (data is Map<String, dynamic>) {

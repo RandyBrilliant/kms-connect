@@ -45,6 +45,7 @@ from .models import (
 )
 from .serializers import (
     ApplicantSearchSerializer,
+    ApplicationAttendanceConfirmSerializer,
     ApplicationTransitionSerializer,
     BatchAnnouncementCreateSerializer,
     BatchAnnouncementSerializer,
@@ -870,10 +871,22 @@ class ApplicantJobApplicationViewSet(viewsets.ReadOnlyModelViewSet):
         """
         application = self.get_object()
 
+        payload = ApplicationAttendanceConfirmSerializer(data=request.data or {})
+        if not payload.is_valid():
+            return Response(
+                error_response(
+                    detail="Data tidak valid.",
+                    code=ApiCode.VALIDATION_ERROR,
+                    errors=payload.errors,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         try:
             ApplicationService.confirm_attendance(
                 application=application,
                 applicant_user=request.user,
+                stage=payload.validated_data.get("stage"),
             )
         except TransitionError as e:
             return Response(

@@ -73,6 +73,9 @@ export interface JobApplication {
   assigned_by_name: string | null
   notes: string
   status_history: ApplicationStatusHistoryEntry[]
+  attendance_by_stage?: Partial<Record<ApplicationStatus, boolean>>
+  attendance_marked_at_by_stage?: Partial<Record<ApplicationStatus, string | null>>
+  reached_stages?: ApplicationStatus[]
   created_at: string
   updated_at: string
 }
