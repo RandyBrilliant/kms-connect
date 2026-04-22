@@ -78,10 +78,12 @@ def _allows_email(pref: NotificationPreference | None, config: EventConfig) -> b
     if not config.send_email:
         return False
     if pref is None:
-        return True  # Default ON if no preference record yet
+        # Default OFF when preference row is missing to avoid accidental emails.
+        return False
     if config.email_pref_field:
-        return getattr(pref, config.email_pref_field, True)
-    return True  # No gate = always allow (critical events)
+        return getattr(pref, config.email_pref_field, False)
+    # No gate event: still require explicit opt-in preference record.
+    return False
 
 
 def _allows_push(pref: NotificationPreference | None, config: EventConfig) -> bool:

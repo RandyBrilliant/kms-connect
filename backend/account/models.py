@@ -2198,27 +2198,27 @@ class NotificationPreference(models.Model):
     # ---- Email preferences ----
     email_account_updates = models.BooleanField(
         _("email perubahan akun"),
-        default=True,
+        default=False,
         help_text=_("Email untuk perubahan kata sandi, keamanan akun."),
     )
     email_profile_updates = models.BooleanField(
         _("email status verifikasi profil"),
-        default=True,
+        default=False,
         help_text=_("Email saat profil diterima atau ditolak oleh admin."),
     )
     email_application_updates = models.BooleanField(
         _("email status lamaran"),
-        default=True,
+        default=False,
         help_text=_("Email saat status lamaran kerja berubah (Interview, Diterima, dll.)."),
     )
     email_job_deadline_reminder = models.BooleanField(
         _("email pengingat deadline"),
-        default=True,
+        default=False,
         help_text=_("Email pengingat 3 hari sebelum deadline lowongan yang relevan."),
     )
     email_batch_departure_reminder = models.BooleanField(
         _("email pengingat keberangkatan"),
-        default=True,
+        default=False,
         help_text=_("Email pengingat 7 hari dan 1 hari sebelum keberangkatan batch."),
     )
     email_job_alerts = models.BooleanField(
