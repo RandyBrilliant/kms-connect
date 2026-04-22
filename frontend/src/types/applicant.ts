@@ -95,6 +95,7 @@ export interface ApplicantProfile {
   destination_country: DestinationCountry
   full_name: string
   birth_place: number | null
+  birth_place_display?: string | null
   birth_date: string | null
   address: string
   /** Province FK id (regions.Province) */
