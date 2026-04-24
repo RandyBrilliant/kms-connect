@@ -22,6 +22,7 @@ from .models import (
     News,
     NewsStatus,
 )
+from .services import ApplicationService
 
 
 # ---------------------------------------------------------------------------
@@ -261,6 +262,8 @@ class JobApplicationSerializer(serializers.ModelSerializer):
     attendance_by_stage = serializers.SerializerMethodField(read_only=True)
     attendance_marked_at_by_stage = serializers.SerializerMethodField(read_only=True)
     reached_stages = serializers.SerializerMethodField(read_only=True)
+    document_collection_progress = serializers.SerializerMethodField(read_only=True)
+    pengumpulan_dokumen_complete = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = JobApplication
@@ -295,6 +298,8 @@ class JobApplicationSerializer(serializers.ModelSerializer):
             "attendance_by_stage",
             "attendance_marked_at_by_stage",
             "reached_stages",
+            "document_collection_progress",
+            "pengumpulan_dokumen_complete",
             "created_at",
             "updated_at",
         ]
@@ -316,6 +321,8 @@ class JobApplicationSerializer(serializers.ModelSerializer):
             "attendance_by_stage",
             "attendance_marked_at_by_stage",
             "reached_stages",
+            "document_collection_progress",
+            "pengumpulan_dokumen_complete",
             "applied_at",
             "created_at",
             "updated_at",
@@ -437,6 +444,12 @@ class JobApplicationSerializer(serializers.ModelSerializer):
     def get_attendance_by_stage(self, obj) -> dict[str, bool]:
         marked_at = self.get_attendance_marked_at_by_stage(obj)
         return {code: bool(marked_at.get(code)) for code in JobApplication.ATTENDANCE_TRACKED_STATUSES}
+
+    def get_document_collection_progress(self, obj) -> dict:
+        return ApplicationService.get_document_collection_progress(obj)
+
+    def get_pengumpulan_dokumen_complete(self, obj) -> bool:
+        return bool(self.get_document_collection_progress(obj).get("is_complete"))
 
 
 class ApplicationTransitionSerializer(serializers.Serializer):

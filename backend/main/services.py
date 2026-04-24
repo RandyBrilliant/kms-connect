@@ -16,6 +16,7 @@ Setiap perubahan status ditulis atomically bersama baris ApplicationStatusHistor
 from __future__ import annotations
 
 from datetime import date
+from functools import lru_cache
 from typing import TYPE_CHECKING, NamedTuple
 
 from dateutil.relativedelta import relativedelta
@@ -114,6 +115,17 @@ class ApplicationService:
     """
 
     REAPPLY_COOLDOWN_YEARS = JobApplication.REAPPLY_COOLDOWN_YEARS
+    DOCUMENT_COLLECTION_STEP_ORDER: tuple[tuple[str, str], ...] = (
+        ("MASUK_BERKAS_ASLI", "Masuk Berkas Asli"),
+        ("MEDICAL", "Medical"),
+        ("BUAT_ID_PEKERJA", "Buat ID Pekerja"),
+        ("BUAT_PASPOR", "Buat Paspor"),
+        ("FWCMS", "FWCMS"),
+        ("PSIKOLOGI_TEST", "Psikologi Test"),
+        ("PAP_BP3MI", "PAP BP3MI"),
+        ("PDO_KILANG", "PDO Kilang"),
+        ("PERSIAPAN_KEBERANGKATAN", "Persiapan Keberangkatan"),
+    )
 
     # ------------------------------------------------------------------
     # Eligibility helpers
@@ -484,6 +496,79 @@ class ApplicationService:
     # Individual application operations
     # ------------------------------------------------------------------
 
+    @staticmethod
+    @lru_cache(maxsize=1)
+    def _required_post_interview_document_type_ids() -> tuple[int, ...]:
+        from account.models import DocumentType
+
+        return tuple(
+            DocumentType.objects.filter(
+                phase=DocumentType.PHASE_POST_INTERVIEW,
+                is_required=True,
+            ).values_list("id", flat=True)
+        )
+
+    @classmethod
+    def get_document_collection_progress(cls, application: JobApplication) -> dict:
+        """
+        Build checklist progress for the DITERIMA-stage document collection flow.
+        """
+        from account.models import ApplicantDocument
+
+        profile = getattr(application, "applicant", None)
+        if not profile:
+            items = [
+                {"code": code, "label": label, "done": False}
+                for code, label in cls.DOCUMENT_COLLECTION_STEP_ORDER
+            ]
+            return {"items": items, "done_count": 0, "total_count": len(items), "is_complete": False}
+
+        required_post_doc_ids = cls._required_post_interview_document_type_ids()
+        uploaded_required_ids = set(
+            ApplicantDocument.objects.filter(
+                applicant_profile=profile,
+                document_type_id__in=required_post_doc_ids,
+            ).values_list("document_type_id", flat=True)
+        )
+        post_docs_complete = all(doc_id in uploaded_required_ids for doc_id in required_post_doc_ids)
+        medical_result = (getattr(profile, "hasil_medical", "") or "").strip().upper()
+
+        checks = {
+            "MASUK_BERKAS_ASLI": post_docs_complete,
+            "MEDICAL": medical_result == "FIT",
+            "BUAT_ID_PEKERJA": bool((getattr(profile, "no_id_sisko", "") or "").strip()),
+            "BUAT_PASPOR": bool((getattr(profile, "passport_number", "") or "").strip()),
+            "FWCMS": bool(getattr(profile, "tgl_fwcm_psikotes", None)),
+            "PSIKOLOGI_TEST": bool(getattr(profile, "tgl_fwcm_psikotes", None)),
+            "PAP_BP3MI": bool((getattr(profile, "no_sip", "") or "").strip()),
+            "PDO_KILANG": bool(getattr(profile, "tgl_kirim_bio_ke_mly", None)),
+            "PERSIAPAN_KEBERANGKATAN": bool(getattr(profile, "tgl_calling_visa", None))
+            and bool((getattr(profile, "no_calling_visa", "") or "").strip()),
+        }
+        items = [
+            {"code": code, "label": label, "done": bool(checks.get(code))}
+            for code, label in cls.DOCUMENT_COLLECTION_STEP_ORDER
+        ]
+        done_count = sum(1 for item in items if item["done"])
+        total_count = len(items)
+        return {
+            "items": items,
+            "done_count": done_count,
+            "total_count": total_count,
+            "is_complete": done_count == total_count,
+        }
+
+    @classmethod
+    def _ensure_document_collection_complete(cls, application: JobApplication) -> None:
+        progress = cls.get_document_collection_progress(application)
+        if progress["is_complete"]:
+            return
+        pending = [item["label"] for item in progress["items"] if not item["done"]]
+        raise TransitionError(
+            "Tahap Pengumpulan Dokumen belum lengkap. "
+            f"Selesaikan terlebih dahulu: {', '.join(pending)}."
+        )
+
     @classmethod
     @transaction.atomic
     def transition(
@@ -517,6 +602,9 @@ class ApplicationService:
                 f"Transisi dari '{application.get_status_display()}' ke "
                 f"'{ApplicationStatus(new_status).label}' tidak diizinkan."
             )
+
+        if application.status == ApplicationStatus.DITERIMA and new_status == ApplicationStatus.BERANGKAT:
+            cls._ensure_document_collection_complete(application)
 
         # ── Quota enforcement (only when moving to DITERIMA) ──────────────
         if new_status == ApplicationStatus.DITERIMA:
@@ -616,6 +704,20 @@ class ApplicationService:
                 # Cap: only transition apps that fit within remaining quota
                 apps = apps[:remaining_slots]
         # ─────────────────────────────────────────────────────────────────
+        if new_status == ApplicationStatus.BERANGKAT:
+            blocked_labels: set[str] = set()
+            for app in apps:
+                progress = cls.get_document_collection_progress(app)
+                if progress["is_complete"]:
+                    continue
+                for item in progress["items"]:
+                    if not item["done"]:
+                        blocked_labels.add(item["label"])
+            if blocked_labels:
+                raise TransitionError(
+                    "Sebagian pelamar belum menyelesaikan tahap Pengumpulan Dokumen. "
+                    f"Kekurangan: {', '.join(sorted(blocked_labels))}."
+                )
         if not apps:
             return []
 

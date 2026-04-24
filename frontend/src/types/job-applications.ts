@@ -76,6 +76,13 @@ export interface JobApplication {
   attendance_by_stage?: Partial<Record<ApplicationStatus, boolean>>
   attendance_marked_at_by_stage?: Partial<Record<ApplicationStatus, string | null>>
   reached_stages?: ApplicationStatus[]
+  document_collection_progress?: {
+    items: Array<{ code: string; label: string; done: boolean }>
+    done_count: number
+    total_count: number
+    is_complete: boolean
+  }
+  pengumpulan_dokumen_complete?: boolean
   created_at: string
   updated_at: string
 }

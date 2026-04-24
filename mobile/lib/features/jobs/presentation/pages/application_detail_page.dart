@@ -476,6 +476,13 @@ class _InfoCard extends StatelessWidget {
               isConfirming: isConfirming,
               onConfirmStage: onConfirmStage,
             ),
+            if (application.status == 'DITERIMA' &&
+                application.documentCollectionProgress != null) ...[
+              const SizedBox(height: 14),
+              _DocumentCollectionSection(
+                progress: application.documentCollectionProgress!,
+              ),
+            ],
             const SizedBox(height: 8),
             if (_kChatAllowedStatuses.contains(application.status))
               FilledButton.icon(
@@ -499,6 +506,70 @@ class _InfoCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _DocumentCollectionSection extends StatelessWidget {
+  const _DocumentCollectionSection({required this.progress});
+
+  final DocumentCollectionProgress progress;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Pengumpulan Dokumen',
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textDark,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          '${progress.doneCount}/${progress.totalCount} selesai',
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: progress.isComplete ? const Color(0xFF28A745) : AppColors.textMedium,
+          ),
+        ),
+        const SizedBox(height: 8),
+        ...progress.items.map(
+          (item) => Container(
+            margin: const EdgeInsets.only(bottom: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFB),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.divider.withValues(alpha: 0.4)),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  item.done ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                  size: 17,
+                  color: item.done ? const Color(0xFF28A745) : AppColors.textMedium,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    item.label,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textDark,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

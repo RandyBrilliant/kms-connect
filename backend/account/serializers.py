@@ -653,6 +653,16 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
         """Format 16 digit; uniqueness dicek di parent ApplicantUserSerializer (supaya punya akses profile instance)."""
         return validate_nik_format(value) if value else value
 
+    def validate_hasil_medical(self, value):
+        raw = (value or "").strip()
+        if not raw:
+            return ""
+        normalized = raw.upper()
+        allowed = {"FIT", "UNFIT"}
+        if normalized not in allowed:
+            raise serializers.ValidationError("Hasil medical harus FIT atau UNFIT.")
+        return normalized
+
     def update(self, instance, validated_data):
         """
         Update ApplicantProfile. full_name (source='user.full_name') arrives as
@@ -945,9 +955,40 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
                             else {"applicant_profile": e.messages}
                         )
                 profile.save()
+                req_user = getattr(self.context.get("request"), "user", None)
+                self._sync_medical_unfit_application(profile=profile, actor=req_user)
             else:
                 ApplicantProfile.objects.create(user=instance, **profile_data)
         return instance
+
+    def _sync_medical_unfit_application(self, *, profile: ApplicantProfile, actor: CustomUser | None) -> None:
+        """
+        Auto-reject active DITERIMA application when medical result is UNFIT.
+        """
+        if (getattr(profile, "hasil_medical", "") or "").strip().upper() != "UNFIT":
+            return
+
+        from main.models import ApplicationStatus, JobApplication
+        from main.services import ApplicationService, TransitionError
+
+        app = (
+            JobApplication.objects
+            .filter(applicant=profile, status=ApplicationStatus.DITERIMA)
+            .order_by("-updated_at")
+            .first()
+        )
+        if not app or actor is None:
+            return
+        try:
+            ApplicationService.transition(
+                application=app,
+                new_status=ApplicationStatus.DITOLAK,
+                actor=actor,
+                note="MEDICAL UNFIT",
+            )
+        except TransitionError:
+            # Keep profile update successful even if transition is not allowed.
+            return
 
 
 # ---------------------------------------------------------------------------

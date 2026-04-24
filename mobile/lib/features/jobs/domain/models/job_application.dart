@@ -2,6 +2,56 @@ import 'package:flutter/material.dart';
 import 'application_status_history.dart';
 import '../../../../core/utils/api_datetime.dart';
 
+class DocumentCollectionProgressItem {
+  final String code;
+  final String label;
+  final bool done;
+
+  const DocumentCollectionProgressItem({
+    required this.code,
+    required this.label,
+    required this.done,
+  });
+
+  factory DocumentCollectionProgressItem.fromJson(Map<String, dynamic> json) {
+    return DocumentCollectionProgressItem(
+      code: json['code']?.toString() ?? '',
+      label: json['label']?.toString() ?? '',
+      done: json['done'] == true,
+    );
+  }
+}
+
+class DocumentCollectionProgress {
+  final List<DocumentCollectionProgressItem> items;
+  final int doneCount;
+  final int totalCount;
+  final bool isComplete;
+
+  const DocumentCollectionProgress({
+    this.items = const [],
+    this.doneCount = 0,
+    this.totalCount = 0,
+    this.isComplete = false,
+  });
+
+  factory DocumentCollectionProgress.fromJson(Map<String, dynamic> json) {
+    final rawItems = json['items'];
+    final items = rawItems is List
+        ? rawItems
+            .whereType<Map<String, dynamic>>()
+            .map(DocumentCollectionProgressItem.fromJson)
+            .toList()
+        : <DocumentCollectionProgressItem>[];
+    return DocumentCollectionProgress(
+      items: items,
+      doneCount: JobApplication._safeInt(json['done_count']),
+      totalCount: JobApplication._safeInt(json['total_count']),
+      isComplete: json['is_complete'] == true,
+    );
+  }
+}
+
 class JobApplication {
   static const List<String> stageOrder = <String>[
     'PRA_SELEKSI',
@@ -38,6 +88,8 @@ class JobApplication {
   final Map<String, bool> attendanceByStage;
   final Map<String, DateTime?> attendanceMarkedAtByStage;
   final List<String> reachedStages;
+  final DocumentCollectionProgress? documentCollectionProgress;
+  final bool pengumpulanDokumenComplete;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -68,6 +120,8 @@ class JobApplication {
     this.attendanceByStage = const {},
     this.attendanceMarkedAtByStage = const {},
     this.reachedStages = const [],
+    this.documentCollectionProgress,
+    this.pengumpulanDokumenComplete = false,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -116,6 +170,10 @@ class JobApplication {
     final reachedStages = reachedRaw is List
         ? reachedRaw.map((e) => e.toString()).toList()
         : <String>[];
+    final dcpRaw = json['document_collection_progress'];
+    final dcp = dcpRaw is Map<String, dynamic>
+        ? DocumentCollectionProgress.fromJson(dcpRaw)
+        : null;
 
     return JobApplication(
       id: _safeInt(json['id']),
@@ -147,6 +205,8 @@ class JobApplication {
       attendanceByStage: attendanceByStage,
       attendanceMarkedAtByStage: attendanceMarkedAtByStage,
       reachedStages: reachedStages,
+      documentCollectionProgress: dcp,
+      pengumpulanDokumenComplete: json['pengumpulan_dokumen_complete'] == true,
       createdAt: ApiDateTime.parseRequired(
         json['created_at'],
         fieldName: 'created_at',

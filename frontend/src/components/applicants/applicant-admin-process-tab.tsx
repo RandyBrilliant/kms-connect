@@ -15,6 +15,13 @@ import {
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { DatePicker } from "@/components/ui/date-picker"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import type { ApplicantProfile } from "@/types/applicant"
 import { applicantProfileUpdateSchema } from "@/schemas/applicant"
 import { formatApiValidationErrors } from "@/lib/format-api-validation-errors"
@@ -200,13 +207,20 @@ export function ApplicantAdminProcessTab({
                 {(field) => (
                   <Field>
                     <FieldLabel htmlFor={field.name}>Hasil Medical</FieldLabel>
-                    <Input
-                      id={field.name}
-                      value={field.state.value}
-                      onChange={(e) => field.handleChange(e.target.value)}
+                    <Select
+                      value={field.state.value || "PENDING"}
+                      onValueChange={(v) => field.handleChange(v === "PENDING" ? "" : v)}
                       disabled={isSubmitting}
-                      placeholder="Contoh: FIT / UNFIT"
-                    />
+                    >
+                      <SelectTrigger id={field.name} className="cursor-pointer">
+                        <SelectValue placeholder="Pilih hasil medical" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="PENDING">Belum diisi</SelectItem>
+                        <SelectItem value="FIT">FIT</SelectItem>
+                        <SelectItem value="UNFIT">UNFIT</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <FieldError errors={field.state.meta.errors as any} />
                   </Field>
                 )}

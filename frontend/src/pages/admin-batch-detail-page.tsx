@@ -403,7 +403,8 @@ function BatchStatusTab({
   }
 
   const showCheckboxCol = apps.length > 0 && !!(nextStatus || canReject)
-  const tableColSpan = (showCheckboxCol ? 1 : 0) + 8
+  const showDocProgressCol = status === "DITERIMA"
+  const tableColSpan = (showCheckboxCol ? 1 : 0) + 8 + (showDocProgressCol ? 1 : 0)
 
   return (
     <div className="flex flex-col gap-4">
@@ -503,6 +504,7 @@ function BatchStatusTab({
               <TableHead>Hadir Tahap Ini</TableHead>
               <TableHead>Konfirmasi Pra-Sel.</TableHead>
               <TableHead>Konfirmasi Interview</TableHead>
+              {showDocProgressCol && <TableHead>Pengumpulan Dokumen</TableHead>}
               <TableHead>Tanggal Ditambahkan</TableHead>
               <TableHead className="w-[88px] text-right">Aksi</TableHead>
             </TableRow>
@@ -569,6 +571,29 @@ function BatchStatusTab({
                       <span className="text-muted-foreground">Belum</span>
                     )}
                   </TableCell>
+                  {showDocProgressCol && (
+                    <TableCell className="text-sm">
+                      {app.document_collection_progress ? (
+                        <div className="flex flex-col gap-0.5">
+                          <span className="font-medium">
+                            {app.document_collection_progress.done_count}/
+                            {app.document_collection_progress.total_count}
+                          </span>
+                          <span
+                            className={
+                              app.document_collection_progress.is_complete
+                                ? "text-xs text-green-600"
+                                : "text-xs text-muted-foreground"
+                            }
+                          >
+                            {app.document_collection_progress.is_complete ? "Lengkap" : "Belum lengkap"}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                  )}
                   <TableCell className="text-sm text-muted-foreground">
                     {formatDate(app.applied_at)}
                   </TableCell>
@@ -602,6 +627,21 @@ function BatchStatusTab({
                       >
                         <IconExternalLink className="size-4" />
                         <span className="sr-only">Buka halaman lamaran</span>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 shrink-0 cursor-pointer text-muted-foreground"
+                        title="Kelola dokumen pelamar"
+                        disabled={!app.applicant_user}
+                        onClick={() => {
+                          if (!app.applicant_user) return
+                          navigate(joinAdminPath(basePath, `/pelamar/${app.applicant_user}`))
+                        }}
+                      >
+                        <IconFileSpreadsheet className="size-4" />
+                        <span className="sr-only">Kelola dokumen pelamar</span>
                       </Button>
                       <Button
                         type="button"
