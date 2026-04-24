@@ -1,3 +1,5 @@
+import '../../../../core/utils/api_datetime.dart';
+
 class Job {
   final int id;
   final String title;
@@ -74,18 +76,14 @@ class Job {
       salaryMax: _safeIntOrNull(json['salary_max']),
       currency: (json['currency'] ?? 'IDR') as String,
       status: (json['status'] ?? '') as String,
-      postedAt: json['posted_at'] != null
-          ? DateTime.parse(json['posted_at'] as String)
-          : null,
-      deadline: json['deadline'] != null
-          ? DateTime.parse(json['deadline'] as String)
-          : null,
-      startDate: json['start_date'] != null
-          ? DateTime.parse(json['start_date'] as String)
-          : null,
+      postedAt: ApiDateTime.parse(json['posted_at']),
+      deadline: ApiDateTime.parse(json['deadline']),
+      startDate: ApiDateTime.parse(json['start_date']),
       quota: _safeIntOrNull(json['quota']),
-      createdAt: DateTime.parse(json['created_at'] as String),
-      updatedAt: DateTime.parse(json['updated_at'] as String),
+      createdAt:
+          ApiDateTime.parseRequired(json['created_at'], fieldName: 'created_at'),
+      updatedAt:
+          ApiDateTime.parseRequired(json['updated_at'], fieldName: 'updated_at'),
     );
   }
 

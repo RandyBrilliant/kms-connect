@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'application_status_history.dart';
+import '../../../../core/utils/api_datetime.dart';
 
 class JobApplication {
   static const List<String> stageOrder = <String>[
@@ -107,9 +108,7 @@ class JobApplication {
     final attendanceMarkedAtByStage = <String, DateTime?>{};
     if (attendanceAtRaw is Map<String, dynamic>) {
       for (final entry in attendanceAtRaw.entries) {
-        final v = entry.value;
-        attendanceMarkedAtByStage[entry.key] =
-            (v is String && v.isNotEmpty) ? DateTime.tryParse(v) : null;
+        attendanceMarkedAtByStage[entry.key] = ApiDateTime.parse(entry.value);
       }
     }
 
@@ -129,27 +128,18 @@ class JobApplication {
       batch: _safeIntOrNull(json['batch']),
       batchName: json['batch_name']?.toString(),
       status: (json['status'] ?? '') as String,
-      praSeleksiDate: json['pra_seleksi_date'] != null
-          ? DateTime.parse(json['pra_seleksi_date'] as String)
-          : null,
+      praSeleksiDate: ApiDateTime.parse(json['pra_seleksi_date']),
       praSeleksiLocation: json['pra_seleksi_location']?.toString(),
-      interviewDate: json['interview_date'] != null
-          ? DateTime.parse(json['interview_date'] as String)
-          : null,
+      interviewDate: ApiDateTime.parse(json['interview_date']),
       interviewLocation: json['interview_location']?.toString(),
-      praSeleksiConfirmedAt: json['pra_seleksi_confirmed_at'] != null
-          ? DateTime.parse(json['pra_seleksi_confirmed_at'] as String)
-          : null,
-      interviewConfirmedAt: json['interview_confirmed_at'] != null
-          ? DateTime.parse(json['interview_confirmed_at'] as String)
-          : null,
-      appliedAt: DateTime.parse(json['applied_at'] as String),
-      placementEndDate: json['placement_end_date'] != null
-          ? DateTime.parse(json['placement_end_date'] as String)
-          : null,
-      cooldownEligibleDate: json['cooldown_eligible_date'] != null
-          ? DateTime.parse(json['cooldown_eligible_date'] as String)
-          : null,
+      praSeleksiConfirmedAt: ApiDateTime.parse(json['pra_seleksi_confirmed_at']),
+      interviewConfirmedAt: ApiDateTime.parse(json['interview_confirmed_at']),
+      appliedAt: ApiDateTime.parseRequired(
+        json['applied_at'],
+        fieldName: 'applied_at',
+      ),
+      placementEndDate: ApiDateTime.parse(json['placement_end_date']),
+      cooldownEligibleDate: ApiDateTime.parse(json['cooldown_eligible_date']),
       assignedBy: _safeIntOrNull(json['assigned_by']),
       assignedByName: json['assigned_by_name']?.toString(),
       notes: json['notes'] as String?,
@@ -157,8 +147,14 @@ class JobApplication {
       attendanceByStage: attendanceByStage,
       attendanceMarkedAtByStage: attendanceMarkedAtByStage,
       reachedStages: reachedStages,
-      createdAt: DateTime.parse(json['created_at'] as String),
-      updatedAt: DateTime.parse(json['updated_at'] as String),
+      createdAt: ApiDateTime.parseRequired(
+        json['created_at'],
+        fieldName: 'created_at',
+      ),
+      updatedAt: ApiDateTime.parseRequired(
+        json['updated_at'],
+        fieldName: 'updated_at',
+      ),
     );
   }
 

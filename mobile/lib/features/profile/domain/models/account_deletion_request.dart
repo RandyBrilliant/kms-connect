@@ -1,3 +1,5 @@
+import '../../../../core/utils/api_datetime.dart';
+
 class AccountDeletionRequest {
   final int id;
   final String? reason;
@@ -20,10 +22,9 @@ class AccountDeletionRequest {
       id: json['id'] as int,
       reason: json['reason'] as String?,
       status: json['status'] as String,
-      requestedAt: DateTime.parse(json['requested_at'] as String),
-      reviewedAt: json['reviewed_at'] != null
-          ? DateTime.parse(json['reviewed_at'] as String)
-          : null,
+      requestedAt:
+          ApiDateTime.parseRequired(json['requested_at'], fieldName: 'requested_at'),
+      reviewedAt: ApiDateTime.parse(json['reviewed_at']),
       adminNotes: json['admin_notes'] as String?,
     );
   }

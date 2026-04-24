@@ -1,3 +1,5 @@
+import '../../../../core/utils/api_datetime.dart';
+
 /// A single message inside a ChatThread.
 class ChatMessage {
   final int id;
@@ -37,11 +39,9 @@ class ChatMessage {
       senderName: (json['sender_name'] ?? '') as String,
       senderRole: (json['sender_role'] ?? '') as String,
       body: (json['body'] ?? '') as String,
-      sentAt: DateTime.parse(json['sent_at'] as String),
+      sentAt: ApiDateTime.parseRequired(json['sent_at'], fieldName: 'sent_at'),
       isRead: (json['is_read'] ?? false) as bool,
-      readAt: json['read_at'] != null
-          ? DateTime.parse(json['read_at'] as String)
-          : null,
+      readAt: ApiDateTime.parse(json['read_at']),
     );
   }
 }

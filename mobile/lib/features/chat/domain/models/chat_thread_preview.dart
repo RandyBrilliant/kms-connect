@@ -1,3 +1,5 @@
+import '../../../../core/utils/api_datetime.dart';
+
 /// Summary of the last message in a chat thread — used in the inbox list.
 class ChatLastMessage {
   final int id;
@@ -22,7 +24,7 @@ class ChatLastMessage {
       body: (json['body'] ?? '') as String,
       senderName: (json['sender_name'] ?? '') as String,
       senderRole: (json['sender_role'] ?? '') as String,
-      sentAt: DateTime.parse(json['sent_at'] as String),
+      sentAt: ApiDateTime.parseRequired(json['sent_at'], fieldName: 'sent_at'),
       isRead: (json['is_read'] ?? false) as bool,
     );
   }
@@ -82,8 +84,10 @@ class ChatThreadPreview {
       lastMessage: lastMsgRaw is Map<String, dynamic>
           ? ChatLastMessage.fromJson(lastMsgRaw)
           : null,
-      updatedAt: DateTime.parse(json['updated_at'] as String),
-      createdAt: DateTime.parse(json['created_at'] as String),
+      updatedAt:
+          ApiDateTime.parseRequired(json['updated_at'], fieldName: 'updated_at'),
+      createdAt:
+          ApiDateTime.parseRequired(json['created_at'], fieldName: 'created_at'),
     );
   }
 

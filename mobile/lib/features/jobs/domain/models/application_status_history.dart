@@ -1,3 +1,5 @@
+import '../../../../core/utils/api_datetime.dart';
+
 /// An entry in the append-only status audit log for a JobApplication.
 class ApplicationStatusHistory {
   final int id;
@@ -40,7 +42,8 @@ class ApplicationStatusHistory {
       toStatus: (json['to_status'] ?? '') as String,
       changedBy: _safeIntOrNull(json['changed_by']),
       changedByName: json['changed_by_name']?.toString(),
-      changedAt: DateTime.parse(json['changed_at'] as String),
+      changedAt:
+          ApiDateTime.parseRequired(json['changed_at'], fieldName: 'changed_at'),
       note: json['note']?.toString(),
     );
   }

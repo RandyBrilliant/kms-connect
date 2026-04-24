@@ -1,3 +1,5 @@
+import '../../../../core/utils/api_datetime.dart';
+
 class News {
   final int id;
   final String title;
@@ -39,11 +41,11 @@ class News {
       content: (json['content'] ?? '') as String,
       heroImage: json['hero_image']?.toString(),
       isPinned: json['is_pinned'] as bool? ?? false,
-      publishedAt: json['published_at'] != null
-          ? DateTime.parse(json['published_at'] as String)
-          : null,
-      createdAt: DateTime.parse(json['created_at'] as String),
-      updatedAt: DateTime.parse(json['updated_at'] as String),
+      publishedAt: ApiDateTime.parse(json['published_at']),
+      createdAt:
+          ApiDateTime.parseRequired(json['created_at'], fieldName: 'created_at'),
+      updatedAt:
+          ApiDateTime.parseRequired(json['updated_at'], fieldName: 'updated_at'),
     );
   }
 }

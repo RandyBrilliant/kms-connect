@@ -8,6 +8,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../../config/colors.dart';
@@ -143,9 +145,10 @@ class _SocialCompleteProfilePageState
     try {
       final imageFile = await _pickImage(source);
       if (imageFile == null || !mounted) return;
+      final persistentFile = await _persistKtpImage(imageFile);
       setState(() => _isPickingImage = false);
       _clearFields();
-      ref.read(socialCompleteProvider.notifier).setKtpImage(imageFile);
+      ref.read(socialCompleteProvider.notifier).setKtpImage(persistentFile);
       await _runOcr();
     } on PlatformException catch (e) {
       if (!mounted) return;
@@ -158,6 +161,24 @@ class _SocialCompleteProfilePageState
     } finally {
       if (mounted && _isPickingImage) setState(() => _isPickingImage = false);
     }
+  }
+
+  Future<File> _persistKtpImage(File source) async {
+    final appDir = await getApplicationSupportDirectory();
+    final ktpDir = Directory(p.join(appDir.path, 'ktp_uploads'));
+    if (!await ktpDir.exists()) {
+      await ktpDir.create(recursive: true);
+    }
+    final ext = p.extension(source.path).toLowerCase();
+    final safeExt = switch (ext) {
+      '.jpg' || '.jpeg' || '.png' || '.webp' => ext,
+      _ => '.jpg',
+    };
+    final targetPath = p.join(
+      ktpDir.path,
+      'ktp_${DateTime.now().millisecondsSinceEpoch}$safeExt',
+    );
+    return source.copy(targetPath);
   }
 
   Future<File?> _pickImage(ImageSource source) async {
@@ -477,6 +498,16 @@ class _SocialCompleteProfilePageState
 
   Future<void> _handleSubmit() async {
     if (!_formKey.currentState!.validate()) return;
+
+    final selectedKtpFile = ref.read(socialCompleteProvider).ktpImage;
+    if (selectedKtpFile == null || !await selectedKtpFile.exists()) {
+      CustomToast.show(
+        context,
+        message: 'File KTP tidak ditemukan. Silakan upload ulang foto KTP.',
+        type: ToastType.error,
+      );
+      return;
+    }
 
     if (_selectedDate != null) {
       final now = DateTime.now();

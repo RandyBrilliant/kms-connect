@@ -1,3 +1,5 @@
+import '../../../../core/utils/api_datetime.dart';
+
 class ApplicantDocument {
   final int id;
   final int documentType;
@@ -52,18 +54,15 @@ class ApplicantDocument {
       documentType: docTypeId,
       documentTypeName: docTypeName,
       file: json['file'] as String?,
-      uploadedAt: DateTime.parse(json['uploaded_at'] as String),
+      uploadedAt:
+          ApiDateTime.parseRequired(json['uploaded_at'], fieldName: 'uploaded_at'),
       ocrText: json['ocr_text'] as String?,
       ocrData: json['ocr_data'] as Map<String, dynamic>?,
-      ocrProcessedAt: json['ocr_processed_at'] != null
-          ? DateTime.parse(json['ocr_processed_at'] as String)
-          : null,
+      ocrProcessedAt: ApiDateTime.parse(json['ocr_processed_at']),
       reviewStatus: json['review_status'] as String? ?? 'PENDING',
       reviewNotes: (json['review_notes'] ?? '') as String,
       reviewedByName: json['reviewed_by_name']?.toString(),
-      reviewedAt: json['reviewed_at'] != null
-          ? DateTime.tryParse(json['reviewed_at'] as String)
-          : null,
+      reviewedAt: ApiDateTime.parse(json['reviewed_at']),
     );
   }
 

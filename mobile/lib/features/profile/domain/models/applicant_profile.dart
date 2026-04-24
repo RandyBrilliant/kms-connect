@@ -1,3 +1,5 @@
+import '../../../../core/utils/api_datetime.dart';
+
 /// A light reference to a region (id + name), returned embedded in profile JSON.
 class RegionRef {
   final int id;
@@ -211,9 +213,7 @@ class ApplicantProfile {
       fullName: _str(json['full_name']),
       birthPlaceId: _idFromField(json['birth_place']),
       birthPlaceName: _str(json['birth_place_display']) ?? _nameFromField(json['birth_place']),
-      birthDate: json['birth_date'] != null
-          ? DateTime.tryParse(json['birth_date'].toString())
-          : null,
+      birthDate: ApiDateTime.parse(json['birth_date']),
       gender: _str(json['gender']),
       address: _str(json['address']),
       provinceId: _idFromField(json['province']),
@@ -234,13 +234,9 @@ class ApplicantProfile {
       maritalStatus: _str(json['marital_status']),
       hasPassport: json['has_passport'] as bool?,
       passportNumber: _str(json['passport_number']),
-      passportIssueDate: json['passport_issue_date'] != null
-          ? DateTime.tryParse(json['passport_issue_date'].toString())
-          : null,
+      passportIssueDate: ApiDateTime.parse(json['passport_issue_date']),
       passportIssuePlace: _str(json['passport_issue_place']),
-      passportExpiryDate: json['passport_expiry_date'] != null
-          ? DateTime.tryParse(json['passport_expiry_date'].toString())
-          : null,
+      passportExpiryDate: ApiDateTime.parse(json['passport_expiry_date']),
       familyCardNumber: _str(json['family_card_number']),
       diplomaNumber: _str(json['diploma_number']),
       bpjsNumber: _str(json['bpjs_number']),
@@ -279,14 +275,12 @@ class ApplicantProfile {
       notes: _str(json['notes']),
       verificationStatus: _str(json['verification_status']) ?? 'DRAFT',
       score: json['score'] != null ? (json['score'] as num).toDouble() : null,
-      submittedAt: json['submitted_at'] != null
-          ? DateTime.tryParse(json['submitted_at'].toString())
-          : null,
-      verifiedAt: json['verified_at'] != null
-          ? DateTime.tryParse(json['verified_at'].toString())
-          : null,
-      createdAt: DateTime.parse(json['created_at'].toString()),
-      updatedAt: DateTime.parse(json['updated_at'].toString()),
+      submittedAt: ApiDateTime.parse(json['submitted_at']),
+      verifiedAt: ApiDateTime.parse(json['verified_at']),
+      createdAt:
+          ApiDateTime.parseRequired(json['created_at'], fieldName: 'created_at'),
+      updatedAt:
+          ApiDateTime.parseRequired(json['updated_at'], fieldName: 'updated_at'),
     );
   }
 

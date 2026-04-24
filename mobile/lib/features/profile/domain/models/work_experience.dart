@@ -1,3 +1,5 @@
+import '../../../../core/utils/api_datetime.dart';
+
 class WorkExperience {
   final int id;
   final String companyName;
@@ -40,17 +42,15 @@ class WorkExperience {
       location: json['location'] as String?,
       country: json['country'] as String?,
       industryType: json['industry_type'] as String?,
-      startDate: json['start_date'] != null 
-          ? DateTime.parse(json['start_date'] as String) 
-          : null,
-      endDate: json['end_date'] != null 
-          ? DateTime.parse(json['end_date'] as String) 
-          : null,
+      startDate: ApiDateTime.parse(json['start_date']),
+      endDate: ApiDateTime.parse(json['end_date']),
       stillEmployed: json['still_employed'] as bool? ?? false,
       description: json['description'] as String?,
       sortOrder: json['sort_order'] as int? ?? 0,
-      createdAt: DateTime.parse(json['created_at'] as String),
-      updatedAt: DateTime.parse(json['updated_at'] as String),
+      createdAt:
+          ApiDateTime.parseRequired(json['created_at'], fieldName: 'created_at'),
+      updatedAt:
+          ApiDateTime.parseRequired(json['updated_at'], fieldName: 'updated_at'),
     );
   }
 

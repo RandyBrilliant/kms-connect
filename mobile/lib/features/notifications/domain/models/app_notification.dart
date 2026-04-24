@@ -1,3 +1,5 @@
+import '../../../../core/utils/api_datetime.dart';
+
 class AppNotification {
   final int id;
   final String title;
@@ -33,10 +35,9 @@ class AppNotification {
       actionUrl: json['action_url'] as String?,
       actionLabel: json['action_label'] as String?,
       isRead: json['is_read'] as bool? ?? false,
-      readAt: json['read_at'] != null
-          ? DateTime.tryParse(json['read_at'] as String)
-          : null,
-      createdAt: DateTime.parse(json['created_at'] as String),
+      readAt: ApiDateTime.parse(json['read_at']),
+      createdAt:
+          ApiDateTime.parseRequired(json['created_at'], fieldName: 'created_at'),
     );
   }
 

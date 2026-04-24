@@ -1,3 +1,5 @@
+import '../../../../core/utils/api_datetime.dart';
+
 /// Broadcast announcement sent by admin to all applicants in a batch.
 ///
 /// Used on PRA_SELEKSI and INTERVIEW stages as the primary communication
@@ -49,7 +51,8 @@ class BatchAnnouncement {
       recipientConfig: rc is Map<String, dynamic> ? rc : null,
       createdBy: _safeIntOrNull(json['created_by']),
       createdByName: json['created_by_name']?.toString(),
-      createdAt: DateTime.parse(json['created_at'] as String),
+      createdAt:
+          ApiDateTime.parseRequired(json['created_at'], fieldName: 'created_at'),
     );
   }
 }
