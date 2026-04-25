@@ -65,7 +65,10 @@ class JobRepository {
       }
 
       return const PaginatedResponse<Job>(
-          count: 0, results: [], hasNext: false);
+        count: 0,
+        results: [],
+        hasNext: false,
+      );
     } on DioException catch (e) {
       throw _handleError(e);
     }
@@ -108,13 +111,17 @@ class JobRepository {
       final data = response.data;
       if (data is List) {
         return data
-            .map((json) => JobApplication.fromJson(json as Map<String, dynamic>))
+            .map(
+              (json) => JobApplication.fromJson(json as Map<String, dynamic>),
+            )
             .toList();
       }
       // Handle paginated response
       if (data is Map<String, dynamic> && data['results'] is List) {
         return (data['results'] as List)
-            .map((json) => JobApplication.fromJson(json as Map<String, dynamic>))
+            .map(
+              (json) => JobApplication.fromJson(json as Map<String, dynamic>),
+            )
             .toList();
       }
       return [];
@@ -152,13 +159,14 @@ class JobRepository {
 
   /// Confirm attendance for a stage.
   /// If stage is null, backend uses current stage.
-  Future<JobApplication> confirmAttendance(int applicationId, {String? stage}) async {
+  Future<JobApplication> confirmAttendance(
+    int applicationId, {
+    String? stage,
+  }) async {
     try {
       final response = await _apiClient.dio.post(
         ApiEndpoints.confirmAttendance(applicationId),
-        data: {
-          if (stage != null && stage.isNotEmpty) 'stage': stage,
-        },
+        data: {if (stage != null && stage.isNotEmpty) 'stage': stage},
       );
       final data = response.data;
       if (data is Map<String, dynamic>) {
@@ -183,12 +191,42 @@ class JobRepository {
     }
   }
 
+  /// Applicant self-confirmation: BERANGKAT -> SELESAI.
+  Future<JobApplication> completeApplication(int applicationId) async {
+    try {
+      final response = await _apiClient.dio.post(
+        ApiEndpoints.completeApplication(applicationId),
+      );
+      final data = response.data;
+      if (data is Map<String, dynamic>) {
+        if (data.containsKey('id')) {
+          return JobApplication.fromJson(data);
+        }
+        final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
+          data,
+          (d) => d as Map<String, dynamic>,
+        );
+        if (apiResponse.data != null) {
+          return JobApplication.fromJson(apiResponse.data!);
+        }
+      }
+      throw DioException(
+        requestOptions: response.requestOptions,
+        message: 'Gagal mengkonfirmasi status selesai',
+      );
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
   /// Fetch batch broadcast announcements for an application.
   ///
   /// Returns the announcements for the batch this application belongs to.
   /// Empty list when the application has no batch.
   /// This is the primary communication channel for PRA_SELEKSI and INTERVIEW stages.
-  Future<List<BatchAnnouncement>> getApplicationAnnouncements(int applicationId) async {
+  Future<List<BatchAnnouncement>> getApplicationAnnouncements(
+    int applicationId,
+  ) async {
     try {
       final response = await _apiClient.dio.get(
         ApiEndpoints.applicationAnnouncements(applicationId),

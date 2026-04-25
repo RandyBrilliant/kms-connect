@@ -79,7 +79,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--count",
             type=int,
-            default=10,
+            default=0,
             help="Jumlah pelamar yang akan di-seed (default: 10).",
         )
         parser.add_argument(

@@ -57,4 +57,53 @@ class KtpImageCropper {
     await outFile.writeAsBytes(img.encodeJpg(cropped, quality: 92));
     return outFile;
   }
+
+  /// Crops the image to a centered fixed aspect ratio (e.g. KTP 1.586:1).
+  static Future<File> cropToAspectRatioCentered({
+    required File sourceFile,
+    required double ratioX,
+    required double ratioY,
+  }) async {
+    final bytes = await sourceFile.readAsBytes();
+    final decoded = img.decodeImage(bytes);
+    if (decoded == null) return sourceFile;
+
+    final oriented = img.bakeOrientation(decoded);
+    final srcW = oriented.width;
+    final srcH = oriented.height;
+    final targetRatio = ratioX / ratioY;
+    final srcRatio = srcW / srcH;
+
+    int cropW;
+    int cropH;
+    if (srcRatio > targetRatio) {
+      // Source is wider than target ratio: trim left/right.
+      cropH = srcH;
+      cropW = (cropH * targetRatio).round();
+    } else {
+      // Source is taller than target ratio: trim top/bottom.
+      cropW = srcW;
+      cropH = (cropW / targetRatio).round();
+    }
+
+    cropW = cropW.clamp(1, srcW);
+    cropH = cropH.clamp(1, srcH);
+    final cropX = ((srcW - cropW) / 2).round().clamp(0, srcW - cropW);
+    final cropY = ((srcH - cropH) / 2).round().clamp(0, srcH - cropH);
+
+    final cropped = img.copyCrop(
+      oriented,
+      x: cropX,
+      y: cropY,
+      width: cropW,
+      height: cropH,
+    );
+
+    final dir = p.dirname(sourceFile.path);
+    final base = p.basenameWithoutExtension(sourceFile.path);
+    final outPath = p.join(dir, '${base}_ktp_ratio_crop.jpg');
+    final outFile = File(outPath);
+    await outFile.writeAsBytes(img.encodeJpg(cropped, quality: 92));
+    return outFile;
+  }
 }

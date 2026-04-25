@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'config/theme.dart';
+import 'core/navigation/main_tab_transition.dart';
 import 'core/widgets/custom_toast.dart';
 
 import 'features/auth/presentation/pages/splash_page.dart';
@@ -190,7 +191,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/home',
         name: 'home',
-        builder: (context, state) => const HomePage(),
+        pageBuilder: (context, state) => MainTabTransition.buildPage(
+          key: state.pageKey,
+          location: state.matchedLocation,
+          child: const HomePage(),
+        ),
       ),
       GoRoute(
         path: '/notifications/:notificationId',
@@ -214,7 +219,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/profile',
         name: 'profile',
-        builder: (context, state) => const ProfilePage(),
+        pageBuilder: (context, state) => MainTabTransition.buildPage(
+          key: state.pageKey,
+          location: state.matchedLocation,
+          child: const ProfilePage(),
+        ),
       ),
       GoRoute(
         path: '/profile/edit',
@@ -254,13 +263,21 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/jobs',
         name: 'jobs',
-        builder: (context, state) => const JobsListPage(),
+        pageBuilder: (context, state) => MainTabTransition.buildPage(
+          key: state.pageKey,
+          location: state.matchedLocation,
+          child: const JobsListPage(),
+        ),
       ),
       // Must come before /jobs/:id so GoRouter doesn't match "my-applications" as an :id
       GoRoute(
         path: '/jobs/my-applications',
         name: 'my-applications',
-        builder: (context, state) => const MyApplicationsPage(),
+        pageBuilder: (context, state) => MainTabTransition.buildPage(
+          key: state.pageKey,
+          location: state.matchedLocation,
+          child: const MyApplicationsPage(),
+        ),
       ),
       // Must come before /jobs/:id so GoRouter doesn't match "applications" as an :id
       GoRoute(
@@ -290,7 +307,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/news',
         name: 'news',
-        builder: (context, state) => const NewsListPage(),
+        pageBuilder: (context, state) => MainTabTransition.buildPage(
+          key: state.pageKey,
+          location: state.matchedLocation,
+          child: const NewsListPage(),
+        ),
       ),
       GoRoute(
         path: '/chat',

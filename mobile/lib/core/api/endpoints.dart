@@ -10,10 +10,14 @@ class ApiEndpoints {
   static const String logout = '$baseUrl/auth/logout/';
   static const String verifyEmail = '$baseUrl/auth/verify-email/';
   static const String verifyEmailCode = '$baseUrl/auth/verify-email-code/';
-  static const String resendVerificationEmail = '$baseUrl/auth/resend-verification-email/';
-  static const String updateUnverifiedEmail = '$baseUrl/auth/update-unverified-email/';
-  static const String requestPasswordReset = '$baseUrl/auth/request-password-reset/';
-  static const String confirmPasswordReset = '$baseUrl/auth/confirm-reset-password/';
+  static const String resendVerificationEmail =
+      '$baseUrl/auth/resend-verification-email/';
+  static const String updateUnverifiedEmail =
+      '$baseUrl/auth/update-unverified-email/';
+  static const String requestPasswordReset =
+      '$baseUrl/auth/request-password-reset/';
+  static const String confirmPasswordReset =
+      '$baseUrl/auth/confirm-reset-password/';
 
   // Social Sign-In
   static const String googleSignIn = '$baseUrl/auth/google/';
@@ -30,18 +34,24 @@ class ApiEndpoints {
 
   // Applicants (Self-service)
   static const String myProfile = '$baseUrl/applicants/me/profile/';
-  static const String myWorkExperiences = '$baseUrl/applicants/me/work_experiences/';
+  static const String myWorkExperiences =
+      '$baseUrl/applicants/me/work_experiences/';
   static const String myDocuments = '$baseUrl/applicants/me/documents/';
+
   /// Checklist tipe dokumen (INITIAL saja sampai lamaran capai INTERVIEW+).
-  static const String myDocumentTypes = '$baseUrl/applicants/me/document-types/';
+  static const String myDocumentTypes =
+      '$baseUrl/applicants/me/document-types/';
   static const String myApplications = '$baseUrl/applicants/me/applications/';
-  static const String changePassword = '$baseUrl/applicants/me/change-password/';
+  static const String changePassword =
+      '$baseUrl/applicants/me/change-password/';
   static const String myBiodataPdf = '$baseUrl/applicants/me/biodata-pdf/';
 
   // Account Deletion
   static const String myDeletionRequest = '$baseUrl/deletion-requests/my/';
-  static const String submitDeletionRequest = '$baseUrl/deletion-requests/submit/';
-  static const String cancelDeletionRequest = '$baseUrl/deletion-requests/my/cancel/';
+  static const String submitDeletionRequest =
+      '$baseUrl/deletion-requests/submit/';
+  static const String cancelDeletionRequest =
+      '$baseUrl/deletion-requests/my/cancel/';
 
   // Public
   static const String publicJobs = '$baseUrl/jobs/public/';
@@ -53,9 +63,14 @@ class ApiEndpoints {
   static String jobDetail(int id) => '$baseUrl/jobs/public/$id/';
 
   // Applicant Applications
-  static String applicationDetail(int id) => '$baseUrl/applicants/me/applications/$id/';
-  static String confirmAttendance(int id) => '$baseUrl/applicants/me/applications/$id/confirm/';
-  static String applicationAnnouncements(int id) => '$baseUrl/applicants/me/applications/$id/announcements/';
+  static String applicationDetail(int id) =>
+      '$baseUrl/applicants/me/applications/$id/';
+  static String confirmAttendance(int id) =>
+      '$baseUrl/applicants/me/applications/$id/confirm/';
+  static String completeApplication(int id) =>
+      '$baseUrl/applicants/me/applications/$id/complete/';
+  static String applicationAnnouncements(int id) =>
+      '$baseUrl/applicants/me/applications/$id/announcements/';
 
   // Chat (applicant side)
   static const String chatThreads = '$baseUrl/chat/applicant/threads/';
@@ -72,15 +87,18 @@ class ApiEndpoints {
   // Notifications
   static const String notifications = '$baseUrl/notifications/';
   static String notificationDetail(int id) => '$baseUrl/notifications/$id/';
-  static String markNotificationRead(int id) => '$baseUrl/notifications/$id/mark-read/';
-  static const String markAllNotificationsRead = '$baseUrl/notifications/mark-all-read/';
+  static String markNotificationRead(int id) =>
+      '$baseUrl/notifications/$id/mark-read/';
+  static const String markAllNotificationsRead =
+      '$baseUrl/notifications/mark-all-read/';
 
   // FCM Device Token
   static const String fcmRegister = '$baseUrl/fcm/register/';
   static const String fcmUnregister = '$baseUrl/fcm/unregister/';
-  
+
   // Documents
-  static String documentOcrPrefill(int id) => '$baseUrl/applicants/me/documents/$id/ocr_prefill/';
+  static String documentOcrPrefill(int id) =>
+      '$baseUrl/applicants/me/documents/$id/ocr_prefill/';
 
   // Regions (public, no auth required)
   static const String provinces = '$baseUrl/provinces/';

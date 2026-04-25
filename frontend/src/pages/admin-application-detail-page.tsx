@@ -220,6 +220,8 @@ export function AdminApplicationDetailPage() {
                     const markedAt = application.attendance_marked_at_by_stage?.[stage] ?? null
                     const value = !reached
                       ? "Belum mencapai tahapan"
+                      : stage === "SELESAI"
+                        ? "Selesai"
                       : markedAt
                         ? `Hadir (${formatDate(markedAt)})`
                         : "Belum hadir"

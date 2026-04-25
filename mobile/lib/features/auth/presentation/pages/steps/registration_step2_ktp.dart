@@ -18,6 +18,7 @@ import '../../../../../core/widgets/terms_privacy_modal.dart';
 import '../../../../../core/models/region.dart';
 import '../../../../../core/widgets/custom_toast.dart';
 import '../../../../../core/widgets/ktp_camera_screen.dart';
+import '../../../../../core/widgets/ktp_gallery_crop_screen.dart';
 import '../../../../../core/widgets/professional_text_field.dart';
 import '../../../../../core/widgets/professional_dropdown_field.dart';
 import '../../../../../core/widgets/professional/professional_button.dart';
@@ -218,7 +219,28 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
         imageQuality: 85,
         maxWidth: 1920,
         maxHeight: 1080);
-    return picked == null ? null : File(picked.path);
+    if (picked == null) return null;
+    return _cropGalleryImageToKtpGuide(File(picked.path));
+  }
+
+  Future<File?> _cropGalleryImageToKtpGuide(File sourceFile) async {
+    try {
+      final cropped = await Navigator.push<File>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => KtpGalleryCropScreen(sourceFile: sourceFile),
+        ),
+      );
+      return cropped;
+    } catch (_) {
+      if (!mounted) return sourceFile;
+      CustomToast.show(
+        context,
+        message: 'Gagal menyesuaikan rasio foto KTP',
+        type: ToastType.info,
+      );
+      return sourceFile;
+    }
   }
 
   //  OCR 

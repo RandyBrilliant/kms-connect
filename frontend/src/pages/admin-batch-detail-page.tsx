@@ -551,7 +551,9 @@ function BatchStatusTab({
                     )}
                   </TableCell>
                   <TableCell className="text-sm">
-                    {app.attendance_by_stage?.[app.status] ? (
+                    {app.status === "SELESAI" ? (
+                      <span className="text-green-600">Selesai</span>
+                    ) : app.attendance_by_stage?.[app.status] ? (
                       <span className="text-green-600">Hadir</span>
                     ) : (
                       <span className="text-muted-foreground">Belum</span>
@@ -574,7 +576,7 @@ function BatchStatusTab({
                   {showDocProgressCol && (
                     <TableCell className="text-sm">
                       {app.document_collection_progress ? (
-                        <div className="flex flex-col gap-0.5">
+                        <div className="flex flex-col gap-1">
                           <span className="font-medium">
                             {app.document_collection_progress.done_count}/
                             {app.document_collection_progress.total_count}
@@ -588,6 +590,30 @@ function BatchStatusTab({
                           >
                             {app.document_collection_progress.is_complete ? "Lengkap" : "Belum lengkap"}
                           </span>
+                          {app.pengumpulan_dokumen_confirmed_at ? (
+                            <span className="text-xs text-green-600">
+                              Dikonfirmasi: {formatDate(app.pengumpulan_dokumen_confirmed_at)}
+                            </span>
+                          ) : app.document_collection_progress.is_complete ? (
+                            <span className="text-xs text-amber-600">
+                              Menunggu konfirmasi pelamar
+                            </span>
+                          ) : null}
+                          {app.pengumpulan_dokumen_pending_labels?.length ? (
+                            <div className="mt-0.5">
+                              <p className="text-[11px] font-medium text-muted-foreground">
+                                Belum terpenuhi:
+                              </p>
+                              <ul className="list-disc pl-4 text-[11px] text-muted-foreground space-y-0.5">
+                                {app.pengumpulan_dokumen_pending_labels.slice(0, 3).map((label) => (
+                                  <li key={label}>{label}</li>
+                                ))}
+                                {app.pengumpulan_dokumen_pending_labels.length > 3 ? (
+                                  <li>+{app.pengumpulan_dokumen_pending_labels.length - 3} item lainnya</li>
+                                ) : null}
+                              </ul>
+                            </div>
+                          ) : null}
                         </div>
                       ) : (
                         <span className="text-muted-foreground">-</span>

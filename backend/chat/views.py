@@ -16,6 +16,7 @@ Applicant endpoints (IsApplicant):
 """
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
+from django.db.models import Q
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -27,6 +28,7 @@ from account.api_responses import ApiCode, error_response, success_response
 from account.permissions import IsApplicant, IsBackofficeAdmin
 
 from .models import ChatMessage, ChatThread
+from main.models import JobApplication
 
 # Statuses at which an applicant is permitted to use individual chat.
 _CHAT_ALLOWED_STATUSES = {"DITERIMA", "BERANGKAT", "SELESAI"}
@@ -207,17 +209,35 @@ class _ApplicantThreadMixin:
                 status=status.HTTP_404_NOT_FOUND,
             )
 
+        # Backward compatibility:
+        # some clients still send application_id in `{thread_id}` path param.
+        # Accept either real thread.pk OR thread.application_id for the same applicant.
         thread = (
             ChatThread.objects
-            .filter(pk=thread_id, application__applicant=applicant_profile)
+            .filter(
+                Q(pk=thread_id) | Q(application_id=thread_id),
+                application__applicant=applicant_profile,
+            )
             .select_related("application__applicant__user", "application__job")
+            .order_by("pk")
             .first()
         )
         if not thread:
-            return None, Response(
-                error_response(detail="Thread tidak ditemukan.", code=ApiCode.NOT_FOUND),
-                status=status.HTTP_404_NOT_FOUND,
+            # Compatibility for older data: some eligible applications may not
+            # have ChatThread rows yet (e.g. created before chat signal existed).
+            application = (
+                JobApplication.objects
+                .select_related("applicant", "job")
+                .filter(pk=thread_id, applicant=applicant_profile)
+                .first()
             )
+            if application and application.status in _CHAT_ALLOWED_STATUSES:
+                thread, _ = ChatThread.objects.get_or_create(application=application)
+            else:
+                return None, Response(
+                    error_response(detail="Thread tidak ditemukan.", code=ApiCode.NOT_FOUND),
+                    status=status.HTTP_404_NOT_FOUND,
+                )
 
         # Chat is only available once the application reaches DITERIMA or later.
         # For PRA_SELEKSI and INTERVIEW stages, use batch announcements instead.
@@ -257,6 +277,25 @@ class ApplicantThreadListView(_ApplicantThreadMixin, APIView):
                     code=ApiCode.NOT_FOUND,
                 ),
                 status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Auto-heal: ensure each eligible application has a thread, so inbox
+        # immediately shows chat when status reaches DITERIMA+.
+        eligible_app_ids = list(
+            JobApplication.objects.filter(
+                applicant=applicant_profile,
+                status__in=_CHAT_ALLOWED_STATUSES,
+            ).values_list("id", flat=True)
+        )
+        existing_app_ids = set(
+            ChatThread.objects.filter(application_id__in=eligible_app_ids)
+            .values_list("application_id", flat=True)
+        )
+        missing_app_ids = [aid for aid in eligible_app_ids if aid not in existing_app_ids]
+        if missing_app_ids:
+            ChatThread.objects.bulk_create(
+                [ChatThread(application_id=aid) for aid in missing_app_ids],
+                ignore_conflicts=True,
             )
 
         threads = (

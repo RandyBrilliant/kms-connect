@@ -23,8 +23,7 @@ class ApplicationDetailPage extends ConsumerStatefulWidget {
       _ApplicationDetailPageState();
 }
 
-class _ApplicationDetailPageState
-    extends ConsumerState<ApplicationDetailPage>
+class _ApplicationDetailPageState extends ConsumerState<ApplicationDetailPage>
     with SingleTickerProviderStateMixin {
   late final AnimationController _animCtrl;
   late final Animation<double> _fadeHeader;
@@ -42,16 +41,17 @@ class _ApplicationDetailPageState
       parent: _animCtrl,
       curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
     );
-    _slideContent = Tween<Offset>(
-      begin: const Offset(0, 0.06),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _animCtrl,
-      curve: const Interval(0.3, 1.0, curve: Curves.easeOut),
-    ));
+    _slideContent =
+        Tween<Offset>(begin: const Offset(0, 0.06), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _animCtrl,
+            curve: const Interval(0.3, 1.0, curve: Curves.easeOut),
+          ),
+        );
   }
 
   bool _isConfirming = false;
+  bool _isCompleting = false;
 
   @override
   void dispose() {
@@ -69,7 +69,9 @@ class _ApplicationDetailPageState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Kehadiran tahap ${_stageLabel(stage)} berhasil dikonfirmasi!'),
+            content: Text(
+              'Kehadiran tahap ${_stageLabel(stage)} berhasil dikonfirmasi!',
+            ),
             backgroundColor: Color(0xFF28A745),
           ),
         );
@@ -88,10 +90,41 @@ class _ApplicationDetailPageState
     }
   }
 
+  Future<void> _confirmCompletedPlacement() async {
+    if (_isCompleting) return;
+    setState(() => _isCompleting = true);
+    try {
+      final repo = ref.read(jobRepositoryProvider);
+      await repo.completeApplication(widget.applicationId);
+      ref.invalidate(applicationDetailProvider(widget.applicationId));
+      ref.invalidate(myApplicationsProvider(null));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Status berhasil diubah ke Selesai.'),
+            backgroundColor: Color(0xFF28A745),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal mengubah status ke Selesai: $e'),
+            backgroundColor: Color(0xFFDC3545),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isCompleting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final applicationAsync =
-        ref.watch(applicationDetailProvider(widget.applicationId));
+    final applicationAsync = ref.watch(
+      applicationDetailProvider(widget.applicationId),
+    );
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
@@ -127,7 +160,11 @@ class _ApplicationDetailPageState
                 mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.wifi_off_rounded, size: 48, color: AppColors.error),
+                  Icon(
+                    Icons.wifi_off_rounded,
+                    size: 48,
+                    color: AppColors.error,
+                  ),
                   const SizedBox(height: 16),
                   Text(
                     'Gagal memuat detail lamaran',
@@ -203,8 +240,11 @@ class _ApplicationDetailPageState
                     children: [
                       _InfoCard(
                         application: application,
-                        onConfirmStage: (stage) => _confirmAttendance(stage: stage),
+                        onConfirmStage: (stage) =>
+                            _confirmAttendance(stage: stage),
                         isConfirming: _isConfirming,
+                        onConfirmCompletedPlacement: _confirmCompletedPlacement,
+                        isCompletingPlacement: _isCompleting,
                       ),
                       const SizedBox(height: 16),
                       // Announcements section for any application that belongs to a batch.
@@ -235,7 +275,9 @@ class _ApplicationDetailPageState
   }
 
   SliverAppBar _buildSliverHeader(
-      BuildContext context, JobApplication application) {
+    BuildContext context,
+    JobApplication application,
+  ) {
     return SliverAppBar(
       expandedHeight: 220,
       pinned: true,
@@ -331,11 +373,15 @@ class _InfoCard extends StatelessWidget {
     required this.application,
     this.onConfirmStage,
     this.isConfirming = false,
+    this.onConfirmCompletedPlacement,
+    this.isCompletingPlacement = false,
   });
 
   final JobApplication application;
   final ValueChanged<String>? onConfirmStage;
   final bool isConfirming;
+  final VoidCallback? onConfirmCompletedPlacement;
+  final bool isCompletingPlacement;
 
   @override
   Widget build(BuildContext context) {
@@ -346,9 +392,7 @@ class _InfoCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppColors.divider.withValues(alpha: 0.35),
-        ),
+        border: Border.all(color: AppColors.divider.withValues(alpha: 0.35)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
@@ -483,11 +527,43 @@ class _InfoCard extends StatelessWidget {
                 progress: application.documentCollectionProgress!,
               ),
             ],
+            if (application.status == 'BERANGKAT' &&
+                onConfirmCompletedPlacement != null) ...[
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: isCompletingPlacement
+                    ? null
+                    : onConfirmCompletedPlacement,
+                icon: isCompletingPlacement
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.check_circle_outline_rounded, size: 16),
+                label: Text(
+                  isCompletingPlacement ? 'Memproses...' : 'Konfirmasi Selesai',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primaryDarkGreen,
+                  minimumSize: const Size.fromHeight(44),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 8),
             if (_kChatAllowedStatuses.contains(application.status))
               FilledButton.icon(
-                onPressed: () => context.push(
-                    '/jobs/applications/${application.id}/chat'),
+                onPressed: () =>
+                    context.push('/jobs/applications/${application.id}/chat'),
                 icon: const Icon(Icons.chat_bubble_outline_rounded, size: 16),
                 label: Text(
                   'Chat dengan Admin',
@@ -534,7 +610,9 @@ class _DocumentCollectionSection extends StatelessWidget {
           style: GoogleFonts.plusJakartaSans(
             fontSize: 11,
             fontWeight: FontWeight.w600,
-            color: progress.isComplete ? const Color(0xFF28A745) : AppColors.textMedium,
+            color: progress.isComplete
+                ? const Color(0xFF28A745)
+                : AppColors.textMedium,
           ),
         ),
         const SizedBox(height: 8),
@@ -545,14 +623,20 @@ class _DocumentCollectionSection extends StatelessWidget {
             decoration: BoxDecoration(
               color: const Color(0xFFF8FAFB),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.divider.withValues(alpha: 0.4)),
+              border: Border.all(
+                color: AppColors.divider.withValues(alpha: 0.4),
+              ),
             ),
             child: Row(
               children: [
                 Icon(
-                  item.done ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                  item.done
+                      ? Icons.check_circle_rounded
+                      : Icons.radio_button_unchecked_rounded,
                   size: 17,
-                  color: item.done ? const Color(0xFF28A745) : AppColors.textMedium,
+                  color: item.done
+                      ? const Color(0xFF28A745)
+                      : AppColors.textMedium,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -584,6 +668,9 @@ class _AttendanceStageSection extends StatelessWidget {
   final JobApplication application;
   final bool isConfirming;
   final ValueChanged<String>? onConfirmStage;
+
+  bool _isDocumentStage(String stage) => stage == 'DITERIMA';
+  bool _isCompletionStage(String stage) => stage == 'SELESAI';
 
   String _label(String status) {
     switch (status) {
@@ -621,16 +708,42 @@ class _AttendanceStageSection extends StatelessWidget {
         const SizedBox(height: 8),
         ...JobApplication.stageOrder.map((stage) {
           final reached =
-              application.reachedStages.contains(stage) || application.status == stage;
+              application.reachedStages.contains(stage) ||
+              application.status == stage;
+          final isCompletionStage = _isCompletionStage(stage);
           final attended = application.attendanceByStage[stage] == true;
+          final stageDone =
+              attended ||
+              (isCompletionStage && application.status == 'SELESAI');
           final attendedAt = application.attendanceMarkedAtByStage[stage];
-          final canTap = reached && !attended && !isConfirming && onConfirmStage != null;
+          final progress = application.documentCollectionProgress;
+          final isDocumentStage = _isDocumentStage(stage);
+          final docsComplete = progress?.isComplete ?? false;
+          final canTap =
+              reached &&
+              !stageDone &&
+              !isConfirming &&
+              !isCompletionStage &&
+              onConfirmStage != null &&
+              (!isDocumentStage || docsComplete);
 
           final subtitle = !reached
               ? 'Belum mencapai tahapan'
-              : attended
-                  ? 'Hadir • ${attendedAt != null ? fmtDt.format(attendedAt) : "-"}'
-                  : 'Belum hadir';
+              : stageDone
+              ? (isCompletionStage
+                    ? 'Berhasil selesai. Anda sudah menyelesaikan tahapan ini.'
+                    : (isDocumentStage
+                          ? 'Dokumen lengkap • ${attendedAt != null ? fmtDt.format(attendedAt) : "-"}'
+                          : 'Hadir • ${attendedAt != null ? fmtDt.format(attendedAt) : "-"}'))
+              : isCompletionStage
+              ? 'Status akan otomatis selesai setelah Anda konfirmasi selesai.'
+              : (isDocumentStage
+                    ? (progress == null
+                          ? 'Checklist dokumen belum tersedia'
+                          : (docsComplete
+                                ? 'Checklist ${progress.doneCount}/${progress.totalCount} selesai — siap konfirmasi'
+                                : 'Checklist ${progress.doneCount}/${progress.totalCount} belum lengkap'))
+                    : 'Belum hadir');
 
           return Container(
             margin: const EdgeInsets.only(bottom: 8),
@@ -638,17 +751,21 @@ class _AttendanceStageSection extends StatelessWidget {
             decoration: BoxDecoration(
               color: const Color(0xFFF8FAFB),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.divider.withValues(alpha: 0.4)),
+              border: Border.all(
+                color: AppColors.divider.withValues(alpha: 0.4),
+              ),
             ),
             child: Row(
               children: [
                 Icon(
-                  attended
+                  stageDone
                       ? Icons.check_circle_rounded
                       : (reached
-                          ? Icons.radio_button_unchecked_rounded
-                          : Icons.lock_outline_rounded),
-                  color: attended ? const Color(0xFF28A745) : AppColors.textMedium,
+                            ? Icons.radio_button_unchecked_rounded
+                            : Icons.lock_outline_rounded),
+                  color: stageDone
+                      ? const Color(0xFF28A745)
+                      : AppColors.textMedium,
                   size: 18,
                 ),
                 const SizedBox(width: 8),
@@ -685,7 +802,7 @@ class _AttendanceStageSection extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 10),
                     ),
                     child: Text(
-                      'Hadir',
+                      isDocumentStage ? 'Dokumen Selesai' : 'Hadir',
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
@@ -862,8 +979,7 @@ class _TimelineItem extends StatelessWidget {
           // ── Right: card ──────────────────────────────────────
           Expanded(
             child: Padding(
-              padding: EdgeInsets.only(
-                  left: 10, bottom: isLast ? 0 : 12),
+              padding: EdgeInsets.only(left: 10, bottom: isLast ? 0 : 12),
               child: Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
@@ -912,8 +1028,7 @@ class _TimelineItem extends StatelessWidget {
                           ),
                         ),
                       ],
-                      if (item.note != null &&
-                          item.note!.isNotEmpty) ...[
+                      if (item.note != null && item.note!.isNotEmpty) ...[
                         const SizedBox(height: 8),
                         Container(
                           width: double.infinity,
@@ -990,7 +1105,9 @@ class _AnnouncementsSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final annoAsync = ref.watch(applicationAnnouncementsProvider(applicationId));
+    final annoAsync = ref.watch(
+      applicationAnnouncementsProvider(applicationId),
+    );
     final cs = Theme.of(context).colorScheme;
     final fmt = DateFormat('dd MMM yyyy, HH:mm', 'id_ID');
 
@@ -1009,9 +1126,7 @@ class _AnnouncementsSection extends ConsumerWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: AppColors.error.withValues(alpha: 0.35),
-          ),
+          border: Border.all(color: AppColors.error.withValues(alpha: 0.35)),
         ),
         child: Text(
           'Gagal memuat pengumuman.',
@@ -1058,12 +1173,7 @@ class _AnnouncementsSection extends ConsumerWidget {
 
         return Column(
           children: announcements
-              .map(
-                (anno) => _AnnouncementCard(
-                  announcement: anno,
-                  fmt: fmt,
-                ),
-              )
+              .map((anno) => _AnnouncementCard(announcement: anno, fmt: fmt))
               .toList(),
         );
       },
@@ -1086,9 +1196,7 @@ class _AnnouncementCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: AppColors.divider.withValues(alpha: 0.35),
-        ),
+        border: Border.all(color: AppColors.divider.withValues(alpha: 0.35)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
@@ -1166,4 +1274,3 @@ class _AnnouncementCard extends StatelessWidget {
     );
   }
 }
-

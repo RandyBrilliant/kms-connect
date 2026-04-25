@@ -2,12 +2,12 @@
 Service layer untuk LamaranBatch dan JobApplication.
 
 Mengandung seluruh business logic lamaran kerja:
-  - Eligibility checks: verification_status == ACCEPTED + no active lamaran.
+  - Eligibility checks: verification_status in (DRAFT/SUBMITTED/ACCEPTED) + no active lamaran.
   - Group assignment: admin menambah banyak pelamar ke satu batch sekaligus.
   - FSM transitions: siapa boleh pindah ke status apa.
   - Applicant confirmation: pelamar mengkonfirmasi kehadiran pra-seleksi/interview.
   - Batch scheduling: admin menetapkan tanggal/lokasi pra-seleksi atau interview.
-  - 2-year re-assign cooldown enforcement.
+  - Re-apply policy for terminal statuses.
 
 Semua fungsi yang mengubah status harus melalui ApplicationService,
 bukan langsung update model di views/serializers.
@@ -19,7 +19,6 @@ from datetime import date
 from functools import lru_cache
 from typing import TYPE_CHECKING, NamedTuple
 
-from dateutil.relativedelta import relativedelta
 from django.db import transaction
 from django.utils import timezone
 
@@ -55,6 +54,11 @@ TRANSITIONS: dict[tuple[str, str], list[str]] = {
 }
 
 _ACTIVE_STATUSES = frozenset(JobApplication.ACTIVE_STATUSES)
+_ELIGIBLE_VERIFICATION_STATUSES = frozenset({
+    ApplicantVerificationStatus.DRAFT,
+    ApplicantVerificationStatus.SUBMITTED,
+    ApplicantVerificationStatus.ACCEPTED,
+})
 
 
 # ---------------------------------------------------------------------------
@@ -137,34 +141,12 @@ class ApplicationService:
         applicant_profile: "ApplicantProfile",
     ) -> tuple[bool, date | None]:
         """
-        Check whether applicant is outside the 2-year re-assign cooldown.
-
-        Returns (True, None)           — eligible.
-        Returns (False, eligible_date) — still in cooldown.
-
-        Cooldown is measured from the most recent placement_end_date across
-        ALL SELESAI applications — one indexed query.
+        Re-apply policy:
+        Applicants in terminal outcomes (including SELESAI / DITOLAK)
+        can be re-assigned immediately.
         """
-        last_completed = (
-            JobApplication.objects
-            .filter(
-                applicant=applicant_profile,
-                status=ApplicationStatus.SELESAI,
-                placement_end_date__isnull=False,
-            )
-            .order_by("-placement_end_date")
-            .values("placement_end_date")
-            .first()
-        )
-        if not last_completed:
-            return True, None
-
-        eligible: date = last_completed["placement_end_date"] + relativedelta(
-            years=cls.REAPPLY_COOLDOWN_YEARS
-        )
-        if timezone.now().date() >= eligible:
-            return True, None
-        return False, eligible
+        _ = applicant_profile
+        return True, None
 
     @classmethod
     def check_eligibility(
@@ -175,19 +157,19 @@ class ApplicationService:
         Single applicant full eligibility check for batch assignment.
 
         Three conditions must all pass:
-          1. verification_status == ACCEPTED
+          1. verification_status in (DRAFT, SUBMITTED, ACCEPTED)
           2. No active application in any job
-          3. Not in 2-year cooldown
+          3. Re-apply is allowed for terminal statuses
         """
         # 1. Verification status
-        if applicant_profile.verification_status != ApplicantVerificationStatus.ACCEPTED:
+        if applicant_profile.verification_status not in _ELIGIBLE_VERIFICATION_STATUSES:
             return EligibilityResult(
                 applicant_id=applicant_profile.pk,
                 eligible=False,
                 reason=(
                     f"Status verifikasi pelamar adalah "
                     f"'{applicant_profile.get_verification_status_display()}', "
-                    f"harus 'Diterima' untuk bisa diikutsertakan."
+                    f"harus Draf, Dikirim, atau Diterima untuk bisa diikutsertakan."
                 ),
             )
 
@@ -208,7 +190,7 @@ class ApplicationService:
                 ),
             )
 
-        # 3. Cooldown
+        # 3. Re-apply policy (terminal statuses are allowed)
         can_apply, eligible_date = cls.can_reapply(applicant_profile)
         if not can_apply:
             return EligibilityResult(
@@ -250,36 +232,19 @@ class ApplicationService:
             if row["applicant_id"] not in active_map:
                 active_map[row["applicant_id"]] = row
 
-        # Query 2: most recent SELESAI placement_end_date per applicant (for cooldown)
-        cooldown_qs = (
-            JobApplication.objects
-            .filter(
-                applicant_id__in=profile_ids,
-                status=ApplicationStatus.SELESAI,
-                placement_end_date__isnull=False,
-            )
-            .order_by("applicant_id", "-placement_end_date")
-            .values("applicant_id", "placement_end_date")
-        )
-        cooldown_map: dict[int, date] = {}
-        for row in cooldown_qs:
-            if row["applicant_id"] not in cooldown_map:
-                cooldown_map[row["applicant_id"]] = row["placement_end_date"]
-
-        today = timezone.now().date()
         results: list[EligibilityResult] = []
 
         for profile in applicant_profiles:
             pid = profile.pk
 
             # 1. Verification
-            if profile.verification_status != ApplicantVerificationStatus.ACCEPTED:
+            if profile.verification_status not in _ELIGIBLE_VERIFICATION_STATUSES:
                 results.append(EligibilityResult(
                     applicant_id=pid,
                     eligible=False,
                     reason=(
                         f"Status verifikasi '{profile.get_verification_status_display()}', "
-                        f"harus 'Diterima'."
+                        f"harus Draf, Dikirim, atau Diterima."
                     ),
                 ))
                 continue
@@ -296,19 +261,6 @@ class ApplicationService:
                     ),
                 ))
                 continue
-
-            # 3. Cooldown
-            if pid in cooldown_map:
-                eligible_date = cooldown_map[pid] + relativedelta(
-                    years=cls.REAPPLY_COOLDOWN_YEARS
-                )
-                if today < eligible_date:
-                    results.append(EligibilityResult(
-                        applicant_id=pid,
-                        eligible=False,
-                        reason=f"Dalam masa cooldown hingga {eligible_date}.",
-                    ))
-                    continue
 
             results.append(EligibilityResult(applicant_id=pid, eligible=True, reason=None))
 
@@ -419,11 +371,15 @@ class ApplicationService:
             from account.services.notification_events import NotificationEvent
 
             # Reload with all related objects needed for context in one query
-            loaded_apps = (
+            loaded_apps = list(
                 JobApplication.objects
                 .filter(pk__in=[app.pk for app in created_applications])
-                .select_related("job__company", "batch", "applicant__user",
-                                "applicant__user__notification_preference")
+                .select_related(
+                    "job__company",
+                    "batch",
+                    "applicant__user",
+                    "applicant__user__notification_preference",
+                )
             )
             
             # Collect active users and build shared context
@@ -570,6 +526,20 @@ class ApplicationService:
         )
 
     @classmethod
+    def _ensure_document_collection_confirmed(cls, application: JobApplication) -> None:
+        attendance_map = (
+            dict(application.attendance_by_stage)
+            if isinstance(application.attendance_by_stage, dict)
+            else {}
+        )
+        if attendance_map.get(ApplicationStatus.DITERIMA):
+            return
+        raise TransitionError(
+            "Pelamar belum mengkonfirmasi pengumpulan dokumen pada tahap Diterima. "
+            "Minta pelamar klik 'Dokumen Selesai' terlebih dahulu."
+        )
+
+    @classmethod
     @transaction.atomic
     def transition(
         cls,
@@ -605,6 +575,7 @@ class ApplicationService:
 
         if application.status == ApplicationStatus.DITERIMA and new_status == ApplicationStatus.BERANGKAT:
             cls._ensure_document_collection_complete(application)
+            cls._ensure_document_collection_confirmed(application)
 
         # ── Quota enforcement (only when moving to DITERIMA) ──────────────
         if new_status == ApplicationStatus.DITERIMA:
@@ -706,17 +677,30 @@ class ApplicationService:
         # ─────────────────────────────────────────────────────────────────
         if new_status == ApplicationStatus.BERANGKAT:
             blocked_labels: set[str] = set()
+            missing_confirmation = False
             for app in apps:
                 progress = cls.get_document_collection_progress(app)
                 if progress["is_complete"]:
-                    continue
-                for item in progress["items"]:
-                    if not item["done"]:
-                        blocked_labels.add(item["label"])
+                    attendance_map = (
+                        dict(app.attendance_by_stage)
+                        if isinstance(app.attendance_by_stage, dict)
+                        else {}
+                    )
+                    if not attendance_map.get(ApplicationStatus.DITERIMA):
+                        missing_confirmation = True
+                else:
+                    for item in progress["items"]:
+                        if not item["done"]:
+                            blocked_labels.add(item["label"])
             if blocked_labels:
                 raise TransitionError(
                     "Sebagian pelamar belum menyelesaikan tahap Pengumpulan Dokumen. "
                     f"Kekurangan: {', '.join(sorted(blocked_labels))}."
+                )
+            if missing_confirmation:
+                raise TransitionError(
+                    "Sebagian pelamar belum mengkonfirmasi 'Dokumen Selesai' "
+                    "pada tahap Diterima."
                 )
         if not apps:
             return []
@@ -781,6 +765,9 @@ class ApplicationService:
                 "Konfirmasi hadir hanya dapat dilakukan untuk tahapan yang sudah dicapai."
             )
 
+        if target_stage == ApplicationStatus.DITERIMA:
+            cls._ensure_document_collection_complete(application)
+
         attendance_map = (
             dict(application.attendance_by_stage)
             if isinstance(application.attendance_by_stage, dict)
@@ -803,6 +790,52 @@ class ApplicationService:
 
         application.save(update_fields=update_fields)
 
+        return application
+
+    @classmethod
+    @transaction.atomic
+    def mark_placement_completed(
+        cls,
+        application: JobApplication,
+        applicant_user: "CustomUser",
+        note: str = "Pelamar mengkonfirmasi telah selesai bekerja dan kembali ke Indonesia.",
+    ) -> JobApplication:
+        """
+        Applicant self-service completion:
+        BERANGKAT -> SELESAI.
+        """
+        try:
+            profile = applicant_user.applicant_profile
+        except Exception:
+            raise TransitionError("Hanya pelamar yang dapat mengkonfirmasi status selesai.")
+
+        if application.applicant_id != profile.pk:
+            raise TransitionError("Anda tidak berhak mengubah lamaran ini.")
+
+        if application.status != ApplicationStatus.BERANGKAT:
+            raise TransitionError(
+                "Konfirmasi selesai hanya tersedia saat status lamaran masih Berangkat."
+            )
+
+        old_status = application.status
+        now = timezone.now()
+        application.status = ApplicationStatus.SELESAI
+        application.reviewed_at = now
+        application.placement_end_date = now.date()
+        application.save(update_fields=[
+            "status",
+            "reviewed_at",
+            "placement_end_date",
+            "updated_at",
+        ])
+
+        ApplicationStatusHistory.objects.create(
+            application=application,
+            from_status=old_status,
+            to_status=ApplicationStatus.SELESAI,
+            changed_by=applicant_user,
+            note=note,
+        )
         return application
 
 

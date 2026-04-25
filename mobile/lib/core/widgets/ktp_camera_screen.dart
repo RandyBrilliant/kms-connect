@@ -9,7 +9,20 @@ import '../utils/ktp_image_cropper.dart';
 /// Custom camera screen with KTP alignment guidelines overlay.
 /// Returns `File` on successful capture, `null` on cancel.
 class KtpCameraScreen extends StatefulWidget {
-  const KtpCameraScreen({super.key});
+  const KtpCameraScreen({
+    super.key,
+    this.ratioX = 1.586,
+    this.ratioY = 1,
+    this.title = 'Posisikan KTP di dalam bingkai',
+    this.subtitle = 'Pastikan foto jelas dan tidak blur',
+    this.tip = 'Gunakan pencahayaan yang cukup',
+  });
+
+  final double ratioX;
+  final double ratioY;
+  final String title;
+  final String subtitle;
+  final String tip;
 
   @override
   State<KtpCameraScreen> createState() => _KtpCameraScreenState();
@@ -17,6 +30,8 @@ class KtpCameraScreen extends StatefulWidget {
 
 class _KtpCameraScreenState extends State<KtpCameraScreen>
     with WidgetsBindingObserver {
+  double get _guideRatio => widget.ratioX / widget.ratioY;
+
   CameraController? _controller;
   bool _isInitialized = false;
   bool _isCapturing = false;
@@ -122,14 +137,14 @@ class _KtpCameraScreenState extends State<KtpCameraScreen>
     if (controller == null || !controller.value.isInitialized || _isCapturing) {
       return;
     }
+    final screenSize = MediaQuery.sizeOf(context);
+    final guideRect = _guideRect(screenSize);
 
     setState(() => _isCapturing = true);
 
     try {
       final XFile image = await controller.takePicture();
       final rawFile = File(image.path);
-      final screenSize = MediaQuery.sizeOf(context);
-      final guideRect = _ktpGuideRect(screenSize);
       final croppedFile = await KtpImageCropper.cropFromGuide(
         sourceFile: rawFile,
         screenSize: screenSize,
@@ -272,7 +287,7 @@ class _KtpCameraScreenState extends State<KtpCameraScreen>
           ),
 
         // KTP frame overlay
-        const _KtpOverlay(),
+        _KtpOverlay(guideRatio: _guideRatio),
 
         // UI controls on top
         SafeArea(
@@ -300,14 +315,14 @@ class _KtpCameraScreenState extends State<KtpCameraScreen>
       margin: const EdgeInsets.symmetric(horizontal: 24),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.55),
+        color: Colors.black.withValues(alpha: 0.55),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'Posisikan KTP di dalam bingkai',
+            widget.title,
             style: GoogleFonts.plusJakartaSans(
               fontSize: 15,
               fontWeight: FontWeight.w700,
@@ -317,7 +332,7 @@ class _KtpCameraScreenState extends State<KtpCameraScreen>
           ),
           const SizedBox(height: 6),
           Text(
-            'Pastikan foto jelas dan tidak blur',
+            widget.subtitle,
             style: GoogleFonts.plusJakartaSans(
               fontSize: 13,
               fontWeight: FontWeight.w500,
@@ -341,7 +356,7 @@ class _KtpCameraScreenState extends State<KtpCameraScreen>
             margin: const EdgeInsets.symmetric(horizontal: 24),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-              color: AppColors.primaryDarkGreen.withOpacity(0.85),
+              color: AppColors.primaryDarkGreen.withValues(alpha: 0.85),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
@@ -352,7 +367,7 @@ class _KtpCameraScreenState extends State<KtpCameraScreen>
                 const SizedBox(width: 8),
                 Flexible(
                   child: Text(
-                    'Gunakan pencahayaan yang cukup',
+                    widget.tip,
                     style: GoogleFonts.plusJakartaSans(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -410,9 +425,9 @@ class _KtpCameraScreenState extends State<KtpCameraScreen>
     );
   }
 
-  Rect _ktpGuideRect(Size size) {
+  Rect _guideRect(Size size) {
     final frameWidth = size.width * 0.85;
-    final frameHeight = frameWidth / 1.586;
+    final frameHeight = frameWidth / _guideRatio;
     final left = (size.width - frameWidth) / 2;
     final top = (size.height - frameHeight) / 2;
     return Rect.fromLTWH(left, top, frameWidth, frameHeight);
@@ -421,13 +436,15 @@ class _KtpCameraScreenState extends State<KtpCameraScreen>
 
 /// Lightweight overlay widget — uses RepaintBoundary so it only paints once.
 class _KtpOverlay extends StatelessWidget {
-  const _KtpOverlay();
+  const _KtpOverlay({required this.guideRatio});
+
+  final double guideRatio;
 
   @override
   Widget build(BuildContext context) {
     return RepaintBoundary(
       child: CustomPaint(
-        painter: _KtpOverlayPainter(),
+        painter: _KtpOverlayPainter(guideRatio: guideRatio),
         child: const SizedBox.expand(),
       ),
     );
@@ -435,10 +452,14 @@ class _KtpOverlay extends StatelessWidget {
 }
 
 class _KtpOverlayPainter extends CustomPainter {
+  const _KtpOverlayPainter({required this.guideRatio});
+
+  final double guideRatio;
+
   @override
   void paint(Canvas canvas, Size size) {
     final double frameWidth = size.width * 0.85;
-    final double frameHeight = frameWidth / 1.586; // KTP standard ~85.6x54mm ≈ 1.586
+    final double frameHeight = frameWidth / guideRatio;
     final double left = (size.width - frameWidth) / 2;
     final double top = (size.height - frameHeight) / 2;
     final double right = left + frameWidth;
@@ -446,7 +467,7 @@ class _KtpOverlayPainter extends CustomPainter {
     final frameRect = Rect.fromLTRB(left, top, right, bottom);
 
     // Semi-transparent background with cutout
-    final bgPaint = Paint()..color = Colors.black.withOpacity(0.5);
+    final bgPaint = Paint()..color = Colors.black.withValues(alpha: 0.5);
     final bgPath = Path()
       ..addRect(Rect.fromLTWH(0, 0, size.width, size.height))
       ..addRRect(RRect.fromRectAndRadius(frameRect, const Radius.circular(12)))
@@ -486,7 +507,7 @@ class _KtpOverlayPainter extends CustomPainter {
 
     // Center guidelines
     final guidePaint = Paint()
-      ..color = AppColors.secondaryLightGreen.withOpacity(0.25)
+      ..color = AppColors.secondaryLightGreen.withValues(alpha: 0.25)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
     canvas.drawLine(

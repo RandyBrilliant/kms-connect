@@ -12,6 +12,8 @@ import '../../../../config/colors.dart';
 import '../../../../core/utils/image_compressor.dart';
 import '../../../../core/utils/safe_navigation.dart';
 import '../../../../core/widgets/custom_toast.dart';
+import '../../../../core/widgets/ktp_camera_screen.dart';
+import '../../../../core/widgets/ktp_gallery_crop_screen.dart';
 import '../../../../core/widgets/professional/professional_card.dart';
 import '../../../../core/widgets/professional/professional_gradient_background.dart';
 import '../../../documents/data/providers/document_provider.dart';
@@ -40,6 +42,20 @@ const _pdfDocCodes = {
   'surat-keterangan-status-perkawinan',
   'perjanjian-penempatan',
 };
+
+class _CropSpec {
+  const _CropSpec({
+    required this.ratioX,
+    required this.ratioY,
+    required this.title,
+    required this.instruction,
+  });
+
+  final double ratioX;
+  final double ratioY;
+  final String title;
+  final String instruction;
+}
 
 class _UploadDocumentPageState extends ConsumerState<UploadDocumentPage> {
   final _picker = ImagePicker();
@@ -86,17 +102,124 @@ class _UploadDocumentPageState extends ConsumerState<UploadDocumentPage> {
 
   // ── Image picker ────────────────────────────────────────────────────────
   Future<void> _pickImage(ImageSource source) async {
+    if (source == ImageSource.camera) {
+      final captured = await _captureFromGuidedCamera();
+      if (captured == null || !mounted) return;
+      setState(() {
+        _file = captured;
+        _filePdf = false;
+      });
+      return;
+    }
+
     final picked = await _picker.pickImage(
       source: source,
       imageQuality: 85,
       maxWidth: 1920,
     );
     if (picked != null && mounted) {
+      File selectedFile = File(picked.path);
+      final cropped = await _cropImageForDocumentType(selectedFile);
+      if (cropped == null || !mounted) return;
+      selectedFile = cropped;
       setState(() {
-        _file = File(picked.path);
+        _file = selectedFile;
         _filePdf = false;
       });
     }
+  }
+
+  Future<File?> _captureFromGuidedCamera() async {
+    final spec = _cropSpecForSelectedType();
+    return Navigator.push<File>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => KtpCameraScreen(
+          ratioX: spec.ratioX,
+          ratioY: spec.ratioY,
+          title: spec.title,
+          subtitle: 'Pastikan dokumen terlihat utuh dan tidak blur',
+          tip: 'Gunakan pencahayaan yang cukup',
+        ),
+      ),
+    );
+  }
+
+  Future<File?> _cropImageForDocumentType(File sourceFile) async {
+    final spec = _cropSpecForSelectedType();
+    try {
+      final cropped = await Navigator.push<File>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => KtpGalleryCropScreen(
+            sourceFile: sourceFile,
+            ratioX: spec.ratioX,
+            ratioY: spec.ratioY,
+            title: spec.title,
+            instruction: spec.instruction,
+          ),
+        ),
+      );
+      return cropped;
+    } catch (_) {
+      if (!mounted) return sourceFile;
+      CustomToast.show(
+        context,
+        message: 'Gagal menyesuaikan foto dokumen',
+        type: ToastType.info,
+      );
+      return sourceFile;
+    }
+  }
+
+  _CropSpec _cropSpecForSelectedType() {
+    final type = _selectedType;
+    if (type == null) {
+      return const _CropSpec(
+        ratioX: 3,
+        ratioY: 4,
+        title: 'Sesuaikan Bingkai Dokumen',
+        instruction: 'Geser & zoom agar dokumen pas di dalam bingkai',
+      );
+    }
+
+    final code = type.code.toLowerCase();
+    final name = type.name.toLowerCase();
+    final text = '$code $name';
+
+    if (text.contains('ktp') ||
+        text.contains('kartu tanda penduduk') ||
+        text.contains('bpjs') ||
+        text.contains('kartu bpjs')) {
+      return const _CropSpec(
+        ratioX: 1.586,
+        ratioY: 1,
+        title: 'Sesuaikan Bingkai Kartu',
+        instruction: 'Posisikan kartu tepat di dalam bingkai',
+      );
+    }
+    if (text.contains('paspor') || text.contains('passport')) {
+      return const _CropSpec(
+        ratioX: 3,
+        ratioY: 4,
+        title: 'Sesuaikan Bingkai Paspor',
+        instruction: 'Posisikan halaman identitas paspor di dalam bingkai',
+      );
+    }
+    if (text.contains('foto')) {
+      return const _CropSpec(
+        ratioX: 3,
+        ratioY: 4,
+        title: 'Sesuaikan Bingkai Foto',
+        instruction: 'Geser & zoom foto agar subjek pas di dalam bingkai',
+      );
+    }
+    return const _CropSpec(
+      ratioX: 3,
+      ratioY: 4,
+      title: 'Sesuaikan Bingkai Dokumen',
+      instruction: 'Geser & zoom agar dokumen pas di dalam bingkai',
+    );
   }
 
   // ── PDF picker ───────────────────────────────────────────────────────────

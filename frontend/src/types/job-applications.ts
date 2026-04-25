@@ -83,6 +83,10 @@ export interface JobApplication {
     is_complete: boolean
   }
   pengumpulan_dokumen_complete?: boolean
+  pengumpulan_dokumen_confirmed_at?: string | null
+  pengumpulan_dokumen_ready_for_departure?: boolean
+  pengumpulan_dokumen_pending_items?: Array<{ code: string; label: string }>
+  pengumpulan_dokumen_pending_labels?: string[]
   created_at: string
   updated_at: string
 }

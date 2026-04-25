@@ -292,7 +292,11 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
             )
             .filter(
                 user__is_active=True,
-                verification_status=ApplicantVerificationStatus.ACCEPTED,
+                verification_status__in=[
+                    ApplicantVerificationStatus.DRAFT,
+                    ApplicantVerificationStatus.SUBMITTED,
+                    ApplicantVerificationStatus.ACCEPTED,
+                ],
             )
         )
 
@@ -827,6 +831,7 @@ class ApplicantJobApplicationViewSet(viewsets.ReadOnlyModelViewSet):
 
     Custom actions:
       POST /api/applicants/me/applications/{id}/confirm/ — confirm attendance at current stage
+      POST /api/applicants/me/applications/{id}/complete/ — self-confirm BERANGKAT -> SELESAI
     """
 
     serializer_class = JobApplicationSerializer
@@ -904,6 +909,42 @@ class ApplicantJobApplicationViewSet(viewsets.ReadOnlyModelViewSet):
             context={"request": request},
         )
         return Response(success_response(data=out.data, detail="Kehadiran berhasil dikonfirmasi."))
+
+    @action(detail=True, methods=["post"], url_path="complete")
+    def complete(self, request, pk=None):
+        """
+        POST /api/applicants/me/applications/{id}/complete/
+
+        Applicant self-confirms completion of overseas placement and transitions:
+        BERANGKAT -> SELESAI.
+        """
+        application = self.get_object()
+        try:
+            ApplicationService.mark_placement_completed(
+                application=application,
+                applicant_user=request.user,
+            )
+        except TransitionError as e:
+            return Response(
+                error_response(detail=str(e), code=ApiCode.PERMISSION_DENIED),
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        except ValueError as e:
+            return Response(
+                error_response(detail=str(e), code=ApiCode.VALIDATION_ERROR),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        out = JobApplicationSerializer(
+            self.get_queryset().get(pk=application.pk),
+            context={"request": request},
+        )
+        return Response(
+            success_response(
+                data=out.data,
+                detail="Status lamaran berhasil dikonfirmasi menjadi Selesai.",
+            )
+        )
 
     @action(detail=True, methods=["get"], url_path="announcements")
     def announcements(self, request, pk=None):

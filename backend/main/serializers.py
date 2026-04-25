@@ -264,6 +264,10 @@ class JobApplicationSerializer(serializers.ModelSerializer):
     reached_stages = serializers.SerializerMethodField(read_only=True)
     document_collection_progress = serializers.SerializerMethodField(read_only=True)
     pengumpulan_dokumen_complete = serializers.SerializerMethodField(read_only=True)
+    pengumpulan_dokumen_confirmed_at = serializers.SerializerMethodField(read_only=True)
+    pengumpulan_dokumen_ready_for_departure = serializers.SerializerMethodField(read_only=True)
+    pengumpulan_dokumen_pending_items = serializers.SerializerMethodField(read_only=True)
+    pengumpulan_dokumen_pending_labels = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = JobApplication
@@ -300,6 +304,10 @@ class JobApplicationSerializer(serializers.ModelSerializer):
             "reached_stages",
             "document_collection_progress",
             "pengumpulan_dokumen_complete",
+            "pengumpulan_dokumen_confirmed_at",
+            "pengumpulan_dokumen_ready_for_departure",
+            "pengumpulan_dokumen_pending_items",
+            "pengumpulan_dokumen_pending_labels",
             "created_at",
             "updated_at",
         ]
@@ -323,6 +331,10 @@ class JobApplicationSerializer(serializers.ModelSerializer):
             "reached_stages",
             "document_collection_progress",
             "pengumpulan_dokumen_complete",
+            "pengumpulan_dokumen_confirmed_at",
+            "pengumpulan_dokumen_ready_for_departure",
+            "pengumpulan_dokumen_pending_items",
+            "pengumpulan_dokumen_pending_labels",
             "applied_at",
             "created_at",
             "updated_at",
@@ -451,6 +463,41 @@ class JobApplicationSerializer(serializers.ModelSerializer):
     def get_pengumpulan_dokumen_complete(self, obj) -> bool:
         return bool(self.get_document_collection_progress(obj).get("is_complete"))
 
+    def get_pengumpulan_dokumen_confirmed_at(self, obj):
+        raw = obj.attendance_by_stage if isinstance(obj.attendance_by_stage, dict) else {}
+        return raw.get("DITERIMA")
+
+    def get_pengumpulan_dokumen_ready_for_departure(self, obj) -> bool:
+        complete = self.get_pengumpulan_dokumen_complete(obj)
+        confirmed = bool(self.get_pengumpulan_dokumen_confirmed_at(obj))
+        return complete and confirmed
+
+    def get_pengumpulan_dokumen_pending_items(self, obj) -> list[dict]:
+        progress = self.get_document_collection_progress(obj)
+        items = progress.get("items") if isinstance(progress, dict) else None
+        if not isinstance(items, list):
+            return []
+        pending: list[dict] = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            if item.get("done"):
+                continue
+            pending.append(
+                {
+                    "code": item.get("code", ""),
+                    "label": item.get("label", ""),
+                }
+            )
+        return pending
+
+    def get_pengumpulan_dokumen_pending_labels(self, obj) -> list[str]:
+        return [
+            item.get("label", "")
+            for item in self.get_pengumpulan_dokumen_pending_items(obj)
+            if item.get("label")
+        ]
+
 
 class ApplicationTransitionSerializer(serializers.Serializer):
     """
@@ -509,6 +556,8 @@ class LamaranBatchSerializer(serializers.ModelSerializer):
     applicant_count = serializers.IntegerField(read_only=True)
     confirmed_pra_seleksi_count = serializers.IntegerField(read_only=True)
     confirmed_interview_count = serializers.IntegerField(read_only=True)
+    diterima_count = serializers.SerializerMethodField(read_only=True)
+    pengumpulan_dokumen_confirmed_count = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = LamaranBatch
@@ -530,6 +579,8 @@ class LamaranBatchSerializer(serializers.ModelSerializer):
             "applicant_count",
             "confirmed_pra_seleksi_count",
             "confirmed_interview_count",
+            "diterima_count",
+            "pengumpulan_dokumen_confirmed_count",
             # Meta
             "created_by",
             "created_by_name",
@@ -544,6 +595,8 @@ class LamaranBatchSerializer(serializers.ModelSerializer):
             "applicant_count",
             "confirmed_pra_seleksi_count",
             "confirmed_interview_count",
+            "diterima_count",
+            "pengumpulan_dokumen_confirmed_count",
             "created_at",
             "updated_at",
         ]
@@ -555,6 +608,24 @@ class LamaranBatchSerializer(serializers.ModelSerializer):
         if not obj.created_by:
             return None
         return obj.created_by.full_name or obj.created_by.email
+
+    def get_diterima_count(self, obj) -> int:
+        return obj.applications.filter(status=ApplicationStatus.DITERIMA).count()
+
+    def get_pengumpulan_dokumen_confirmed_count(self, obj) -> int:
+        """
+        Number of DITERIMA-stage applications where applicant already clicked
+        "Dokumen Selesai" (stored in attendance_by_stage['DITERIMA']).
+        """
+        applications = obj.applications.filter(status=ApplicationStatus.DITERIMA).only(
+            "attendance_by_stage"
+        )
+        count = 0
+        for app in applications:
+            attendance_map = app.attendance_by_stage if isinstance(app.attendance_by_stage, dict) else {}
+            if attendance_map.get(ApplicationStatus.DITERIMA):
+                count += 1
+        return count
 
 
 class LamaranBatchCreateSerializer(serializers.Serializer):

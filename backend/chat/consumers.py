@@ -25,6 +25,7 @@ import logging
 
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework_simplejwt.tokens import AccessToken
 
@@ -51,7 +52,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     # ── Connection lifecycle ────────────────────────────────────────────
 
     async def connect(self):
-        self.thread_id = self.scope["url_route"]["kwargs"]["thread_id"]
+        raw_thread_id = int(self.scope["url_route"]["kwargs"]["thread_id"])
+        self.thread_id = raw_thread_id
         self.group_name = f"chat_thread_{self.thread_id}"
         self.user = None
 
@@ -68,12 +70,15 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             await self.close(code=4001)
             return
 
-        # Verify user has access to this thread
-        has_access = await self._check_thread_access(user, int(self.thread_id))
-        if not has_access:
+        # Verify user has access and normalize thread_id.
+        # Compatibility: clients may send thread.pk OR application_id.
+        resolved_thread_id = await self._resolve_accessible_thread_id(user, raw_thread_id)
+        if resolved_thread_id is None:
             await self.close(code=4003)
             return
 
+        self.thread_id = resolved_thread_id
+        self.group_name = f"chat_thread_{self.thread_id}"
         self.user = user
 
         # Join channel group
@@ -180,27 +185,35 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             return None
 
     @database_sync_to_async
-    def _check_thread_access(self, user: CustomUser, thread_id: int) -> bool:
+    def _resolve_accessible_thread_id(
+        self, user: CustomUser, thread_or_application_id: int
+    ) -> int | None:
         """
-        Verify user can access this thread:
-        - Admin/Staff: can access any thread
-        - Applicant: can only access their own thread
+        Resolve and validate thread access.
+
+        Compatibility:
+        - Accept URL id as ChatThread.pk
+        - Accept URL id as JobApplication.id (legacy mobile behavior)
         """
-        try:
-            thread = ChatThread.objects.select_related(
-                "application__applicant__user"
-            ).get(pk=thread_id)
-        except ChatThread.DoesNotExist:
-            return False
+        thread = (
+            ChatThread.objects.select_related("application__applicant__user")
+            .filter(Q(pk=thread_or_application_id) | Q(application_id=thread_or_application_id))
+            .order_by("pk")
+            .first()
+        )
+        if thread is None:
+            return None
 
         if user.role in ("MASTER_ADMIN", "ADMIN", "STAFF"):
-            return True
+            return thread.pk
 
         # Applicant must own the application
         try:
-            return thread.application.applicant.user_id == user.pk
+            if thread.application.applicant.user_id == user.pk:
+                return thread.pk
+            return None
         except Exception:
-            return False
+            return None
 
     @database_sync_to_async
     def _mark_messages_read(self) -> int:
