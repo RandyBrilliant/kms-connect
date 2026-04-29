@@ -26,6 +26,7 @@ import {
   IconMapPin,
   IconSearch,
   IconSend,
+  IconTrash,
   IconUserPlus,
   IconUsers,
   IconLoader,
@@ -35,6 +36,15 @@ import {
 import { toast } from "@/lib/toast"
 
 import { BreadcrumbNav } from "@/components/breadcrumb-nav"
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -91,7 +101,10 @@ import type {
   BatchStage,
 } from "@/types/lamaran-batch"
 import { usePageTitle } from "@/hooks/use-page-title"
+import { useAuth } from "@/hooks/use-auth"
+import { useDeleteBatchMutation } from "@/hooks/use-batches-query"
 import { joinAdminPath, useAdminDashboard } from "@/contexts/admin-dashboard-context"
+import { isMasterAdmin, type UserRole } from "@/types/auth"
 
 function formatDate(value: string | null | undefined) {
   if (!value) return "-"
@@ -752,8 +765,15 @@ export function AdminBatchDetailPage() {
   const { id } = useParams<{ id: string }>()
   const batchId = Number(id)
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const { basePath } = useAdminDashboard()
+  const { user } = useAuth()
+  const deleteBatchMutation = useDeleteBatchMutation()
 
+  const canDeleteBatch =
+    !!user && isMasterAdmin(user.role as UserRole)
+
+  const [deleteBatchDialogOpen, setDeleteBatchDialogOpen] = useState(false)
   const [assignOpen, setAssignOpen] = useState(false)
   const [annoTitle, setAnnoTitle] = useState("")
   const [annoBody, setAnnoBody] = useState("")
@@ -878,6 +898,31 @@ export function AdminBatchDetailPage() {
 
   usePageTitle(batch ? `Batch: ${batch.name}` : "Detail Batch")
 
+  const handleConfirmDeleteBatch = async () => {
+    try {
+      await deleteBatchMutation.mutateAsync(batchId)
+      toast.success(
+        "Batch dihapus",
+        "Seluruh lamaran dan data terkait batch ini telah dihapus."
+      )
+      setDeleteBatchDialogOpen(false)
+      navigate(joinAdminPath(basePath, `/lowongan-kerja/${batch?.job ?? ""}`))
+    } catch (err: unknown) {
+      const res = err as { response?: { status?: number; data?: { detail?: string } } }
+      if (res?.response?.status === 403) {
+        toast.error(
+          "Tidak diizinkan",
+          "Hanya Admin Utama yang dapat menghapus batch."
+        )
+      } else {
+        toast.error(
+          "Gagal menghapus",
+          res?.response?.data?.detail ?? "Coba lagi nanti."
+        )
+      }
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -929,6 +974,17 @@ export function AdminBatchDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {canDeleteBatch && (
+            <Button
+              type="button"
+              variant="destructive"
+              className="cursor-pointer"
+              onClick={() => setDeleteBatchDialogOpen(true)}
+            >
+              <IconTrash className="mr-2 size-4" />
+              Hapus batch
+            </Button>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -1229,6 +1285,53 @@ export function AdminBatchDetailPage() {
           queryClient.invalidateQueries({ queryKey: ["batch", batchId] })
         }}
       />
+
+      <AlertDialog open={deleteBatchDialogOpen} onOpenChange={setDeleteBatchDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Hapus batch permanen?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-muted-foreground text-sm">
+                <p>
+                  Tindakan ini tidak dapat dibatalkan. Batch{" "}
+                  <span className="font-medium text-foreground">{batch.name}</span> dan
+                  semua isinya akan dihapus, termasuk:
+                </p>
+                <ul className="list-disc space-y-1 pl-4">
+                  <li>
+                    Seluruh lamaran (job applications) dalam batch ini — beserta riwayat
+                    status dan chat
+                  </li>
+                  <li>Pengumuman batch yang terkait</li>
+                  <li>Jadwal pra-seleksi dan interview yang tercatat pada batch ini</li>
+                </ul>
+                <p>
+                  Akun pelamar <span className="font-medium text-foreground">tidak</span>{" "}
+                  dihapus; hanya data lamaran mereka pada batch ini.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              type="button"
+              className="cursor-pointer"
+              disabled={deleteBatchMutation.isPending}
+            >
+              Batal
+            </AlertDialogCancel>
+            <Button
+              type="button"
+              variant="destructive"
+              className="cursor-pointer"
+              disabled={deleteBatchMutation.isPending}
+              onClick={() => void handleConfirmDeleteBatch()}
+            >
+              {deleteBatchMutation.isPending ? "Menghapus..." : "Ya, hapus batch"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

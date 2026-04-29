@@ -26,7 +26,6 @@ from .api_responses import (
 )
 from .throttles import AuthPublicRateThrottle
 from .document_specs import validate_document_file, compress_image_file
-from .tasks import process_document_ocr
 from .validators import validate_indonesian_phone, normalize_indonesian_phone
 
 
@@ -266,14 +265,11 @@ class ApplicantRegistrationView(APIView):
                     sort_order=1,
                 )
 
-            ktp_document = ApplicantDocument.objects.create(
+            ApplicantDocument.objects.create(
                 applicant_profile=applicant_profile,
                 document_type=ktp_doc_type,
                 file=ktp_file,
             )
-
-            # Trigger OCR processing (async)
-            process_document_ocr.delay(ktp_document.id)
 
         except Exception as e:
             # Jika upload gagal, hapus user dan profile
@@ -661,13 +657,11 @@ class GoogleCompleteRegistrationView(APIView):
                 applicant_profile=profile, document_type=ktp_doc_type
             ).delete()
 
-            ktp_document = ApplicantDocument.objects.create(
+            ApplicantDocument.objects.create(
                 applicant_profile=profile,
                 document_type=ktp_doc_type,
                 file=ktp_file,
             )
-
-            process_document_ocr.delay(ktp_document.id)
 
         except Exception as e:
             return Response(

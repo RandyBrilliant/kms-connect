@@ -1,7 +1,7 @@
 """
 Signals for account app.
 
-- Queue OCR when an ApplicantDocument is created or its file is replaced.
+- Queue OCR when a KTP ApplicantDocument is created or its file is replaced (saves Vision quota).
 - Queue image optimization for large image documents.
 - Auto-generate referral codes for new staff/admin users.
 - Auto-create NotificationPreference for every new user.
@@ -19,6 +19,7 @@ from .models import (
     ApplicantVerificationStatus,
     CustomUser,
     DocumentReviewStatus,
+    DocumentType,
     NotificationPreference,
     UserRole,
     Notification,
@@ -53,13 +54,27 @@ def _file_was_created_or_replaced(instance: ApplicantDocument, created: bool) ->
     return prev != (instance.file.name if instance.file else None)
 
 
+def _is_ktp_document_for_ocr(instance: ApplicantDocument) -> bool:
+    """Google Vision OCR hanya untuk tipe dokumen KTP (hemat quota)."""
+    if not instance.document_type_id:
+        return False
+    doc_type = getattr(instance, "document_type", None)
+    if doc_type is not None:
+        return doc_type.code == "ktp"
+    return DocumentType.objects.filter(pk=instance.document_type_id, code="ktp").exists()
+
+
 @receiver(post_save, sender=ApplicantDocument)
 def queue_ocr_on_document_upload(sender, instance: ApplicantDocument, created, **kwargs):
     """
-    Setelah dokumen diunggah (baru atau file diganti), antrekan OCR di background.
+    Setelah KTP diunggah (baru atau file diganti), antrekan OCR di background.
+    Dokumen selain KTP tidak memanggil Vision.
     """
-    if _file_was_created_or_replaced(instance, created):
-        process_document_ocr.delay(instance.pk)
+    if not _file_was_created_or_replaced(instance, created):
+        return
+    if not _is_ktp_document_for_ocr(instance):
+        return
+    process_document_ocr.delay(instance.pk)
 
 
 @receiver(post_save, sender=ApplicantDocument)

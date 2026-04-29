@@ -61,3 +61,20 @@ export function useDeleteJobMutation() {
   })
 }
 
+/** Cached OPEN jobs list for batch assignment UIs (pelamar quick-assign, etc.). */
+export const openJobsForAssignQueryKey = [...jobsKeys.all, "open-for-assign"] as const
+
+export function useOpenJobsForAssignQuery(enabled = true) {
+  return useQuery({
+    queryKey: openJobsForAssignQueryKey,
+    queryFn: () =>
+      getJobs({
+        status: "OPEN",
+        page_size: 200,
+        ordering: "title",
+      }),
+    enabled,
+    staleTime: 60_000,
+  })
+}
+

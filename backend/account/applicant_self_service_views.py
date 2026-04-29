@@ -29,7 +29,6 @@ from django.http import HttpResponse
 from .permissions import IsApplicant
 from .api_responses import success_response, error_response, ApiCode, ApiMessage
 from .document_specs import validate_document_file, compress_image_file, is_image_type
-from .tasks import process_document_ocr
 from .services.biodata_pdf import generate_biodata_pdf
 
 
@@ -338,9 +337,7 @@ class ApplicantDocumentSelfServiceViewSet(ApplicantSelfServiceMixin, viewsets.Mo
             )
             created = True
 
-        # Trigger OCR for KTP
-        if document_type.code == "ktp":
-            process_document_ocr.delay(document.id)
+        # OCR (Google Vision) hanya untuk KTP — di-signal dari post_save ApplicantDocument.
 
         response_serializer = self.get_serializer(document)
         response_status = status.HTTP_201_CREATED if created else status.HTTP_200_OK

@@ -99,15 +99,14 @@ class _HomePageState extends ConsumerState<HomePage>
     final displayName = user?.fullName?.isNotEmpty == true
         ? user!.fullName!
         : profileState.profile?.fullName?.isNotEmpty == true
-            ? profileState.profile!.fullName!
-            : user?.email ?? 'Pengguna';
+        ? profileState.profile!.fullName!
+        : user?.email ?? 'Pengguna';
     final firstName = _firstName(displayName, user?.email);
 
     final score = profileState.profile?.score?.toInt() ?? 0;
     final statusLabel =
         profileState.profile?.verificationStatusDisplay ?? 'Draf';
-    final statusColor =
-        _statusColor(profileState.profile?.verificationStatus);
+    final statusColor = _statusColor(profileState.profile?.verificationStatus);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFB), // Light gray background
@@ -122,9 +121,13 @@ class _HomePageState extends ConsumerState<HomePage>
               onRefresh: () async {
                 // Refresh all homepage data sources concurrently.
                 await Future.wait([
-                  ref.read(profileNotifierProvider.notifier).loadProfile(force: true),
+                  ref
+                      .read(profileNotifierProvider.notifier)
+                      .loadProfile(force: true),
                   ref.read(notificationProvider.notifier).load(),
-                  ref.read(paginatedNewsProvider(null).notifier).loadFirstPage(),
+                  ref
+                      .read(paginatedNewsProvider(null).notifier)
+                      .loadFirstPage(),
                 ]);
               },
               color: cs.primary,
@@ -132,95 +135,99 @@ class _HomePageState extends ConsumerState<HomePage>
                 physics: const AlwaysScrollableScrollPhysics(
                   parent: BouncingScrollPhysics(),
                 ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ── Professional header ─────────────────────────────────
-                  _animated(
-                    _ProfessionalHeader(
-                      displayName: displayName,
-                      firstName: firstName,
-                      unreadCount: notifState.unreadCount,
-                      onNotificationTap: () =>
-                          context.push('/notifications'),
-                    ),
-                    0.0, 0.40,
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // ── Dashboard stats ───────────────────────────────────────
-                  _animated(
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Column(
-                        children: [
-                          // Top stats row
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _DashboardStatCard(
-                                  title: 'Kelengkapan Profil',
-                                  value: profileState.isLoading ? null : score,
-                                  unit: '%',
-                                  icon: Icons.person_outline_rounded,
-                                  color: AppColors.primaryDarkGreen,
-                                  onTap: () => context.push('/profile'),
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: _DashboardStatCard(
-                                  title: 'Status Lamaran',
-                                  value: null,
-                                  customLabel: statusLabel,
-                                  icon: Icons.work_outline_rounded,
-                                  color: statusColor,
-                                  isLoading: profileState.isLoading,
-                                  onTap: () => context.push('/profile'),
-                                ),
-                              ),
-                            ],
-                          ),
-                          
-                          const SizedBox(height: 16),
-                          
-                          // Quick actions row
-                          _DashboardQuickActions(),
-                        ],
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ── Professional header ─────────────────────────────────
+                    _animated(
+                      _ProfessionalHeader(
+                        displayName: displayName,
+                        firstName: firstName,
+                        unreadCount: notifState.unreadCount,
+                        onNotificationTap: () => context.push('/notifications'),
                       ),
+                      0.0,
+                      0.40,
                     ),
-                    0.20, 0.60,
-                  ),
 
-                  const SizedBox(height: 32),
+                    const SizedBox(height: 20),
 
-                  // ── Professional news section ────────────────────────────────
-                  _animated(
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Column(
-                        children: [
-                          _ProfessionalSectionHeader(
-                            title: 'Pengumuman Terbaru',
-                            actionLabel: 'Lihat semua',
-                            onAction: () => context.go('/news'),
-                          ),
-                          
-                          const SizedBox(height: 20),
-                          
-                          _ProfessionalNewsList(
-                            newsState: newsState,
-                            onTap: (id) => context.push('/news/$id'),
-                          ),
-                        ],
+                    // ── Dashboard stats ───────────────────────────────────────
+                    _animated(
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Column(
+                          children: [
+                            // Top stats row
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _DashboardStatCard(
+                                    title: 'Kelengkapan Profil',
+                                    value: profileState.isLoading
+                                        ? null
+                                        : score,
+                                    unit: '%',
+                                    icon: Icons.person_outline_rounded,
+                                    color: AppColors.primaryDarkGreen,
+                                    onTap: () => context.push('/profile'),
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: _DashboardStatCard(
+                                    title: 'Status Lamaran',
+                                    value: null,
+                                    customLabel: statusLabel,
+                                    icon: Icons.work_outline_rounded,
+                                    color: statusColor,
+                                    isLoading: profileState.isLoading,
+                                    onTap: () => context.push('/profile'),
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(height: 16),
+
+                            // Quick actions row
+                            _DashboardQuickActions(),
+                          ],
+                        ),
                       ),
+                      0.20,
+                      0.60,
                     ),
-                    0.35, 0.90,
-                  ),
-                ],
+
+                    const SizedBox(height: 32),
+
+                    // ── Professional news section ────────────────────────────────
+                    _animated(
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Column(
+                          children: [
+                            _ProfessionalSectionHeader(
+                              title: 'Pengumuman Terbaru',
+                              actionLabel: 'Lihat semua',
+                              onAction: () => context.go('/news'),
+                            ),
+
+                            const SizedBox(height: 20),
+
+                            _ProfessionalNewsList(
+                              newsState: newsState,
+                              onTap: (id) => context.push('/news/$id'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      0.35,
+                      0.90,
+                    ),
+                  ],
+                ),
               ),
-            ),
             ),
           ),
 
@@ -256,7 +263,7 @@ class _ProfessionalHeader extends StatelessWidget {
     final topPad = MediaQuery.paddingOf(context).top;
     final now = DateTime.now();
     final hour = now.hour;
-    
+
     String greeting;
     IconData greetingIcon;
     if (hour < 12) {
@@ -318,9 +325,9 @@ class _ProfessionalHeader extends StatelessWidget {
                   size: 28,
                 ),
               ),
-              
+
               const SizedBox(width: 16),
-              
+
               // User Info
               Expanded(
                 child: Column(
@@ -355,7 +362,7 @@ class _ProfessionalHeader extends StatelessWidget {
                   ],
                 ),
               ),
-              
+
               // Notification Bell
               _ProfessionalNotificationBell(
                 unreadCount: unreadCount,
@@ -363,9 +370,9 @@ class _ProfessionalHeader extends StatelessWidget {
               ),
             ],
           ),
-          
+
           const SizedBox(height: 20),
-          
+
           // Dashboard Title
           Row(
             children: [
@@ -398,7 +405,10 @@ class _ProfessionalHeader extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _ProfessionalNotificationBell extends StatelessWidget {
-  const _ProfessionalNotificationBell({required this.onTap, this.unreadCount = 0});
+  const _ProfessionalNotificationBell({
+    required this.onTap,
+    this.unreadCount = 0,
+  });
 
   final VoidCallback onTap;
   final int unreadCount;
@@ -416,10 +426,7 @@ class _ProfessionalNotificationBell extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: AppColors.divider,
-              width: 1.2,
-            ),
+            border: Border.all(color: AppColors.divider, width: 1.2),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.04),
@@ -449,12 +456,8 @@ class _ProfessionalNotificationBell extends StatelessWidget {
                       shape: BoxShape.circle,
                       border: Border.all(color: Colors.white, width: 2),
                     ),
-                    child: unreadCount > 9 
-                        ? const Icon(
-                            Icons.add, 
-                            size: 8, 
-                            color: Colors.white,
-                          )
+                    child: unreadCount > 9
+                        ? const Icon(Icons.add, size: 8, color: Colors.white)
                         : Center(
                             child: Text(
                               '$unreadCount',
@@ -553,9 +556,9 @@ class _DashboardStatCard extends StatelessWidget {
                   ),
                 ],
               ),
-              
+
               const SizedBox(height: 20),
-              
+
               // Value
               if (isLoading)
                 SizedBox(
@@ -598,7 +601,7 @@ class _DashboardStatCard extends StatelessWidget {
                     ],
                   ),
                 ),
-              
+
               // Progress indicator for percentage
               if (value != null && unit == '%') ...[
                 const SizedBox(height: 12),
@@ -637,7 +640,7 @@ class _DashboardQuickActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
-    
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -665,9 +668,9 @@ class _DashboardQuickActions extends StatelessWidget {
               fontWeight: FontWeight.w600,
             ),
           ),
-          
+
           const SizedBox(height: 16),
-          
+
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
@@ -738,9 +741,9 @@ class _QuickActionButton extends StatelessWidget {
                 ),
                 child: Icon(icon, color: color, size: 24),
               ),
-              
+
               const SizedBox(height: 8),
-              
+
               Text(
                 label,
                 style: tt.bodySmall?.copyWith(
@@ -846,10 +849,7 @@ class _ProfessionalSectionHeader extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _ProfessionalNewsList extends StatelessWidget {
-  const _ProfessionalNewsList({
-    required this.newsState,
-    required this.onTap,
-  });
+  const _ProfessionalNewsList({required this.newsState, required this.onTap});
 
   final PaginatedState<News> newsState;
   final void Function(int id) onTap;
@@ -909,9 +909,7 @@ class _ProfessionalNewsList extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               'Coba lagi nanti',
-              style: tt.bodyMedium?.copyWith(
-                color: AppColors.textMedium,
-              ),
+              style: tt.bodyMedium?.copyWith(color: AppColors.textMedium),
             ),
           ],
         ),
@@ -932,11 +930,7 @@ class _ProfessionalNewsList extends StatelessWidget {
         ),
         child: Column(
           children: [
-            Icon(
-              Icons.article_outlined,
-              size: 48,
-              color: AppColors.textMedium,
-            ),
+            Icon(Icons.article_outlined, size: 48, color: AppColors.textMedium),
             const SizedBox(height: 12),
             Text(
               'Belum ada pengumuman',
@@ -948,9 +942,7 @@ class _ProfessionalNewsList extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               'Pengumuman akan tampil di sini',
-              style: tt.bodyMedium?.copyWith(
-                color: AppColors.textMedium,
-              ),
+              style: tt.bodyMedium?.copyWith(color: AppColors.textMedium),
             ),
           ],
         ),
@@ -959,7 +951,7 @@ class _ProfessionalNewsList extends StatelessWidget {
 
     final list = newsState.items;
     final items = list.length > 5 ? list.sublist(0, 5) : list;
-    
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -1016,7 +1008,7 @@ class _ProfessionalNewsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
-    
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -1024,12 +1016,14 @@ class _ProfessionalNewsCard extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            border: !isLast ? Border(
-              bottom: BorderSide(
-                color: AppColors.divider.withValues(alpha: 0.2),
-                width: 1,
-              ),
-            ) : null,
+            border: !isLast
+                ? Border(
+                    bottom: BorderSide(
+                      color: AppColors.divider.withValues(alpha: 0.2),
+                      width: 1,
+                    ),
+                  )
+                : null,
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1044,9 +1038,9 @@ class _ProfessionalNewsCard extends StatelessWidget {
                   shape: BoxShape.circle,
                 ),
               ),
-              
+
               const SizedBox(width: 16),
-              
+
               // Content
               Expanded(
                 child: Column(
@@ -1075,7 +1069,9 @@ class _ProfessionalNewsCard extends StatelessWidget {
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: AppColors.primaryDarkGreen.withValues(alpha: 0.1),
+                            color: AppColors.primaryDarkGreen.withValues(
+                              alpha: 0.1,
+                            ),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
@@ -1088,7 +1084,7 @@ class _ProfessionalNewsCard extends StatelessWidget {
                         ),
                       ],
                     ),
-                    
+
                     // Summary if available
                     if (news.summary != null && news.summary!.isNotEmpty) ...[
                       const SizedBox(height: 8),

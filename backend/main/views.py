@@ -192,7 +192,7 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
       POST   /api/batches/             — create a new batch
       GET    /api/batches/{id}/        — batch detail + counts
       PATCH  /api/batches/{id}/        — update name/notes on the batch
-      DELETE /api/batches/{id}/        — delete batch (only if has no applications)
+      DELETE /api/batches/{id}/        — delete batch + semua lamaran di dalamnya (hanya Admin Utama / MASTER_ADMIN)
 
     Custom actions:
       GET   /api/batches/{id}/eligible-applicants/?q=   — applicant search table with eligibility
@@ -208,6 +208,11 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
     search_fields = ["name", "notes", "job__title"]
     ordering_fields = ["created_at", "pra_seleksi_date", "interview_date"]
     ordering = ["-created_at"]
+
+    def get_permissions(self):
+        if self.action == "destroy":
+            return [IsMasterAdmin()]
+        return [IsBackofficeAdmin()]
 
     def get_serializer_class(self):
         if self.action == "create":

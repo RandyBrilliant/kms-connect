@@ -8,6 +8,7 @@ Account models for the TKI recruitment platform.
 """
 
 import os
+import uuid
 from datetime import date
 
 from django.db import models
@@ -1607,9 +1608,11 @@ class DocumentType(models.Model):
 def applicant_document_upload_to(instance, filename: str) -> str:
     """
     Upload path convention:
-    account/documents/<applicant_profile_id>/<doc_type_code>/<slug-name>-<last4nik>-<doc_type_code>.<ext>
+    account/documents/<applicant_profile_id>/<doc_type_code>/<uuid>-<slug-name>-<last4nik>-<doc_type_code>.<ext>
 
     - Folder per applicant (stable numeric ID, no PII in path beyond that ID)
+    - A unique prefix per upload so replaced files get new URLs (avoids browser cache
+      showing the previous file when the path would otherwise be identical).
     - File name is human-readable but only uses:
       - slugified full name (no spaces/special chars)
       - last 4 digits of NIK (not full NIK, to reduce PII exposure)
@@ -1635,7 +1638,8 @@ def applicant_document_upload_to(instance, filename: str) -> str:
         name_parts.append(doc_type_code)
 
     final_name = "-".join(name_parts) + ext
-    return f"account/documents/{profile.id}/{doc_type_code}/{final_name}"
+    unique_prefix = uuid.uuid4().hex[:16]
+    return f"account/documents/{profile.id}/{doc_type_code}/{unique_prefix}-{final_name}"
 
 
 # ---------------------------------------------------------------------------

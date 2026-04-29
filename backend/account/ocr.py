@@ -161,6 +161,8 @@ def extract_text_with_blocks(image_path: str) -> dict:
 
 # Common label prefixes found on Indonesian KTP
 _LABEL_NAMA = re.compile(r"^nama\s*[:.]?\s*", re.I)
+# Value sometimes OCR'd as only separators before the real name (e.g. ": DEVI ANANDA")
+_LEADING_FIELD_JUNK = re.compile(r"^[\s\u3000:.;,・·\-—_/\\]+")
 _LABEL_TTL = re.compile(
     r"(?:tempat\s*[/.,]?\s*t(?:ang)?g(?:al|l)?\.?\s*lahir|t\.?t\.?l\.?)\s*[:.]?\s*",
     re.I,
@@ -210,6 +212,37 @@ def _normalise_date(raw: str) -> str | None:
 def _clean_label(text: str, pattern: re.Pattern) -> str:
     """Remove a label prefix from *text* and return the stripped remainder."""
     return pattern.sub("", text).strip()
+
+
+def _clean_person_name_value(text: str) -> str:
+    """
+    Strip OCR noise from the KTP name field.
+
+    Vision often merges ':' from the card layout with the value, producing names like
+    ": DEVI ANANDA" or "Nama : : BUDI". Remove leading junk and stray label remnants.
+    """
+    if not text:
+        return ""
+    s = text.strip()
+    for _ in range(6):
+        prev = s
+        s = _LEADING_FIELD_JUNK.sub("", s)
+        s = _LABEL_NAMA.sub("", s).strip()
+        s = _LEADING_FIELD_JUNK.sub("", s)
+        if s == prev:
+            break
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+
+def _normalize_nik_value(nik: str | None) -> str | None:
+    """Keep 16-digit NIK; strip spaces/dashes if OCR inserted them (still 16 digits total)."""
+    if not nik:
+        return None
+    digits = re.sub(r"\D", "", str(nik))
+    if len(digits) == 16:
+        return digits
+    return str(nik).strip()
 
 
 def _is_valid_name_candidate(text: str) -> bool:
@@ -314,14 +347,14 @@ def parse_ktp_with_blocks(blocks: list[TextBlock]) -> dict:
         if nik_range[0] <= block.center_y <= nik_range[1]:
             nik_match = _NIK_PATTERN.search(block.text)
             if nik_match:
-                result["nik"] = nik_match.group(1)
+                result["nik"] = _normalize_nik_value(nik_match.group(1))
                 break
 
     # Fallback: search entire text
     if not result["nik"]:
         nik_match = _NIK_PATTERN.search(full_text)
         if nik_match:
-            result["nik"] = nik_match.group(1)
+            result["nik"] = _normalize_nik_value(nik_match.group(1))
 
     # ── Name extraction using spatial position ──
     name_label_pattern = re.compile(r"\bnama\b", re.I)
@@ -361,7 +394,7 @@ def parse_ktp_with_blocks(blocks: list[TextBlock]) -> dict:
         candidates.sort(key=lambda x: (x[0], x[1].y_min, x[1].x_min))
 
         for _, block in candidates:
-            cleaned = _clean_label(block.text, _LABEL_NAMA)
+            cleaned = _clean_person_name_value(_clean_label(block.text, _LABEL_NAMA))
             if _is_valid_name_candidate(cleaned):
                 result["name"] = cleaned
                 break
@@ -374,13 +407,14 @@ def parse_ktp_with_blocks(blocks: list[TextBlock]) -> dict:
                 text_upper = block.text.upper().strip()
                 if text_upper.startswith(("NAMA", "NIK", "TEMPAT", "TANGGAL", "TGL")):
                     # Try to extract value after the label
-                    cleaned = _clean_label(block.text, _LABEL_NAMA)
+                    cleaned = _clean_person_name_value(_clean_label(block.text, _LABEL_NAMA))
                     if cleaned and _is_valid_name_candidate(cleaned):
                         result["name"] = cleaned
                         break
                     continue
-                if _is_valid_name_candidate(block.text):
-                    result["name"] = block.text
+                cleaned = _clean_person_name_value(block.text)
+                if _is_valid_name_candidate(cleaned):
+                    result["name"] = cleaned
                     break
 
     # ── Birth place and date extraction ──
@@ -436,6 +470,17 @@ def parse_ktp_with_blocks(blocks: list[TextBlock]) -> dict:
     return result
 
 
+def _finalize_ktp_parsed_fields(result: dict) -> dict:
+    """Last-pass cleanup on name; NIK digits-only when 16 chars. birth_place left raw for dropdown matching."""
+    if result.get("name"):
+        result["name"] = _clean_person_name_value(str(result["name"]))
+    if result.get("nik"):
+        normalized = _normalize_nik_value(str(result["nik"]))
+        if normalized:
+            result["nik"] = normalized
+    return result
+
+
 def parse_ktp_text(text: str, blocks: list[TextBlock] | None = None) -> dict:
     """
     Parse Indonesian KTP OCR text into a dict keyed by *KTP_OCR_KEYS*.
@@ -454,15 +499,15 @@ def parse_ktp_text(text: str, blocks: list[TextBlock] | None = None) -> dict:
         result = parse_ktp_with_blocks(blocks)
         # If spatial extraction got all fields, return it
         if all(result.get(k) for k in KTP_OCR_KEYS):
-            return result
+            return _finalize_ktp_parsed_fields(result)
         # Otherwise, try to fill missing fields with text-based extraction
         text_result = _parse_ktp_text_only(text)
         for key in KTP_OCR_KEYS:
             if not result.get(key) and text_result.get(key):
                 result[key] = text_result[key]
-        return result
+        return _finalize_ktp_parsed_fields(result)
 
-    return _parse_ktp_text_only(text)
+    return _finalize_ktp_parsed_fields(_parse_ktp_text_only(text))
 
 
 def _parse_ktp_text_only(text: str) -> dict:
@@ -482,16 +527,16 @@ def _parse_ktp_text_only(text: str) -> dict:
     # ── NIK (16 consecutive digits) ──────────────────────────────────────
     nik_match = _NIK_PATTERN.search(full_text)
     if nik_match:
-        result["nik"] = nik_match.group(1)
+        result["nik"] = _normalize_nik_value(nik_match.group(1))
 
     # ── Nama ─────────────────────────────────────────────────────────────
     for idx, line in enumerate(lines):
         if _LABEL_NAMA.match(line):
-            value = _clean_label(line, _LABEL_NAMA)
+            value = _clean_person_name_value(_clean_label(line, _LABEL_NAMA))
             if _is_valid_name_candidate(value):
                 result["name"] = value
             elif idx + 1 < len(lines):
-                candidate = lines[idx + 1].strip()
+                candidate = _clean_person_name_value(lines[idx + 1])
                 if _is_valid_name_candidate(candidate):
                     result["name"] = candidate
             break
@@ -499,7 +544,7 @@ def _parse_ktp_text_only(text: str) -> dict:
     # Fallback: first non-numeric, non-label line in the top 7 lines
     if not result["name"]:
         for line in lines[:7]:
-            stripped = line.strip()
+            stripped = _clean_person_name_value(line)
             if len(stripped) > 3 and _is_valid_name_candidate(stripped):
                 result["name"] = stripped
                 break

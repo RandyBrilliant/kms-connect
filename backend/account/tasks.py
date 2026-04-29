@@ -12,7 +12,7 @@ def process_document_ocr(self, document_id: int):
     Simpan full text ke ocr_text; untuk KTP parse ke ocr_data (nik, name, dll.).
     
     Uses bounding box extraction for improved KTP field accuracy.
-    Panggil setelah upload: process_document_ocr.delay(doc.pk)
+    Dipanggil dari signal hanya untuk dokumen tipe KTP: process_document_ocr.delay(doc.pk)
     """
     from django.conf import settings
     from django.utils import timezone
