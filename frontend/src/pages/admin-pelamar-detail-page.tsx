@@ -5,7 +5,7 @@
  */
 
 import { Link, useNavigate, useParams } from "react-router-dom"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { format } from "date-fns"
 import { id as idLocale } from "date-fns/locale"
 import {
@@ -30,6 +30,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Textarea } from "@/components/ui/textarea"
 import { ApplicantBiodataTab } from "@/components/applicants/applicant-biodata-tab"
 import { ApplicantWorkExperienceTab } from "@/components/applicants/applicant-work-experience-tab"
 import { ApplicantDocumentsTab } from "@/components/applicants/applicant-documents-tab"
@@ -49,11 +50,17 @@ import {
   useActivateApplicantMutation,
   useSendVerificationEmailMutation,
   useSendPasswordResetMutation,
+  useSendSubmissionSummaryMutation,
   usePermanentDeleteApplicantMutation,
 } from "@/hooks/use-applicants-query"
 import { toast } from "@/lib/toast"
 import { viewBiodataPdf, viewInbondPdf } from "@/api/applicants"
-import type { ApplicantUser, ApplicantVerificationStatus, ApplicantProfile } from "@/types/applicant"
+import type {
+  ApplicantUser,
+  ApplicantVerificationStatus,
+  ApplicantProfile,
+  ScoreBreakdown,
+} from "@/types/applicant"
 import { usePageTitle } from "@/hooks/use-page-title"
 import {
   joinAdminPath,
@@ -65,18 +72,22 @@ import { isMasterAdmin, isRestrictedAdmin, type UserRole } from "@/types/auth"
 function ApplicantSidebar({
   applicant,
   hideAccountToggle,
+  canSendSubmissionSummary,
 }: {
   applicant: ApplicantUser
   hideAccountToggle?: boolean
+  canSendSubmissionSummary?: boolean
 }) {
   const deactivateMutation = useDeactivateApplicantMutation()
   const activateMutation = useActivateApplicantMutation()
   const sendVerificationMutation = useSendVerificationEmailMutation()
   const sendPasswordResetMutation = useSendPasswordResetMutation()
   const updateMutation = useUpdateApplicantMutation(applicant.id)
+  const sendSubmissionSummaryMutation = useSendSubmissionSummaryMutation()
 
   const [isViewingPdf, setIsViewingPdf] = useState(false)
   const [isViewingInbond, setIsViewingInbond] = useState(false)
+  const [sendSummaryDialogOpen, setSendSummaryDialogOpen] = useState(false)
 
   const handleViewBiodataPdf = async () => {
     setIsViewingPdf(true)
@@ -142,7 +153,17 @@ function ApplicantSidebar({
   }
 
   const profile = applicant.applicant_profile
-  const scoreBreakdown = profile?.score_breakdown
+  const [keteranganNotes, setKeteranganNotes] = useState(profile?.notes ?? "")
+  const scoreBreakdown = (profile?.score_breakdown ?? {}) as Partial<ScoreBreakdown>
+  const missingProfileFields = scoreBreakdown.profile_missing_fields ?? []
+  const missingDocCodes = scoreBreakdown.missing_required_document_codes ?? []
+  const isAccepted = profile?.verification_status === "ACCEPTED"
+  const hasMissingData = missingProfileFields.length > 0 || missingDocCodes.length > 0
+
+  useEffect(() => {
+    // Keep textarea in sync when applicant changes or after save refetches.
+    setKeteranganNotes(profile?.notes ?? "")
+  }, [profile?.notes, applicant.id])
 
   const VERIFICATION_LABELS: Record<ApplicantVerificationStatus, string> = {
     DRAFT: "Draf",
@@ -250,7 +271,7 @@ function ApplicantSidebar({
   return (
     <div className="flex flex-col gap-6">
       {/* Skor kesiapan & data yang belum lengkap */}
-      {scoreBreakdown && Object.keys(scoreBreakdown).length > 0 && (
+      {profile && (
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between gap-2">
@@ -267,13 +288,13 @@ function ApplicantSidebar({
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {scoreBreakdown.profile_missing_fields?.length ? (
+              {missingProfileFields.length ? (
                 <div className="space-y-1">
                   <p className="text-xs font-medium text-foreground">
                     Biodata belum lengkap:
                   </p>
                   <ul className="list-disc space-y-0.5 pl-4 text-xs text-muted-foreground">
-                    {scoreBreakdown.profile_missing_fields.map((field) => {
+                    {missingProfileFields.map((field) => {
                       const label = prettyFieldLabels[field] ?? field
                       return <li key={field}>{label}</li>
                     })}
@@ -281,13 +302,13 @@ function ApplicantSidebar({
                 </div>
               ) : null}
 
-              {scoreBreakdown.missing_required_document_codes?.length ? (
+              {missingDocCodes.length ? (
                 <div className="space-y-1">
                   <p className="text-xs font-medium text-foreground">
                     Dokumen wajib belum lengkap:
                   </p>
                   <ul className="list-disc space-y-0.5 pl-4 text-xs text-muted-foreground">
-                    {scoreBreakdown.missing_required_document_codes.map((code) => {
+                    {missingDocCodes.map((code) => {
                       const label = prettyDocumentLabels[code] ?? code.toUpperCase()
                       return <li key={code}>{label}</li>
                     })}
@@ -295,15 +316,78 @@ function ApplicantSidebar({
                 </div>
               ) : null}
 
-              {!scoreBreakdown.profile_missing_fields?.length &&
-              !scoreBreakdown.missing_required_document_codes?.length ? (
+              {!missingProfileFields.length && !missingDocCodes.length ? (
                 <p className="text-xs text-muted-foreground">
                   Tidak ada kekurangan data yang terdeteksi untuk perhitungan skor.
                 </p>
               ) : null}
+
+              {/* Admin-only: send applicant submission summary */}
+              {canSendSubmissionSummary && (
+                <div className="pt-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="cursor-pointer"
+                    onClick={() => setSendSummaryDialogOpen(true)}
+                    disabled={
+                      sendSubmissionSummaryMutation.isPending ||
+                      isAccepted ||
+                      !hasMissingData
+                    }
+                  >
+                    {isAccepted ? "Sudah Diterima" : "Kirim Ringkasan Pengisian"}
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
+
+      {/* Keterangan (catatan tambahan) */}
+      {profile && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Keterangan</CardTitle>
+            <CardDescription>Catatan tambahan (III. Keterangan) untuk biodata CPMI.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Textarea
+              value={keteranganNotes}
+              onChange={(e) => setKeteranganNotes(e.target.value)}
+              placeholder="Masukkan keterangan tambahan (opsional)..."
+              rows={5}
+              disabled={updateMutation.isPending}
+            />
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="default"
+                className="cursor-pointer"
+                disabled={
+                  updateMutation.isPending || (keteranganNotes ?? "").trim() === (profile.notes ?? "").trim()
+                }
+                onClick={async () => {
+                  try {
+                    await updateMutation.mutateAsync({
+                      applicant_profile: {
+                        notes: keteranganNotes ?? "",
+                      },
+                    })
+                    toast.success("Keterangan tersimpan", "Catatan tambahan berhasil diperbarui.")
+                  } catch (err: unknown) {
+                    const res = err as { response?: { data?: { detail?: string } } }
+                    toast.error("Gagal menyimpan keterangan", res?.response?.data?.detail ?? "Coba lagi nanti")
+                  }
+                }}
+              >
+                {updateMutation.isPending ? "Menyimpan..." : "Simpan Keterangan"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Status verifikasi */}
       {profile && (
@@ -456,6 +540,47 @@ function ApplicantSidebar({
         </Card>
       )}
 
+      <AlertDialog open={sendSummaryDialogOpen} onOpenChange={setSendSummaryDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Kirim ringkasan ke pelamar?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <p className="text-muted-foreground">
+                Notifikasi akan dikirim ke pelamar agar dapat melengkapi biodata dan dokumen yang
+                masih kurang.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              type="button"
+              className="cursor-pointer"
+              disabled={sendSubmissionSummaryMutation.isPending}
+            >
+              Batal
+            </AlertDialogCancel>
+            <Button
+              type="button"
+              variant="default"
+              className="cursor-pointer"
+              disabled={sendSubmissionSummaryMutation.isPending}
+              onClick={async () => {
+                try {
+                  await sendSubmissionSummaryMutation.mutateAsync(applicant.id)
+                  toast.success("Ringkasan terkirim", "Notifikasi telah dikirim ke pelamar.")
+                  setSendSummaryDialogOpen(false)
+                } catch (err: unknown) {
+                  const res = err as { response?: { data?: { detail?: string } } }
+                  toast.error("Gagal mengirim ringkasan", res?.response?.data?.detail ?? "Coba lagi nanti")
+                }
+              }}
+            >
+              {sendSubmissionSummaryMutation.isPending ? "Mengirim..." : "Kirim"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Send email verification */}
       <Card>
         <CardHeader>
@@ -566,8 +691,9 @@ export function AdminPelamarDetailPage() {
   const hideAccountToggle = user
     ? isRestrictedAdmin(user.role as UserRole)
     : false
-  const canPermanentDelete =
-    !!user && isMasterAdmin(user.role as UserRole)
+  const canPermanentDelete = !!user && (isMasterAdmin(user.role as UserRole) || isRestrictedAdmin(user.role as UserRole))
+
+  const canSendSubmissionSummary = !!user && (isMasterAdmin(user.role as UserRole) || isRestrictedAdmin(user.role as UserRole))
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const permanentDeleteMutation = usePermanentDeleteApplicantMutation()
@@ -580,6 +706,10 @@ export function AdminPelamarDetailPage() {
   )
   const updateMutation = useUpdateApplicantMutation(applicantId ?? 0)
 
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
+
   const handleBiodataSubmit = async (
     data: Parameters<typeof updateMutation.mutateAsync>[0]["applicant_profile"]
   ) => {
@@ -588,6 +718,7 @@ export function AdminPelamarDetailPage() {
         applicant_profile: data,
       })
       toast.success("Biodata diperbarui")
+      scrollToTop()
     } catch (err: unknown) {
       const res = err as {
         response?: {
@@ -783,12 +914,14 @@ export function AdminPelamarDetailPage() {
                 profile={profile}
                 onSubmit={handleBiodataSubmit}
                 isSubmitting={updateMutation.isPending}
+                hideNotesField
               />
             </div>
             <div className="flex flex-col gap-6">
               <ApplicantSidebar
                 applicant={applicant}
                 hideAccountToggle={hideAccountToggle}
+                canSendSubmissionSummary={canSendSubmissionSummary}
               />
             </div>
           </div>
@@ -801,6 +934,7 @@ export function AdminPelamarDetailPage() {
               await updateMutation.mutateAsync({
                 applicant_profile: data,
               })
+              scrollToTop()
             }}
             isSubmitting={updateMutation.isPending}
           />

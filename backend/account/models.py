@@ -1070,6 +1070,21 @@ class ApplicantProfile(models.Model):
             )
         
         # Passport validation
+        # Some production records can end up in an inconsistent state:
+        # `has_passport=True` but all passport detail fields are blank.
+        # In that case, we treat it as `has_passport=False` so unrelated
+        # biodata updates don't fail validation.
+        passport_details_present = any(
+            [
+                bool((self.passport_number or "").strip()),
+                self.passport_issue_date is not None,
+                self.passport_expiry_date is not None,
+                bool((self.passport_issue_place or "").strip()),
+            ]
+        )
+        if self.has_passport is True and not passport_details_present:
+            self.has_passport = False
+
         if self.has_passport and not self.passport_number:
             raise ValidationError(
                 {"passport_number": _("Nomor paspor wajib diisi jika memiliki paspor.")}

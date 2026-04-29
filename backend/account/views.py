@@ -392,8 +392,11 @@ class ApplicantUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
     ordering = ["-applicant_profile__created_at"]
 
     def get_permissions(self):
-        if self.action in ("deactivate", "activate", "permanent_delete"):
+        if self.action in ("deactivate", "activate"):
             return [IsMasterAdmin()]
+        if self.action in ("permanent_delete",):
+            # Allow both MASTER_ADMIN and ADMIN to permanently delete applicants.
+            return [IsBackofficeAdmin()]
         return [IsBackofficeAdmin()]
 
     def get_queryset(self):
@@ -559,6 +562,80 @@ class ApplicantUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
         if missing:
             response["X-Missing-Files"] = ",".join(missing)
         return response
+
+    @action(detail=True, methods=["post"], url_path="send-submission-summary")
+    def send_submission_summary(self, request, pk=None):
+        """
+        POST /api/applicants/{id}/send-submission-summary/
+        Send a targeted in-app/push notification containing a summary of biodata/documents
+        that the applicant still needs to complete.
+        """
+        applicant = self.get_object()
+        profile = getattr(applicant, "applicant_profile", None)
+
+        if not profile:
+            return Response(
+                error_response(
+                    detail="Profil pelamar tidak ditemukan.",
+                    code=ApiCode.NOT_FOUND,
+                ),
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        breakdown = getattr(profile, "score_breakdown", None) or {}
+        missing_profile = breakdown.get("profile_missing_fields") or []
+        missing_docs = breakdown.get("missing_required_document_codes") or []
+
+        if not missing_profile and not missing_docs:
+            return Response(
+                error_response(
+                    detail="Tidak ada kekurangan data yang perlu dilengkapi.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from .services.submission_summary import build_submission_summary_context
+
+        context = build_submission_summary_context(
+            applicant_name=applicant.full_name or applicant.email,
+            missing_profile=missing_profile,
+            missing_docs=missing_docs,
+        )
+
+        action_url = "/profile"
+        action_label = "Lengkapi Sekarang"
+
+        notification = dispatch(
+            event=NotificationEvent.PROFILE_SUBMISSION_SUMMARY,
+            user=applicant,
+            context=context,
+            action_url=action_url,
+            action_label=action_label,
+            deduplicate=False,
+        )
+
+        if notification is None:
+            return Response(
+                success_response(
+                    data={"sent": False},
+                    detail="Notifikasi tidak dikirim (mungkin karena pengaturan notifikasi).",
+                    code=ApiCode.ALREADY_PROCESSED,
+                ),
+                status=status.HTTP_200_OK,
+            )
+
+        return Response(
+            success_response(
+                data={
+                    "sent": True,
+                    "notification_id": notification.id,
+                },
+                detail="Ringkasan pengisian berhasil dikirim.",
+                code=ApiCode.SUCCESS,
+            ),
+            status=status.HTTP_200_OK,
+        )
 
     @action(detail=True, methods=["post"], url_path="permanent-delete")
     def permanent_delete(self, request, pk=None):

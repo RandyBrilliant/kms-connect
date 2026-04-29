@@ -152,6 +152,7 @@ export function StaffReferredApplicantsPage() {
                       <TableHead>NIK</TableHead>
                       <TableHead>No. Telepon</TableHead>
                       <TableHead>Status Verifikasi</TableHead>
+                      <TableHead>Tahapan Proses</TableHead>
                       <TableHead>Terdaftar</TableHead>
                       <TableHead className="text-right">Aksi</TableHead>
                     </TableRow>
@@ -193,6 +194,32 @@ export function StaffReferredApplicantsPage() {
                                 </Badge>
                               )}
                               {!profile?.verification_status && <Badge variant="outline">-</Badge>}
+                            </TableCell>
+                            <TableCell>
+                              {Array.isArray((applicant as any).applications_summary) &&
+                              (applicant as any).applications_summary.length > 0 ? (
+                                (() => {
+                                  const appSum = (applicant as any).applications_summary[0]
+                                  const jobTitle = appSum.job_title as string | undefined
+                                  const batchName = appSum.batch_name as string | undefined
+                                  const statusLabel = appSum.status_label as string | undefined
+                                  return (
+                                    <div className="flex flex-col text-xs">
+                                      <span className="font-medium">
+                                        {statusLabel || appSum.status || "-"}
+                                      </span>
+                                      <span className="text-muted-foreground">
+                                        {jobTitle || "Tanpa lowongan"}
+                                        {batchName ? ` · ${batchName}` : ""}
+                                      </span>
+                                    </div>
+                                  )
+                                })()
+                              ) : (
+                                <span className="text-xs text-muted-foreground">
+                                  Belum ada lamaran
+                                </span>
+                              )}
                             </TableCell>
                             <TableCell>
                               <span className="text-sm">{formatDate(applicant.date_joined)}</span>

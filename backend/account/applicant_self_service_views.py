@@ -402,8 +402,9 @@ class ApplicantDocumentTypesChecklistView(APIView):
     Daftar tipe dokumen untuk checklist unggah (mobile), disesuaikan dengan
     progres lamaran:
 
-    - Hanya fase INITIAL sampai pelamar punya minimal satu lamaran dengan status
-      INTERVIEW, DITERIMA, BERANGKAT, atau SELESAI.
+    - Hanya fase INITIAL sampai pelamar lulus pra-seleksi pada minimal satu
+      lamaran aktif (status PRA_SELEKSI dengan kehadiran terkonfirmasi) atau
+      mencapai tahap INTERVIEW+.
     - Setelah itu: semua tipe (INITIAL + POST_INTERVIEW).
     """
 
@@ -427,6 +428,16 @@ class ApplicantDocumentTypesChecklistView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
+        # Unlock full document checklist once applicant has:
+        # - at least one application where PRA_SELEKSI attendance is confirmed
+        #   (pra_seleksi_confirmed_at is not null), OR
+        # - reached INTERVIEW or later on any application.
+        has_confirmed_pra_seleksi = JobApplication.objects.filter(
+            applicant=profile,
+            status=ApplicationStatus.PRA_SELEKSI,
+            pra_seleksi_confirmed_at__isnull=False,
+        ).exists()
+
         post_interview_onwards = [
             ApplicationStatus.INTERVIEW,
             ApplicationStatus.DITERIMA,
@@ -438,7 +449,7 @@ class ApplicantDocumentTypesChecklistView(APIView):
             status__in=post_interview_onwards,
         ).exists()
 
-        if has_reached_interview_or_later:
+        if has_confirmed_pra_seleksi or has_reached_interview_or_later:
             qs = DocumentType.objects.all().order_by("sort_order", "code")
         else:
             qs = DocumentType.objects.filter(phase=DocumentType.PHASE_INITIAL).order_by(

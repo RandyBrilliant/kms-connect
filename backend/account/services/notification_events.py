@@ -38,6 +38,7 @@ class NotificationEvent(str, Enum):
     PROFILE_SUBMITTED = "profile.submitted"         # → Admin/Staff
     PROFILE_ACCEPTED = "profile.accepted"           # → Applicant
     PROFILE_REJECTED = "profile.rejected"           # → Applicant
+    PROFILE_SUBMISSION_SUMMARY = "profile.submission_summary"  # → Applicant (ringkasan yang harus dilengkapi)
 
     # ---- Job application status ----
     APPLICATION_ASSIGNED = "application.assigned"   # → Applicant (PRA_SELEKSI initial)
@@ -151,6 +152,14 @@ _EVENT_CONFIG: dict[NotificationEvent, EventConfig] = {
         send_email=True,
         send_push=True,
         email_pref_field="email_profile_updates",
+        push_pref_field="push_application_updates",
+    ),
+    NotificationEvent.PROFILE_SUBMISSION_SUMMARY: EventConfig(
+        notification_type=NotificationType.WARNING,
+        priority=NotificationPriority.HIGH,
+        send_email=False,
+        send_push=True,
+        send_inapp=True,
         push_pref_field="push_application_updates",
     ),
 
@@ -360,6 +369,31 @@ def _tmpl_profile_rejected(ctx: dict) -> tuple[str, str]:
         body += f" Catatan dari admin: {notes}"
     body += " Harap perbaiki data Anda dan kirim ulang."
     return ("Profil Anda Ditolak", body)
+
+
+@_t(NotificationEvent.PROFILE_SUBMISSION_SUMMARY)
+def _tmpl_profile_submission_summary(ctx: dict) -> tuple[str, str]:
+    name = ctx.get("applicant_name", "Pelamar")
+    biodata = (ctx.get("biodata_summary") or "").strip()
+    docs = (ctx.get("docs_summary") or "").strip()
+    total = ctx.get("total_missing", None)
+
+    missing_cnt_part = ""
+    if isinstance(total, int) and total > 0:
+        missing_cnt_part = f" (total {total} item yang perlu dilengkapi)"
+
+    parts: list[str] = []
+    if biodata:
+        parts.append(f"Biodata: {biodata}")
+    if docs:
+        parts.append(f"Dokumen: {docs}")
+
+    details = " ".join(parts) if parts else "Silakan lengkapi data Anda untuk lanjut melamar."
+
+    return (
+        "Ringkasan Pengisian Profil Anda",
+        f"Halo {name}! Agar bisa lanjut melamar, mohon lengkapi:{missing_cnt_part} {details}",
+    )
 
 
 @_t(NotificationEvent.APPLICATION_ASSIGNED)

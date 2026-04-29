@@ -25,6 +25,7 @@ import {
   getDocumentTypes,
   sendVerificationEmail,
   sendPasswordResetEmail,
+  sendSubmissionSummary,
   permanentDeleteApplicant,
 } from "@/api/applicants"
 import { applicationsKeys } from "@/hooks/use-applications-query"
@@ -140,6 +141,12 @@ export function useSendVerificationEmailMutation() {
 export function useSendPasswordResetMutation() {
   return useMutation({
     mutationFn: (userId: number) => sendPasswordResetEmail(userId),
+  })
+}
+
+export function useSendSubmissionSummaryMutation() {
+  return useMutation({
+    mutationFn: (applicantId: number) => sendSubmissionSummary(applicantId),
   })
 }
 

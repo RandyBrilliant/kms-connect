@@ -356,7 +356,17 @@ function BatchStatusTab({
     [apps, stageSearch]
   )
 
-  const pageIds = filteredApps.map((a) => a.id)
+  // Simple client-side pagination per status tab to avoid very tall tables.
+  const [page, setPage] = useState(1)
+  const pageSize = 50
+  const pageCount = Math.max(1, Math.ceil(filteredApps.length / pageSize))
+  const currentPage = Math.min(page, pageCount)
+  const pagedApps = useMemo(() => {
+    const start = (currentPage - 1) * pageSize
+    return filteredApps.slice(start, start + pageSize)
+  }, [filteredApps, currentPage])
+
+  const pageIds = pagedApps.map((a) => a.id)
   const allSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id))
 
   const hiddenSelectedCount = useMemo(() => {
@@ -498,7 +508,7 @@ function BatchStatusTab({
       )}
 
       {/* Table */}
-      <div className="overflow-hidden rounded-lg border">
+      <div className="overflow-auto rounded-lg border">
         <Table>
           <TableHeader>
             <TableRow>
@@ -525,7 +535,7 @@ function BatchStatusTab({
           <TableBody>
             {apps.length ? (
               filteredApps.length ? (
-              filteredApps.map((app) => (
+              pagedApps.map((app) => (
                 <TableRow
                   key={app.id}
                   className="hover:bg-muted/50 cursor-pointer"
@@ -636,7 +646,10 @@ function BatchStatusTab({
                   <TableCell className="text-sm text-muted-foreground">
                     {formatDate(app.applied_at)}
                   </TableCell>
-                  <TableCell onClick={(e) => e.stopPropagation()}>
+                  <TableCell
+                    onClick={(e) => e.stopPropagation()}
+                    className="sticky right-0 bg-background"
+                  >
                     <div className="flex items-center justify-end gap-0.5">
                       <Button
                         type="button"
@@ -725,6 +738,46 @@ function BatchStatusTab({
           </TableBody>
         </Table>
       </div>
+
+      {/* Pagination controls */}
+      {filteredApps.length > pageSize && (
+        <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+          <div>
+            Menampilkan{" "}
+            <span className="font-medium">
+              {(currentPage - 1) * pageSize + 1}-
+              {Math.min(currentPage * pageSize, filteredApps.length)}
+            </span>{" "}
+            dari <span className="font-medium">{filteredApps.length}</span> pelamar
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 cursor-pointer"
+              disabled={currentPage <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              Sebelumnya
+            </Button>
+            <span>
+              Halaman{" "}
+              <span className="font-medium">
+                {currentPage} / {pageCount}
+              </span>
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 cursor-pointer"
+              disabled={currentPage >= pageCount}
+              onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+            >
+              Berikutnya
+            </Button>
+          </div>
+        </div>
+      )}
 
       <ApplicantAdminProcessDialog
         applicantUserId={processUserId}

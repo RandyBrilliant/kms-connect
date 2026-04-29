@@ -738,6 +738,8 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
 
     password = serializers.CharField(write_only=True, required=False, validators=[validate_password])
     applicant_profile = ApplicantProfileSerializer(required=False)
+    # Optional summary of applications for staff/company views.
+    applications_summary = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = CustomUser
@@ -755,6 +757,7 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
             "google_id",
             "apple_id",
             "applicant_profile",
+            "applications_summary",
         ]
         read_only_fields = [
             "id",
@@ -779,6 +782,16 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
             for f in ("is_active", "email_verified"):
                 if f in self.fields:
                     self.fields[f].read_only = True
+
+        # For non-staff backoffice views, hide the optional applications summary
+        # to avoid extra queries where it isn't needed.
+        request = self.context.get("request")
+        view = self.context.get("view")
+        view_name = getattr(view, "__class__", type("V",(object,),{})).__name__
+        is_staff_referral_view = view_name == "StaffReferredApplicantsViewSet"
+        is_company_view = bool(view_name and view_name.startswith("Company"))
+        if not (is_staff_referral_view or is_company_view):
+            self.fields.pop("applications_summary", None)
 
     def validate_email(self, value):
         return validate_email_unique(CustomUser, value, self.instance)
@@ -842,6 +855,44 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
                         profile_data["verified_by"] = user
 
         return attrs
+
+    def get_applications_summary(self, obj):
+        """
+        Lightweight summary of this applicant's job applications, used for
+        STAFF views so they can see which job/batch/stage their referrals are in.
+        """
+        profile = getattr(obj, "applicant_profile", None)
+        if profile is None:
+            return []
+
+        from main.models import JobApplication, ApplicationStatus
+
+        # Limit to a few most-recent applications to keep payload small.
+        apps = (
+            JobApplication.objects
+            .filter(applicant=profile)
+            .select_related("job", "batch")
+            .order_by("-applied_at")[:5]
+        )
+
+        out = []
+        for app in apps:
+            try:
+                status_label = ApplicationStatus(app.status).label
+            except Exception:
+                status_label = app.status
+            out.append(
+                {
+                    "id": app.id,
+                    "status": app.status,
+                    "status_label": status_label,
+                    "job_id": app.job_id,
+                    "job_title": getattr(app.job, "title", "") or "",
+                    "batch_id": app.batch_id,
+                    "batch_name": getattr(app.batch, "name", "") if app.batch_id else "",
+                }
+            )
+        return out
 
     def create(self, validated_data):
         profile_data = validated_data.pop("applicant_profile", None)

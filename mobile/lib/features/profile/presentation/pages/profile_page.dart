@@ -249,28 +249,26 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
 
                   const SizedBox(height: 20),
 
-                  // PDF Biodata (only visible when application accepted)
-                  if (profile?.verificationStatus == 'ACCEPTED')
-                    _animated(
-                      _ProfessionalMenuSection(
-                        title: 'Dokumen Saya',
-                        items: [
-                          _ProfessionalMenuItem(
-                            icon: Icons.picture_as_pdf_outlined,
-                            color: AppColors.error,
-                            title: 'Biodata PDF',
-                            subtitle: 'Lihat biodata dalam format PDF',
-                            onTap: _handleViewBiodataPdf,
-                            isLoading: pdfState.isLoading,
-                          ),
-                        ],
-                      ),
-                      0.50,
-                      0.78,
+                  // PDF Biodata — available for all applicants once profile exists
+                  _animated(
+                    _ProfessionalMenuSection(
+                      title: 'Dokumen Saya',
+                      items: [
+                        _ProfessionalMenuItem(
+                          icon: Icons.picture_as_pdf_outlined,
+                          color: AppColors.error,
+                          title: 'Biodata PDF',
+                          subtitle: 'Lihat biodata dalam format PDF',
+                          onTap: _handleViewBiodataPdf,
+                          isLoading: pdfState.isLoading,
+                        ),
+                      ],
                     ),
+                    0.50,
+                    0.78,
+                  ),
 
-                  if (profile?.verificationStatus == 'ACCEPTED')
-                    const SizedBox(height: 20),
+                  const SizedBox(height: 20),
 
                   // Linked Accounts (hidden on Android while Google sign-in is disabled)
                   if (Platform.isIOS || !_hideGoogleSignInTemporarily) ...[

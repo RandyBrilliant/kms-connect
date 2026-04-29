@@ -45,6 +45,8 @@ interface ApplicantBiodataTabProps {
   profile: ApplicantProfile
   onSubmit: (data: Partial<ApplicantProfile>) => Promise<void>
   isSubmitting?: boolean
+  /** Hide `notes` (keterangan) field because admin has dedicated card. */
+  hideNotesField?: boolean
 }
 
 type BiodataFormValues = {
@@ -161,6 +163,7 @@ export function ApplicantBiodataTab({
   profile,
   onSubmit,
   isSubmitting = false,
+  hideNotesField = false,
 }: ApplicantBiodataTabProps) {
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({})
   const { data: regencies = [], isPending: regenciesLoading } = useRegenciesQuery(null)
@@ -198,7 +201,8 @@ export function ApplicantBiodataTab({
         heir_name: value.heir_name || undefined,
         heir_relationship: value.heir_relationship || undefined,
         heir_contact_phone: value.heir_contact_phone || undefined,
-        notes: value.notes || undefined,
+        // When hidden, don't overwrite notes from the sidebar card.
+        notes: hideNotesField ? undefined : value.notes || undefined,
         province: value.province ?? undefined,
         district: value.district ?? undefined,
         village: value.village ?? undefined,
@@ -1066,19 +1070,21 @@ export function ApplicantBiodataTab({
               )}
             </form.Field>
 
-            <form.Field name="notes">
-              {(field) => (
-                <Field>
-                  <FieldLabel htmlFor={field.name}>Keterangan</FieldLabel>
-                  <Input
-                    id={field.name}
-                    value={field.state.value}
-                    onChange={(e) => field.handleChange(e.target.value)}
-                    onBlur={field.handleBlur}
-                  />
-                </Field>
-              )}
-            </form.Field>
+            {!hideNotesField && (
+              <form.Field name="notes">
+                {(field) => (
+                  <Field>
+                    <FieldLabel htmlFor={field.name}>Keterangan</FieldLabel>
+                    <Input
+                      id={field.name}
+                      value={field.state.value}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      onBlur={field.handleBlur}
+                    />
+                  </Field>
+                )}
+              </form.Field>
+            )}
           </FieldGroup>
         </CardContent>
       </Card>

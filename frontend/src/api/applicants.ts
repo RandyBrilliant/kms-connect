@@ -144,6 +144,20 @@ export async function sendPasswordResetEmail(
 }
 
 /**
+ * POST /api/applicants/:id/send-submission-summary/
+ * Admin sends a notification reminder summary to the applicant.
+ */
+export async function sendSubmissionSummary(
+  applicantId: number,
+): Promise<{ sent: boolean; notification_id?: number }> {
+  const { data } = await api.post<{ data: { sent: boolean; notification_id?: number } }>(
+    `/api/applicants/${applicantId}/send-submission-summary/`,
+    {},
+  )
+  return data.data
+}
+
+/**
  * POST /api/applicant-profiles/:id/approve/
  * NOTE: Backend endpoint needs to be implemented
  */
