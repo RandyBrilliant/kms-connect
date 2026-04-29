@@ -1,5 +1,5 @@
 /**
- * Quick assign: add this pelamar to an OPEN job's batch from the pelamar detail page.
+ * Quick assign: add this pelamar to a batch (lowongan Dibuka atau Ditutup) from the pelamar detail page.
  * Uses the same batch assign API as the batch detail "Tambah pelamar" flow.
  */
 
@@ -29,7 +29,7 @@ import {
   useAssignApplicantsToBatchMutation,
   useBatchesForJobQuery,
 } from "@/hooks/use-batches-query"
-import { useOpenJobsForAssignQuery } from "@/hooks/use-jobs-query"
+import { useJobsForQuickAssignQuery } from "@/hooks/use-jobs-query"
 import { toast } from "@/lib/toast"
 import type { JobApplication } from "@/types/job-applications"
 import { ACTIVE_APPLICATION_STATUSES } from "@/types/job-applications"
@@ -48,7 +48,7 @@ export function ApplicantLamaranQuickAssign({
   basePath,
   disabled = false,
 }: ApplicantLamaranQuickAssignProps) {
-  const { data: jobsData, isLoading: jobsLoading } = useOpenJobsForAssignQuery(
+  const { data: jobsData, isLoading: jobsLoading } = useJobsForQuickAssignQuery(
     !disabled
   )
   const [jobIdStr, setJobIdStr] = useState("")
@@ -74,10 +74,10 @@ export function ApplicantLamaranQuickAssign({
     return blocked
   }, [applications])
 
-  const openJobs = jobsData?.results ?? []
+  const jobsList = jobsData?.results ?? []
   const assignableJobs = useMemo(
-    () => openJobs.filter((j) => !jobsWithActiveApplication.has(j.id)),
-    [openJobs, jobsWithActiveApplication]
+    () => jobsList.filter((j) => !jobsWithActiveApplication.has(j.id)),
+    [jobsList, jobsWithActiveApplication]
   )
 
   const batches = batchesData?.results ?? []
@@ -123,8 +123,8 @@ export function ApplicantLamaranQuickAssign({
   }
 
   const jobsBlocked =
-    !jobsLoading && openJobs.length > 0 && assignableJobs.length === 0
-  const noOpenJobs = !jobsLoading && openJobs.length === 0
+    !jobsLoading && jobsList.length > 0 && assignableJobs.length === 0
+  const noJobs = !jobsLoading && jobsList.length === 0
 
   const selectedBatchId = batchIdStr ? Number(batchIdStr) : null
   const createBatchHref =
@@ -137,7 +137,8 @@ export function ApplicantLamaranQuickAssign({
       <CardHeader>
         <CardTitle className="text-base">Tambahkan ke batch lamaran</CardTitle>
         <CardDescription>
-          Pilih lowongan yang statusnya dibuka, lalu batch tujuan. Alur ini sama dengan
+          Pilih lowongan (Dibuka atau Ditutup), lalu batch tujuan. Lowongan yang sudah ditutup
+          tetap bisa dipakai untuk menambahkan pelamar ke batch yang ada. Alur ini sama dengan
           menambahkan pelamar dari halaman detail batch.
         </CardDescription>
       </CardHeader>
@@ -149,15 +150,15 @@ export function ApplicantLamaranQuickAssign({
             <IconLoader className="size-4 animate-spin" />
             Memuat lowongan…
           </div>
-        ) : noOpenJobs ? (
+        ) : noJobs ? (
           <p className="text-muted-foreground text-sm">
-            Tidak ada lowongan dengan status Dibuka. Buka lowongan baru atau ubah status
-            lowongan di menu Lowongan Kerja.
+            Tidak ada lowongan Dibuka atau Ditutup yang bisa dipakai untuk penugasan. Buat atau
+            ubah status lowongan di menu Lowongan Kerja.
           </p>
         ) : jobsBlocked ? (
           <p className="text-muted-foreground text-sm">
             Pelamar sudah memiliki lamaran aktif (pra-seleksi, interview, diterima, atau
-            berangkat) pada semua lowongan yang sedang dibuka. Selesaikan atau tolak lamaran
+            berangkat) pada semua lowongan yang tersedia di sini. Selesaikan atau tolak lamaran
             yang ada sebelum menugaskan ke lowongan yang sama.
           </p>
         ) : (
@@ -176,6 +177,7 @@ export function ApplicantLamaranQuickAssign({
                     <SelectItem key={j.id} value={String(j.id)}>
                       {j.title}
                       {j.company_name ? ` — ${j.company_name}` : ""}
+                      {j.status === "CLOSED" ? " (Ditutup)" : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>

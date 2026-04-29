@@ -61,18 +61,48 @@ export function useDeleteJobMutation() {
   })
 }
 
-/** Cached OPEN jobs list for batch assignment UIs (pelamar quick-assign, etc.). */
-export const openJobsForAssignQueryKey = [...jobsKeys.all, "open-for-assign"] as const
+/**
+ * Cached OPEN + CLOSED jobs for admin batch assignment (pelamar quick-assign, etc.).
+ * Ditutup listings stay assignable so admins can add pelamar to existing batches.
+ */
+export const jobsForQuickAssignQueryKey = [
+  ...jobsKeys.all,
+  "quick-assign-open-closed",
+] as const
 
-export function useOpenJobsForAssignQuery(enabled = true) {
+export function useJobsForQuickAssignQuery(enabled = true) {
   return useQuery({
-    queryKey: openJobsForAssignQueryKey,
-    queryFn: () =>
-      getJobs({
-        status: "OPEN",
-        page_size: 200,
-        ordering: "title",
-      }),
+    queryKey: jobsForQuickAssignQueryKey,
+    queryFn: async () => {
+      const [openRes, closedRes] = await Promise.all([
+        getJobs({
+          status: "OPEN",
+          page_size: 200,
+          ordering: "title",
+        }),
+        getJobs({
+          status: "CLOSED",
+          page_size: 200,
+          ordering: "title",
+        }),
+      ])
+      const byId = new Map<number, JobItem>()
+      for (const j of openRes.results) {
+        byId.set(j.id, j)
+      }
+      for (const j of closedRes.results) {
+        byId.set(j.id, j)
+      }
+      const merged = Array.from(byId.values()).sort((a, b) =>
+        a.title.localeCompare(b.title, "id")
+      )
+      return {
+        count: merged.length,
+        next: null as string | null,
+        previous: null as string | null,
+        results: merged,
+      }
+    },
     enabled,
     staleTime: 60_000,
   })
