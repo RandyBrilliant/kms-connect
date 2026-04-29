@@ -12,8 +12,6 @@ import {
   IconArrowLeft,
   IconMail,
   IconKey,
-  IconMessage,
-  IconExternalLink,
   IconAlertCircle,
   IconFileTypePdf,
   IconTrash,
