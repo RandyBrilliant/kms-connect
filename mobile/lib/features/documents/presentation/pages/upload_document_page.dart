@@ -206,6 +206,14 @@ class _UploadDocumentPageState extends ConsumerState<UploadDocumentPage> {
         instruction: 'Posisikan halaman identitas paspor di dalam bingkai',
       );
     }
+    if (text.contains('kartu keluarga') || text.contains(' kk')) {
+      return const _CropSpec(
+        ratioX: 297,
+        ratioY: 210,
+        title: 'Sesuaikan Bingkai Kartu Keluarga',
+        instruction: 'Posisikan dokumen KK penuh di dalam bingkai',
+      );
+    }
     if (text.contains('foto')) {
       return const _CropSpec(
         ratioX: 3,
