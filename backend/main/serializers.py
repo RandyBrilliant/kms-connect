@@ -527,6 +527,25 @@ class ApplicationTransitionSerializer(serializers.Serializer):
     )
 
 
+class BulkApplicationTransitionSerializer(ApplicationTransitionSerializer):
+    """
+    Input serializer for POST /api/applications/bulk-transition/.
+    Transitions selected application IDs in a single request.
+    """
+
+    application_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=False,
+        help_text="Daftar ID JobApplication yang akan ditransisikan.",
+    )
+
+    def validate_application_ids(self, value):
+        deduped = list(dict.fromkeys(value))
+        if len(deduped) > 500:
+            raise serializers.ValidationError("Maksimal 500 lamaran per permintaan.")
+        return deduped
+
+
 class ApplicationAttendanceConfirmSerializer(serializers.Serializer):
     """
     Input serializer for POST /api/applicants/me/applications/{id}/confirm/.

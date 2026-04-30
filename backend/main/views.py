@@ -46,6 +46,7 @@ from .models import (
 from .serializers import (
     ApplicantSearchSerializer,
     ApplicationAttendanceConfirmSerializer,
+    BulkApplicationTransitionSerializer,
     ApplicationTransitionSerializer,
     BatchAnnouncementCreateSerializer,
     BatchAnnouncementSerializer,
@@ -821,6 +822,90 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
             context={"request": request},
         )
         return Response(success_response(data=out.data, detail="Status lamaran diperbarui."))
+
+    @action(detail=False, methods=["post"], url_path="bulk-transition")
+    def bulk_transition(self, request):
+        """
+        POST /api/applications/bulk-transition/
+        Body: {
+          "application_ids": [1, 2, 3],
+          "status": "INTERVIEW",
+          "note": "...",
+          "placement_end_date": "2026-12-31"
+        }
+
+        Performs selected-IDs transition in one API request.
+        Returns updated_count and per-ID failures for rows that could not move.
+        """
+        serializer = BulkApplicationTransitionSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                error_response(
+                    detail="Data tidak valid.",
+                    code=ApiCode.VALIDATION_ERROR,
+                    errors=serializer.errors,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        ids = serializer.validated_data["application_ids"]
+        target_status = serializer.validated_data["status"]
+        note = serializer.validated_data.get("note", "")
+        placement_end_date = serializer.validated_data.get("placement_end_date")
+
+        # Keep selection order so frontend can map failures predictably.
+        apps_by_id = {
+            app.id: app
+            for app in self.get_queryset().filter(id__in=ids)
+        }
+
+        updated_ids: list[int] = []
+        failed: list[dict] = []
+
+        for app_id in ids:
+            application = apps_by_id.get(app_id)
+            if not application:
+                failed.append(
+                    {
+                        "application_id": app_id,
+                        "reason": "Lamaran tidak ditemukan atau tidak dapat diakses.",
+                    }
+                )
+                continue
+            try:
+                ApplicationService.transition(
+                    application=application,
+                    new_status=target_status,
+                    actor=request.user,
+                    note=note,
+                    placement_end_date=placement_end_date,
+                )
+                updated_ids.append(app_id)
+            except TransitionError as e:
+                failed.append({"application_id": app_id, "reason": str(e)})
+            except ValueError as e:
+                failed.append({"application_id": app_id, "reason": str(e)})
+
+        detail = (
+            f"{len(updated_ids)} lamaran berhasil dipindahkan ke status '{target_status}'."
+            + (
+                f" {len(failed)} gagal dipindahkan."
+                if failed
+                else ""
+            )
+        )
+
+        return Response(
+            success_response(
+                data={
+                    "updated_count": len(updated_ids),
+                    "failed_count": len(failed),
+                    "updated_ids": updated_ids,
+                    "failed": failed,
+                },
+                detail=detail,
+            )
+        )
 
 
 # ---------------------------------------------------------------------------

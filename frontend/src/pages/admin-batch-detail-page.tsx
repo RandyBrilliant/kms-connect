@@ -89,7 +89,10 @@ import {
   previewBatchAnnouncementRecipients,
   exportBatchExcel,
 } from "@/api/batches"
-import { getAllApplicationsByBatch, transitionApplication } from "@/api/applications"
+import {
+  bulkTransitionApplications,
+  getAllApplicationsByBatch,
+} from "@/api/applications"
 import {
   APPLICATION_STATUS_LABELS,
   type ApplicationStatus,
@@ -405,51 +408,39 @@ function BatchStatusTab({
       return
     }
     setLoading(true)
-    let ok = 0
-    let fail = 0
-    const failureReasons = new Map<string, number>()
-    const payload = {
-      status: targetStatus,
-      note: note.trim() || undefined,
-      ...(targetStatus === "SELESAI" ? { placement_end_date: placementDate } : {}),
-    }
+    try {
+      const result = await bulkTransitionApplications({
+        application_ids: ids,
+        status: targetStatus,
+        note: note.trim() || undefined,
+        ...(targetStatus === "SELESAI" ? { placement_end_date: placementDate } : {}),
+      })
+      await queryClient.invalidateQueries({ queryKey: ["applications"] })
+      await queryClient.invalidateQueries({ queryKey: ["batch", batchId] })
+      setSelected(new Set())
+      setNote("")
+      setPlacementDate("")
 
-    // Avoid flooding backend with dozens of concurrent transition requests.
-    const CONCURRENCY = 5
-    let cursor = 0
-    const workers = Array.from({
-      length: Math.min(CONCURRENCY, ids.length),
-    }).map(async () => {
-      while (cursor < ids.length) {
-        const idx = cursor
-        cursor += 1
-        const id = ids[idx]
-        try {
-          await transitionApplication(id, payload)
-          ok += 1
-        } catch (err) {
-          fail += 1
-          const detail =
-            (err as { response?: { data?: { detail?: string } } })?.response?.data
-              ?.detail ?? "Transisi gagal."
-          failureReasons.set(detail, (failureReasons.get(detail) ?? 0) + 1)
-        }
+      if (result.updated_count > 0) {
+        toast.success(
+          `${result.updated_count} pelamar dipindahkan ke ${APPLICATION_STATUS_LABELS[targetStatus]}.`
+        )
       }
-    })
-    await Promise.all(workers)
-    await queryClient.invalidateQueries({ queryKey: ["applications"] })
-    await queryClient.invalidateQueries({ queryKey: ["batch", batchId] })
-    setSelected(new Set())
-    setNote("")
-    setPlacementDate("")
-    setLoading(false)
-    if (ok > 0) toast.success(`${ok} pelamar dipindahkan ke ${APPLICATION_STATUS_LABELS[targetStatus]}.`)
-    if (fail > 0) {
-      const topReason = Array.from(failureReasons.entries()).sort((a, b) => b[1] - a[1])[0]?.[0]
-      toast.error(
-        `${fail} pelamar gagal dipindahkan.`,
-        topReason ?? "Cek status terbaru lalu coba lagi."
-      )
+      if (result.failed_count > 0) {
+        const reasonFreq = new Map<string, number>()
+        for (const item of result.failed) {
+          reasonFreq.set(item.reason, (reasonFreq.get(item.reason) ?? 0) + 1)
+        }
+        const topReason = Array.from(reasonFreq.entries()).sort((a, b) => b[1] - a[1])[0]?.[0]
+        toast.error(
+          `${result.failed_count} pelamar gagal dipindahkan.`,
+          topReason ?? "Cek status terbaru lalu coba lagi."
+        )
+      }
+    } catch {
+      toast.error("Gagal memproses transisi massal.")
+    } finally {
+      setLoading(false)
     }
   }
 

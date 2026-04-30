@@ -117,6 +117,17 @@ export interface TransitionApplicationInput {
   placement_end_date?: string | null
 }
 
+export interface BulkTransitionApplicationsInput extends TransitionApplicationInput {
+  application_ids: number[]
+}
+
+export interface BulkTransitionApplicationsResponse {
+  updated_count: number
+  failed_count: number
+  updated_ids: number[]
+  failed: Array<{ application_id: number; reason: string }>
+}
+
 export interface CompanyDashboardStats {
   total_jobs: number
   total_open_jobs: number

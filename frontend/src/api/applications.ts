@@ -11,6 +11,8 @@ import type {
   JobApplication,
   ApplicationsListParams,
   AssignApplicationInput,
+  BulkTransitionApplicationsInput,
+  BulkTransitionApplicationsResponse,
   TransitionApplicationInput,
 } from "@/types/job-applications"
 import type { BatchAnnouncement } from "@/types/lamaran-batch"
@@ -85,6 +87,17 @@ export async function transitionApplication(
 ): Promise<JobApplication> {
   const { data } = await api.patch<{ data: JobApplication }>(
     `/api/applications/${id}/transition/`,
+    input
+  )
+  return data.data
+}
+
+/** POST /api/applications/bulk-transition/ — admin transitions selected applications */
+export async function bulkTransitionApplications(
+  input: BulkTransitionApplicationsInput
+): Promise<BulkTransitionApplicationsResponse> {
+  const { data } = await api.post<{ data: BulkTransitionApplicationsResponse }>(
+    "/api/applications/bulk-transition/",
     input
   )
   return data.data

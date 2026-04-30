@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from io import BytesIO
 from typing import Any, Iterable
-from datetime import datetime
+from datetime import date, datetime
 
 from django.conf import settings
 
@@ -22,37 +22,63 @@ from openpyxl.styles import Font, Alignment, PatternFill
 from openpyxl.utils import get_column_letter
 
 
-# Excel column headers (Indonesian labels matching frontend table)
+# Excel column headers follow client-provided template order.
 EXPORT_COLUMNS = [
-    # Basic Info
-    ("Nama", "full_name"),
-    ("Email", "email"),
+    ("TANGGAL DAFTAR", "registration_date"),
+    ("Pemberi Rujukan", "referrer_name"),
     ("NIK", "nik"),
-    ("No. HP", "contact_phone"),
-    ("Tanggal Lahir", "birth_date"),
+    ("Nama", "full_name"),
     ("Tempat Lahir", "birth_place"),
-    ("Jenis Kelamin", "gender"),
+    ("Tanggal Lahir", "birth_date"),
     ("Alamat", "address"),
-    ("Provinsi", "province_display"),
     ("Kota/Kabupaten", "district_display"),
     ("Kecamatan", "subdistrict_display"),
     ("Kelurahan/Desa", "village_display"),
+    ("Provinsi", "province_display"),
     ("Kode Pos", "postal_code"),
-    ("Pendidikan", "education_level"),
-    ("Nama Institusi", "education_institution"),
-    ("Jurusan", "education_major"),
-    ("Tahun Lulus", "education_graduation_year"),
+    ("No. HP", "contact_phone"),
+    ("Email", "email"),
+    ("JUMLAH SAUDARA", "sibling_count"),
+    ("ANDA ANAK KEBERAPA", "birth_order"),
+    ("PENGALAMAN KERJA 1 (TULISKAN NAMA PERUSAHAAN DAN KOTANYA) ", "work_company_1"),
+    ("NEGARA TEMPAT ANDA BEKERJA TERSEBUT DIMANA (1) ?", "work_country_1"),
+    ("JABATAN SEBAGAI 1 (CONTOH : OPERATOR / LEADER /  SUPERVISOR, PENJAGA TOKO, DLL)", "work_position_1"),
+    ("MASA BEKERJA 1 (Contoh Januari 2022 - Januari 2024)", "work_period_1"),
+    ("PENGALAMAN KERJA 2 (TULISKAN NAMA PERUSAHAAN DAN KOTANYA) ", "work_company_2"),
+    ("NEGARA TEMPAT ANDA BEKERJA TERSEBUT DIMANA (2) ?", "work_country_2"),
+    ("JABATAN SEBAGAI 2 (CONTOH : OPERATOR / LEADER /  SUPERVISOR, PENJAGA TOKO, DLL)", "work_position_2"),
+    ("MASA BEKERJA 2 (Contoh Januari 2022 - Januari 2024)", "work_period_2"),
+    ("NAMA BAPAK", "father_name"),
+    ("PEKERJAAN ", "father_occupation"),
+    ("UMUR", "father_age"),
+    ("NAMA IBU", "mother_name"),
+    ("PEKERJAAN ", "mother_occupation"),
+    ("UMUR", "mother_age"),
+    ("NAMA SUAMI", "spouse_name"),
+    ("PEKERJAAN ", "spouse_occupation"),
+    ("UMUR", "spouse_age"),
     # Family Info
     ("Alamat Keluarga", "family_address"),
-    ("Provinsi Keluarga", "family_province_display"),
     ("Kota Keluarga", "family_district_display"),
     ("Kecamatan Keluarga", "family_subdistrict_display"),
     ("Kelurahan Keluarga", "family_village_display"),
+    ("Provinsi Keluarga", "family_province_display"),
     ("Kode Pos Keluarga", "family_postal_code"),
     ("No. HP Keluarga", "family_phone"),
     ("Email Keluarga", "family_email"),
-    # Referral & Admin
-    ("Pemberi Rujukan", "referrer_name"),
+    ("AGAMA", "religion"),
+    ("Pendidikan", "education_level"),
+    ("Jurusan", "education_major"),
+    ("TINGGI", "height_cm"),
+    ("BERAT", "weight_kg"),
+    ("APAKAH ANDA MEMAKAI KACAMATA (MATA MINUS)", "wears_glasses"),
+    ("ANDA MENULIS DENGAN TANGAN ?", "writing_hand"),
+    ("STATUS PERKAWINAN ANDA", "marital_status"),
+    ("APAKAH ANDA SUDAH MEMILIKI PASPOR ?", "has_passport"),
+    ("ISI NOMOR PASPOR ANDA", "passport_number"),
+    ("TANGGAL BERAKHIR MASA BERLAKU PASPOR", "passport_expiry_date"),
+    ("Jenis Kelamin", "gender"),
+    # Admin
     ("Status Verifikasi", "verification_status"),
     ("Diverifikasi Oleh", "verified_by_name"),
     ("Tanggal Verifikasi", "verified_at"),
@@ -178,6 +204,33 @@ def _format_document_review_status(status: str | None) -> str:
         "REJECTED": "Ditolak",
     }
     return status_map.get(status or "", status or "-")
+
+
+def _format_date_dmy(value: Any) -> str:
+    """Format date/datetime as DD-MM-YYYY for export."""
+    if not value:
+        return "-"
+    if isinstance(value, datetime):
+        return value.strftime("%d-%m-%Y")
+    if isinstance(value, date):
+        return value.strftime("%d-%m-%Y")
+    return str(value)
+
+
+def _safe_name(obj: Any) -> str:
+    if not obj:
+        return "-"
+    return getattr(obj, "name", None) or str(obj) or "-"
+
+
+def _work_experience_at(profile: Any, index: int):
+    work_experiences = getattr(profile, "work_experiences", None)
+    if not work_experiences:
+        return None
+    experiences = list(work_experiences.all()) if hasattr(work_experiences, "all") else list(work_experiences)
+    if not experiences or index < 0 or index >= len(experiences):
+        return None
+    return experiences[index]
 
 
 def _get_region_display(profile: Any, field: str) -> str:
@@ -423,8 +476,29 @@ def generate_applicants_excel(applicants: Iterable[Any], request: Any = None) ->
     ws = wb.active
     ws.title = "Daftar Pelamar"
     
-    # Get all document types ordered by sort_order
-    document_types = list(DocumentType.objects.all().order_by('sort_order', 'code'))
+    # Get all document types and force the client-requested export order first.
+    desired_document_order = [
+        "KTP",
+        "Ijazah",
+        "Kartu Keluarga",
+        "Paspor",
+        "Pas Photo",
+        "CV",
+        "Surat Izin Keluarga (Form Biru)",
+        "Sertifikat Keterampilan",
+        "KTP Orangtua / Wali",
+        "Surat Kesehatan",
+        "Surat Keterangan Pemberi Izin",
+        "Buku Nikah",
+        "Perjanjian Penempatan",
+        "Surat Keterangan Status Perkawinan",
+        "Kartu BPJS Kesehatan",
+    ]
+    all_doc_types = list(DocumentType.objects.all().order_by("sort_order", "code"))
+    doc_by_name = {d.name: d for d in all_doc_types}
+    ordered = [doc_by_name[name] for name in desired_document_order if name in doc_by_name]
+    remainder = [d for d in all_doc_types if d.name not in desired_document_order]
+    document_types = ordered + remainder
     
     # Build full column list: base columns + document type columns
     all_columns = list(EXPORT_COLUMNS)
@@ -474,26 +548,17 @@ def generate_applicants_excel(applicants: Iterable[Any], request: Any = None) ->
                 value = _get_nested_value(applicant, "full_name")
             elif field_path == "email":
                 value = _get_nested_value(applicant, "email")
+            elif field_path == "registration_date":
+                value = _format_date_dmy(getattr(profile, "registration_date", None))
             elif field_path == "nik":
                 value = _get_nested_value(profile, "nik")
             elif field_path == "contact_phone":
                 value = _get_nested_value(profile, "contact_phone")
             elif field_path == "birth_date":
-                birth_date_obj = getattr(profile, "birth_date", None)
-                if birth_date_obj:
-                    try:
-                        if isinstance(birth_date_obj, datetime):
-                            value = birth_date_obj.strftime("%Y-%m-%d")
-                        elif hasattr(birth_date_obj, "strftime"):
-                            value = birth_date_obj.strftime("%Y-%m-%d")
-                        else:
-                            value = str(birth_date_obj)
-                    except Exception:
-                        value = str(birth_date_obj) if birth_date_obj else "-"
-                else:
-                    value = "-"
+                value = _format_date_dmy(getattr(profile, "birth_date", None))
             elif field_path == "birth_place":
-                value = _get_nested_value(profile, "birth_place")
+                # birth_place is FK to Regency (kabupaten/kota). Export name only.
+                value = _safe_name(getattr(profile, "birth_place", None))
             elif field_path == "gender":
                 gender = _get_nested_value(profile, "gender", "")
                 value = _format_gender(gender) if gender != "-" else "-"
@@ -504,35 +569,17 @@ def generate_applicants_excel(applicants: Iterable[Any], request: Any = None) ->
                 province = getattr(profile, "province", None)
                 value = getattr(province, "name", "-") if province else "-"
             elif field_path == "district_display":
-                # Extract regency/district from village_display or related objects
-                display_obj = getattr(profile, "village_display", None)
-                if isinstance(display_obj, dict):
-                    value = display_obj.get("regency", "-")
-                elif display_obj and hasattr(display_obj, "regency"):
-                    value = str(display_obj.regency)
-                else:
-                    district = getattr(profile, "district", None)
-                    value = getattr(district, "name", "-") if district else "-"
+                # Kota/Kabupaten (Regency)
+                district = getattr(profile, "district", None)
+                value = _safe_name(district)
             elif field_path == "subdistrict_display":
-                # Extract subdistrict from village_display or related objects
-                display_obj = getattr(profile, "village_display", None)
-                if isinstance(display_obj, dict):
-                    value = display_obj.get("district", "-")
-                elif display_obj and hasattr(display_obj, "district"):
-                    value = str(display_obj.district)
-                else:
-                    subdistrict = getattr(profile, "subdistrict", None)
-                    value = getattr(subdistrict, "name", "-") if subdistrict else "-"
+                # Kecamatan should come from selected village relation.
+                village = getattr(profile, "village", None)
+                subdistrict = getattr(village, "district", None) if village else None
+                value = _safe_name(subdistrict)
             elif field_path == "village_display":
-                # Extract village from village_display or related objects
-                display_obj = getattr(profile, "village_display", None)
-                if isinstance(display_obj, dict):
-                    value = display_obj.get("village", "-")
-                elif display_obj and hasattr(display_obj, "village"):
-                    value = str(display_obj.village)
-                else:
-                    village = getattr(profile, "village", None)
-                    value = getattr(village, "name", "-") if village else "-"
+                village = getattr(profile, "village", None)
+                value = _safe_name(village)
             elif field_path == "postal_code":
                 value = _get_nested_value(profile, "postal_code")
             elif field_path == "education_level":
@@ -542,6 +589,74 @@ def generate_applicants_excel(applicants: Iterable[Any], request: Any = None) ->
                 value = _get_nested_value(profile, "education_institution")
             elif field_path == "education_major":
                 value = _get_nested_value(profile, "education_major")
+            elif field_path == "sibling_count":
+                value = _get_nested_value(profile, "sibling_count")
+            elif field_path == "birth_order":
+                value = _get_nested_value(profile, "birth_order")
+            elif field_path == "work_company_1":
+                exp = _work_experience_at(profile, 0)
+                if exp:
+                    company = getattr(exp, "company_name", "") or ""
+                    city = getattr(exp, "location", "") or ""
+                    value = f"{company} - {city}".strip(" -") or "-"
+                else:
+                    value = "-"
+            elif field_path == "work_country_1":
+                exp = _work_experience_at(profile, 0)
+                value = str(getattr(exp, "country", "") or "-") if exp else "-"
+            elif field_path == "work_position_1":
+                exp = _work_experience_at(profile, 0)
+                value = str(getattr(exp, "position", "") or "-") if exp else "-"
+            elif field_path == "work_period_1":
+                exp = _work_experience_at(profile, 0)
+                if exp:
+                    start = _format_date_dmy(getattr(exp, "start_date", None))
+                    end_raw = getattr(exp, "end_date", None)
+                    end = _format_date_dmy(end_raw) if end_raw else "Sekarang"
+                    value = f"{start} - {end}" if start != "-" else "-"
+                else:
+                    value = "-"
+            elif field_path == "work_company_2":
+                exp = _work_experience_at(profile, 1)
+                if exp:
+                    company = getattr(exp, "company_name", "") or ""
+                    city = getattr(exp, "location", "") or ""
+                    value = f"{company} - {city}".strip(" -") or "-"
+                else:
+                    value = "-"
+            elif field_path == "work_country_2":
+                exp = _work_experience_at(profile, 1)
+                value = str(getattr(exp, "country", "") or "-") if exp else "-"
+            elif field_path == "work_position_2":
+                exp = _work_experience_at(profile, 1)
+                value = str(getattr(exp, "position", "") or "-") if exp else "-"
+            elif field_path == "work_period_2":
+                exp = _work_experience_at(profile, 1)
+                if exp:
+                    start = _format_date_dmy(getattr(exp, "start_date", None))
+                    end_raw = getattr(exp, "end_date", None)
+                    end = _format_date_dmy(end_raw) if end_raw else "Sekarang"
+                    value = f"{start} - {end}" if start != "-" else "-"
+                else:
+                    value = "-"
+            elif field_path == "father_name":
+                value = _get_nested_value(profile, "father_name")
+            elif field_path == "father_occupation":
+                value = _get_nested_value(profile, "father_occupation")
+            elif field_path == "father_age":
+                value = _get_nested_value(profile, "father_age")
+            elif field_path == "mother_name":
+                value = _get_nested_value(profile, "mother_name")
+            elif field_path == "mother_occupation":
+                value = _get_nested_value(profile, "mother_occupation")
+            elif field_path == "mother_age":
+                value = _get_nested_value(profile, "mother_age")
+            elif field_path == "spouse_name":
+                value = _get_nested_value(profile, "spouse_name")
+            elif field_path == "spouse_occupation":
+                value = _get_nested_value(profile, "spouse_occupation")
+            elif field_path == "spouse_age":
+                value = _get_nested_value(profile, "spouse_age")
             elif field_path == "education_graduation_year":
                 value = _get_nested_value(profile, "education_graduation_year")
             # Family Info
@@ -552,29 +667,13 @@ def generate_applicants_excel(applicants: Iterable[Any], request: Any = None) ->
                 family_province = getattr(profile, "family_province", None)
                 value = getattr(family_province, "name", "-") if family_province else "-"
             elif field_path == "family_district_display":
-                display_obj = getattr(profile, "family_village_display", None)
-                if isinstance(display_obj, dict):
-                    value = display_obj.get("regency", "-")
-                elif display_obj and hasattr(display_obj, "regency"):
-                    value = str(display_obj.regency)
-                else:
-                    value = "-"
+                value = _safe_name(getattr(profile, "family_district", None))
             elif field_path == "family_subdistrict_display":
-                display_obj = getattr(profile, "family_village_display", None)
-                if isinstance(display_obj, dict):
-                    value = display_obj.get("district", "-")
-                elif display_obj and hasattr(display_obj, "district"):
-                    value = str(display_obj.district)
-                else:
-                    value = "-"
+                family_village = getattr(profile, "family_village", None)
+                family_subdistrict = getattr(family_village, "district", None) if family_village else None
+                value = _safe_name(family_subdistrict)
             elif field_path == "family_village_display":
-                display_obj = getattr(profile, "family_village_display", None)
-                if isinstance(display_obj, dict):
-                    value = display_obj.get("village", "-")
-                elif display_obj and hasattr(display_obj, "village"):
-                    value = str(display_obj.village)
-                else:
-                    value = "-"
+                value = _safe_name(getattr(profile, "family_village", None))
             elif field_path == "family_postal_code":
                 value = _get_nested_value(profile, "family_postal_code")
             elif field_path == "family_phone":
@@ -598,14 +697,7 @@ def generate_applicants_excel(applicants: Iterable[Any], request: Any = None) ->
                 else:
                     value = "-"
             elif field_path == "verified_at":
-                verified_at = getattr(profile, "verified_at", None)
-                if verified_at:
-                    if isinstance(verified_at, datetime):
-                        value = verified_at.strftime("%Y-%m-%d %H:%M:%S")
-                    else:
-                        value = str(verified_at)
-                else:
-                    value = "-"
+                value = _format_date_dmy(getattr(profile, "verified_at", None))
             elif field_path == "verification_notes":
                 value = _get_nested_value(profile, "verification_notes")
             elif field_path == "score":
@@ -618,19 +710,17 @@ def generate_applicants_excel(applicants: Iterable[Any], request: Any = None) ->
                         value = score
                 else:
                     value = "-"
+            elif field_path == "religion":
+                value = _get_nested_value(profile, "religion")
             elif field_path == "is_active":
                 value = "Aktif" if getattr(applicant, "is_active", False) else "Nonaktif"
             elif field_path == "email_verified":
                 value = "Ya" if getattr(applicant, "email_verified", False) else "Tidak"
             elif field_path == "created_at":
                 created = getattr(profile, "created_at", None) or getattr(applicant, "date_joined", None)
-                if created:
-                    if isinstance(created, datetime):
-                        value = created.strftime("%Y-%m-%d %H:%M:%S")
-                    else:
-                        value = str(created)
-                else:
-                    value = "-"
+                value = _format_date_dmy(created)
+            elif field_path == "passport_expiry_date":
+                value = _format_date_dmy(getattr(profile, "passport_expiry_date", None))
             # Work Experiences
             elif field_path == "work_experiences":
                 value = _format_work_experiences(profile, request)
