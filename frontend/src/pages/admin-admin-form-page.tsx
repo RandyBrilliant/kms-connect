@@ -22,6 +22,7 @@ import { toast } from "@/lib/toast"
 import type { AdminUser } from "@/types/admin"
 import { usePageTitle } from "@/hooks/use-page-title"
 import { joinAdminPath, useAdminDashboard } from "@/contexts/admin-dashboard-context"
+import { goBackOrDefault } from "@/lib/back-navigation"
 
 function formatDate(value: string | null) {
   if (!value) return "-"
@@ -159,6 +160,7 @@ export function AdminAdminFormPage() {
   const BASE_PATH = joinAdminPath(basePath, "/admin")
 
   const navigate = useNavigate()
+  const handleBack = () => goBackOrDefault(navigate, BASE_PATH)
   const { id } = useParams<{ id: string }>()
   const isEdit = id !== "new" && id != null
   const adminId = isEdit ? parseInt(id, 10) : null
@@ -225,8 +227,8 @@ export function AdminAdminFormPage() {
     return (
       <div className="px-6 py-8">
         <p className="text-destructive">Admin tidak ditemukan.</p>
-        <Button variant="link" asChild>
-          <Link to={BASE_PATH}>Kembali ke daftar</Link>
+        <Button variant="link" onClick={handleBack}>
+          Kembali ke daftar
         </Button>
       </div>
     )
@@ -260,11 +262,14 @@ export function AdminAdminFormPage() {
                 : "Tambah pengguna baru dengan peran Admin"}
             </p>
           </div>
-          <Button variant="ghost" size="sm" className="w-fit cursor-pointer" asChild>
-            <Link to={BASE_PATH}>
-              <IconArrowLeft className="mr-2 size-4" />
-              Kembali
-            </Link>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-fit cursor-pointer"
+            onClick={handleBack}
+          >
+            <IconArrowLeft className="mr-2 size-4" />
+            Kembali
           </Button>
         </div>
 

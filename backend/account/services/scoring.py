@@ -42,6 +42,7 @@ PROFILE_COMPLETENESS_FIELDS: tuple[str, ...] = (
     "birth_date",
     "gender",
     "address",
+    "postal_code",
     "contact_phone",
     "province_id",
     "district_id",
@@ -63,6 +64,7 @@ PROFILE_COMPLETENESS_FIELDS: tuple[str, ...] = (
     "writing_hand",
     "shoe_size",
     "shirt_size",
+    "family_postal_code",
     # --- Data paspor ---
     "passport_number",
     "passport_issue_date",

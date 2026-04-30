@@ -61,10 +61,10 @@ function toNum(v: string): number | null {
 
 /** Build applicant_profile from parsed create payload (omit account-only fields). */
 const PROFILE_KEYS = [
-  "full_name", "nik", "birth_place", "birth_date", "address", "province", "district", "village",
+  "full_name", "nik", "birth_place", "birth_date", "address", "postal_code", "province", "district", "village",
   "contact_phone", "gender", "sibling_count", "birth_order", "father_name", "father_age", "father_occupation",
   "father_almarhum", "mother_name", "mother_age", "mother_occupation", "mother_almarhum", "spouse_name", "spouse_age", "spouse_occupation", "spouse_almarhum",
-  "family_address", "family_province", "family_district", "family_village", "father_phone", "mother_phone",
+  "family_address", "family_postal_code", "family_province", "family_district", "family_village", "father_phone", "mother_phone",
   "heir_name", "heir_relationship", "heir_contact_phone",
   "religion", "education_level", "education_major", "marital_status", "height_cm", "weight_kg", "wears_glasses", "writing_hand",
   "passport_number", "passport_issue_date", "passport_issue_place", "passport_expiry_date",
@@ -145,6 +145,7 @@ const defaultBiodata = {
   spouse_occupation: "",
   spouse_almarhum: false,
   family_address: "",
+  family_postal_code: "",
   father_phone: "",
   mother_phone: "",
   heir_name: "",
@@ -170,6 +171,7 @@ const defaultBiodata = {
   province: null as number | null,
   district: null as number | null,
   village: null as number | null,
+  postal_code: "",
 }
 
 export function ApplicantForm({
@@ -489,6 +491,23 @@ export function ApplicantForm({
               )}
             </form.Field>
 
+            <form.Field name="postal_code">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>Kode Pos</FieldLabel>
+                  <Input
+                    id={field.name}
+                    type="text"
+                    placeholder="Contoh: 40123"
+                    maxLength={20}
+                    value={field.state.value}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    onBlur={field.handleBlur}
+                  />
+                </Field>
+              )}
+            </form.Field>
+
             <form.Field name="province">
               {(fp) => (
                 <form.Field name="district">
@@ -702,6 +721,22 @@ export function ApplicantForm({
                 <Field>
                   <FieldLabel htmlFor={field.name}>Alamat Orangtua/Keluarga</FieldLabel>
                   <Input id={field.name} value={field.state.value} onChange={(e) => field.handleChange(e.target.value)} onBlur={field.handleBlur} />
+                </Field>
+              )}
+            </form.Field>
+            <form.Field name="family_postal_code">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>Kode Pos Keluarga</FieldLabel>
+                  <Input
+                    id={field.name}
+                    type="text"
+                    placeholder="Contoh: 40211"
+                    maxLength={20}
+                    value={field.state.value}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    onBlur={field.handleBlur}
+                  />
                 </Field>
               )}
             </form.Field>

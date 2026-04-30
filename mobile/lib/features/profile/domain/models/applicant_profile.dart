@@ -30,6 +30,7 @@ class ApplicantProfile {
 
   // KTP address – cascading hierarchy
   final String? address;
+  final String? postalCode;
   final int? provinceId;
   final String? provinceName;
   final int? districtId;      // = Kabupaten/Kota (Regency FK named 'district' on backend)
@@ -77,6 +78,7 @@ class ApplicantProfile {
   final String? spouseOccupation;
   final bool spouseAlmarhum;
   final String? familyAddress;
+  final String? familyPostalCode;
   final int? familyProvinceId;
   final String? familyProvinceName;
   final int? familyDistrictId;
@@ -116,6 +118,7 @@ class ApplicantProfile {
     this.birthDate,
     this.gender,
     this.address,
+    this.postalCode,
     this.provinceId,
     this.provinceName,
     this.districtId,
@@ -157,6 +160,7 @@ class ApplicantProfile {
     this.spouseOccupation,
     this.spouseAlmarhum = false,
     this.familyAddress,
+    this.familyPostalCode,
     this.familyProvinceId,
     this.familyProvinceName,
     this.familyDistrictId,
@@ -216,6 +220,7 @@ class ApplicantProfile {
       birthDate: ApiDateTime.parse(json['birth_date']),
       gender: _str(json['gender']),
       address: _str(json['address']),
+      postalCode: _str(json['postal_code']),
       provinceId: _idFromField(json['province']),
       provinceName: _str(vd?['province']) ?? _nameFromField(json['province']),
       districtId: _idFromField(json['district']),
@@ -257,6 +262,7 @@ class ApplicantProfile {
       spouseOccupation: _str(json['spouse_occupation']),
       spouseAlmarhum: json['spouse_almarhum'] == true,
       familyAddress: _str(json['family_address']),
+      familyPostalCode: _str(json['family_postal_code']),
       familyProvinceId: _idFromField(json['family_province']),
       familyProvinceName: _str(fvd?['province']) ?? _nameFromField(json['family_province']),
       familyDistrictId: _idFromField(json['family_district']),
@@ -291,6 +297,7 @@ class ApplicantProfile {
         'birth_date': birthDate?.toIso8601String(),
         'gender': gender,
         'address': address,
+        'postal_code': postalCode,
         'province': provinceId,
         'district': districtId,
         'village': villageId,
@@ -311,6 +318,7 @@ class ApplicantProfile {
         'spouse_occupation': spouseOccupation,
         'spouse_almarhum': spouseAlmarhum,
         'family_address': familyAddress,
+        'family_postal_code': familyPostalCode,
         'family_province': familyProvinceId,
         'family_district': familyDistrictId,
         'family_village': familyVillageId,

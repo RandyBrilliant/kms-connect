@@ -406,6 +406,7 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
             "birth_place_display",
             "birth_date",
             "address",
+            "postal_code",
             "district",
             "province",
             "village",
@@ -428,6 +429,7 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
             "spouse_occupation",
             "spouse_almarhum",
             "family_address",
+            "family_postal_code",
             "family_district",
             "family_province",
             "family_village",
@@ -1272,6 +1274,9 @@ class DocumentTypeSerializer(serializers.ModelSerializer):
 class NotificationSerializer(serializers.ModelSerializer):
     """Serializer untuk notifikasi individual."""
 
+    created_at = serializers.SerializerMethodField()
+    read_at = serializers.SerializerMethodField()
+
     class Meta:
         model = Notification
         fields = [
@@ -1287,6 +1292,21 @@ class NotificationSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = ["id", "is_read", "read_at", "created_at"]
+
+    def _to_jakarta_iso(self, value):
+        """Serialize datetime in explicit Asia/Jakarta offset format."""
+        if value is None:
+            return None
+        dt = value
+        if timezone.is_naive(dt):
+            dt = timezone.make_aware(dt, timezone.get_default_timezone())
+        return timezone.localtime(dt).isoformat()
+
+    def get_created_at(self, obj):
+        return self._to_jakarta_iso(obj.created_at)
+
+    def get_read_at(self, obj):
+        return self._to_jakarta_iso(obj.read_at)
 
 
 class BroadcastSerializer(serializers.ModelSerializer):

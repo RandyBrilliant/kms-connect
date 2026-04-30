@@ -68,6 +68,7 @@ import {
 } from "@/contexts/admin-dashboard-context"
 import { useAuth } from "@/hooks/use-auth"
 import { isMasterAdmin, isRestrictedAdmin, type UserRole } from "@/types/auth"
+import { goBackOrDefault } from "@/lib/back-navigation"
 
 function ApplicantSidebar({
   applicant,
@@ -226,6 +227,7 @@ function ApplicantSidebar({
     birth_date: "Tanggal Lahir",
     gender: "Jenis Kelamin",
     address: "Alamat",
+    postal_code: "Kode Pos",
     contact_phone: "No. HP / WA",
     province_id: "Provinsi (alamat KTP)",
     district_id: "Kota / Kabupaten (alamat KTP)",
@@ -247,6 +249,7 @@ function ApplicantSidebar({
     writing_hand: "Tangan yang Digunakan untuk Menulis",
     shoe_size: "Ukuran Sepatu",
     shirt_size: "Ukuran Baju",
+    family_postal_code: "Kode Pos Keluarga",
     // Data paspor
     passport_number: "Nomor Paspor",
     passport_issue_date: "Tanggal Terbit Paspor",
@@ -687,6 +690,8 @@ export function AdminPelamarDetailPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const BASE_PATH = joinAdminPath(basePath, "/pelamar")
+  const handleBack = () => goBackOrDefault(navigate, BASE_PATH)
+
   const lamaranBase = joinAdminPath(basePath, "/lamaran")
   const hideAccountToggle = user
     ? isRestrictedAdmin(user.role as UserRole)
@@ -789,8 +794,8 @@ export function AdminPelamarDetailPage() {
     return (
       <div className="px-6 py-8">
         <p className="text-destructive">Pelamar tidak ditemukan.</p>
-        <Button variant="link" asChild>
-          <Link to={BASE_PATH}>Kembali ke daftar</Link>
+        <Button variant="link" onClick={handleBack}>
+          Kembali ke daftar
         </Button>
       </div>
     )
@@ -835,11 +840,14 @@ export function AdminPelamarDetailPage() {
               Hapus pelamar
             </Button>
           )}
-          <Button variant="ghost" size="sm" className="w-fit cursor-pointer" asChild>
-            <Link to={BASE_PATH}>
-              <IconArrowLeft className="mr-2 size-4" />
-              Kembali
-            </Link>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-fit cursor-pointer"
+            onClick={handleBack}
+          >
+            <IconArrowLeft className="mr-2 size-4" />
+            Kembali
           </Button>
         </div>
       </div>

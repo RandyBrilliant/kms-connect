@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useStaffReferredApplicantQuery } from "@/hooks/use-staff-self-service-query"
 import { usePageTitle } from "@/hooks/use-page-title"
+import { goBackOrDefault } from "@/lib/back-navigation"
 
 function formatDate(value: string | null | undefined) {
   if (!value) return "-"
@@ -60,6 +61,7 @@ function InfoRow({ label, value }: { label: string; value: string | null | undef
 export function StaffApplicantDetailPage() {
   const { id: applicantId } = useParams()
   const navigate = useNavigate()
+  const handleBack = () => goBackOrDefault(navigate, "/staff-portal/pelamar")
   const { data: applicant, isLoading, isError } = useStaffReferredApplicantQuery(Number(applicantId))
 
   usePageTitle(applicant ? `Detail Pelamar - ${applicant.applicant_profile?.full_name || applicant.email}` : "Detail Pelamar")
@@ -67,7 +69,7 @@ export function StaffApplicantDetailPage() {
   if (isLoading) {
     return (
       <div className="flex flex-col gap-4 px-6 py-6 md:px-8 md:py-8">
-        <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="w-fit">
+        <Button variant="ghost" size="sm" onClick={handleBack} className="w-fit">
           <IconArrowLeft className="size-4" />
           Kembali
         </Button>
@@ -79,7 +81,7 @@ export function StaffApplicantDetailPage() {
   if (isError || !applicant) {
     return (
       <div className="flex flex-col gap-4 px-6 py-6 md:px-8 md:py-8">
-        <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="w-fit">
+        <Button variant="ghost" size="sm" onClick={handleBack} className="w-fit">
           <IconArrowLeft className="size-4" />
           Kembali
         </Button>
@@ -95,7 +97,7 @@ export function StaffApplicantDetailPage() {
       {/* Header */}
       <div className="flex flex-col gap-4 @xl/main:flex-row @xl/main:items-center @xl/main:justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
+          <Button variant="ghost" size="sm" onClick={handleBack}>
             <IconArrowLeft className="size-4" />
             Kembali
           </Button>

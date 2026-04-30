@@ -98,6 +98,8 @@ export interface ApplicantProfile {
   birth_place_display?: string | null
   birth_date: string | null
   address: string
+  postal_code: string
+  postal_code: string
   /** Province FK id (regions.Province) */
   province: number | null
   /** District/Regency FK id (regions.Regency - Kabupaten/Kota) */
@@ -126,6 +128,8 @@ export interface ApplicantProfile {
   /** Pasangan (suami/istri) sudah meninggal */
   spouse_almarhum?: boolean
   family_address: string
+  family_postal_code: string
+  family_postal_code: string
   family_province: number | null
   family_district: number | null
   family_village: number | null

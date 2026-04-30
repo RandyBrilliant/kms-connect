@@ -5,7 +5,7 @@
  */
 
 import { useState } from "react"
-import { Link, useNavigate, useParams } from "react-router-dom"
+import { useNavigate, useParams } from "react-router-dom"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { IconArrowLeft } from "@tabler/icons-react"
 
@@ -27,6 +27,7 @@ import { joinAdminPath, useAdminDashboard } from "@/contexts/admin-dashboard-con
 import { getJob } from "@/api/jobs"
 import { createBatch } from "@/api/batches"
 import { toast } from "@/lib/toast"
+import { goBackOrDefault } from "@/lib/back-navigation"
 
 function apiErrorMessage(err: unknown): string {
   const ax = err as {
@@ -59,6 +60,9 @@ export function AdminBatchFormPage() {
   const { id } = useParams<{ id: string }>()
   const jobId = Number(id)
   const navigate = useNavigate()
+  const fallbackBackPath = joinAdminPath(basePath, `/lowongan-kerja/${jobId}`)
+  const handleBack = () => goBackOrDefault(navigate, fallbackBackPath)
+
   const { basePath } = useAdminDashboard()
 
   usePageTitle("Buat Batch Baru")
@@ -111,14 +115,12 @@ export function AdminBatchFormPage() {
 
       <div className="flex items-center gap-3">
         <Button
-          asChild
           variant="ghost"
           size="icon"
           className="cursor-pointer shrink-0"
+          onClick={handleBack}
         >
-          <Link to={joinAdminPath(basePath, `/lowongan-kerja/${jobId}`)}>
-            <IconArrowLeft className="size-5" />
-          </Link>
+          <IconArrowLeft className="size-5" />
         </Button>
         <div>
           <h1 className="text-2xl font-bold">Buat Batch Baru</h1>
@@ -182,11 +184,12 @@ export function AdminBatchFormPage() {
 
               <div className="flex items-center justify-end gap-2 pt-2">
                 <Button
-                  asChild
+                  type="button"
                   variant="outline"
                   className="cursor-pointer"
+                  onClick={handleBack}
                 >
-                  <Link to={joinAdminPath(basePath, `/lowongan-kerja/${jobId}`)}>Batal</Link>
+                  Batal
                 </Button>
                 <Button
                   onClick={handleSubmit}

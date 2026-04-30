@@ -42,6 +42,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { IconLoader, IconUsers, IconDeviceFloppy, IconArrowLeft } from "@tabler/icons-react"
 import { toast } from "@/lib/toast"
 import { joinAdminPath, useAdminDashboard } from "@/contexts/admin-dashboard-context"
+import { goBackOrDefault } from "@/lib/back-navigation"
 
 export function AdminBroadcastFormPage() {
   const { basePath } = useAdminDashboard()
@@ -52,6 +53,7 @@ export function AdminBroadcastFormPage() {
   usePageTitle(isEdit ? "Edit Broadcast" : "Buat Broadcast Baru")
   
   const navigate = useNavigate()
+  const handleBack = () => goBackOrDefault(navigate, BASE_PATH)
   const [recipientCount, setRecipientCount] = useState<number | null>(null)
 
   // Fetch existing broadcast if editing
@@ -161,11 +163,14 @@ export function AdminBroadcastFormPage() {
                 : "Kirim notifikasi massal ke pengguna terpilih"}
             </p>
           </div>
-          <Button variant="ghost" size="sm" className="w-fit cursor-pointer" asChild>
-            <Link to={BASE_PATH}>
-              <IconArrowLeft className="mr-2 size-4" />
-              Kembali
-            </Link>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-fit cursor-pointer"
+            onClick={handleBack}
+          >
+            <IconArrowLeft className="mr-2 size-4" />
+            Kembali
           </Button>
         </div>
 

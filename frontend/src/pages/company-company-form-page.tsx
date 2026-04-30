@@ -21,6 +21,7 @@ import {
 import { toast } from "@/lib/toast"
 import type { CompanyUser } from "@/types/company"
 import { usePageTitle } from "@/hooks/use-page-title"
+import { goBackOrDefault } from "@/lib/back-navigation"
 
 const BASE_PATH = "/perusahaan"
 
@@ -159,6 +160,7 @@ function CompanyEditSidebar({ company }: { company: CompanyUser }) {
 
 export function CompanyCompanyFormPage() {
   const navigate = useNavigate()
+  const handleBack = () => goBackOrDefault(navigate, BASE_PATH)
   const { id } = useParams<{ id: string }>()
   const isEdit = id !== "new" && id != null
   const companyId = isEdit ? parseInt(id, 10) : null
@@ -241,8 +243,8 @@ export function CompanyCompanyFormPage() {
     return (
       <div className="px-6 py-8">
         <p className="text-destructive">Perusahaan tidak ditemukan.</p>
-        <Button variant="link" asChild>
-          <Link to={BASE_PATH}>Kembali ke daftar</Link>
+        <Button variant="link" onClick={handleBack}>
+          Kembali ke daftar
         </Button>
       </div>
     )
@@ -276,11 +278,14 @@ export function CompanyCompanyFormPage() {
                 : "Tambah pengguna baru dengan peran Perusahaan"}
             </p>
           </div>
-          <Button variant="ghost" size="sm" className="w-fit cursor-pointer" asChild>
-            <Link to={BASE_PATH}>
-              <IconArrowLeft className="mr-2 size-4" />
-              Kembali
-            </Link>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-fit cursor-pointer"
+            onClick={handleBack}
+          >
+            <IconArrowLeft className="mr-2 size-4" />
+            Kembali
           </Button>
         </div>
 

@@ -55,6 +55,7 @@ type BiodataFormValues = {
   birth_place: number | null
   birth_date: string
   address: string
+  postal_code: string
   contact_phone: string
   gender: string
   sibling_count: string
@@ -74,6 +75,7 @@ type BiodataFormValues = {
   spouse_occupation: string
   spouse_almarhum: boolean
   family_address: string
+  family_postal_code: string
   heir_name: string
   heir_relationship: string
   heir_contact_phone: string
@@ -107,6 +109,7 @@ function toFormValues(p: ApplicantProfile): BiodataFormValues {
     birth_place: p.birth_place ?? null,
     birth_date: p.birth_date || "",
     address: p.address || "",
+    postal_code: p.postal_code || "",
     contact_phone: p.contact_phone || "",
     gender: p.gender || "",
     sibling_count: p.sibling_count != null ? String(p.sibling_count) : "",
@@ -126,6 +129,7 @@ function toFormValues(p: ApplicantProfile): BiodataFormValues {
     spouse_occupation: p.spouse_occupation || "",
     spouse_almarhum: p.spouse_almarhum ?? false,
     family_address: p.family_address || "",
+    family_postal_code: p.family_postal_code || "",
     heir_name: p.heir_name || "",
     heir_relationship: p.heir_relationship || "",
     heir_contact_phone: p.heir_contact_phone || "",
@@ -179,6 +183,7 @@ export function ApplicantBiodataTab({
         birth_place: value.birth_place ?? undefined,
         birth_date: value.birth_date || null,
         address: value.address || undefined,
+        postal_code: value.postal_code || undefined,
         contact_phone: value.contact_phone || undefined,
         gender: (value.gender || undefined) as "M" | "F" | "O" | undefined,
         sibling_count: toNum(value.sibling_count),
@@ -198,6 +203,7 @@ export function ApplicantBiodataTab({
         spouse_occupation: value.spouse_occupation || undefined,
         spouse_almarhum: value.spouse_almarhum,
         family_address: value.family_address || undefined,
+        family_postal_code: value.family_postal_code || undefined,
         heir_name: value.heir_name || undefined,
         heir_relationship: value.heir_relationship || undefined,
         heir_contact_phone: value.heir_contact_phone || undefined,
@@ -399,6 +405,22 @@ export function ApplicantBiodataTab({
                     value={field.state.value}
                     onChange={(e) => field.handleChange(e.target.value)}
                     onBlur={field.handleBlur}
+                  />
+                </Field>
+              )}
+            </form.Field>
+
+            <form.Field name="postal_code">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>Kode Pos</FieldLabel>
+                  <Input
+                    id={field.name}
+                    value={field.state.value}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    onBlur={field.handleBlur}
+                    placeholder="Contoh: 40123"
+                    maxLength={20}
                   />
                 </Field>
               )}
@@ -1038,6 +1060,22 @@ export function ApplicantBiodataTab({
                     value={field.state.value}
                     onChange={(e) => field.handleChange(e.target.value)}
                     onBlur={field.handleBlur}
+                  />
+                </Field>
+              )}
+            </form.Field>
+
+            <form.Field name="family_postal_code">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>Kode Pos Keluarga</FieldLabel>
+                  <Input
+                    id={field.name}
+                    value={field.state.value}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    onBlur={field.handleBlur}
+                    placeholder="Contoh: 40211"
+                    maxLength={20}
                   />
                 </Field>
               )}

@@ -5,7 +5,7 @@
  * Opens with `?tab=chat` to jump directly to the chat panel.
  */
 
-import { useParams, useSearchParams, Link } from "react-router-dom"
+import { useNavigate, useParams, useSearchParams, Link } from "react-router-dom"
 import { format } from "date-fns"
 import { id as idLocale } from "date-fns/locale"
 import { IconArrowLeft, IconBell, IconClipboardList } from "@tabler/icons-react"
@@ -29,6 +29,7 @@ import { useChatThreadsQuery } from "@/hooks/use-chat-query"
 import { useAuth } from "@/hooks/use-auth"
 import { joinAdminPath, useAdminDashboard } from "@/contexts/admin-dashboard-context"
 import { APPLICATION_STATUS_LABELS, type ApplicationStatus } from "@/types/job-applications"
+import { goBackOrDefault } from "@/lib/back-navigation"
 
 const CHAT_ALLOWED_STATUSES = new Set(["DITERIMA", "BERANGKAT", "SELESAI"])
 
@@ -62,6 +63,7 @@ export function AdminApplicationDetailPage() {
   const activeTab = searchParams.get("tab") ?? "info"
   const { basePath } = useAdminDashboard()
   const BASE_PATH = joinAdminPath(basePath, "/lowongan-kerja")
+  const navigate = useNavigate()
 
   const { data: application, isLoading, isError } = useApplicationQuery(appId)
   const { data: threadsPage } = useChatThreadsQuery(
@@ -85,11 +87,13 @@ export function AdminApplicationDetailPage() {
     return (
       <div className="p-6">
         <p className="text-destructive">Data lamaran tidak ditemukan.</p>
-        <Button asChild variant="outline" className="mt-4 cursor-pointer">
-          <Link to={BASE_PATH}>
-            <IconArrowLeft className="mr-2 size-4" />
-            Kembali
-          </Link>
+        <Button
+          variant="outline"
+          className="mt-4 cursor-pointer"
+          onClick={() => goBackOrDefault(navigate, BASE_PATH)}
+        >
+          <IconArrowLeft className="mr-2 size-4" />
+          Kembali
         </Button>
       </div>
     )
@@ -109,11 +113,16 @@ export function AdminApplicationDetailPage() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
-          <Button asChild variant="ghost" size="icon" className="cursor-pointer">
-            <Link to={`${BASE_PATH}/${application.job}`}>
-              <IconArrowLeft className="size-5" />
-              <span className="sr-only">Kembali</span>
-            </Link>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="cursor-pointer"
+            onClick={() =>
+              goBackOrDefault(navigate, `${BASE_PATH}/${application.job}`)
+            }
+          >
+            <IconArrowLeft className="size-5" />
+            <span className="sr-only">Kembali</span>
           </Button>
           <div>
             <div className="flex items-center gap-2">

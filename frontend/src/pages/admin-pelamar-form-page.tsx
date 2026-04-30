@@ -13,6 +13,7 @@ import { toast } from "@/lib/toast"
 import { usePageTitle } from "@/hooks/use-page-title"
 import type { ApplicantUserCreateInput } from "@/types/applicant"
 import { joinAdminPath, useAdminDashboard } from "@/contexts/admin-dashboard-context"
+import { goBackOrDefault } from "@/lib/back-navigation"
 
 export function AdminPelamarFormPage() {
   const { basePath } = useAdminDashboard()
@@ -21,6 +22,8 @@ export function AdminPelamarFormPage() {
   usePageTitle("Tambah Pelamar")
 
   const navigate = useNavigate()
+  const handleBack = () => goBackOrDefault(navigate, BASE_PATH)
+
   const createMutation = useCreateApplicantMutation()
 
   const handleSubmit = async (values: {
@@ -68,11 +71,14 @@ export function AdminPelamarFormPage() {
               Buat akun pelamar baru beserta biodata dasar
             </p>
           </div>
-          <Button variant="ghost" size="sm" className="w-fit cursor-pointer" asChild>
-            <Link to={BASE_PATH}>
-              <IconArrowLeft className="mr-2 size-4" />
-              Kembali
-            </Link>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-fit cursor-pointer"
+            onClick={handleBack}
+          >
+            <IconArrowLeft className="mr-2 size-4" />
+            Kembali
           </Button>
         </div>
 

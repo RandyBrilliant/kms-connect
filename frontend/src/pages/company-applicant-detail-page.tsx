@@ -2,7 +2,7 @@
  * Company applicant detail page - read-only view of applicant details.
  */
 
-import { useParams, Link } from "react-router-dom"
+import { useNavigate, useParams, Link } from "react-router-dom"
 import { IconArrowLeft, IconUser, IconPhone } from "@tabler/icons-react"
 import { format } from "date-fns"
 import { id } from "date-fns/locale"
@@ -13,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { useCompanyApplicantQuery } from "@/hooks/use-company-self-service-query"
 import { usePageTitle } from "@/hooks/use-page-title"
+import { goBackOrDefault } from "@/lib/back-navigation"
 
 function formatDate(value: string | null | undefined) {
   if (!value) return "-"
@@ -51,6 +52,8 @@ function verificationStatusVariant(status: string) {
 
 export function CompanyApplicantDetailPage() {
   const { id: applicantId } = useParams<{ id: string }>()
+  const navigate = useNavigate()
+  const handleBack = () => goBackOrDefault(navigate, "/company/pelamar")
   const numericId = applicantId ? Number(applicantId) : null
 
   const { data: applicant, isLoading, isError } = useCompanyApplicantQuery(numericId)
@@ -71,11 +74,9 @@ export function CompanyApplicantDetailPage() {
     return (
       <div className="flex flex-col gap-4 px-6 py-6 md:px-8 md:py-8">
         <p className="text-destructive">Data pelamar tidak ditemukan.</p>
-        <Button variant="outline" asChild>
-          <Link to="/company/pelamar">
-            <IconArrowLeft className="size-4" />
-            Kembali
-          </Link>
+        <Button variant="outline" onClick={handleBack}>
+          <IconArrowLeft className="size-4" />
+          Kembali
         </Button>
       </div>
     )
@@ -98,11 +99,9 @@ export function CompanyApplicantDetailPage() {
               Data lengkap pelamar (hanya tampilan).
             </p>
           </div>
-          <Button variant="ghost" size="sm" asChild>
-            <Link to="/company/pelamar">
-              <IconArrowLeft className="size-4" />
-              Kembali
-            </Link>
+          <Button variant="ghost" size="sm" onClick={handleBack}>
+            <IconArrowLeft className="size-4" />
+            Kembali
           </Button>
         </div>
 

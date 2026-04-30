@@ -18,12 +18,13 @@ import { toast } from "@/lib/toast"
 import type { NewsStatus } from "@/types/news"
 import { usePageTitle } from "@/hooks/use-page-title"
 import { joinAdminPath, useAdminDashboard } from "@/contexts/admin-dashboard-context"
+import { goBackOrDefault } from "@/lib/back-navigation"
 
 export function AdminNewsFormPage() {
   const { basePath } = useAdminDashboard()
   const BASE_PATH = joinAdminPath(basePath, "/berita")
-
   const navigate = useNavigate()
+  const handleBack = () => goBackOrDefault(navigate, BASE_PATH)
   const { id } = useParams<{ id: string }>()
   const isEdit = id !== "new" && id != null
   const newsId = isEdit ? parseInt(id, 10) : null
@@ -85,8 +86,8 @@ export function AdminNewsFormPage() {
     return (
       <div className="px-6 py-8">
         <p className="text-destructive">Berita tidak ditemukan.</p>
-        <Button variant="link" asChild>
-          <Link to={BASE_PATH}>Kembali ke daftar</Link>
+        <Button variant="link" onClick={handleBack}>
+          Kembali ke daftar
         </Button>
       </div>
     )
@@ -120,11 +121,14 @@ export function AdminNewsFormPage() {
                 : "Tambah berita baru untuk halaman utama"}
             </p>
           </div>
-          <Button variant="ghost" size="sm" className="w-fit cursor-pointer" asChild>
-            <Link to={BASE_PATH}>
-              <IconArrowLeft className="mr-2 size-4" />
-              Kembali
-            </Link>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-fit cursor-pointer"
+            onClick={handleBack}
+          >
+            <IconArrowLeft className="mr-2 size-4" />
+            Kembali
           </Button>
         </div>
 

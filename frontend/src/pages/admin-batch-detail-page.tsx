@@ -34,6 +34,7 @@ import {
   IconX,
 } from "@tabler/icons-react"
 import { toast } from "@/lib/toast"
+import { goBackOrDefault } from "@/lib/back-navigation"
 
 import { BreadcrumbNav } from "@/components/breadcrumb-nav"
 import {
@@ -1013,11 +1014,15 @@ export function AdminBatchDetailPage() {
     return (
       <div className="p-6">
         <p className="text-destructive">Batch tidak ditemukan.</p>
-        <Button asChild variant="outline" className="mt-4 cursor-pointer">
-          <Link to={joinAdminPath(basePath, "/lowongan-kerja")}>
-            <IconArrowLeft className="mr-2 size-4" />
-            Kembali
-          </Link>
+        <Button
+          variant="outline"
+          className="mt-4 cursor-pointer"
+          onClick={() =>
+            goBackOrDefault(navigate, joinAdminPath(basePath, "/lowongan-kerja"))
+          }
+        >
+          <IconArrowLeft className="mr-2 size-4" />
+          Kembali
         </Button>
       </div>
     )
@@ -1037,14 +1042,17 @@ export function AdminBatchDetailPage() {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
           <Button
-            asChild
             variant="ghost"
             size="icon"
             className="cursor-pointer"
+            onClick={() =>
+              goBackOrDefault(
+                navigate,
+                joinAdminPath(basePath, `/lowongan-kerja/${batch.job}`)
+              )
+            }
           >
-            <Link to={joinAdminPath(basePath, `/lowongan-kerja/${batch.job}`)}>
-              <IconArrowLeft className="size-5" />
-            </Link>
+            <IconArrowLeft className="size-5" />
           </Button>
           <div>
             <h1 className="text-2xl font-bold">{batch.name}</h1>

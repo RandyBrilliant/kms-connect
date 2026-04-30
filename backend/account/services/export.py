@@ -223,6 +223,30 @@ def _safe_name(obj: Any) -> str:
     return getattr(obj, "name", None) or str(obj) or "-"
 
 
+def _country_full_name(value: Any) -> str:
+    """
+    Convert CountryField value into full country name.
+    Falls back safely to string representation.
+    """
+    if not value:
+        return "-"
+    name = getattr(value, "name", None)
+    if name:
+        return str(name)
+    code = getattr(value, "code", None)
+    if code and hasattr(value, "name"):
+        return str(value.name)
+    return str(value)
+
+
+def _first_non_empty(*values: Any) -> str:
+    for value in values:
+        text = str(value).strip() if value is not None else ""
+        if text:
+            return text
+    return "-"
+
+
 def _work_experience_at(profile: Any, index: int):
     work_experiences = getattr(profile, "work_experiences", None)
     if not work_experiences:
@@ -367,7 +391,7 @@ def _format_work_experiences(profile: Any, request: Any = None) -> str:
             
             country = getattr(exp, "country", None)
             if country:
-                parts.append(f"Negara: {country}")
+                parts.append(f"Negara: {_country_full_name(country)}")
             
             industry = getattr(exp, "industry_type", None)
             if industry:
@@ -549,7 +573,10 @@ def generate_applicants_excel(applicants: Iterable[Any], request: Any = None) ->
             elif field_path == "email":
                 value = _get_nested_value(applicant, "email")
             elif field_path == "registration_date":
-                value = _format_date_dmy(getattr(profile, "registration_date", None))
+                registration_date = getattr(profile, "registration_date", None)
+                if not registration_date:
+                    registration_date = getattr(profile, "created_at", None) or getattr(applicant, "date_joined", None)
+                value = _format_date_dmy(registration_date)
             elif field_path == "nik":
                 value = _get_nested_value(profile, "nik")
             elif field_path == "contact_phone":
@@ -581,7 +608,11 @@ def generate_applicants_excel(applicants: Iterable[Any], request: Any = None) ->
                 village = getattr(profile, "village", None)
                 value = _safe_name(village)
             elif field_path == "postal_code":
-                value = _get_nested_value(profile, "postal_code")
+                village = getattr(profile, "village", None)
+                value = _first_non_empty(
+                    getattr(profile, "postal_code", None),
+                    str(getattr(village, "code", "") or "").strip(),
+                )
             elif field_path == "education_level":
                 level = _get_nested_value(profile, "education_level", "")
                 value = _format_education_level(level) if level != "-" else "-"
@@ -603,7 +634,7 @@ def generate_applicants_excel(applicants: Iterable[Any], request: Any = None) ->
                     value = "-"
             elif field_path == "work_country_1":
                 exp = _work_experience_at(profile, 0)
-                value = str(getattr(exp, "country", "") or "-") if exp else "-"
+                value = _country_full_name(getattr(exp, "country", None)) if exp else "-"
             elif field_path == "work_position_1":
                 exp = _work_experience_at(profile, 0)
                 value = str(getattr(exp, "position", "") or "-") if exp else "-"
@@ -626,7 +657,7 @@ def generate_applicants_excel(applicants: Iterable[Any], request: Any = None) ->
                     value = "-"
             elif field_path == "work_country_2":
                 exp = _work_experience_at(profile, 1)
-                value = str(getattr(exp, "country", "") or "-") if exp else "-"
+                value = _country_full_name(getattr(exp, "country", None)) if exp else "-"
             elif field_path == "work_position_2":
                 exp = _work_experience_at(profile, 1)
                 value = str(getattr(exp, "position", "") or "-") if exp else "-"
@@ -675,9 +706,17 @@ def generate_applicants_excel(applicants: Iterable[Any], request: Any = None) ->
             elif field_path == "family_village_display":
                 value = _safe_name(getattr(profile, "family_village", None))
             elif field_path == "family_postal_code":
-                value = _get_nested_value(profile, "family_postal_code")
+                family_village = getattr(profile, "family_village", None)
+                value = _first_non_empty(
+                    getattr(profile, "family_postal_code", None),
+                    str(getattr(family_village, "code", "") or "").strip(),
+                )
             elif field_path == "family_phone":
-                value = _get_nested_value(profile, "family_phone")
+                value = _first_non_empty(
+                    getattr(profile, "heir_contact_phone", None),
+                    getattr(profile, "father_phone", None),
+                    getattr(profile, "mother_phone", None),
+                )
             elif field_path == "family_email":
                 value = _get_nested_value(profile, "family_email")
             # Referral & Admin

@@ -57,6 +57,7 @@ import { isRestrictedAdmin, type UserRole } from "@/types/auth"
 import { JobForm } from "@/components/jobs/job-form"
 import { useUpdateJobMutation } from "@/hooks/use-jobs-query"
 import { toast } from "@/lib/toast"
+import { goBackOrDefault } from "@/lib/back-navigation"
 
 import { getJob } from "@/api/jobs"
 import { getBatches } from "@/api/batches"
@@ -452,11 +453,13 @@ export function AdminJobDetailPage() {
     return (
       <div className="p-6">
         <p className="text-destructive">Lowongan tidak ditemukan.</p>
-        <Button asChild variant="outline" className="mt-4 cursor-pointer">
-          <Link to={jobsBase}>
-            <IconArrowLeft className="mr-2 size-4" />
-            Kembali
-          </Link>
+        <Button
+          variant="outline"
+          className="mt-4 cursor-pointer"
+          onClick={() => goBackOrDefault(navigate, jobsBase)}
+        >
+          <IconArrowLeft className="mr-2 size-4" />
+          Kembali
         </Button>
       </div>
     )
@@ -482,14 +485,12 @@ export function AdminJobDetailPage() {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
           <Button
-            asChild
             variant="ghost"
             size="icon"
             className="cursor-pointer shrink-0"
+            onClick={() => goBackOrDefault(navigate, jobsBase)}
           >
-            <Link to={jobsBase}>
-              <IconArrowLeft className="size-5" />
-            </Link>
+            <IconArrowLeft className="size-5" />
           </Button>
           <div>
             <div className="flex items-center gap-2 flex-wrap">

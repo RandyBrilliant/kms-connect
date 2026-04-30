@@ -479,6 +479,12 @@ class ApplicantProfile(models.Model):
         blank=True,
         help_text=_("Alamat sesuai KTP (lengkap sampai Kota/Kabupaten)."),
     )
+    postal_code = models.CharField(
+        _("kode pos"),
+        max_length=20,
+        blank=True,
+        help_text=_("Kode pos alamat sesuai KTP."),
+    )
     province = models.ForeignKey(
         "regions.Province",
         on_delete=models.SET_NULL,
@@ -605,6 +611,12 @@ class ApplicantProfile(models.Model):
         _("alamat orangtua / keluarga"),
         blank=True,
         help_text=_("Alamat orangtua/keluarga (lengkap sampai Kota/Kabupaten)."),
+    )
+    family_postal_code = models.CharField(
+        _("kode pos keluarga"),
+        max_length=20,
+        blank=True,
+        help_text=_("Kode pos alamat orangtua/keluarga."),
     )
     family_province = models.ForeignKey(
         "regions.Province",

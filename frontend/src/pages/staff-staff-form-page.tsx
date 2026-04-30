@@ -23,6 +23,7 @@ import {
 import { toast } from "@/lib/toast"
 import type { StaffUser } from "@/types/staff"
 import { usePageTitle } from "@/hooks/use-page-title"
+import { goBackOrDefault } from "@/lib/back-navigation"
 
 const BASE_PATH = "/staff"
 
@@ -270,6 +271,7 @@ function StaffEditSidebar({ staff }: { staff: StaffUser }) {
 
 export function StaffStaffFormPage() {
     const navigate = useNavigate()
+    const handleBack = () => goBackOrDefault(navigate, BASE_PATH)
     const { id } = useParams<{ id: string }>()
     const isEdit = id !== "new" && id != null
     const staffId = isEdit ? parseInt(id, 10) : null
@@ -367,8 +369,8 @@ export function StaffStaffFormPage() {
         return (
             <div className="px-6 py-8">
                 <p className="text-destructive">Staff tidak ditemukan.</p>
-                <Button variant="link" asChild>
-                    <Link to={BASE_PATH}>Kembali ke daftar</Link>
+                <Button variant="link" onClick={handleBack}>
+                    Kembali ke daftar
                 </Button>
             </div>
         )
@@ -402,11 +404,14 @@ export function StaffStaffFormPage() {
                                 : "Tambah pengguna baru dengan peran Staff"}
                         </p>
                     </div>
-                    <Button variant="ghost" size="sm" className="w-fit cursor-pointer" asChild>
-                        <Link to={BASE_PATH}>
-                            <IconArrowLeft className="mr-2 size-4" />
-                            Kembali
-                        </Link>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-fit cursor-pointer"
+                        onClick={handleBack}
+                    >
+                        <IconArrowLeft className="mr-2 size-4" />
+                        Kembali
                     </Button>
                 </div>
 

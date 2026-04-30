@@ -38,6 +38,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   final _nik = TextEditingController();
   final _birthDate = TextEditingController();
   final _address = TextEditingController();
+  final _postalCode = TextEditingController();
   final _phone = TextEditingController();
   final _siblingCount = TextEditingController();
   final _birthOrder = TextEditingController();
@@ -48,6 +49,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   final _motherAge = TextEditingController();
   final _motherOccupation = TextEditingController();
   final _familyAddress = TextEditingController();
+  final _familyPostalCode = TextEditingController();
   final _fatherPhone = TextEditingController();
   final _motherPhone = TextEditingController();
   bool _fatherAlmarhum = false;
@@ -178,6 +180,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
       _nik,
       _birthDate,
       _address,
+      _postalCode,
       _phone,
       _siblingCount,
       _birthOrder,
@@ -188,6 +191,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
       _motherAge,
       _motherOccupation,
       _familyAddress,
+      _familyPostalCode,
       _fatherPhone,
       _motherPhone,
       _spouseName,
@@ -248,6 +252,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     }
     _gender = _normalizeGender(p.gender);
     _address.text = (p.address ?? '').toUpperCase();
+    _postalCode.text = p.postalCode ?? '';
     _phone.text = p.contactPhone ?? '';
     _siblingCount.text = p.siblingCount?.toString() ?? '';
     _birthOrder.text = p.birthOrder?.toString() ?? '';
@@ -312,6 +317,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     }
     _motherOccupation.text = (p.motherOccupation ?? '').toUpperCase();
     _familyAddress.text = (p.familyAddress ?? '').toUpperCase();
+    _familyPostalCode.text = p.familyPostalCode ?? '';
     _fatherPhone.text = p.fatherPhone ?? '';
     _motherPhone.text = p.motherPhone ?? '';
     _fatherAlmarhum = p.fatherAlmarhum;
@@ -458,6 +464,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
         'birth_date': DateFormat('yyyy-MM-dd').format(_pickedDate!),
       if (_gender != null) 'gender': _gender,
       if (_address.text.trim().isNotEmpty) 'address': _address.text.trim(),
+      if (_postalCode.text.trim().isNotEmpty)
+        'postal_code': _postalCode.text.trim(),
       if (_province != null) 'province': _province!.id,
       if (_kabupaten != null) 'district': _kabupaten!.id,
       if (_kelurahan != null) 'village': _kelurahan!.id,
@@ -524,6 +532,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
         'mother_occupation': _motherOccupation.text.trim(),
       if (_familyAddress.text.trim().isNotEmpty)
         'family_address': _familyAddress.text.trim(),
+      if (_familyPostalCode.text.trim().isNotEmpty)
+        'family_postal_code': _familyPostalCode.text.trim(),
       if (_familyProvince != null) 'family_province': _familyProvince!.id,
       if (_familyKabupaten != null) 'family_district': _familyKabupaten!.id,
       if (_familyKelurahan != null) 'family_village': _familyKelurahan!.id,
@@ -1042,6 +1052,18 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     upperCase: true,
                                   ),
                                   const SizedBox(height: 14),
+                                  M3TextField(
+                                    controller: _postalCode,
+                                    label: 'Kode Pos',
+                                    hint: 'Contoh: 40123',
+                                    prefixIcon:
+                                        Icons.markunread_mailbox_outlined,
+                                    keyboardType: TextInputType.number,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                    ],
+                                  ),
+                                  const SizedBox(height: 14),
                                   // Province
                                   _RegionPickerField(
                                     label: 'Provinsi',
@@ -1483,6 +1505,18 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     prefixIcon: Icons.home_outlined,
                                     maxLines: 2,
                                     upperCase: true,
+                                  ),
+                                  const SizedBox(height: 14),
+                                  M3TextField(
+                                    controller: _familyPostalCode,
+                                    label: 'Kode Pos Orang Tua / Keluarga',
+                                    hint: 'Contoh: 40211',
+                                    prefixIcon:
+                                        Icons.local_post_office_outlined,
+                                    keyboardType: TextInputType.number,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                    ],
                                   ),
                                   const SizedBox(height: 14),
                                   // ── Family address region pickers ──
