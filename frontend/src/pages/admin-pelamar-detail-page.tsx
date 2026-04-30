@@ -4,7 +4,7 @@
  * Lamaran tab lists applications and supports quick assign to an OPEN job batch.
  */
 
-import { Link, useNavigate, useParams } from "react-router-dom"
+import { useNavigate, useParams } from "react-router-dom"
 import { useEffect, useState } from "react"
 import { format } from "date-fns"
 import { id as idLocale } from "date-fns/locale"

@@ -3,7 +3,7 @@
  * /staff/new (create) and /staff/:id/edit (edit)
  */
 
-import { Link, useNavigate, useParams } from "react-router-dom"
+import { useNavigate, useParams } from "react-router-dom"
 import { IconArrowLeft, IconKey, IconPhone, IconUser, IconCopy, IconBrandGoogle } from "@tabler/icons-react"
 
 import { StaffForm } from "@/components/staffs/staff-form"

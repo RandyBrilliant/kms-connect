@@ -10,7 +10,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react"
-import { useParams, Link, useNavigate } from "react-router-dom"
+import { useParams, useNavigate } from "react-router-dom"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { format } from "date-fns"
 import { id as idLocale } from "date-fns/locale"

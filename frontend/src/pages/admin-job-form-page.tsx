@@ -3,7 +3,7 @@
  * /lowongan-kerja/new (create) and /lowongan-kerja/:id/edit (edit)
  */
 
-import { Link, useNavigate, useParams } from "react-router-dom"
+import { useNavigate, useParams } from "react-router-dom"
 import { IconArrowLeft } from "@tabler/icons-react"
 
 import { JobForm } from "@/components/jobs/job-form"

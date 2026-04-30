@@ -2,7 +2,7 @@
  * Pelamar create form page.
  */
 
-import { Link, useNavigate } from "react-router-dom"
+import { useNavigate } from "react-router-dom"
 import { IconArrowLeft } from "@tabler/icons-react"
 
 import { ApplicantForm } from "@/components/applicants/applicant-form"

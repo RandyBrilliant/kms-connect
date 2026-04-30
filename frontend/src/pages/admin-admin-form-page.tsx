@@ -3,7 +3,7 @@
  * /admin/new (create) and /admin/:id/edit (edit)
  */
 
-import { Link, useNavigate, useParams } from "react-router-dom"
+import { useNavigate, useParams } from "react-router-dom"
 import { IconArrowLeft, IconKey } from "@tabler/icons-react"
 
 import { AdminForm } from "@/components/admins/admin-form"

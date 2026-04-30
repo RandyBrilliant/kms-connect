@@ -57,13 +57,12 @@ function apiErrorMessage(err: unknown): string {
 }
 
 export function AdminBatchFormPage() {
+  const { basePath } = useAdminDashboard()
   const { id } = useParams<{ id: string }>()
   const jobId = Number(id)
   const navigate = useNavigate()
   const fallbackBackPath = joinAdminPath(basePath, `/lowongan-kerja/${jobId}`)
   const handleBack = () => goBackOrDefault(navigate, fallbackBackPath)
-
-  const { basePath } = useAdminDashboard()
 
   usePageTitle("Buat Batch Baru")
 

@@ -13,7 +13,7 @@
  */
 
 import { type ReactNode, useState, useEffect } from "react"
-import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router-dom"
+import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import { format } from "date-fns"
 import { id as idLocale } from "date-fns/locale"

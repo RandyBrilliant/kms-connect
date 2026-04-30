@@ -2,7 +2,7 @@
  * Company applicant detail page - read-only view of applicant details.
  */
 
-import { useNavigate, useParams, Link } from "react-router-dom"
+import { useNavigate, useParams } from "react-router-dom"
 import { IconArrowLeft, IconUser, IconPhone } from "@tabler/icons-react"
 import { format } from "date-fns"
 import { id } from "date-fns/locale"
