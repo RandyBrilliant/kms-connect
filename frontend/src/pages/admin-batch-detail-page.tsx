@@ -89,7 +89,7 @@ import {
   previewBatchAnnouncementRecipients,
   exportBatchExcel,
 } from "@/api/batches"
-import { getApplications, transitionApplication } from "@/api/applications"
+import { getAllApplicationsByBatch, transitionApplication } from "@/api/applications"
 import {
   APPLICATION_STATUS_LABELS,
   type ApplicationStatus,
@@ -405,16 +405,38 @@ function BatchStatusTab({
       return
     }
     setLoading(true)
-    let ok = 0, fail = 0
-    await Promise.allSettled(
-      ids.map((id) =>
-        transitionApplication(id, {
-          status: targetStatus,
-          note: note.trim() || undefined,
-          ...(targetStatus === "SELESAI" ? { placement_end_date: placementDate } : {}),
-        }).then(() => ok++).catch(() => fail++)
-      )
-    )
+    let ok = 0
+    let fail = 0
+    const failureReasons = new Map<string, number>()
+    const payload = {
+      status: targetStatus,
+      note: note.trim() || undefined,
+      ...(targetStatus === "SELESAI" ? { placement_end_date: placementDate } : {}),
+    }
+
+    // Avoid flooding backend with dozens of concurrent transition requests.
+    const CONCURRENCY = 5
+    let cursor = 0
+    const workers = Array.from({
+      length: Math.min(CONCURRENCY, ids.length),
+    }).map(async () => {
+      while (cursor < ids.length) {
+        const idx = cursor
+        cursor += 1
+        const id = ids[idx]
+        try {
+          await transitionApplication(id, payload)
+          ok += 1
+        } catch (err) {
+          fail += 1
+          const detail =
+            (err as { response?: { data?: { detail?: string } } })?.response?.data
+              ?.detail ?? "Transisi gagal."
+          failureReasons.set(detail, (failureReasons.get(detail) ?? 0) + 1)
+        }
+      }
+    })
+    await Promise.all(workers)
     await queryClient.invalidateQueries({ queryKey: ["applications"] })
     await queryClient.invalidateQueries({ queryKey: ["batch", batchId] })
     setSelected(new Set())
@@ -422,7 +444,13 @@ function BatchStatusTab({
     setPlacementDate("")
     setLoading(false)
     if (ok > 0) toast.success(`${ok} pelamar dipindahkan ke ${APPLICATION_STATUS_LABELS[targetStatus]}.`)
-    if (fail > 0) toast.error(`${fail} pelamar gagal dipindahkan.`)
+    if (fail > 0) {
+      const topReason = Array.from(failureReasons.entries()).sort((a, b) => b[1] - a[1])[0]?.[0]
+      toast.error(
+        `${fail} pelamar gagal dipindahkan.`,
+        topReason ?? "Cek status terbaru lalu coba lagi."
+      )
+    }
   }
 
   const showCheckboxCol = apps.length > 0 && !!(nextStatus || canReject)
@@ -861,11 +889,19 @@ export function AdminBatchDetailPage() {
     queryFn: () => getBatch(batchId),
   })
 
-  const { data: appsPage } = useQuery({
-    queryKey: ["applications", { batch: batchId, page_size: 200 }],
-    queryFn: () => getApplications({ batch: batchId, page_size: 200 }),
+  const { data: apps = [] } = useQuery({
+    queryKey: ["applications", { batch: batchId, mode: "all-pages" }],
+    queryFn: () => getAllApplicationsByBatch(batchId),
     enabled: !!batch,
   })
+
+  const sortedApps = useMemo(() => {
+    return [...apps].sort((a, b) =>
+      (a.applicant_name || "").localeCompare(b.applicant_name || "", "id", {
+        sensitivity: "base",
+      })
+    )
+  }, [apps])
 
   const { data: announcements = [], isLoading: annoLoading } = useQuery({    queryKey: ["batch-announcements", batchId],
     queryFn: () => getBatchAnnouncements(batchId),
@@ -933,16 +969,14 @@ export function AdminBatchDetailPage() {
     onSuccess: () => {},
   })
 
-  const apps = appsPage?.results ?? []
-
   // Group by status for tabs
   const appsByStatus = STATUS_TABS.reduce(
-    (acc, t) => ({ ...acc, [t.value]: apps.filter((a) => a.status === t.value) }),
-    {} as Record<ApplicationStatus, typeof apps>
+    (acc, t) => ({ ...acc, [t.value]: sortedApps.filter((a) => a.status === t.value) }),
+    {} as Record<ApplicationStatus, typeof sortedApps>
   )
 
   // Infer dominant status (for legacy use if needed)
-  const statusFreq = apps.reduce(
+  const statusFreq = sortedApps.reduce(
     (acc, a) => ({ ...acc, [a.status]: (acc[a.status] ?? 0) + 1 }),
     {} as Record<string, number>
   )

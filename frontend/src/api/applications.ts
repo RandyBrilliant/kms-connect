@@ -39,6 +39,27 @@ export async function getApplications(
   return data
 }
 
+/**
+ * GET /api/applications/ across all pages for one batch.
+ * Keeps requesting pages until backend "next" is null.
+ */
+export async function getAllApplicationsByBatch(
+  batchId: number
+): Promise<JobApplication[]> {
+  const pageSize = 100
+  let page = 1
+  const all: JobApplication[] = []
+
+  while (true) {
+    const data = await getApplications({ batch: batchId, page, page_size: pageSize })
+    all.push(...data.results)
+    if (!data.next) break
+    page += 1
+  }
+
+  return all
+}
+
 /** GET /api/applications/:id/ — admin gets single application */
 export async function getApplication(id: number): Promise<JobApplication> {
   const { data } = await api.get<JobApplication>(`/api/applications/${id}/`)
