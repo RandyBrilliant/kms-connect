@@ -165,7 +165,6 @@ def _format_gender(gender: str | None) -> str:
     gender_map = {
         "M": "Laki-laki",
         "F": "Perempuan",
-        "O": "Lainnya",
     }
     return gender_map.get(gender or "", gender or "-")
 
@@ -584,8 +583,11 @@ def generate_applicants_excel(applicants: Iterable[Any], request: Any = None) ->
             elif field_path == "birth_date":
                 value = _format_date_dmy(getattr(profile, "birth_date", None))
             elif field_path == "birth_place":
-                # birth_place is FK to Regency (kabupaten/kota). Export name only.
-                value = _safe_name(getattr(profile, "birth_place", None))
+                t = (getattr(profile, "birth_place_text", None) or "").strip()
+                if t:
+                    value = t
+                else:
+                    value = _safe_name(getattr(profile, "birth_place", None))
             elif field_path == "gender":
                 gender = _get_nested_value(profile, "gender", "")
                 value = _format_gender(gender) if gender != "-" else "-"

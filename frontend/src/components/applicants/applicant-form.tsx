@@ -3,7 +3,7 @@
  * Uses TanStack Form. Required: email, password, full_name, nik. All other fields optional.
  */
 
-import { useState } from "react"
+import { useState, type ChangeEvent } from "react"
 import { useForm } from "@tanstack/react-form"
 import { IconEye, IconEyeOff } from "@tabler/icons-react"
 import { format } from "date-fns"
@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
+import { handleApplicantUppercaseChange } from "@/lib/applicant-uppercase-input"
 import { applicantCreateSchema } from "@/schemas/applicant"
 import type { ApplicantCreateSchema } from "@/schemas/applicant"
 import { BIODATA_SECTIONS, RequiredStar } from "./biodata-form-shared"
@@ -40,7 +41,6 @@ import {
   MARITAL_STATUS_LABELS,
   NEXT_OF_KIN_RELATIONSHIP_OPTIONS,
 } from "@/constants/applicant"
-import { useRegenciesQuery } from "@/hooks/use-regions-query"
 import { useReferrersQuery } from "@/hooks/use-referrers-query"
 
 interface ApplicantFormProps {
@@ -59,9 +59,17 @@ function toNum(v: string): number | null {
   return isNaN(n) ? null : n
 }
 
+/** Uppercase biodata text fields (parity with mobile); email/password/postal/numeric excluded via helper set. */
+function applicantTextChange(
+  fieldName: string,
+  commit: (value: string) => void
+): (e: ChangeEvent<HTMLInputElement>) => void {
+  return handleApplicantUppercaseChange(fieldName, commit) ?? ((e) => commit(e.target.value))
+}
+
 /** Build applicant_profile from parsed create payload (omit account-only fields). */
 const PROFILE_KEYS = [
-  "full_name", "nik", "birth_place", "birth_date", "address", "postal_code", "province", "district", "village",
+  "full_name", "nik", "birth_place_text", "birth_date", "address", "postal_code", "province", "district", "village",
   "contact_phone", "gender", "sibling_count", "birth_order", "father_name", "father_age", "father_occupation",
   "father_almarhum", "mother_name", "mother_age", "mother_occupation", "mother_almarhum", "spouse_name", "spouse_age", "spouse_occupation", "spouse_almarhum",
   "family_address", "family_postal_code", "family_province", "family_district", "family_village", "father_phone", "mother_phone",
@@ -181,7 +189,6 @@ export function ApplicantForm({
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({})
-  const { data: regencies = [], isPending: regenciesLoading } = useRegenciesQuery(null)
   const { data: referrers = [], isPending: referrersLoading } = useReferrersQuery()
 
   const form = useForm({
@@ -191,7 +198,7 @@ export function ApplicantForm({
       confirmPassword: "",
       full_name: "",
       nik: "",
-      birth_place: null as number | null,
+      birth_place_text: "",
       birth_date: "",
       address: "",
       contact_phone: "",
@@ -350,7 +357,7 @@ export function ApplicantForm({
                     type="text"
                     placeholder="Nama sesuai KTP"
                     value={field.state.value}
-                    onChange={(e) => field.handleChange(e.target.value)}
+                    onChange={applicantTextChange(field.name, field.handleChange)}
                     onBlur={field.handleBlur}
                   />
                   <FieldError
@@ -395,26 +402,25 @@ export function ApplicantForm({
             </form.Field>
 
             <div className="grid gap-6 sm:grid-cols-2">
-              <form.Field name="birth_place">
+              <form.Field name="birth_place_text">
                 {(field) => (
                   <Field>
                     <FieldLabel htmlFor={field.name}>Tempat Lahir</FieldLabel>
-                    <SearchableSelect
-                      items={regencies.map((r) => ({ id: r.id, name: r.name }))}
+                    <Input
+                      id={field.name}
+                      type="text"
+                      placeholder="Contoh: JAKARTA"
+                      maxLength={200}
                       value={field.state.value}
-                      onChange={(id) => field.handleChange(id)}
-                      placeholder="Pilih kabupaten/kota tempat lahir"
-                      clearLabel="Pilih kabupaten/kota"
-                      disabled={false}
-                      loading={regenciesLoading}
-                      emptyMessage="Tidak ada kabupaten/kota"
+                      onChange={applicantTextChange(field.name, field.handleChange)}
+                      onBlur={field.handleBlur}
                     />
                     <FieldError
                       errors={[
                         ...(field.state.meta.errors as unknown[]).map((err) =>
                           typeof err === "string" ? { message: err } : { message: (err as { message?: string }).message }
                         ),
-                        ...(errors.birth_place ? [{ message: errors.birth_place }] : []),
+                        ...(errors.birth_place_text ? [{ message: errors.birth_place_text }] : []),
                       ].filter(Boolean)}
                     />
                   </Field>
@@ -460,7 +466,6 @@ export function ApplicantForm({
                       <SelectItem value="none">Pilih</SelectItem>
                       <SelectItem value="M">Laki-laki</SelectItem>
                       <SelectItem value="F">Perempuan</SelectItem>
-                      <SelectItem value="O">Lainnya</SelectItem>
                     </SelectContent>
                   </Select>
                 </Field>
@@ -476,7 +481,7 @@ export function ApplicantForm({
                     type="text"
                     placeholder="Alamat sesuai KTP"
                     value={field.state.value}
-                    onChange={(e) => field.handleChange(e.target.value)}
+                    onChange={applicantTextChange(field.name, field.handleChange)}
                     onBlur={field.handleBlur}
                   />
                   <FieldError
@@ -597,7 +602,7 @@ export function ApplicantForm({
                 {(field) => (
                   <Field>
                     <FieldLabel htmlFor={field.name}>Nama Ayah</FieldLabel>
-                    <Input id={field.name} value={field.state.value} onChange={(e) => field.handleChange(e.target.value)} onBlur={field.handleBlur} />
+                    <Input id={field.name} value={field.state.value} onChange={applicantTextChange(field.name, field.handleChange)} onBlur={field.handleBlur} />
                   </Field>
                 )}
               </form.Field>
@@ -613,7 +618,7 @@ export function ApplicantForm({
                 {(field) => (
                   <Field>
                     <FieldLabel htmlFor={field.name}>Pekerjaan Ayah</FieldLabel>
-                    <Input id={field.name} value={field.state.value} onChange={(e) => field.handleChange(e.target.value)} onBlur={field.handleBlur} />
+                    <Input id={field.name} value={field.state.value} onChange={applicantTextChange(field.name, field.handleChange)} onBlur={field.handleBlur} />
                   </Field>
                 )}
               </form.Field>
@@ -646,7 +651,7 @@ export function ApplicantForm({
                 {(field) => (
                   <Field>
                     <FieldLabel htmlFor={field.name}>Nama Ibu</FieldLabel>
-                    <Input id={field.name} value={field.state.value} onChange={(e) => field.handleChange(e.target.value)} onBlur={field.handleBlur} />
+                    <Input id={field.name} value={field.state.value} onChange={applicantTextChange(field.name, field.handleChange)} onBlur={field.handleBlur} />
                   </Field>
                 )}
               </form.Field>
@@ -662,7 +667,7 @@ export function ApplicantForm({
                 {(field) => (
                   <Field>
                     <FieldLabel htmlFor={field.name}>Pekerjaan Ibu</FieldLabel>
-                    <Input id={field.name} value={field.state.value} onChange={(e) => field.handleChange(e.target.value)} onBlur={field.handleBlur} />
+                    <Input id={field.name} value={field.state.value} onChange={applicantTextChange(field.name, field.handleChange)} onBlur={field.handleBlur} />
                   </Field>
                 )}
               </form.Field>
@@ -695,7 +700,7 @@ export function ApplicantForm({
                 {(field) => (
                   <Field>
                     <FieldLabel htmlFor={field.name}>Nama Suami/Istri</FieldLabel>
-                    <Input id={field.name} value={field.state.value} onChange={(e) => field.handleChange(e.target.value)} onBlur={field.handleBlur} />
+                    <Input id={field.name} value={field.state.value} onChange={applicantTextChange(field.name, field.handleChange)} onBlur={field.handleBlur} />
                   </Field>
                 )}
               </form.Field>
@@ -711,7 +716,7 @@ export function ApplicantForm({
                 {(field) => (
                   <Field>
                     <FieldLabel htmlFor={field.name}>Pekerjaan Suami/Istri</FieldLabel>
-                    <Input id={field.name} value={field.state.value} onChange={(e) => field.handleChange(e.target.value)} onBlur={field.handleBlur} />
+                    <Input id={field.name} value={field.state.value} onChange={applicantTextChange(field.name, field.handleChange)} onBlur={field.handleBlur} />
                   </Field>
                 )}
               </form.Field>
@@ -720,7 +725,7 @@ export function ApplicantForm({
               {(field) => (
                 <Field>
                   <FieldLabel htmlFor={field.name}>Alamat Orangtua/Keluarga</FieldLabel>
-                  <Input id={field.name} value={field.state.value} onChange={(e) => field.handleChange(e.target.value)} onBlur={field.handleBlur} />
+                  <Input id={field.name} value={field.state.value} onChange={applicantTextChange(field.name, field.handleChange)} onBlur={field.handleBlur} />
                 </Field>
               )}
             </form.Field>
@@ -810,7 +815,7 @@ export function ApplicantForm({
                 {(field) => (
                   <Field>
                     <FieldLabel htmlFor={field.name}>Jurusan / Bidang Studi</FieldLabel>
-                    <Input id={field.name} value={field.state.value} onChange={(e) => field.handleChange(e.target.value)} onBlur={field.handleBlur} placeholder="Contoh: Teknik Informatika" />
+                    <Input id={field.name} value={field.state.value} onChange={applicantTextChange(field.name, field.handleChange)} onBlur={field.handleBlur} placeholder="Contoh: Teknik Informatika" />
                   </Field>
                 )}
               </form.Field>
@@ -902,7 +907,7 @@ export function ApplicantForm({
               {(field) => (
                 <Field>
                   <FieldLabel htmlFor={field.name}>Nomor Paspor</FieldLabel>
-                  <Input id={field.name} value={field.state.value} onChange={(e) => field.handleChange(e.target.value.toUpperCase())} onBlur={field.handleBlur} placeholder="Contoh: A1234567" />
+                  <Input id={field.name} value={field.state.value} onChange={applicantTextChange(field.name, field.handleChange)} onBlur={field.handleBlur} placeholder="Contoh: A1234567" />
                 </Field>
               )}
             </form.Field>
@@ -927,7 +932,7 @@ export function ApplicantForm({
                 {(field) => (
                   <Field>
                     <FieldLabel htmlFor={field.name}>Tempat Terbit Paspor</FieldLabel>
-                    <Input id={field.name} value={field.state.value} onChange={(e) => field.handleChange(e.target.value)} onBlur={field.handleBlur} placeholder="Contoh: Jakarta" />
+                    <Input id={field.name} value={field.state.value} onChange={applicantTextChange(field.name, field.handleChange)} onBlur={field.handleBlur} placeholder="Contoh: Jakarta" />
                   </Field>
                 )}
               </form.Field>
@@ -980,7 +985,7 @@ export function ApplicantForm({
               {(field) => (
                 <Field>
                   <FieldLabel htmlFor={field.name}>Nama Ahli Waris</FieldLabel>
-                  <Input id={field.name} value={field.state.value} onChange={(e) => field.handleChange(e.target.value)} onBlur={field.handleBlur} placeholder="Nama lengkap ahli waris" />
+                  <Input id={field.name} value={field.state.value} onChange={applicantTextChange(field.name, field.handleChange)} onBlur={field.handleBlur} placeholder="Nama lengkap ahli waris" />
                 </Field>
               )}
             </form.Field>
@@ -1021,7 +1026,7 @@ export function ApplicantForm({
               {(field) => (
                 <Field>
                   <FieldLabel htmlFor={field.name}>Keterangan</FieldLabel>
-                  <Input id={field.name} value={field.state.value} onChange={(e) => field.handleChange(e.target.value)} onBlur={field.handleBlur} />
+                  <Input id={field.name} value={field.state.value} onChange={applicantTextChange(field.name, field.handleChange)} onBlur={field.handleBlur} />
                 </Field>
               )}
             </form.Field>

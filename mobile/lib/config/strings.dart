@@ -17,9 +17,11 @@ class AppStrings {
   // Registration
   static const String registerTitle = 'Daftar sebagai Pelamar';
   static const String uploadKtp = 'Unggah KTP Anda';
-  static const String uploadKtpDescription = 'Unggah foto KTP untuk mengekstrak data secara otomatis';
+  static const String uploadKtpDescription =
+      'Unggah foto KTP; sistem akan membaca NIK. Nama dan data lain diisi manual sesuai KTP';
   static const String selectKtpPhoto = 'Pilih Foto KTP';
-  static const String ktpNote = 'Data dari KTP akan digunakan untuk mengisi informasi pribadi Anda';
+  static const String ktpNote =
+      'Hanya NIK yang diambil dari foto; lengkapi informasi lain sesuai dokumen asli';
   static const String registrationSuccess = 'Akun Berhasil Dibuat!';
   static const String ktpProcessing = 'KTP sedang diproses dengan OCR.';
   static const String completeProfile = 'Lengkapi Profil Anda';

@@ -225,7 +225,7 @@ class AuthRepository {
     String? referralCode,
     String? fullName,
     String? phoneNumber,
-    int? birthPlaceId,
+    String? birthPlaceText,
     String? birthDateIso,
     bool? dataDeclarationConfirmed,
   }) async {
@@ -246,7 +246,8 @@ class AuthRepository {
           'full_name': fullName.trim(),
         if (phoneNumber != null && phoneNumber.trim().isNotEmpty)
           'phone_number': ProfessionalPhoneField.toIndonesiaE164(phoneNumber),
-        'birth_place': ?birthPlaceId,
+        if (birthPlaceText != null && birthPlaceText.trim().isNotEmpty)
+          'birth_place_text': birthPlaceText.trim(),
         'birth_date': ?birthDateIso,
         'data_declaration_confirmed': ?dataDeclarationConfirmed,
       });
@@ -316,7 +317,7 @@ class AuthRepository {
     required String nik,
     required File ktpFile,
     String? fullName,
-    int? birthPlaceId,
+    String? birthPlaceText,
     String? birthDateIso,
   }) async {
     try {
@@ -329,7 +330,8 @@ class AuthRepository {
         ),
         if (fullName != null && fullName.trim().isNotEmpty)
           'full_name': fullName.trim(),
-        'birth_place': ?birthPlaceId,
+        if (birthPlaceText != null && birthPlaceText.trim().isNotEmpty)
+          'birth_place_text': birthPlaceText.trim(),
         'birth_date': ?birthDateIso,
       });
 

@@ -78,16 +78,23 @@ export function AdminBatchFormPage() {
 
   const [name, setName] = useState("")
   const [notes, setNotes] = useState("")
+  const [tahapOrder, setTahapOrder] = useState<string>("")
+  const [tahapLabel, setTahapLabel] = useState("")
   const [loading, setLoading] = useState(false)
 
   const handleSubmit = async () => {
     if (!jobIdValid || !name.trim()) return
     setLoading(true)
     try {
+      const tahapOrderNum = tahapOrder.trim()
+        ? Number.parseInt(tahapOrder.trim(), 10)
+        : undefined
       const batch = await createBatch({
         job: jobId,
         name: name.trim(),
         notes: notes.trim(),
+        tahap_order: Number.isFinite(tahapOrderNum) ? tahapOrderNum : undefined,
+        tahap_label: tahapLabel.trim() || undefined,
       })
       await queryClient.invalidateQueries({ queryKey: ["batches", { job: jobId }] })
       toast.success("Batch berhasil dibuat.")
@@ -134,10 +141,11 @@ export function AdminBatchFormPage() {
 
       <Card className="max-w-lg">
         <CardHeader>
-          <CardTitle>Detail Batch</CardTitle>
+          <CardTitle>Detail Batch (Tahapan Pra-Seleksi)</CardTitle>
           <CardDescription>
-            Batch mengelompokkan pelamar yang akan menjalani seleksi bersama
-            untuk satu lowongan kerja.
+            Sebuah lowongan dapat memiliki banyak batch (tahapan pra-seleksi),
+            misalnya CV Screening → Psikotes → FGD. Setiap batch berisi pelamar
+            yang sedang menjalani tahapan tersebut.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -163,6 +171,39 @@ export function AdminBatchFormPage() {
                   onChange={(e) => setName(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="batch-tahap-order">
+                    Urutan Tahapan{" "}
+                    <span className="text-muted-foreground text-xs">(opsional)</span>
+                  </Label>
+                  <Input
+                    id="batch-tahap-order"
+                    type="number"
+                    min={1}
+                    max={50}
+                    placeholder="auto"
+                    value={tahapOrder}
+                    onChange={(e) => setTahapOrder(e.target.value)}
+                  />
+                  <p className="text-muted-foreground text-xs">
+                    Default: nomor tahapan berikutnya untuk lowongan ini.
+                  </p>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="batch-tahap-label">
+                    Label Tahapan{" "}
+                    <span className="text-muted-foreground text-xs">(opsional)</span>
+                  </Label>
+                  <Input
+                    id="batch-tahap-label"
+                    placeholder="CV Screening / Psikotes / FGD"
+                    value={tahapLabel}
+                    onChange={(e) => setTahapLabel(e.target.value)}
+                  />
+                </div>
               </div>
 
               <div className="flex flex-col gap-1.5">

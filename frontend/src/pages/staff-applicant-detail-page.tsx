@@ -144,7 +144,7 @@ export function StaffApplicantDetailPage() {
         <CardContent className="space-y-3">
           <InfoRow label="NIK" value={profile?.nik} />
           <InfoRow label="Jenis Kelamin" value={profile?.gender} />
-          <InfoRow label="Tempat Lahir" value={profile?.birth_place?.toString()} />
+          <InfoRow label="Tempat Lahir" value={profile?.birth_place_display ?? profile?.birth_place_text ?? "-"} />
           <InfoRow label="Tanggal Lahir" value={formatDate(profile?.birth_date)} />
           <InfoRow label="Agama" value={profile?.religion} />
         </CardContent>

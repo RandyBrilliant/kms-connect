@@ -1,10 +1,17 @@
 /**
  * LamaranBatch types — matches backend main.LamaranBatchSerializer.
  *
- * A batch is the unit of group assignment.
- * Admin creates a batch for a job, searches/selects eligible applicants,
- * and bulk-assigns them. Then admin schedules Pra-Seleksi and Interview
- * stages (date + location) for the whole batch.
+ * A batch represents **one tahapan pra-seleksi** for a job. Each job may
+ * have many batches (e.g., CV Screening → Psikotes → FGD).
+ * Interview-onwards is owned by `InterviewCohort` (see interview-cohort.ts).
+ *
+ * Admin workflow:
+ *   1. Create batch (tahap_order=N) for a job.
+ *   2. Search & assign eligible applicants.
+ *   3. Schedule pra-seleksi date/location.
+ *   4. Run pra-seleksi; mark survivors → advance to next tahapan
+ *      (re-batch via move-applicants) or → INTERVIEW (advance-to-interview
+ *      with chosen cohort) or → DITOLAK.
  */
 
 // ---------------------------------------------------------------------------
@@ -18,20 +25,32 @@ export interface LamaranBatch {
   name: string
   notes: string
 
+  // Tahapan pra-seleksi
+  tahap_order: number
+  tahap_label: string
+  /** Display fallback: "Pra-Seleksi {N}" if tahap_label is blank. */
+  display_tahap_label: string
+
   // Pra-seleksi schedule (null = not yet scheduled)
   pra_seleksi_date: string | null
   pra_seleksi_location: string
   pra_seleksi_notes: string
 
-  // Interview schedule (null = not yet scheduled)
+  // DEPRECATED interview fields (kept for backward compat with old data).
+  // Interview metadata now lives on `InterviewCohort`.
   interview_date: string | null
   interview_location: string
   interview_notes: string
 
   // Counts (computed by the serializer)
   applicant_count: number
+  pra_seleksi_count: number
+  advanced_count: number
+  rejected_count: number
   confirmed_pra_seleksi_count: number
   confirmed_interview_count: number
+  diterima_count: number
+  pengumpulan_dokumen_confirmed_count: number
 
   created_by: number | null
   created_by_name: string | null
@@ -114,6 +133,16 @@ export interface CreateBatchInput {
   job: number
   name: string
   notes?: string
+  tahap_order?: number
+  tahap_label?: string
+}
+
+/** PATCH /api/batches/{id}/ */
+export interface UpdateBatchInput {
+  name?: string
+  notes?: string
+  tahap_order?: number
+  tahap_label?: string
 }
 
 /** POST /api/batches/{id}/assign/ */
@@ -137,14 +166,25 @@ export interface CheckEligibilityResponse {
   results: EligibilityCheckResult[]
 }
 
-/** PATCH /api/batches/{id}/schedule/ */
-export type BatchStage = "pra_seleksi" | "interview"
+/**
+ * PATCH /api/batches/{id}/schedule/
+ * Only `pra_seleksi` is supported on a batch. Interview schedules live on
+ * InterviewCohort.
+ */
+export type BatchStage = "pra_seleksi"
 
 export interface ScheduleBatchStageInput {
   stage: BatchStage
   date: string   // ISO datetime string
   location: string
   notes?: string
+}
+
+/** POST /api/batches/{id}/move-applicants/ — re-batch within PRA_SELEKSI */
+export interface MoveApplicationsToBatchInput {
+  target_batch: number
+  application_ids: number[]
+  note?: string
 }
 
 /** Response after assign */
@@ -154,11 +194,16 @@ export interface GroupAssignResponse {
   skipped: Array<{ applicant_id: number; reason: string | null }>
 }
 
-/** POST /api/batches/{id}/bulk-transition/ */
+/**
+ * POST /api/batches/{id}/bulk-transition/
+ * Allowed targets from a batch: INTERVIEW (requires cohort) or DITOLAK.
+ */
 export interface BulkTransitionInput {
   status: string
   note?: string
   placement_end_date?: string | null
+  /** Required when status=INTERVIEW — the cohort to route survivors into. */
+  interview_cohort?: number | null
 }
 
 export interface BulkTransitionResponse {

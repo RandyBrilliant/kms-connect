@@ -174,7 +174,9 @@ export function CompanyApplicantDetailPage() {
                   </div>
                   <div>
                     <p className="text-muted-foreground text-sm">Tempat Lahir</p>
-                    <p className="font-medium">{profile.birth_place || "-"}</p>
+                    <p className="font-medium">
+                      {(profile.birth_place_display ?? profile.birth_place_text) || "-"}
+                    </p>
                   </div>
                   <div>
                     <p className="text-muted-foreground text-sm">Tanggal Lahir</p>

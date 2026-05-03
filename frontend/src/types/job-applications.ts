@@ -60,10 +60,31 @@ export interface JobApplication {
   job: number
   job_title: string
   company_name: string
-  /** ID of the LamaranBatch this application belongs to */
+  /** ID of the LamaranBatch (pra-seleksi tahapan) this application belongs to */
   batch: number | null
   batch_name: string | null
+  /** tahap_order of the current batch (1, 2, 3, ...). null when no batch. */
+  batch_tahap_order?: number | null
+  /** Display label for current batch tahapan ("Pra-Seleksi 1: CV Screening"). */
+  batch_tahap_label?: string | null
+  /** ID of the InterviewCohort owning this app from INTERVIEW onwards */
+  interview_cohort?: number | null
+  interview_cohort_name?: string | null
   status: ApplicationStatus
+  /**
+   * Pra-seleksi schedule resolved from the application's batch.
+   * Kept on this shape for backward compatibility with mobile clients.
+   */
+  pra_seleksi_date?: string | null
+  pra_seleksi_location?: string
+  pra_seleksi_notes?: string
+  /**
+   * Interview schedule resolved from the application's interview_cohort
+   * (with fallback to the legacy batch.interview_* columns for old data).
+   */
+  interview_date?: string | null
+  interview_location?: string
+  interview_notes?: string
   pra_seleksi_confirmed_at: string | null
   interview_confirmed_at: string | null
   applied_at: string
@@ -99,6 +120,7 @@ export interface ApplicationsListParams {
   job?: number
   applicant?: number
   batch?: number
+  interview_cohort?: number
   ordering?: string
 }
 
@@ -115,6 +137,8 @@ export interface TransitionApplicationInput {
   note?: string
   /** Only required when transitioning to SELESAI */
   placement_end_date?: string | null
+  /** Required when transitioning to INTERVIEW (admin must pick a cohort). */
+  interview_cohort?: number | null
 }
 
 export interface BulkTransitionApplicationsInput extends TransitionApplicationInput {

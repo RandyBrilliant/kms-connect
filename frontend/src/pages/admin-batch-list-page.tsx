@@ -115,11 +115,12 @@ export function AdminBatchListPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Nama Batch</TableHead>
+                <TableHead>Nama Tahapan</TableHead>
                 <TableHead>Lowongan</TableHead>
-                <TableHead>Pra-Seleksi</TableHead>
-                <TableHead>Interview</TableHead>
+                <TableHead className="w-[80px]">Urutan</TableHead>
+                <TableHead>Jadwal Pra-Seleksi</TableHead>
                 <TableHead className="text-center">Pelamar</TableHead>
+                <TableHead className="text-center">Lanjut</TableHead>
                 <TableHead>Dibuat</TableHead>
                 <TableHead />
               </TableRow>
@@ -133,15 +134,32 @@ export function AdminBatchListPage() {
                     onClick={() => navigate(`${batchBase}/${batch.id}`)}
                   >
                     <TableCell>
-                      <div className="flex items-center gap-2">
-                        <IconClipboardList className="size-4 text-muted-foreground shrink-0" />
-                        <span className="font-medium">{batch.name}</span>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="flex items-center gap-2 font-medium">
+                          <IconClipboardList className="size-4 text-muted-foreground shrink-0" />
+                          {batch.name}
+                        </span>
+                        {batch.tahap_label ? (
+                          <span className="text-xs text-muted-foreground">
+                            {batch.tahap_label}
+                          </span>
+                        ) : null}
                       </div>
                     </TableCell>
                     <TableCell>{batch.job_title}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      Tahap {batch.tahap_order}
+                    </TableCell>
                     <TableCell>{formatDate(batch.pra_seleksi_date)}</TableCell>
-                    <TableCell>{formatDate(batch.interview_date)}</TableCell>
-                    <TableCell className="text-center">{batch.applicant_count}</TableCell>
+                    <TableCell className="text-center tabular-nums">
+                      {batch.applicant_count}
+                    </TableCell>
+                    <TableCell
+                      className="text-center tabular-nums text-muted-foreground"
+                      title="Pelamar yang sudah dipindahkan ke Sesi Interview"
+                    >
+                      {batch.advanced_count}
+                    </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
                       {formatDate(batch.created_at)}
                     </TableCell>
@@ -151,7 +169,7 @@ export function AdminBatchListPage() {
                         size="icon"
                         className="size-8 cursor-pointer"
                         onClick={() => navigate(`${batchBase}/${batch.id}`)}
-                        title="Lihat detail batch"
+                        title="Lihat detail tahapan"
                       >
                         <IconEye className="size-4" />
                       </Button>
@@ -160,7 +178,7 @@ export function AdminBatchListPage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center">
+                  <TableCell colSpan={8} className="h-24 text-center">
                     Belum ada batch. Buat batch baru untuk mulai menugaskan pelamar.
                   </TableCell>
                 </TableRow>

@@ -15,7 +15,9 @@ import 'features/auth/presentation/pages/forgot_password_page.dart';
 import 'features/auth/presentation/pages/reset_password_page.dart';
 import 'features/home/presentation/pages/home_page.dart';
 import 'features/profile/presentation/pages/profile_page.dart';
+import 'features/profile/presentation/pages/profile_complete_page.dart';
 import 'features/profile/presentation/pages/edit_profile_page.dart';
+import 'features/profile/domain/profile_completion.dart';
 import 'features/profile/presentation/pages/work_experiences_page.dart';
 import 'features/profile/presentation/pages/change_password_page.dart';
 import 'features/profile/presentation/pages/account_deletion_request_page.dart';
@@ -52,6 +54,14 @@ final routerProvider = Provider<GoRouter>((ref) {
   // - notify the router so redirects are re-evaluated
   // - clear user-scoped cached data when logging out, so a new login
   //   never sees stale profile/documents from the previous account.
+  ref.listen<ProfileState>(profileNotifierProvider, (previous, next) {
+    final prevAt = previous?.lastFetchedAt;
+    final nextAt = next.lastFetchedAt;
+    if (prevAt != nextAt || previous?.profile?.id != next.profile?.id) {
+      authNotifier.notify();
+    }
+  });
+
   ref.listen<AuthState>(authStateProvider, (previous, next) {
     final wasAuthenticated = previous?.isAuthenticated ?? false;
     final isAuthenticated = next.isAuthenticated;
@@ -119,6 +129,31 @@ final routerProvider = Provider<GoRouter>((ref) {
         return loc.startsWith('/email-verification')
             ? null
             : '/email-verification?email=$userEmail';
+      }
+
+      // Applicant biodata: redirect incomplete draft profiles to the checklist.
+      final user = authState.user;
+      final isApplicant = (user?.role.toUpperCase() == 'APPLICANT');
+      if (isApplicant) {
+        final ps = ref.read(profileNotifierProvider);
+        if (ps.isLoading && ps.profile == null) {
+          return null;
+        }
+        if (ps.error != null && ps.profile == null) {
+          return null;
+        }
+        final p = ps.profile;
+        if (p != null &&
+            !shouldBlockForIncompleteProfile(p) &&
+            loc == '/profile/complete') {
+          return '/home';
+        }
+        if (shouldBlockForIncompleteProfile(p)) {
+          const exempt = {'/profile/complete', '/profile/edit'};
+          if (!exempt.contains(loc)) {
+            return '/profile/complete';
+          }
+        }
       }
 
       // Authenticated & complete — send away from pre-auth routes.
@@ -224,6 +259,11 @@ final routerProvider = Provider<GoRouter>((ref) {
           location: state.matchedLocation,
           child: const ProfilePage(),
         ),
+      ),
+      GoRoute(
+        path: '/profile/complete',
+        name: 'profile-complete',
+        builder: (context, state) => const ProfileCompletePage(),
       ),
       GoRoute(
         path: '/profile/edit',

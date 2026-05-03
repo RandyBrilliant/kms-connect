@@ -38,7 +38,6 @@ import {
 import { BIODATA_SECTIONS, RequiredStar } from "./biodata-form-shared"
 import { RegionAddressFields } from "./region-address-fields"
 import { SearchableSelect } from "@/components/ui/searchable-select"
-import { useRegenciesQuery } from "@/hooks/use-regions-query"
 import { useReferrersQuery } from "@/hooks/use-referrers-query"
 
 interface ApplicantBiodataTabProps {
@@ -52,7 +51,7 @@ interface ApplicantBiodataTabProps {
 type BiodataFormValues = {
   full_name: string
   nik: string
-  birth_place: number | null
+  birth_place_text: string
   birth_date: string
   address: string
   postal_code: string
@@ -106,12 +105,12 @@ function toFormValues(p: ApplicantProfile): BiodataFormValues {
   return {
     full_name: p.full_name || "",
     nik: p.nik || "",
-    birth_place: p.birth_place ?? null,
+    birth_place_text: p.birth_place_text || p.birth_place_display || "",
     birth_date: p.birth_date || "",
     address: p.address || "",
     postal_code: p.postal_code || "",
     contact_phone: p.contact_phone || "",
-    gender: p.gender || "",
+    gender: p.gender === "M" || p.gender === "F" ? p.gender : "",
     sibling_count: p.sibling_count != null ? String(p.sibling_count) : "",
     birth_order: p.birth_order != null ? String(p.birth_order) : "",
     father_name: p.father_name || "",
@@ -170,7 +169,6 @@ export function ApplicantBiodataTab({
   hideNotesField = false,
 }: ApplicantBiodataTabProps) {
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({})
-  const { data: regencies = [], isPending: regenciesLoading } = useRegenciesQuery(null)
   const { data: referrers = [], isPending: referrersLoading } = useReferrersQuery()
 
   const form = useForm({
@@ -180,12 +178,12 @@ export function ApplicantBiodataTab({
 
       const payload = {
         full_name: value.full_name || undefined,
-        birth_place: value.birth_place ?? undefined,
+        birth_place_text: value.birth_place_text?.trim() || undefined,
         birth_date: value.birth_date || null,
         address: value.address || undefined,
         postal_code: value.postal_code || undefined,
         contact_phone: value.contact_phone || undefined,
-        gender: (value.gender || undefined) as "M" | "F" | "O" | undefined,
+        gender: (value.gender || undefined) as "M" | "F" | undefined,
         sibling_count: toNum(value.sibling_count),
         birth_order: toNum(value.birth_order),
         father_name: value.father_name || undefined,
@@ -284,8 +282,9 @@ export function ApplicantBiodataTab({
                   <Input
                     id={field.name}
                     value={field.state.value}
-                    onChange={(e) => field.handleChange(e.target.value)}
+                    onChange={(e) => field.handleChange(e.target.value.toUpperCase())}
                     onBlur={field.handleBlur}
+                    className="uppercase"
                   />
                   <FieldError
                     errors={[
@@ -324,26 +323,23 @@ export function ApplicantBiodataTab({
             </form.Field>
 
             <div className="grid gap-6 sm:grid-cols-2">
-              <form.Field name="birth_place">
+              <form.Field name="birth_place_text">
                 {(field) => (
                   <Field>
                     <FieldLabel htmlFor={field.name}>Tempat Lahir</FieldLabel>
-                    <SearchableSelect
-                      items={regencies.map((r) => ({ id: r.id, name: r.name }))}
+                    <Input
+                      id={field.name}
                       value={field.state.value}
-                      onChange={(id) => field.handleChange(id)}
-                      placeholder="Pilih kabupaten/kota tempat lahir"
-                      clearLabel="Pilih kabupaten/kota"
-                      disabled={false}
-                      loading={regenciesLoading}
-                      emptyMessage="Tidak ada kabupaten/kota"
+                      onChange={(e) => field.handleChange(e.target.value.toUpperCase())}
+                      placeholder="Sesuai KTP (huruf kapital)"
+                      className="uppercase"
                     />
                     <FieldError
                       errors={[
                         ...(field.state.meta.errors as unknown[]).map((err) =>
                           typeof err === "string" ? { message: err } : { message: (err as { message?: string }).message }
                         ),
-                        ...(errors.birth_place ? [{ message: errors.birth_place }] : []),
+                        ...(errors.birth_place_text ? [{ message: errors.birth_place_text }] : []),
                       ].filter(Boolean)}
                     />
                   </Field>
@@ -389,7 +385,6 @@ export function ApplicantBiodataTab({
                       <SelectItem value="none">Pilih</SelectItem>
                       <SelectItem value="M">Laki-laki</SelectItem>
                       <SelectItem value="F">Perempuan</SelectItem>
-                      <SelectItem value="O">Lainnya</SelectItem>
                     </SelectContent>
                   </Select>
                 </Field>
@@ -403,8 +398,9 @@ export function ApplicantBiodataTab({
                   <Input
                     id={field.name}
                     value={field.state.value}
-                    onChange={(e) => field.handleChange(e.target.value)}
+                    onChange={(e) => field.handleChange(e.target.value.toUpperCase())}
                     onBlur={field.handleBlur}
+                    className="uppercase"
                   />
                 </Field>
               )}
@@ -570,9 +566,10 @@ export function ApplicantBiodataTab({
                     <Input
                       id={field.name}
                       value={field.state.value}
-                      onChange={(e) => field.handleChange(e.target.value)}
+                      onChange={(e) => field.handleChange(e.target.value.toUpperCase())}
                       onBlur={field.handleBlur}
                       placeholder="Contoh: Teknik Informatika"
+                      className="uppercase"
                     />
                   </Field>
                 )}
@@ -585,9 +582,10 @@ export function ApplicantBiodataTab({
                     <Input
                       id={field.name}
                       value={field.state.value}
-                      onChange={(e) => field.handleChange(e.target.value)}
+                      onChange={(e) => field.handleChange(e.target.value.toUpperCase())}
                       onBlur={field.handleBlur}
                       placeholder="Contoh: DN-01/1234567"
+                      className="uppercase"
                     />
                   </Field>
                 )}
@@ -735,6 +733,7 @@ export function ApplicantBiodataTab({
                     onChange={(e) => field.handleChange(e.target.value.toUpperCase())}
                     onBlur={field.handleBlur}
                     placeholder="Contoh: A1234567"
+                    className="uppercase"
                   />
                 </Field>
               )}
@@ -792,9 +791,10 @@ export function ApplicantBiodataTab({
                     <Input
                       id={field.name}
                       value={field.state.value}
-                      onChange={(e) => field.handleChange(e.target.value)}
+                      onChange={(e) => field.handleChange(e.target.value.toUpperCase())}
                       onBlur={field.handleBlur}
                       placeholder="Contoh: Jakarta"
+                      className="uppercase"
                     />
                   </Field>
                 )}
@@ -867,8 +867,9 @@ export function ApplicantBiodataTab({
                     <Input
                       id={field.name}
                       value={field.state.value}
-                      onChange={(e) => field.handleChange(e.target.value)}
+                      onChange={(e) => field.handleChange(e.target.value.toUpperCase())}
                       onBlur={field.handleBlur}
+                      className="uppercase"
                     />
                   </Field>
                 )}
@@ -895,8 +896,9 @@ export function ApplicantBiodataTab({
                     <Input
                       id={field.name}
                       value={field.state.value}
-                      onChange={(e) => field.handleChange(e.target.value)}
+                      onChange={(e) => field.handleChange(e.target.value.toUpperCase())}
                       onBlur={field.handleBlur}
+                      className="uppercase"
                     />
                   </Field>
                 )}
@@ -941,8 +943,9 @@ export function ApplicantBiodataTab({
                     <Input
                       id={field.name}
                       value={field.state.value}
-                      onChange={(e) => field.handleChange(e.target.value)}
+                      onChange={(e) => field.handleChange(e.target.value.toUpperCase())}
                       onBlur={field.handleBlur}
+                      className="uppercase"
                     />
                   </Field>
                 )}
@@ -969,8 +972,9 @@ export function ApplicantBiodataTab({
                     <Input
                       id={field.name}
                       value={field.state.value}
-                      onChange={(e) => field.handleChange(e.target.value)}
+                      onChange={(e) => field.handleChange(e.target.value.toUpperCase())}
                       onBlur={field.handleBlur}
+                      className="uppercase"
                     />
                   </Field>
                 )}
@@ -1015,8 +1019,9 @@ export function ApplicantBiodataTab({
                     <Input
                       id={field.name}
                       value={field.state.value}
-                      onChange={(e) => field.handleChange(e.target.value)}
+                      onChange={(e) => field.handleChange(e.target.value.toUpperCase())}
                       onBlur={field.handleBlur}
+                      className="uppercase"
                     />
                   </Field>
                 )}
@@ -1043,8 +1048,9 @@ export function ApplicantBiodataTab({
                     <Input
                       id={field.name}
                       value={field.state.value}
-                      onChange={(e) => field.handleChange(e.target.value)}
+                      onChange={(e) => field.handleChange(e.target.value.toUpperCase())}
                       onBlur={field.handleBlur}
+                      className="uppercase"
                     />
                   </Field>
                 )}
@@ -1058,8 +1064,9 @@ export function ApplicantBiodataTab({
                   <Input
                     id={field.name}
                     value={field.state.value}
-                    onChange={(e) => field.handleChange(e.target.value)}
+                    onChange={(e) => field.handleChange(e.target.value.toUpperCase())}
                     onBlur={field.handleBlur}
+                    className="uppercase"
                   />
                 </Field>
               )}
@@ -1116,8 +1123,9 @@ export function ApplicantBiodataTab({
                     <Input
                       id={field.name}
                       value={field.state.value}
-                      onChange={(e) => field.handleChange(e.target.value)}
+                      onChange={(e) => field.handleChange(e.target.value.toUpperCase())}
                       onBlur={field.handleBlur}
+                      className="uppercase"
                     />
                   </Field>
                 )}
@@ -1141,9 +1149,10 @@ export function ApplicantBiodataTab({
                   <Input
                     id={field.name}
                     value={field.state.value}
-                    onChange={(e) => field.handleChange(e.target.value)}
+                    onChange={(e) => field.handleChange(e.target.value.toUpperCase())}
                     onBlur={field.handleBlur}
                     placeholder="Nama lengkap ahli waris"
+                    className="uppercase"
                   />
                 </Field>
               )}

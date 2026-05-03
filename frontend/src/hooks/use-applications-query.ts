@@ -59,7 +59,9 @@ export function useTransitionApplicationMutation(id: number) {
     mutationFn: (input: TransitionApplicationInput) =>
       transitionApplication(id, input),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: applicationsKeys.lists() })
+      // Invalidate every query keyed under ["applications", …] — admin job detail
+      // tabs use ["applications", { job, status }], not the list() sub-key.
+      queryClient.invalidateQueries({ queryKey: applicationsKeys.all })
       queryClient.invalidateQueries({ queryKey: applicationsKeys.detail(id) })
     },
   })

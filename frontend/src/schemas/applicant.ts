@@ -17,7 +17,7 @@ export const applicantCreateSchema = z
     full_name: z.string().min(1, "Nama lengkap wajib diisi"),
     nik: nikSchema,
     // Biodata optional – data CPMI
-    birth_place: z.number().int().positive().nullable().optional(),
+    birth_place_text: z.string().max(200).optional(),
     birth_date: z.string().nullable().optional(),
     address: z.string().optional(),
     postal_code: z.string().max(20).optional(),
@@ -25,7 +25,7 @@ export const applicantCreateSchema = z
     district: z.number().int().positive().nullable().optional(),
     village: z.number().int().positive().nullable().optional(),
     contact_phone: z.string().optional(),
-    gender: z.enum(["M", "F", "O", ""]).optional(),
+    gender: z.enum(["M", "F", ""]).optional(),
     // Data keluarga
     sibling_count: z.number().int().min(0).nullable().optional(),
     birth_order: z.number().int().min(0).nullable().optional(),
@@ -78,7 +78,7 @@ export const applicantCreateSchema = z
 export const applicantProfileUpdateSchema = z.object({
   full_name: z.string().min(1, "Nama lengkap wajib diisi").optional(),
   nik: nikSchema.optional(),
-  birth_place: z.number().int().positive().nullable().optional(),
+  birth_place_text: z.string().max(200).optional(),
   birth_date: z.string().nullable().optional(),
   address: z.string().optional(),
   postal_code: z.string().max(20).optional(),
@@ -86,7 +86,7 @@ export const applicantProfileUpdateSchema = z.object({
   district: z.number().int().positive().nullable().optional(),
   village: z.number().int().positive().nullable().optional(),
   contact_phone: z.string().optional(),
-  gender: z.enum(["M", "F", "O", ""]).optional(),
+  gender: z.enum(["M", "F", ""]).optional(),
   sibling_count: z.number().int().min(0).nullable().optional(),
   birth_order: z.number().int().min(0).nullable().optional(),
   father_name: z.string().optional(),

@@ -29,6 +29,7 @@ router.register(r"jobs/public", views.PublicJobsListViewSet, basename="jobs-publ
 router.register(r"news", views.NewsViewSet, basename="news")
 router.register(r"jobs", views.LowonganKerjaViewSet, basename="job")
 router.register(r"batches", views.LamaranBatchViewSet, basename="batch")
+router.register(r"interview-cohorts", views.InterviewCohortViewSet, basename="interview-cohort")
 router.register(r"applications", views.JobApplicationViewSet, basename="job-application")
 # Applicant self-service
 router.register(

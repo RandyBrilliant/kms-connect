@@ -1,15 +1,20 @@
 /**
  * Admin — Job Detail page.
  *
- * Tabs:
- *  - Info        — job metadata (editable via Edit button)
- *  - Batch       — list of batches for this job + create new
- *  - Pra-Seleksi — applications at PRA_SELEKSI
- *  - Interview   — applications at INTERVIEW
- *  - Diterima    — applications at DITERIMA
- *  - Berangkat   — applications at BERANGKAT
- *  - Selesai     — applications at SELESAI
- *  - Ditolak     — applications at DITOLAK
+ * Tabs (re-organised around the new Pra-Seleksi / InterviewCohort split):
+ *  - Info        — job metadata
+ *  - Edit        — edit form (gated)
+ *  - Pra-Seleksi — list of pra-seleksi tahapan (LamaranBatch) for this job.
+ *                  Each row shows the tahapan's progress (counts).
+ *  - Interview   — list of InterviewCohort sessions for this job. Each row
+ *                  shows interview counts and downstream progress.
+ *  - Diterima    — applications at DITERIMA across all cohorts.
+ *  - Berangkat   — applications at BERANGKAT across all cohorts.
+ *  - Selesai     — applications at SELESAI across all cohorts.
+ *  - Ditolak     — applications at DITOLAK across all batches/cohorts.
+ *
+ * The PRA_SELEKSI / INTERVIEW status lists are intentionally absent here —
+ * they are managed inside their owning batch / cohort detail pages.
  */
 
 import { type ReactNode, useState, useEffect } from "react"
@@ -22,16 +27,24 @@ import {
   IconBriefcase,
   IconBuilding,
   IconCalendar,
+  IconCircleCheck,
   IconClipboardList,
+  IconExternalLink,
   IconEye,
+  IconFileSpreadsheet,
   IconMapPin,
   IconPencil,
   IconPlus,
+  IconUserCheck,
   IconUsers,
+  IconUsersGroup,
 } from "@tabler/icons-react"
 
 import { BreadcrumbNav } from "@/components/breadcrumb-nav"
+import { ApplicantAdminProcessDialog } from "@/components/applicants/applicant-admin-process-dialog"
+import { ApplicantDetailPreviewDialog } from "@/components/batches/applicant-detail-preview-dialog"
 import { ApplicationStatusBadge } from "@/components/applications/application-status-badge"
+import { DocumentCollectionProgressCell } from "@/components/applications/document-collection-progress-cell"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -61,6 +74,7 @@ import { goBackOrDefault } from "@/lib/back-navigation"
 
 import { getJob } from "@/api/jobs"
 import { getBatches } from "@/api/batches"
+import { getInterviewCohorts } from "@/api/interview-cohorts"
 import { getApplications } from "@/api/applications"
 import type { JobItem, EmploymentType, JobStatus as JobStatusType } from "@/types/jobs"
 import type { ApplicationStatus } from "@/types/job-applications"
@@ -74,27 +88,38 @@ function formatDate(v: string | null | undefined) {
   return format(new Date(v), "dd MMM yyyy", { locale: idLocale })
 }
 
-const JOB_STATUS_MAP: Record<string, { label: string; variant: "default" | "secondary" | "outline" | "destructive" }> = {
-  OPEN:     { label: "Dibuka",       variant: "default" },
-  DRAFT:    { label: "Draf",         variant: "secondary" },
-  CLOSED:   { label: "Ditutup",      variant: "outline" },
-  ARCHIVED: { label: "Diarsipkan",   variant: "destructive" },
+function formatDateTime(v: string | null | undefined) {
+  if (!v) return "-"
+  return format(new Date(v), "dd MMM yyyy HH:mm", { locale: idLocale })
+}
+
+const JOB_STATUS_MAP: Record<
+  string,
+  { label: string; variant: "default" | "secondary" | "outline" | "destructive" }
+> = {
+  OPEN: { label: "Dibuka", variant: "default" },
+  DRAFT: { label: "Draf", variant: "secondary" },
+  CLOSED: { label: "Ditutup", variant: "outline" },
+  ARCHIVED: { label: "Diarsipkan", variant: "destructive" },
 }
 
 const EMPLOYMENT_TYPE_MAP: Record<string, string> = {
-  FULL_TIME:   "Penuh Waktu",
-  PART_TIME:   "Paruh Waktu",
-  CONTRACT:    "Kontrak",
-  INTERNSHIP:  "Magang",
+  FULL_TIME: "Penuh Waktu",
+  PART_TIME: "Paruh Waktu",
+  CONTRACT: "Kontrak",
+  INTERNSHIP: "Magang",
 }
 
-const STATUS_TABS: { value: ApplicationStatus; label: string }[] = [
-  { value: "PRA_SELEKSI", label: "Pra-Seleksi" },
-  { value: "INTERVIEW",   label: "Interview" },
-  { value: "DITERIMA",    label: "Diterima" },
-  { value: "BERANGKAT",   label: "Berangkat" },
-  { value: "SELESAI",     label: "Selesai" },
-  { value: "DITOLAK",     label: "Ditolak" },
+/**
+ * Status tabs surfaced at the job level. PRA_SELEKSI and INTERVIEW are
+ * intentionally excluded — admins manage those inside the owning batch /
+ * cohort detail pages.
+ */
+const DOWNSTREAM_STATUS_TABS: { value: ApplicationStatus; label: string }[] = [
+  { value: "DITERIMA", label: "Diterima" },
+  { value: "BERANGKAT", label: "Berangkat" },
+  { value: "SELESAI", label: "Selesai" },
+  { value: "DITOLAK", label: "Ditolak" },
 ]
 
 // ---------------------------------------------------------------------------
@@ -162,10 +187,10 @@ function EditTab({
 }
 
 // ---------------------------------------------------------------------------
-// Sub-component: Batch list
+// Sub-component: Pra-Seleksi (batches/tahapan) tab
 // ---------------------------------------------------------------------------
 
-function BatchListTab({
+function PraSeleksiTab({
   jobId,
   jobsBase,
   batchBase,
@@ -178,16 +203,20 @@ function BatchListTab({
 
   const { data, isLoading } = useQuery({
     queryKey: ["batches", { job: jobId }],
-    queryFn: () => getBatches({ job: jobId, page_size: 100 }),
+    queryFn: () =>
+      getBatches({ job: jobId, page_size: 100, ordering: "tahap_order,created_at" }),
   })
 
   const batches = data?.results ?? []
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <p className="text-sm text-muted-foreground">
-          {batches.length} batch ditemukan
+          {batches.length} tahapan pra-seleksi.{" "}
+          <span className="text-xs">
+            Setiap tahapan adalah batch pelamar yang diseleksi sebelum interview.
+          </span>
         </p>
         <Button
           size="sm"
@@ -195,7 +224,7 @@ function BatchListTab({
           onClick={() => navigate(`${jobsBase}/${jobId}/batch/new`)}
         >
           <IconPlus className="mr-2 size-4" />
-          Buat Batch Baru
+          Buat Tahapan Baru
         </Button>
       </div>
 
@@ -208,12 +237,14 @@ function BatchListTab({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Nama Batch</TableHead>
-                <TableHead className="text-center">Pelamar</TableHead>
-                <TableHead>Jadwal Pra-Seleksi</TableHead>
-                <TableHead>Jadwal Interview</TableHead>
-                <TableHead>Dibuat</TableHead>
-                <TableHead />
+                <TableHead className="w-[80px]">Urutan</TableHead>
+                <TableHead>Nama Tahapan</TableHead>
+                <TableHead className="text-center">Total</TableHead>
+                <TableHead className="text-center">Pra-Seleksi</TableHead>
+                <TableHead className="text-center">Lanjut Interview</TableHead>
+                <TableHead className="text-center">Ditolak</TableHead>
+                <TableHead>Jadwal</TableHead>
+                <TableHead className="w-[60px]" />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -225,29 +256,64 @@ function BatchListTab({
                     onClick={() => navigate(`${batchBase}/${batch.id}`)}
                   >
                     <TableCell>
-                      <div className="flex items-center gap-2">
-                        <IconClipboardList className="size-4 shrink-0 text-muted-foreground" />
-                        <span className="font-medium">{batch.name}</span>
+                      <Badge variant="outline" className="font-mono">
+                        Tahap {batch.tahap_order}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-medium flex items-center gap-2">
+                          <IconClipboardList className="size-4 shrink-0 text-muted-foreground" />
+                          {batch.name}
+                        </span>
+                        {batch.tahap_label ? (
+                          <span className="text-xs text-muted-foreground">
+                            {batch.tahap_label}
+                          </span>
+                        ) : null}
                       </div>
                     </TableCell>
-                    <TableCell className="text-center">
-                      <div className="flex items-center justify-center gap-1">
+                    <TableCell className="text-center tabular-nums">
+                      <span className="inline-flex items-center justify-center gap-1">
                         <IconUsers className="size-3.5 text-muted-foreground" />
                         {batch.applicant_count}
-                      </div>
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-center tabular-nums">
+                      <Badge variant="secondary" className="font-mono">
+                        {batch.pra_seleksi_count}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-center tabular-nums">
+                      <Badge
+                        variant="default"
+                        className="font-mono"
+                        title="Sudah dipindahkan ke Sesi Interview / di tahap setelah pra-seleksi"
+                      >
+                        {batch.advanced_count}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-center tabular-nums">
+                      <Badge
+                        variant={batch.rejected_count ? "destructive" : "outline"}
+                        className="font-mono"
+                      >
+                        {batch.rejected_count}
+                      </Badge>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {batch.pra_seleksi_date
-                        ? format(new Date(batch.pra_seleksi_date), "dd MMM yyyy", { locale: idLocale })
-                        : "-"}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {batch.interview_date
-                        ? format(new Date(batch.interview_date), "dd MMM yyyy", { locale: idLocale })
-                        : "-"}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {formatDate(batch.created_at)}
+                      {batch.pra_seleksi_date ? (
+                        <div className="flex flex-col">
+                          <span>{formatDate(batch.pra_seleksi_date)}</span>
+                          {batch.pra_seleksi_location ? (
+                            <span className="text-xs">
+                              {batch.pra_seleksi_location}
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <span className="text-xs italic">Belum dijadwalkan</span>
+                      )}
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       <Button
@@ -255,7 +321,7 @@ function BatchListTab({
                         size="icon"
                         className="size-8 cursor-pointer"
                         onClick={() => navigate(`${batchBase}/${batch.id}`)}
-                        title="Lihat detail batch"
+                        title="Lihat detail tahapan"
                       >
                         <IconEye className="size-4" />
                       </Button>
@@ -264,13 +330,14 @@ function BatchListTab({
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
-                    Belum ada batch untuk lowongan ini.{" "}
+                  <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                    Belum ada tahapan pra-seleksi untuk lowongan ini.{" "}
                     <button
+                      type="button"
                       className="text-primary underline-offset-2 hover:underline cursor-pointer"
                       onClick={() => navigate(`${jobsBase}/${jobId}/batch/new`)}
                     >
-                      Buat batch pertama
+                      Buat tahapan pertama
                     </button>
                   </TableCell>
                 </TableRow>
@@ -284,36 +351,51 @@ function BatchListTab({
 }
 
 // ---------------------------------------------------------------------------
-// Sub-component: Applications per status
+// Sub-component: Interview cohorts tab
 // ---------------------------------------------------------------------------
 
-function ApplicationsTab({
+function InterviewCohortsTab({
   jobId,
-  status,
-  batchBase,
-  lamaranBase,
-  pelamarBase,
+  jobsBase,
+  cohortBase,
 }: {
   jobId: number
-  status: ApplicationStatus
-  batchBase: string
-  lamaranBase: string
-  pelamarBase: string
+  jobsBase: string
+  cohortBase: string
 }) {
   const navigate = useNavigate()
 
   const { data, isLoading } = useQuery({
-    queryKey: ["applications", { job: jobId, status }],
-    queryFn: () => getApplications({ job: jobId, status, page_size: 100 }),
+    queryKey: ["interview-cohorts", { job: jobId, mode: "job-detail" }],
+    queryFn: () =>
+      getInterviewCohorts({
+        job: jobId,
+        page_size: 100,
+        ordering: "-interview_date,-created_at",
+      }),
   })
 
-  const apps = data?.results ?? []
+  const cohorts = data?.results ?? []
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-sm text-muted-foreground">
-        {data?.count ?? 0} pelamar
-      </p>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <p className="text-sm text-muted-foreground">
+          {cohorts.length} sesi interview.{" "}
+          <span className="text-xs">
+            Sesi mengelola tahap Interview hingga Selesai. Pelamar dirutekan ke
+            sesi dari batch pra-seleksi.
+          </span>
+        </p>
+        <Button
+          size="sm"
+          className="cursor-pointer"
+          onClick={() => navigate(`${jobsBase}/${jobId}/sesi-interview/baru`)}
+        >
+          <IconPlus className="mr-2 size-4" />
+          Buat Sesi Interview
+        </Button>
+      </div>
 
       <div className="overflow-hidden rounded-lg border">
         {isLoading ? (
@@ -324,74 +406,120 @@ function ApplicationsTab({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Pelamar</TableHead>
+                <TableHead>Nama Sesi</TableHead>
+                <TableHead>Jadwal Interview</TableHead>
+                <TableHead className="text-center">Total</TableHead>
+                <TableHead className="text-center">Interview</TableHead>
+                <TableHead className="text-center">Diterima</TableHead>
+                <TableHead className="text-center">Berangkat</TableHead>
+                <TableHead className="text-center">Selesai</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Batch</TableHead>
-                <TableHead>Tanggal Lamar</TableHead>
-                <TableHead />
+                <TableHead className="w-[60px]" />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {apps.length ? (
-                apps.map((app) => (
-                  <TableRow key={app.id} className="hover:bg-muted/50">
+              {cohorts.length ? (
+                cohorts.map((cohort) => (
+                  <TableRow
+                    key={cohort.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => navigate(`${cohortBase}/${cohort.id}`)}
+                  >
                     <TableCell>
-                      <div className="flex flex-col">
-                        <span className="font-medium">{app.applicant_name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {app.applicant_email}
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-medium flex items-center gap-2">
+                          <IconUsersGroup className="size-4 shrink-0 text-muted-foreground" />
+                          {cohort.name}
                         </span>
+                        {cohort.notes ? (
+                          <span className="text-xs text-muted-foreground line-clamp-1">
+                            {cohort.notes}
+                          </span>
+                        ) : null}
                       </div>
                     </TableCell>
-                    <TableCell>
-                      <ApplicationStatusBadge status={app.status} />
-                    </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {app.batch ? (
-                        <button
-                          className="text-primary underline-offset-2 hover:underline cursor-pointer"
-                          onClick={() => navigate(`${batchBase}/${app.batch}`)}
-                        >
-                          {app.batch_name ?? `Batch #${app.batch}`}
-                        </button>
+                      {cohort.interview_date ? (
+                        <div className="flex flex-col">
+                          <span className="flex items-center gap-1">
+                            <IconCalendar className="size-3.5" />
+                            {formatDateTime(cohort.interview_date)}
+                          </span>
+                          {cohort.interview_location ? (
+                            <span className="text-xs flex items-center gap-1">
+                              <IconMapPin className="size-3" />
+                              {cohort.interview_location}
+                            </span>
+                          ) : null}
+                        </div>
                       ) : (
-                        "-"
+                        <span className="text-xs italic">Belum dijadwalkan</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {formatDate(app.applied_at)}
+                    <TableCell className="text-center tabular-nums">
+                      <span className="inline-flex items-center justify-center gap-1">
+                        <IconUsers className="size-3.5 text-muted-foreground" />
+                        {cohort.applicant_count}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-center tabular-nums">
+                      <Badge variant="secondary" className="font-mono">
+                        {cohort.interview_count}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-center tabular-nums">
+                      <Badge variant="default" className="font-mono">
+                        {cohort.diterima_count}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-center tabular-nums">
+                      <Badge variant="default" className="font-mono">
+                        {cohort.berangkat_count}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-center tabular-nums">
+                      <Badge variant="outline" className="font-mono">
+                        {cohort.selesai_count}
+                      </Badge>
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-8 cursor-pointer"
-                          onClick={() => navigate(`${lamaranBase}/${app.id}`)}
-                          title="Lihat detail lamaran"
-                        >
-                          <IconEye className="size-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-8 cursor-pointer"
-                          onClick={() => navigate(`${pelamarBase}/${app.applicant}`)}
-                          title="Edit profil pelamar"
-                        >
-                          <IconPencil className="size-4" />
-                        </Button>
-                      </div>
+                      {cohort.is_active ? (
+                        <Badge variant="default" className="gap-1">
+                          <IconCircleCheck className="size-3" /> Aktif
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline">Non-aktif</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 cursor-pointer"
+                        onClick={() => navigate(`${cohortBase}/${cohort.id}`)}
+                        title="Lihat detail sesi"
+                      >
+                        <IconEye className="size-4" />
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
-                    className="h-20 text-center text-muted-foreground"
+                    colSpan={9}
+                    className="h-24 text-center text-muted-foreground"
                   >
-                    Tidak ada pelamar dengan status ini.
+                    Belum ada sesi interview untuk lowongan ini.{" "}
+                    <button
+                      type="button"
+                      className="text-primary underline-offset-2 hover:underline cursor-pointer"
+                      onClick={() =>
+                        navigate(`${jobsBase}/${jobId}/sesi-interview/baru`)
+                      }
+                    >
+                      Buat sesi pertama
+                    </button>
                   </TableCell>
                 </TableRow>
               )}
@@ -400,6 +528,302 @@ function ApplicationsTab({
         )}
       </div>
     </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Sub-component: Applications per status (downstream stages only)
+// ---------------------------------------------------------------------------
+
+const APPLICATIONS_TAB_PAGE_SIZE = 20
+
+function ApplicationsTab({
+  jobId,
+  status,
+  batchBase,
+  cohortBase,
+  lamaranBase,
+  pelamarBase,
+}: {
+  jobId: number
+  status: ApplicationStatus
+  batchBase: string
+  cohortBase: string
+  lamaranBase: string
+  pelamarBase: string
+}) {
+  const navigate = useNavigate()
+  const [page, setPage] = useState(1)
+  const [previewUserId, setPreviewUserId] = useState<number | null>(null)
+  const [previewUserLabel, setPreviewUserLabel] = useState("")
+  const [processUserId, setProcessUserId] = useState<number | null>(null)
+  const [processUserLabel, setProcessUserLabel] = useState("")
+
+  useEffect(() => {
+    setPage(1)
+  }, [jobId, status])
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["applications", { job: jobId, status, page }],
+    queryFn: () =>
+      getApplications({
+        job: jobId,
+        status,
+        page,
+        page_size: APPLICATIONS_TAB_PAGE_SIZE,
+        ordering: "-applied_at",
+      }),
+  })
+
+  const totalCount = data?.count ?? 0
+  const pageCount = Math.max(1, Math.ceil(totalCount / APPLICATIONS_TAB_PAGE_SIZE))
+  const currentPage = Math.min(page, pageCount)
+
+  useEffect(() => {
+    if (!data || isLoading) return
+    const maxPage = Math.max(1, Math.ceil(data.count / APPLICATIONS_TAB_PAGE_SIZE))
+    if (page > maxPage) setPage(maxPage)
+  }, [data, isLoading, page])
+
+  const apps = data?.results ?? []
+  const showCohortCol = status !== "DITOLAK"
+  const showDocCol = status === "DITERIMA"
+  const emptyColSpan = 5 + (showCohortCol ? 1 : 0) + (showDocCol ? 1 : 0)
+
+  return (
+    <>
+      <div className="flex flex-col gap-4">
+        <p className="text-sm text-muted-foreground">
+          {totalCount} pelamar
+          {totalCount > 0 ? (
+            <span className="text-muted-foreground/80">
+              {" "}
+              (menampilkan{" "}
+              {(currentPage - 1) * APPLICATIONS_TAB_PAGE_SIZE + 1}–
+              {Math.min(currentPage * APPLICATIONS_TAB_PAGE_SIZE, totalCount)})
+            </span>
+          ) : null}
+        </p>
+
+        <div className="overflow-hidden rounded-lg border">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Pelamar</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Tahapan / Batch</TableHead>
+                  {showCohortCol && <TableHead>Sesi Interview</TableHead>}
+                  {showDocCol && (
+                    <TableHead className="min-w-[11rem]">
+                      Pengumpulan Dokumen
+                    </TableHead>
+                  )}
+                  <TableHead>Tanggal Lamar</TableHead>
+                  <TableHead className="text-right w-[180px]">Aksi</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {apps.length ? (
+                  apps.map((app) => (
+                    <TableRow key={app.id} className="hover:bg-muted/50">
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="font-medium">{app.applicant_name}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {app.applicant_email}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <ApplicationStatusBadge status={app.status} />
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {app.batch ? (
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline cursor-pointer"
+                            onClick={() => navigate(`${batchBase}/${app.batch}`)}
+                          >
+                            {app.batch_tahap_label ?? app.batch_name ?? `Batch #${app.batch}`}
+                            <IconExternalLink className="size-3" />
+                          </button>
+                        ) : (
+                          "—"
+                        )}
+                      </TableCell>
+                      {showCohortCol && (
+                        <TableCell className="text-sm text-muted-foreground">
+                          {app.interview_cohort != null ? (
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline cursor-pointer"
+                              onClick={() =>
+                                navigate(`${cohortBase}/${app.interview_cohort}`)
+                              }
+                            >
+                              {app.interview_cohort_name ??
+                                `Sesi #${app.interview_cohort}`}
+                              <IconExternalLink className="size-3" />
+                            </button>
+                          ) : (
+                            "—"
+                          )}
+                        </TableCell>
+                      )}
+                      {showDocCol && (
+                        <TableCell className="text-sm align-top">
+                          <DocumentCollectionProgressCell app={app} />
+                        </TableCell>
+                      )}
+                      <TableCell className="text-sm text-muted-foreground">
+                        {formatDate(app.applied_at)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-0.5">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="size-8 shrink-0 cursor-pointer text-muted-foreground"
+                            title="Lihat detail pelamar"
+                            disabled={!app.applicant_user}
+                            onClick={() => {
+                              if (!app.applicant_user) return
+                              setPreviewUserId(app.applicant_user)
+                              setPreviewUserLabel(app.applicant_name)
+                            }}
+                          >
+                            <IconEye className="size-4" />
+                            <span className="sr-only">Lihat detail pelamar</span>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="size-8 shrink-0 cursor-pointer text-muted-foreground"
+                            title="Buka halaman lamaran"
+                            onClick={() => navigate(`${lamaranBase}/${app.id}`)}
+                          >
+                            <IconExternalLink className="size-4" />
+                            <span className="sr-only">Buka halaman lamaran</span>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="size-8 shrink-0 cursor-pointer text-muted-foreground"
+                            title="Kelola dokumen pelamar"
+                            disabled={!app.applicant_user}
+                            onClick={() => {
+                              if (!app.applicant_user) return
+                              navigate(`${pelamarBase}/${app.applicant_user}`)
+                            }}
+                          >
+                            <IconFileSpreadsheet className="size-4" />
+                            <span className="sr-only">Kelola dokumen pelamar</span>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="size-8 shrink-0 cursor-pointer text-muted-foreground"
+                            title="Edit data proses"
+                            disabled={!app.applicant_user}
+                            onClick={() => {
+                              if (!app.applicant_user) return
+                              setProcessUserId(app.applicant_user)
+                              setProcessUserLabel(app.applicant_name)
+                            }}
+                          >
+                            <IconClipboardList className="size-4" />
+                            <span className="sr-only">Edit data proses</span>
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell
+                      colSpan={emptyColSpan}
+                      className="h-20 text-center text-muted-foreground"
+                    >
+                      Tidak ada pelamar dengan status ini.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          )}
+        </div>
+
+        {pageCount > 1 && (
+          <div className="flex items-center justify-between gap-2 flex-wrap text-xs text-muted-foreground">
+            <div>
+              Halaman{" "}
+              <span className="font-medium text-foreground">
+                {currentPage} / {pageCount}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 cursor-pointer"
+                disabled={currentPage <= 1 || isLoading}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                Sebelumnya
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 cursor-pointer"
+                disabled={currentPage >= pageCount || isLoading}
+                onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+              >
+                Berikutnya
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <ApplicantAdminProcessDialog
+        applicantUserId={processUserId}
+        open={processUserId != null}
+        onOpenChange={(next) => {
+          if (!next) {
+            setProcessUserId(null)
+            setProcessUserLabel("")
+          }
+        }}
+        applicantLabel={processUserLabel}
+      />
+      <ApplicantDetailPreviewDialog
+        applicantUserId={previewUserId}
+        applicantLabel={previewUserLabel}
+        applicantDetailPath={
+          previewUserId != null
+            ? `${pelamarBase}/${previewUserId}`
+            : pelamarBase
+        }
+        open={previewUserId != null}
+        onOpenChange={(next) => {
+          if (!next) {
+            setPreviewUserId(null)
+            setPreviewUserLabel("")
+          }
+        }}
+      />
+    </>
   )
 }
 
@@ -416,18 +840,19 @@ export function AdminJobDetailPage() {
   const { user } = useAuth()
   const jobsBase = `${basePath}/lowongan-kerja`
   const batchBase = `${basePath}/batch`
+  const cohortBase = `${basePath}/sesi-interview`
   const lamaranBase = `${basePath}/lamaran`
   const pelamarBase = `${basePath}/pelamar`
   const readOnlyJob = user ? isRestrictedAdmin(user.role as UserRole) : false
   const pathIsEdit = location.pathname.endsWith("/edit")
-  const initialTab = readOnlyJob ? "batch" : pathIsEdit ? "edit" : "batch"
+  const initialTab = readOnlyJob ? "pra_seleksi" : pathIsEdit ? "edit" : "pra_seleksi"
   const [activeTab, setActiveTab] = useState(initialTab)
 
   // Sync tab when URL changes (e.g. browser back/forward)
   useEffect(() => {
     if (readOnlyJob) return
     setActiveTab(location.pathname.endsWith("/edit") ? "edit" : activeTab)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname, readOnlyJob])
 
   const {
@@ -469,7 +894,8 @@ export function AdminJobDetailPage() {
     return <Navigate to={`${jobsBase}/${jobId}`} replace />
   }
 
-  const statusInfo = JOB_STATUS_MAP[job.status] ?? { label: job.status, variant: "outline" as const }
+  const statusInfo =
+    JOB_STATUS_MAP[job.status] ?? { label: job.status, variant: "outline" as const }
 
   return (
     <div className="flex flex-col gap-6 px-6 py-6 md:px-8 md:py-8">
@@ -515,26 +941,35 @@ export function AdminJobDetailPage() {
             Edit Lowongan
           </Button>
         )}
-
       </div>
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={(tab) => {
-        setActiveTab(tab)
-        if (readOnlyJob) return
-        // keep URL in sync: edit tab → /edit path, others → base path
-        if (tab === "edit") {
-          navigate(`${jobsBase}/${jobId}/edit`, { replace: true })
-        } else if (location.pathname.endsWith("/edit")) {
-          navigate(`${jobsBase}/${jobId}`, { replace: true })
-        }
-      }}>
+      <Tabs
+        value={activeTab}
+        onValueChange={(tab) => {
+          setActiveTab(tab)
+          if (readOnlyJob) return
+          if (tab === "edit") {
+            navigate(`${jobsBase}/${jobId}/edit`, { replace: true })
+          } else if (location.pathname.endsWith("/edit")) {
+            navigate(`${jobsBase}/${jobId}`, { replace: true })
+          }
+        }}
+      >
         <TabsList className="h-auto flex-wrap gap-1">
           <TabsTrigger value="info">Info</TabsTrigger>
           {!readOnlyJob && <TabsTrigger value="edit">Edit</TabsTrigger>}
-          <TabsTrigger value="batch">Batch</TabsTrigger>
-          {STATUS_TABS.map((t) => (
-            <TabsTrigger key={t.value} value={t.value}>
+          <TabsTrigger value="pra_seleksi" className="gap-1.5">
+            <IconClipboardList className="size-4" />
+            Pra-Seleksi
+          </TabsTrigger>
+          <TabsTrigger value="interview" className="gap-1.5">
+            <IconUsersGroup className="size-4" />
+            Interview
+          </TabsTrigger>
+          {DOWNSTREAM_STATUS_TABS.map((t) => (
+            <TabsTrigger key={t.value} value={t.value} className="gap-1.5">
+              {t.value === "DITERIMA" ? <IconUserCheck className="size-4" /> : null}
               {t.label}
             </TabsTrigger>
           ))}
@@ -558,7 +993,9 @@ export function AdminJobDetailPage() {
                   </div>
                 </Row>
                 <Row label="Kota">{job.location_city || "-"}</Row>
-                <Row label="Tipe">{EMPLOYMENT_TYPE_MAP[job.employment_type] ?? job.employment_type}</Row>
+                <Row label="Tipe">
+                  {EMPLOYMENT_TYPE_MAP[job.employment_type] ?? job.employment_type}
+                </Row>
                 {(job.salary_min || job.salary_max) && (
                   <Row label="Gaji">
                     {job.salary_min?.toLocaleString("id") ?? "?"} –{" "}
@@ -584,9 +1021,7 @@ export function AdminJobDetailPage() {
                   Perusahaan
                 </CardTitle>
               </CardHeader>
-              <CardContent className="text-sm">
-                {job.company_name ?? "-"}
-              </CardContent>
+              <CardContent className="text-sm">{job.company_name ?? "-"}</CardContent>
             </Card>
 
             <Card className="md:col-span-2">
@@ -618,18 +1053,32 @@ export function AdminJobDetailPage() {
           <EditTab jobId={jobId} job={job} jobsBase={jobsBase} />
         </TabsContent>
 
-        {/* ── Batch tab ─────────────────────────────────────────────────── */}
-        <TabsContent value="batch" className="mt-4">
-          <BatchListTab jobId={jobId} jobsBase={jobsBase} batchBase={batchBase} />
+        {/* ── Pra-Seleksi tab (batches/tahapan) ─────────────────────────── */}
+        <TabsContent value="pra_seleksi" className="mt-4">
+          <PraSeleksiTab
+            jobId={jobId}
+            jobsBase={jobsBase}
+            batchBase={batchBase}
+          />
         </TabsContent>
 
-        {/* ── Per-status tabs ────────────────────────────────────────────── */}
-        {STATUS_TABS.map((t) => (
+        {/* ── Interview tab (cohorts) ───────────────────────────────────── */}
+        <TabsContent value="interview" className="mt-4">
+          <InterviewCohortsTab
+            jobId={jobId}
+            jobsBase={jobsBase}
+            cohortBase={cohortBase}
+          />
+        </TabsContent>
+
+        {/* ── Downstream per-status tabs ────────────────────────────────── */}
+        {DOWNSTREAM_STATUS_TABS.map((t) => (
           <TabsContent key={t.value} value={t.value} className="mt-4">
             <ApplicationsTab
               jobId={jobId}
               status={t.value}
               batchBase={batchBase}
+              cohortBase={cohortBase}
               lamaranBase={lamaranBase}
               pelamarBase={pelamarBase}
             />
@@ -644,13 +1093,7 @@ export function AdminJobDetailPage() {
 // Tiny helper
 // ---------------------------------------------------------------------------
 
-function Row({
-  label,
-  children,
-}: {
-  label: string
-  children: ReactNode
-}) {
+function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex gap-2">
       <span className="w-32 shrink-0 text-muted-foreground">{label}</span>

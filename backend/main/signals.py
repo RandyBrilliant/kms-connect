@@ -8,7 +8,12 @@ Signals for the main app.
 from django.db.models.signals import pre_save, post_save
 from django.dispatch import receiver
 
-from .models import ApplicationStatus, JobApplication, BatchAnnouncement
+from .models import (
+    ApplicationStatus,
+    BatchAnnouncement,
+    InterviewCohortAnnouncement,
+    JobApplication,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -67,7 +72,12 @@ def notify_on_application_status_change(
         if not hasattr(instance, "_job_loaded"):
             instance = (
                 JobApplication.objects
-                .select_related("job__company", "batch", "applicant__user")
+                .select_related(
+                    "job__company",
+                    "batch",
+                    "interview_cohort",
+                    "applicant__user",
+                )
                 .get(pk=instance.pk)
             )
     except JobApplication.DoesNotExist:
@@ -151,6 +161,63 @@ def notify_on_batch_announcement(
             users=users,
             context=ctx,
             action_url=f"/batch/{batch.pk}/announcements",
+            action_label="Lihat Pengumuman",
+            deduplicate=False,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Interview cohort announcement → notify all applicants in the cohort
+# ---------------------------------------------------------------------------
+
+
+@receiver(post_save, sender=InterviewCohortAnnouncement)
+def notify_on_cohort_announcement(
+    sender, instance: InterviewCohortAnnouncement, created: bool, **kwargs
+):
+    """
+    When a new InterviewCohortAnnouncement is posted, notify applicants
+    selected by recipient_config (in-app + push). Mirrors the batch
+    announcement signal so existing notification UI just picks up.
+    """
+    if not created:
+        return
+
+    from account.services.notification_dispatcher import dispatch_bulk
+    from account.services.notification_events import NotificationEvent
+    from .batch_announcement_recipients import (
+        applications_for_cohort_recipient_config,
+    )
+
+    try:
+        cohort = instance.cohort
+        job_title = cohort.job.title if cohort.job_id else ""
+    except Exception:
+        return
+
+    ctx = {
+        # Reuse the same context keys the batch announcement template uses
+        # so the same email/push templates work for cohort announcements.
+        "batch_name": cohort.name,
+        "job_title": job_title,
+        "announcement_title": instance.title,
+        "announcement_body": instance.body,
+    }
+
+    config = instance.recipient_config or {}
+    applications = applications_for_cohort_recipient_config(cohort, config).select_related(
+        "applicant__user",
+        "applicant__user__notification_preference",
+    )
+
+    users = [app.applicant.user for app in applications]
+
+    if users:
+        dispatch_bulk(
+            event=NotificationEvent.BATCH_ANNOUNCEMENT,
+            users=users,
+            context=ctx,
+            action_url=f"/interview-cohort/{cohort.pk}/announcements",
             action_label="Lihat Pengumuman",
             deduplicate=False,
         )

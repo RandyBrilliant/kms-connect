@@ -219,11 +219,11 @@ class JobRepository {
     }
   }
 
-  /// Fetch batch broadcast announcements for an application.
+  /// Fetch merged broadcast announcements for an application.
   ///
-  /// Returns the announcements for the batch this application belongs to.
-  /// Empty list when the application has no batch.
-  /// This is the primary communication channel for PRA_SELEKSI and INTERVIEW stages.
+  /// Server returns pra-seleksi batch announcements plus interview-cohort
+  /// announcements when applicable. Empty list when the application has neither
+  /// a batch nor an interview cohort.
   Future<List<BatchAnnouncement>> getApplicationAnnouncements(
     int applicationId,
   ) async {

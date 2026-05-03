@@ -27,6 +27,7 @@ from account.models import ApplicantVerificationStatus, UserRole
 from .models import (
     ApplicationStatus,
     ApplicationStatusHistory,
+    InterviewCohort,
     JobApplication,
     LamaranBatch,
     LowonganKerja,
@@ -548,9 +549,14 @@ class ApplicationService:
         actor: "CustomUser",
         note: str = "",
         placement_end_date: date | None = None,
+        interview_cohort: "InterviewCohort | None" = None,
     ) -> JobApplication:
         """
         Validate and apply a single status transition (admin only).
+
+        When transitioning **PRA_SELEKSI → INTERVIEW**, `interview_cohort`
+        is required: it routes the applicant into the cohort that owns the
+        rest of the lifecycle. The cohort must belong to the same job.
 
         Raises:
           TransitionError — if the move is not allowed.
@@ -572,6 +578,25 @@ class ApplicationService:
                 f"Transisi dari '{application.get_status_display()}' ke "
                 f"'{ApplicationStatus(new_status).label}' tidak diizinkan."
             )
+
+        # ── Cohort routing rules (PRA_SELEKSI → INTERVIEW) ───────────────
+        # When moving to INTERVIEW we must know which cohort owns the
+        # applicant from this point on. Same job constraint is enforced.
+        if new_status == ApplicationStatus.INTERVIEW:
+            if interview_cohort is None:
+                raise TransitionError(
+                    "Pilih sesi interview (cohort) sebelum memindahkan pelamar "
+                    "ke tahap INTERVIEW."
+                )
+            if interview_cohort.job_id != application.job_id:
+                raise TransitionError(
+                    "Sesi interview yang dipilih bukan untuk lowongan yang sama."
+                )
+            if not interview_cohort.is_active:
+                raise TransitionError(
+                    "Sesi interview yang dipilih sudah ditandai non-aktif."
+                )
+        # ─────────────────────────────────────────────────────────────────
 
         if application.status == ApplicationStatus.DITERIMA and new_status == ApplicationStatus.BERANGKAT:
             cls._ensure_document_collection_complete(application)
@@ -599,6 +624,10 @@ class ApplicationService:
         application.reviewed_by = actor
         application.reviewed_at = timezone.now()
 
+        if new_status == ApplicationStatus.INTERVIEW and interview_cohort is not None:
+            application.interview_cohort = interview_cohort
+            update_fields.append("interview_cohort")
+
         # SELESAI requires placement_end_date for cooldown calculation
         if new_status == ApplicationStatus.SELESAI:
             application.placement_end_date = placement_end_date or timezone.now().date()
@@ -624,24 +653,177 @@ class ApplicationService:
         actor: "CustomUser",
         note: str = "",
         placement_end_date: date | None = None,
+        interview_cohort: "InterviewCohort | None" = None,
     ) -> list[JobApplication]:
         """
-        Transition ALL eligible applications in a batch to a new status.
-        Uses bulk UPDATE + bulk INSERT for history — efficient at scale.
+        Bulk transition for the **PRA_SELEKSI** scope of a batch.
 
-        Returns list of updated applications.
+        Allowed `new_status` values from a pra-seleksi batch:
+          - INTERVIEW (requires `interview_cohort` of the same job)
+          - DITOLAK
+          - PRA_SELEKSI (no-op via this method — re-batching is done by
+            `move_applications_to_batch`)
+
+        Other downstream transitions (DITERIMA / BERANGKAT / SELESAI) are
+        scoped to a cohort, see `cohort_bulk_transition`.
+
+        Uses bulk UPDATE + bulk INSERT for history.
         """
         actor_role = "admin" if (actor.role in _ADMIN_ROLES or actor.is_superuser) else "applicant"
         if actor_role != "admin":
             raise TransitionError("Hanya admin/staff yang dapat memindahkan status batch.")
 
-        # Find which current statuses are valid sources for this new_status
+        if new_status not in (ApplicationStatus.INTERVIEW, ApplicationStatus.DITOLAK):
+            raise TransitionError(
+                "Aksi batch hanya mendukung transisi ke INTERVIEW atau DITOLAK. "
+                "Untuk DITERIMA/BERANGKAT/SELESAI, gunakan aksi pada sesi interview (cohort)."
+            )
+
+        if new_status == ApplicationStatus.INTERVIEW:
+            if interview_cohort is None:
+                raise TransitionError(
+                    "Pilih sesi interview (cohort) sebelum memindahkan batch "
+                    "ke tahap INTERVIEW."
+                )
+            if interview_cohort.job_id != batch.job_id:
+                raise TransitionError(
+                    "Sesi interview yang dipilih bukan untuk lowongan yang sama "
+                    "dengan batch ini."
+                )
+            if not interview_cohort.is_active:
+                raise TransitionError(
+                    "Sesi interview yang dipilih sudah ditandai non-aktif."
+                )
+
+        # Apps still in PRA_SELEKSI are the only valid source from a batch.
+        apps = list(
+            batch.applications.filter(status=ApplicationStatus.PRA_SELEKSI)
+            .select_related("applicant__user")
+        )
+
+        if not apps:
+            return []
+
+        now = timezone.now()
+        update_kwargs: dict = {
+            "status": new_status,
+            "reviewed_by": actor,
+            "reviewed_at": now,
+        }
+        if new_status == ApplicationStatus.INTERVIEW and interview_cohort is not None:
+            update_kwargs["interview_cohort"] = interview_cohort
+
+        old_statuses = {app.pk: app.status for app in apps}
+
+        batch.applications.filter(pk__in=[a.pk for a in apps]).update(**update_kwargs)
+
+        ApplicationStatusHistory.objects.bulk_create([
+            ApplicationStatusHistory(
+                application=app,
+                from_status=old_statuses[app.pk],
+                to_status=new_status,
+                changed_by=actor,
+                note=note,
+            )
+            for app in apps
+        ])
+
+        # Reflect new state on in-memory objects so callers see updated rows.
+        for app in apps:
+            app.status = new_status
+            if new_status == ApplicationStatus.INTERVIEW:
+                app.interview_cohort = interview_cohort
+
+        return apps
+
+    # ------------------------------------------------------------------
+    # Interview Cohort operations
+    # ------------------------------------------------------------------
+
+    @classmethod
+    @transaction.atomic
+    def create_cohort(
+        cls,
+        job: LowonganKerja,
+        name: str,
+        created_by: "CustomUser",
+        notes: str = "",
+        interview_date=None,
+        interview_location: str = "",
+        interview_notes: str = "",
+    ) -> InterviewCohort:
+        """Create an interview cohort for a job. No applicants yet."""
+        return InterviewCohort.objects.create(
+            job=job,
+            name=name,
+            notes=notes,
+            interview_date=interview_date,
+            interview_location=interview_location,
+            interview_notes=interview_notes,
+            created_by=created_by,
+            is_active=True,
+        )
+
+    @classmethod
+    @transaction.atomic
+    def schedule_cohort(
+        cls,
+        cohort: InterviewCohort,
+        interview_date=None,
+        interview_location: str = "",
+        interview_notes: str = "",
+    ) -> InterviewCohort:
+        """Set or update the interview schedule on a cohort."""
+        cohort.interview_date = interview_date
+        cohort.interview_location = interview_location
+        cohort.interview_notes = interview_notes
+        cohort.save(update_fields=[
+            "interview_date",
+            "interview_location",
+            "interview_notes",
+            "updated_at",
+        ])
+        return cohort
+
+    @classmethod
+    @transaction.atomic
+    def cohort_bulk_transition(
+        cls,
+        cohort: InterviewCohort,
+        new_status: str,
+        actor: "CustomUser",
+        note: str = "",
+        placement_end_date: date | None = None,
+    ) -> list[JobApplication]:
+        """
+        Bulk transition all eligible applications **in a cohort** at once.
+
+        Valid targets from cohort scope:
+          - DITERIMA  (from INTERVIEW; quota-checked at job level)
+          - BERANGKAT (from DITERIMA; doc-collection checks)
+          - SELESAI   (from BERANGKAT)
+          - DITOLAK   (from INTERVIEW or DITERIMA)
+
+        Used by the new admin UX: from interview onwards, every status
+        change is scoped to the cohort (the operational unit), not to the
+        original pra-seleksi batch.
+        """
+        actor_role = "admin" if (actor.role in _ADMIN_ROLES or actor.is_superuser) else "applicant"
+        if actor_role != "admin":
+            raise TransitionError("Hanya admin/staff yang dapat memindahkan status sesi interview.")
+
+        # Valid source statuses for this target, restricted to non-PRA_SELEKSI
+        # because cohorts only own INTERVIEW+ lifecycle.
         valid_froms = [
             current for (current, role), targets in TRANSITIONS.items()
-            if role == "admin" and new_status in targets
+            if role == "admin"
+            and current != ApplicationStatus.PRA_SELEKSI
+            and new_status in targets
         ]
         if not valid_froms:
-            raise TransitionError(f"Status '{new_status}' tidak valid sebagai tujuan transisi.")
+            raise TransitionError(
+                f"Status '{new_status}' tidak valid sebagai tujuan transisi dari sesi interview."
+            )
 
         now = timezone.now()
         update_kwargs: dict = {
@@ -652,15 +834,13 @@ class ApplicationService:
         if new_status == ApplicationStatus.SELESAI:
             update_kwargs["placement_end_date"] = placement_end_date or now.date()
 
-        # Fetch apps to build history rows
         apps = list(
-            batch.applications.filter(status__in=valid_froms)
+            cohort.applications.filter(status__in=valid_froms)
             .select_related("applicant__user")
         )
 
-        # ── Quota enforcement for bulk DITERIMA ───────────────────────────
         if new_status == ApplicationStatus.DITERIMA:
-            job = batch.job
+            job = cohort.job
             if job.quota is not None:
                 already_accepted = JobApplication.objects.filter(
                     job=job,
@@ -672,9 +852,8 @@ class ApplicationService:
                         f"Kuota penerimaan lowongan '{job.title}' sudah penuh "
                         f"({job.quota} pelamar diterima)."
                     )
-                # Cap: only transition apps that fit within remaining quota
                 apps = apps[:remaining_slots]
-        # ─────────────────────────────────────────────────────────────────
+
         if new_status == ApplicationStatus.BERANGKAT:
             blocked_labels: set[str] = set()
             missing_confirmation = False
@@ -702,15 +881,14 @@ class ApplicationService:
                     "Sebagian pelamar belum mengkonfirmasi 'Dokumen Selesai' "
                     "pada tahap Diterima."
                 )
+
         if not apps:
             return []
 
         old_statuses = {app.pk: app.status for app in apps}
 
-        # Single bulk UPDATE
-        batch.applications.filter(pk__in=[a.pk for a in apps]).update(**update_kwargs)
+        cohort.applications.filter(pk__in=[a.pk for a in apps]).update(**update_kwargs)
 
-        # Single bulk INSERT for history
         ApplicationStatusHistory.objects.bulk_create([
             ApplicationStatusHistory(
                 application=app,
@@ -724,8 +902,106 @@ class ApplicationService:
 
         for app in apps:
             app.status = new_status
+            if new_status == ApplicationStatus.SELESAI:
+                app.placement_end_date = update_kwargs["placement_end_date"]
 
         return apps
+
+    @classmethod
+    @transaction.atomic
+    def move_applications_to_batch(
+        cls,
+        applications: list[JobApplication],
+        target_batch: LamaranBatch,
+        actor: "CustomUser",
+    ) -> list[JobApplication]:
+        """
+        Re-batch applications within the **PRA_SELEKSI** stage of a job.
+        Used to advance survivors from one tahapan to the next.
+
+        Status is NOT changed — this is a container move only.
+        Source and target batches must belong to the same job.
+        """
+        if not applications:
+            return []
+
+        actor_role = "admin" if (actor.role in _ADMIN_ROLES or actor.is_superuser) else "applicant"
+        if actor_role != "admin":
+            raise TransitionError("Hanya admin/staff yang dapat memindahkan batch pelamar.")
+
+        ids: list[int] = []
+        for app in applications:
+            if app.status != ApplicationStatus.PRA_SELEKSI:
+                raise TransitionError(
+                    f"Pelamar '{app.applicant_id}' tidak lagi di tahap pra-seleksi."
+                )
+            if app.job_id != target_batch.job_id:
+                raise TransitionError(
+                    "Batch tujuan bukan milik lowongan yang sama."
+                )
+            ids.append(app.pk)
+
+        JobApplication.objects.filter(pk__in=ids).update(
+            batch=target_batch,
+            updated_at=timezone.now(),
+        )
+        for app in applications:
+            app.batch = target_batch
+
+        return applications
+
+    @classmethod
+    @transaction.atomic
+    def move_applications_to_cohort(
+        cls,
+        applications: list[JobApplication],
+        target_cohort: InterviewCohort,
+        actor: "CustomUser",
+    ) -> list[JobApplication]:
+        """
+        Re-cohort applications within the **INTERVIEW+** stages of a job.
+        Status is NOT changed — only the cohort assignment.
+        Used when the admin reschedules an applicant to another interview
+        session, or moves them between cohorts before/after interview.
+        """
+        if not applications:
+            return []
+
+        actor_role = "admin" if (actor.role in _ADMIN_ROLES or actor.is_superuser) else "applicant"
+        if actor_role != "admin":
+            raise TransitionError("Hanya admin/staff yang dapat memindahkan cohort pelamar.")
+
+        if not target_cohort.is_active:
+            raise TransitionError("Sesi interview tujuan sudah ditandai non-aktif.")
+
+        eligible_statuses = {
+            ApplicationStatus.INTERVIEW,
+            ApplicationStatus.DITERIMA,
+            ApplicationStatus.BERANGKAT,
+            ApplicationStatus.SELESAI,
+            ApplicationStatus.DITOLAK,
+        }
+
+        ids: list[int] = []
+        for app in applications:
+            if app.status not in eligible_statuses:
+                raise TransitionError(
+                    "Pelamar belum mencapai tahap interview, tidak bisa dipindah ke cohort."
+                )
+            if app.job_id != target_cohort.job_id:
+                raise TransitionError(
+                    "Cohort tujuan bukan milik lowongan yang sama."
+                )
+            ids.append(app.pk)
+
+        JobApplication.objects.filter(pk__in=ids).update(
+            interview_cohort=target_cohort,
+            updated_at=timezone.now(),
+        )
+        for app in applications:
+            app.interview_cohort = target_cohort
+
+        return applications
 
     @classmethod
     @transaction.atomic

@@ -36,6 +36,8 @@ from .models import (
     ApplicationStatus,
     ApplicationStatusHistory,
     BatchAnnouncement,
+    InterviewCohort,
+    InterviewCohortAnnouncement,
     JobApplication,
     JobStatus,
     LamaranBatch,
@@ -46,17 +48,28 @@ from .models import (
 from .serializers import (
     ApplicantSearchSerializer,
     ApplicationAttendanceConfirmSerializer,
+    BatchAdvanceToCohortSerializer,
     BulkApplicationTransitionSerializer,
     ApplicationTransitionSerializer,
     BatchAnnouncementCreateSerializer,
     BatchAnnouncementSerializer,
     BatchCheckEligibilitySerializer,
     BatchScheduleSerializer,
+    CohortBulkTransitionSerializer,
     GroupAssignSerializer,
+    InterviewCohortAnnouncementCreateSerializer,
+    InterviewCohortAnnouncementSerializer,
+    InterviewCohortCreateSerializer,
+    InterviewCohortScheduleSerializer,
+    InterviewCohortSerializer,
+    InterviewCohortUpdateSerializer,
     JobApplicationSerializer,
     LamaranBatchCreateSerializer,
     LamaranBatchSerializer,
+    LamaranBatchUpdateSerializer,
     LowonganKerjaSerializer,
+    MoveApplicationsToBatchSerializer,
+    MoveApplicationsToCohortSerializer,
     NewsSerializer,
 )
 from .services import ApplicationService, CooldownError, EligibilityError, TransitionError
@@ -205,10 +218,10 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
 
     permission_classes = [IsBackofficeAdmin]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ["job"]
-    search_fields = ["name", "notes", "job__title"]
-    ordering_fields = ["created_at", "pra_seleksi_date", "interview_date"]
-    ordering = ["-created_at"]
+    filterset_fields = ["job", "tahap_order"]
+    search_fields = ["name", "notes", "tahap_label", "job__title"]
+    ordering_fields = ["created_at", "pra_seleksi_date", "tahap_order"]
+    ordering = ["job", "tahap_order", "-created_at"]
 
     def get_permissions(self):
         if self.action == "destroy":
@@ -218,6 +231,8 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
         if self.action == "create":
             return LamaranBatchCreateSerializer
+        if self.action in ("update", "partial_update"):
+            return LamaranBatchUpdateSerializer
         return LamaranBatchSerializer
 
     def get_queryset(self):
@@ -253,10 +268,23 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
                 ),
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        batch = ApplicationService.create_batch(
-            job=serializer.validated_data["job"],
-            name=serializer.validated_data["name"],
-            notes=serializer.validated_data.get("notes", ""),
+        vd = serializer.validated_data
+        job = vd["job"]
+        tahap_order = vd.get("tahap_order")
+        if tahap_order is None:
+            # Default: next tahapan number for this job.
+            existing_max = (
+                LamaranBatch.objects.filter(job=job)
+                .order_by("-tahap_order").values_list("tahap_order", flat=True).first()
+            )
+            tahap_order = (existing_max or 0) + 1
+
+        batch = LamaranBatch.objects.create(
+            job=job,
+            name=vd["name"],
+            notes=vd.get("notes", ""),
+            tahap_order=tahap_order,
+            tahap_label=vd.get("tahap_label", ""),
             created_by=request.user,
         )
         out = LamaranBatchSerializer(
@@ -480,11 +508,10 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
         """
         PATCH /api/batches/{id}/schedule/
         Body: { "stage": "pra_seleksi", "date": "...", "location": "...", "notes": "..." }
-              OR
-              { "stage": "interview", "date": "...", "location": "...", "notes": "..." }
 
-        Admin sets the date, location, and notes for either the pra-seleksi
-        or interview stage so applicants know when/where to show up.
+        Hanya stage `pra_seleksi` yang valid pada batch — jadwal interview kini
+        dikelola pada `InterviewCohort`. Permintaan dengan stage `interview`
+        ditolak untuk mencegah kebocoran skema lama.
         """
         batch = self._get_batch_for_action(pk)
         serializer = BatchScheduleSerializer(data=request.data)
@@ -498,10 +525,22 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        if serializer.validated_data["stage"] != "pra_seleksi":
+            return Response(
+                error_response(
+                    detail=(
+                        "Jadwal interview kini dikelola pada InterviewCohort. "
+                        "Gunakan PATCH /api/interview-cohorts/{id}/schedule/."
+                    ),
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         try:
             ApplicationService.schedule_stage(
                 batch=batch,
-                stage=serializer.validated_data["stage"],
+                stage="pra_seleksi",
                 stage_date=serializer.validated_data["date"],
                 location=serializer.validated_data.get("location", ""),
                 notes=serializer.validated_data.get("notes", ""),
@@ -522,17 +561,22 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
     def bulk_transition(self, request, pk=None):
         """
         POST /api/batches/{id}/bulk-transition/
-        Body: { "status": "INTERVIEW", "note": "...", "placement_end_date": "..." }
+        Body: {
+          "status": "INTERVIEW" | "DITOLAK",
+          "interview_cohort": <id>,   # required when status=INTERVIEW
+          "note": "..."
+        }
 
-        Advance ALL eligible applications in this batch to the next status at once.
-        Useful for moving the entire batch from PRA_SELEKSI → INTERVIEW etc.
+        Memindahkan SEMUA pelamar PRA_SELEKSI di batch ini sekaligus.
+        Dari batch hanya boleh ke INTERVIEW (butuh cohort) atau DITOLAK.
+        Untuk transisi DITERIMA/BERANGKAT/SELESAI gunakan endpoint cohort.
         """
         batch = self._get_batch_for_action(pk)
         serializer = ApplicationTransitionSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(
                 error_response(
-                    detail="Data tidak valid.",
+                    detail=_first_serializer_error_detail(serializer.errors) or "Data tidak valid.",
                     code=ApiCode.VALIDATION_ERROR,
                     errors=serializer.errors,
                 ),
@@ -546,6 +590,7 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
                 actor=request.user,
                 note=serializer.validated_data.get("note", ""),
                 placement_end_date=serializer.validated_data.get("placement_end_date"),
+                interview_cohort=serializer.validated_data.get("interview_cohort"),
             )
         except TransitionError as e:
             return Response(
@@ -557,6 +602,148 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
             success_response(
                 data={"updated_count": len(updated)},
                 detail=f"{len(updated)} lamaran berhasil dipindahkan ke status '{serializer.validated_data['status']}'.",
+            )
+        )
+
+    @action(detail=True, methods=["post"], url_path="advance-to-interview")
+    def advance_to_interview(self, request, pk=None):
+        """
+        POST /api/batches/{id}/advance-to-interview/
+        Body: {
+          "interview_cohort": <id>,
+          "application_ids": [<id>, ...] (optional; default = semua PRA_SELEKSI di batch),
+          "note": "..."
+        }
+
+        Helper khusus admin: pilih sebagian (atau semua) pelamar PRA_SELEKSI
+        di batch ini lalu kirim ke cohort interview yang dipilih.
+        Mengembalikan jumlah yang berhasil dipindah dan daftar yang gagal.
+        """
+        batch = self._get_batch_for_action(pk)
+        serializer = BatchAdvanceToCohortSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                error_response(
+                    detail=_first_serializer_error_detail(serializer.errors) or "Data tidak valid.",
+                    code=ApiCode.VALIDATION_ERROR,
+                    errors=serializer.errors,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        cohort = serializer.validated_data["interview_cohort"]
+        ids = serializer.validated_data.get("application_ids")
+        note = serializer.validated_data.get("note", "")
+
+        if cohort.job_id != batch.job_id:
+            return Response(
+                error_response(
+                    detail="Cohort yang dipilih bukan untuk lowongan yang sama dengan batch.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        qs = batch.applications.filter(status=ApplicationStatus.PRA_SELEKSI)
+        if ids:
+            qs = qs.filter(pk__in=ids)
+        applications = list(qs)
+
+        updated_ids: list[int] = []
+        failed: list[dict] = []
+        for app in applications:
+            try:
+                ApplicationService.transition(
+                    application=app,
+                    new_status=ApplicationStatus.INTERVIEW,
+                    actor=request.user,
+                    note=note,
+                    interview_cohort=cohort,
+                )
+                updated_ids.append(app.pk)
+            except TransitionError as e:
+                failed.append({"application_id": app.pk, "reason": str(e)})
+
+        return Response(
+            success_response(
+                data={
+                    "updated_count": len(updated_ids),
+                    "failed_count": len(failed),
+                    "updated_ids": updated_ids,
+                    "failed": failed,
+                    "interview_cohort": cohort.pk,
+                },
+                detail=(
+                    f"{len(updated_ids)} pelamar berhasil dipindah ke sesi interview "
+                    f"'{cohort.name}'."
+                ),
+            )
+        )
+
+    @action(detail=True, methods=["post"], url_path="move-applicants")
+    def move_applicants(self, request, pk=None):
+        """
+        POST /api/batches/{id}/move-applicants/
+        Body: { "target_batch": <id>, "application_ids": [...], "note": "..." }
+
+        Pindahkan pelamar PRA_SELEKSI ke batch (tahapan) lain di lowongan
+        yang sama. Status tidak berubah; ini hanya pemindahan wadah.
+        """
+        batch = self._get_batch_for_action(pk)
+        serializer = MoveApplicationsToBatchSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                error_response(
+                    detail=_first_serializer_error_detail(serializer.errors) or "Data tidak valid.",
+                    code=ApiCode.VALIDATION_ERROR,
+                    errors=serializer.errors,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        target_batch = serializer.validated_data["target_batch"]
+        if target_batch.job_id != batch.job_id:
+            return Response(
+                error_response(
+                    detail="Batch tujuan bukan untuk lowongan yang sama.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if target_batch.pk == batch.pk:
+            return Response(
+                error_response(
+                    detail="Batch tujuan tidak boleh sama dengan batch asal.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        ids = serializer.validated_data["application_ids"]
+        applications = list(batch.applications.filter(pk__in=ids))
+
+        try:
+            ApplicationService.move_applications_to_batch(
+                applications=applications,
+                target_batch=target_batch,
+                actor=request.user,
+            )
+        except TransitionError as e:
+            return Response(
+                error_response(detail=str(e), code=ApiCode.VALIDATION_ERROR),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(
+            success_response(
+                data={
+                    "moved_count": len(applications),
+                    "target_batch": target_batch.pk,
+                },
+                detail=(
+                    f"{len(applications)} pelamar dipindahkan ke batch "
+                    f"'{target_batch.name}'."
+                ),
             )
         )
 
@@ -730,6 +917,395 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
 
 
 # ---------------------------------------------------------------------------
+# InterviewCohortViewSet — admin operations for interview-and-onwards
+# ---------------------------------------------------------------------------
+
+
+class InterviewCohortViewSet(viewsets.ModelViewSet):
+    """
+    CRUD + custom actions for `InterviewCohort` (admin/backoffice).
+
+    Standard CRUD:
+      GET    /api/interview-cohorts/             — list (filterable by job, is_active)
+      POST   /api/interview-cohorts/             — create cohort
+      GET    /api/interview-cohorts/{id}/        — detail + counts
+      PATCH  /api/interview-cohorts/{id}/        — update name/notes/schedule/is_active
+      DELETE /api/interview-cohorts/{id}/        — delete (Master Admin only; only if no apps)
+
+    Custom actions:
+      PATCH /api/interview-cohorts/{id}/schedule/        — set/clear schedule
+      POST  /api/interview-cohorts/{id}/bulk-transition/ — DITERIMA / BERANGKAT / SELESAI / DITOLAK
+      POST  /api/interview-cohorts/{id}/move-applicants/ — re-cohort applicants
+      GET   /api/interview-cohorts/{id}/announcements/   — list cohort announcements
+      POST  /api/interview-cohorts/{id}/announcements/   — create cohort announcement
+      POST  /api/interview-cohorts/{id}/announcements/preview-recipients/ — count preview
+      GET   /api/interview-cohorts/{id}/export-excel/    — export applicants
+    """
+
+    permission_classes = [IsBackofficeAdmin]
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ["job", "is_active"]
+    search_fields = ["name", "notes", "job__title"]
+    ordering_fields = ["created_at", "interview_date", "name"]
+    ordering = ["-created_at"]
+
+    def get_permissions(self):
+        if self.action == "destroy":
+            return [IsMasterAdmin()]
+        return [IsBackofficeAdmin()]
+
+    def get_serializer_class(self):
+        if self.action == "create":
+            return InterviewCohortCreateSerializer
+        if self.action in ("update", "partial_update"):
+            return InterviewCohortUpdateSerializer
+        return InterviewCohortSerializer
+
+    def get_queryset(self):
+        return (
+            InterviewCohort.objects
+            .select_related("job", "job__company", "created_by")
+            .prefetch_related("applications")
+        )
+
+    def _get_cohort_for_action(self, pk):
+        return get_object_or_404(
+            InterviewCohort.objects
+            .select_related("job", "job__company", "created_by")
+            .prefetch_related("applications"),
+            pk=pk,
+        )
+
+    def create(self, request, *args, **kwargs):
+        serializer = InterviewCohortCreateSerializer(data=request.data)
+        if not serializer.is_valid():
+            msg = _first_serializer_error_detail(serializer.errors) or "Data tidak valid."
+            return Response(
+                error_response(
+                    detail=msg,
+                    code=ApiCode.VALIDATION_ERROR,
+                    errors=serializer.errors,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        vd = serializer.validated_data
+        cohort = ApplicationService.create_cohort(
+            job=vd["job"],
+            name=vd["name"],
+            notes=vd.get("notes", ""),
+            interview_date=vd.get("interview_date"),
+            interview_location=vd.get("interview_location", ""),
+            interview_notes=vd.get("interview_notes", ""),
+            created_by=request.user,
+        )
+        out = InterviewCohortSerializer(
+            self.get_queryset().get(pk=cohort.pk),
+            context={"request": request},
+        )
+        return Response(
+            success_response(data=out.data, detail="Sesi interview berhasil dibuat."),
+            status=status.HTTP_201_CREATED,
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        cohort = self.get_object()
+        if cohort.applications.exists():
+            return Response(
+                error_response(
+                    detail=(
+                        "Sesi interview ini sudah berisi pelamar dan tidak dapat "
+                        "dihapus. Tandai non-aktif (is_active=false) bila ingin "
+                        "menghentikan penggunaan."
+                    ),
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().destroy(request, *args, **kwargs)
+
+    @action(detail=True, methods=["patch"], url_path="schedule")
+    def schedule(self, request, pk=None):
+        """PATCH /api/interview-cohorts/{id}/schedule/ — date / location / notes."""
+        cohort = self._get_cohort_for_action(pk)
+        serializer = InterviewCohortScheduleSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                error_response(
+                    detail=_first_serializer_error_detail(serializer.errors) or "Data tidak valid.",
+                    code=ApiCode.VALIDATION_ERROR,
+                    errors=serializer.errors,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        ApplicationService.schedule_cohort(
+            cohort=cohort,
+            interview_date=serializer.validated_data.get("interview_date"),
+            interview_location=serializer.validated_data.get("interview_location", ""),
+            interview_notes=serializer.validated_data.get("interview_notes", ""),
+        )
+        out = InterviewCohortSerializer(
+            self.get_queryset().get(pk=cohort.pk),
+            context={"request": request},
+        )
+        return Response(success_response(data=out.data, detail="Jadwal interview tersimpan."))
+
+    @action(detail=True, methods=["post"], url_path="bulk-transition")
+    def bulk_transition(self, request, pk=None):
+        """
+        POST /api/interview-cohorts/{id}/bulk-transition/
+        Body: { "status": "DITERIMA" | "BERANGKAT" | "SELESAI" | "DITOLAK", ... }
+
+        Mengubah status SEMUA pelamar yang memenuhi syarat di cohort.
+        Aturan FSM, kuota, dan kelengkapan dokumen tetap diberlakukan.
+        """
+        cohort = self._get_cohort_for_action(pk)
+        serializer = CohortBulkTransitionSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                error_response(
+                    detail=_first_serializer_error_detail(serializer.errors) or "Data tidak valid.",
+                    code=ApiCode.VALIDATION_ERROR,
+                    errors=serializer.errors,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            updated = ApplicationService.cohort_bulk_transition(
+                cohort=cohort,
+                new_status=serializer.validated_data["status"],
+                actor=request.user,
+                note=serializer.validated_data.get("note", ""),
+                placement_end_date=serializer.validated_data.get("placement_end_date"),
+            )
+        except TransitionError as e:
+            return Response(
+                error_response(detail=str(e), code=ApiCode.VALIDATION_ERROR),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(
+            success_response(
+                data={"updated_count": len(updated)},
+                detail=(
+                    f"{len(updated)} lamaran berhasil dipindahkan ke status "
+                    f"'{serializer.validated_data['status']}'."
+                ),
+            )
+        )
+
+    @action(detail=True, methods=["post"], url_path="move-applicants")
+    def move_applicants(self, request, pk=None):
+        """Re-cohort: pindahkan pelamar dari cohort ini ke cohort lain (lowongan sama)."""
+        cohort = self._get_cohort_for_action(pk)
+        serializer = MoveApplicationsToCohortSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                error_response(
+                    detail=_first_serializer_error_detail(serializer.errors) or "Data tidak valid.",
+                    code=ApiCode.VALIDATION_ERROR,
+                    errors=serializer.errors,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        target = serializer.validated_data["target_cohort"]
+        if target.job_id != cohort.job_id:
+            return Response(
+                error_response(
+                    detail="Cohort tujuan bukan untuk lowongan yang sama.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if target.pk == cohort.pk:
+            return Response(
+                error_response(
+                    detail="Cohort tujuan tidak boleh sama dengan cohort asal.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        ids = serializer.validated_data["application_ids"]
+        applications = list(cohort.applications.filter(pk__in=ids))
+
+        try:
+            ApplicationService.move_applications_to_cohort(
+                applications=applications,
+                target_cohort=target,
+                actor=request.user,
+            )
+        except TransitionError as e:
+            return Response(
+                error_response(detail=str(e), code=ApiCode.VALIDATION_ERROR),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(
+            success_response(
+                data={
+                    "moved_count": len(applications),
+                    "target_cohort": target.pk,
+                },
+                detail=(
+                    f"{len(applications)} pelamar dipindahkan ke sesi interview "
+                    f"'{target.name}'."
+                ),
+            )
+        )
+
+    @action(detail=True, methods=["get", "post"], url_path="announcements")
+    def announcements(self, request, pk=None):
+        """List/create announcements scoped to this cohort."""
+        cohort = self._get_cohort_for_action(pk)
+
+        if request.method == "GET":
+            qs = (
+                InterviewCohortAnnouncement.objects
+                .filter(cohort=cohort)
+                .select_related("created_by")
+                .order_by("-created_at")
+            )
+            serializer = InterviewCohortAnnouncementSerializer(
+                qs, many=True, context={"request": request}
+            )
+            return Response(success_response(data=serializer.data))
+
+        serializer = InterviewCohortAnnouncementCreateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                error_response(
+                    detail=_first_serializer_error_detail(serializer.errors) or "Data tidak valid.",
+                    code=ApiCode.VALIDATION_ERROR,
+                    errors=serializer.errors,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        vd = serializer.validated_data
+        announcement = InterviewCohortAnnouncement.objects.create(
+            cohort=cohort,
+            title=vd["title"],
+            body=vd["body"],
+            recipient_config=vd["recipient_config"],
+            created_by=request.user,
+        )
+        from .batch_announcement_recipients import cohort_recipient_user_count
+
+        n = cohort_recipient_user_count(cohort, announcement.recipient_config)
+        detail_msg = (
+            f"Pengumuman dibuat dan dikirim ke {n} pelamar."
+            if n
+            else (
+                "Pengumuman dibuat. Tidak ada pelamar yang cocok dengan filter "
+                "penerima (notifikasi tidak dikirim)."
+            )
+        )
+        return Response(
+            success_response(
+                data=InterviewCohortAnnouncementSerializer(
+                    announcement, context={"request": request}
+                ).data,
+                detail=detail_msg,
+            ),
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["post"], url_path="announcements/preview-recipients")
+    def announcements_preview_recipients(self, request, pk=None):
+        """Preview recipient count for a candidate cohort announcement."""
+        cohort = self._get_cohort_for_action(pk)
+        from .batch_announcement_recipients import (
+            cohort_recipient_user_count,
+            validate_recipient_config,
+        )
+
+        config = request.data.get("recipient_config")
+        if config is None:
+            return Response(
+                error_response(
+                    detail="recipient_config diperlukan.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        ok, err = validate_recipient_config(config)
+        if not ok:
+            return Response(
+                error_response(detail=err, code=ApiCode.VALIDATION_ERROR),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        count = cohort_recipient_user_count(cohort, config)
+        return Response(
+            success_response(
+                data={"recipient_count": count},
+                detail=f"Preview: {count} pelamar akan menerima pengumuman.",
+            )
+        )
+
+    @action(detail=True, methods=["get"], url_path="export-excel")
+    def export_excel(self, request, pk=None):
+        """Export applicants in this cohort to Excel (optionally filtered by status)."""
+        from django.http import HttpResponse
+
+        cohort = self._get_cohort_for_action(pk)
+
+        applications = (
+            JobApplication.objects.filter(interview_cohort=cohort)
+            .select_related("applicant__user")
+            .order_by("applicant__user__full_name")
+        )
+
+        status_params = request.query_params.getlist("status")
+        if status_params:
+            valid_codes = {c[0] for c in ApplicationStatus.choices}
+            unknown = [s for s in status_params if s not in valid_codes]
+            if unknown:
+                return Response(
+                    error_response(
+                        detail=f"Parameter status tidak valid: {', '.join(unknown)}",
+                        code=ApiCode.VALIDATION_ERROR,
+                    ),
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            applications = applications.filter(status__in=status_params)
+
+        applicant_user_ids = (
+            applications.values_list("applicant__user_id", flat=True).distinct()
+        )
+
+        applicants_qs = (
+            CustomUser.objects.filter(
+                id__in=applicant_user_ids,
+                role=UserRole.APPLICANT,
+            )
+            .prefetch_related(
+                "applicant_profile__work_experiences",
+                "applicant_profile__documents__document_type",
+                "applicant_profile__documents__reviewed_by",
+            )
+            .order_by("applicant_profile__created_at")
+        )
+
+        excel_file = generate_applicants_excel(applicants_qs, request)
+
+        safe_filename = "".join(
+            c for c in cohort.name if c.isalnum() or c in (" ", "-", "_")
+        ).strip().replace(" ", "_")
+        filename = f"interview_{safe_filename}.xlsx"
+
+        response = HttpResponse(
+            excel_file.read(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+
+
+# ---------------------------------------------------------------------------
 # Job Application — Admin read + individual transitions
 # ---------------------------------------------------------------------------
 
@@ -751,7 +1327,7 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
     serializer_class = JobApplicationSerializer
     permission_classes = [IsBackofficeAdmin]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ["status", "job", "applicant", "batch"]
+    filterset_fields = ["status", "job", "applicant", "batch", "interview_cohort"]
     search_fields = [
         "applicant__user__full_name",
         "applicant__user__email",
@@ -778,6 +1354,7 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
                 "applicant__referrer",
                 "job", "job__company",
                 "batch",
+                "interview_cohort",
                 "assigned_by",
             )
             .prefetch_related("status_history__changed_by")
@@ -787,8 +1364,12 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
     def transition(self, request, pk=None):
         """
         PATCH /api/applications/{id}/transition/
-        Body: { "status": "INTERVIEW", "note": "...", "placement_end_date": "2026-12-31" }
-        placement_end_date is only required when transitioning to SELESAI.
+        Body: {
+          "status": "INTERVIEW",
+          "interview_cohort": <id>,        # required when status=INTERVIEW
+          "note": "...",
+          "placement_end_date": "2026-12-31"
+        }
         """
         application = self.get_object()
 
@@ -796,7 +1377,7 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
         if not serializer.is_valid():
             return Response(
                 error_response(
-                    detail="Data tidak valid.",
+                    detail=_first_serializer_error_detail(serializer.errors) or "Data tidak valid.",
                     code=ApiCode.VALIDATION_ERROR,
                     errors=serializer.errors,
                 ),
@@ -810,6 +1391,7 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
                 actor=request.user,
                 note=serializer.validated_data.get("note", ""),
                 placement_end_date=serializer.validated_data.get("placement_end_date"),
+                interview_cohort=serializer.validated_data.get("interview_cohort"),
             )
         except TransitionError as e:
             return Response(
@@ -852,6 +1434,7 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
         target_status = serializer.validated_data["status"]
         note = serializer.validated_data.get("note", "")
         placement_end_date = serializer.validated_data.get("placement_end_date")
+        interview_cohort = serializer.validated_data.get("interview_cohort")
 
         # Keep selection order so frontend can map failures predictably.
         apps_by_id = {
@@ -879,6 +1462,7 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
                     actor=request.user,
                     note=note,
                     placement_end_date=placement_end_date,
+                    interview_cohort=interview_cohort,
                 )
                 updated_ids.append(app_id)
             except TransitionError as e:
@@ -949,6 +1533,7 @@ class ApplicantJobApplicationViewSet(viewsets.ReadOnlyModelViewSet):
                 "job",
                 "job__company",
                 "batch",
+                "interview_cohort",
                 "assigned_by",
             )
             .prefetch_related("status_history__changed_by")
@@ -1041,31 +1626,62 @@ class ApplicantJobApplicationViewSet(viewsets.ReadOnlyModelViewSet):
         """
         GET /api/applicants/me/applications/{id}/announcements/
 
-        Returns all broadcast announcements for this application's batch, ordered
-        newest-first. Returns an empty list when the application has no batch
-        (i.e. it was not assigned via the batch workflow).
+        Returns broadcast announcements relevant to this application:
+          - announcements from the application's pra-seleksi `batch`,
+          - announcements from the application's `interview_cohort` (if any),
+        merged and ordered newest-first.
 
-        This endpoint is the primary communication channel for PRA_SELEKSI and
-        INTERVIEW stages — applicants read batch-level messages here instead of
-        opening an individual chat thread.
+        Backward-compatible payload shape: each item still carries
+        `id, title, body, recipient_config, created_by, created_by_name,
+        created_at` (mobile reads this same shape). New keys: `kind`
+        ("batch" or "cohort") and `source_id` for clients that want to
+        differentiate, but old clients can ignore them safely.
         """
         application = self.get_object()
 
-        if application.batch_id is None:
-            return Response(success_response(data=[]))
-
-        from .batch_announcement_recipients import announcement_visible_for_application
-
-        qs = (
-            BatchAnnouncement.objects.filter(batch_id=application.batch_id)
-            .select_related("created_by")
-            .order_by("-created_at")
+        from .batch_announcement_recipients import (
+            announcement_visible_for_application,
+            cohort_announcement_visible_for_application,
         )
-        visible = [a for a in qs if announcement_visible_for_application(a, application)]
-        serializer = BatchAnnouncementSerializer(
-            visible, many=True, context={"request": request}
-        )
-        return Response(success_response(data=serializer.data))
+
+        items: list[dict] = []
+
+        if application.batch_id is not None:
+            batch_qs = (
+                BatchAnnouncement.objects.filter(batch_id=application.batch_id)
+                .select_related("created_by")
+                .order_by("-created_at")
+            )
+            for ann in batch_qs:
+                if not announcement_visible_for_application(ann, application):
+                    continue
+                data = BatchAnnouncementSerializer(ann, context={"request": request}).data
+                data["kind"] = "batch"
+                data["source_id"] = application.batch_id
+                items.append(data)
+
+        if application.interview_cohort_id is not None:
+            cohort_qs = (
+                InterviewCohortAnnouncement.objects
+                .filter(cohort_id=application.interview_cohort_id)
+                .select_related("created_by")
+                .order_by("-created_at")
+            )
+            for ann in cohort_qs:
+                if not cohort_announcement_visible_for_application(ann, application):
+                    continue
+                data = InterviewCohortAnnouncementSerializer(
+                    ann, context={"request": request}
+                ).data
+                data["kind"] = "cohort"
+                data["source_id"] = application.interview_cohort_id
+                # Re-key `cohort` to keep the older `batch` field present so
+                # very old mobile parsers don't choke on missing key.
+                data.setdefault("batch", None)
+                items.append(data)
+
+        items.sort(key=lambda x: x.get("created_at") or "", reverse=True)
+        return Response(success_response(data=items))
 
 
 # ---------------------------------------------------------------------------

@@ -22,9 +22,8 @@ class ApplicantProfile {
   final int id;
   final String? fullName;
 
-  // Birth
-  final int? birthPlaceId;   // FK → regions.Regency
-  final String? birthPlaceName;
+  // Birth (free text, UPPERCASE in API; legacy FK no longer used)
+  final String? birthPlaceText;
   final DateTime? birthDate;
   final String? gender;       // 'M' or 'F'
 
@@ -113,8 +112,7 @@ class ApplicantProfile {
   const ApplicantProfile({
     required this.id,
     this.fullName,
-    this.birthPlaceId,
-    this.birthPlaceName,
+    this.birthPlaceText,
     this.birthDate,
     this.gender,
     this.address,
@@ -215,8 +213,9 @@ class ApplicantProfile {
     return ApplicantProfile(
       id: _parseId(json['id'])!,
       fullName: _str(json['full_name']),
-      birthPlaceId: _idFromField(json['birth_place']),
-      birthPlaceName: _str(json['birth_place_display']) ?? _nameFromField(json['birth_place']),
+      birthPlaceText:
+          _str(json['birth_place_text']) ??
+          _str(json['birth_place_display']),
       birthDate: ApiDateTime.parse(json['birth_date']),
       gender: _str(json['gender']),
       address: _str(json['address']),
@@ -293,7 +292,8 @@ class ApplicantProfile {
   Map<String, dynamic> toJson() => {
         'id': id,
         'full_name': fullName,
-        'birth_place': birthPlaceId,
+        if (birthPlaceText != null && birthPlaceText!.trim().isNotEmpty)
+          'birth_place_text': birthPlaceText!.trim(),
         'birth_date': birthDate?.toIso8601String(),
         'gender': gender,
         'address': address,

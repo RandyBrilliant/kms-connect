@@ -64,7 +64,7 @@ class SocialCompleteNotifier extends StateNotifier<SocialCompleteState> {
   Future<User> completeProfile({
     required String nik,
     required String fullName,
-    int? birthPlaceId,
+    String? birthPlaceText,
     String? birthDateIso,
   }) async {
     if (state.ktpImage == null) {
@@ -76,7 +76,7 @@ class SocialCompleteNotifier extends StateNotifier<SocialCompleteState> {
         nik: nik,
         ktpFile: state.ktpImage!,
         fullName: fullName,
-        birthPlaceId: birthPlaceId,
+        birthPlaceText: birthPlaceText,
         birthDateIso: birthDateIso,
       );
       state = state.copyWith(isProcessing: false);

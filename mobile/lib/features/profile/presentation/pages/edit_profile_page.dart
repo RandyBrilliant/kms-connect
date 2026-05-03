@@ -37,6 +37,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   final _fullName = TextEditingController();
   final _nik = TextEditingController();
   final _birthDate = TextEditingController();
+  final _birthPlaceText = TextEditingController();
   final _address = TextEditingController();
   final _postalCode = TextEditingController();
   final _phone = TextEditingController();
@@ -90,9 +91,6 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   Region? _kabupaten; // Kabupaten/Kota (regency)
   Region? _kecamatan; // Kecamatan (district)
   Region? _kelurahan; // Kelurahan/Desa (village)
-
-  // ── Region state – Tempat Lahir ──────────────────────────────────────────
-  Region? _birthPlace; // Regency
 
   // ── Region state – Alamat Keluarga (cascading) ────────────────────────
   Region? _familyProvince;
@@ -179,6 +177,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
       _fullName,
       _nik,
       _birthDate,
+      _birthPlaceText,
       _address,
       _postalCode,
       _phone,
@@ -227,15 +226,16 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     return t.toUpperCase();
   }
 
-  /// Normalizes gender to `M` / `F` for segmented control.
+  /// Normalizes gender to `M` / `F` for segmented control (only two options).
   static String? _normalizeGender(String? raw) {
     if (raw == null) return null;
     final u = raw.trim().toUpperCase();
+    if (u == 'O') return null;
     if (u == 'M' || u == 'L' || u == 'LAKI' || u.startsWith('LAKI')) {
       return 'M';
     }
     if (u == 'F' || u == 'P' || u.startsWith('PEREM')) return 'F';
-    return u.length == 1 ? u : null;
+    return null;
   }
 
   /// Populates controllers exactly once from the loaded profile.
@@ -250,6 +250,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
       _pickedDate = p.birthDate;
       _birthDate.text = DateFormat('dd MMMM yyyy', 'id').format(p.birthDate!);
     }
+    _birthPlaceText.text = (p.birthPlaceText ?? '').toUpperCase();
     _gender = _normalizeGender(p.gender);
     _address.text = (p.address ?? '').toUpperCase();
     _postalCode.text = p.postalCode ?? '';
@@ -340,13 +341,6 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     _heirContactPhone.text = p.heirContactPhone ?? '';
 
     // Pre-seed region objects from names stored in profile
-    if (p.birthPlaceId != null && p.birthPlaceName != null) {
-      _birthPlace = Region(
-        id: p.birthPlaceId!,
-        code: '',
-        name: p.birthPlaceName!,
-      );
-    }
     if (p.provinceId != null && p.provinceName != null) {
       _province = Region(id: p.provinceId!, code: '', name: p.provinceName!);
     }
@@ -459,7 +453,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     final data = <String, dynamic>{
       if (_fullName.text.trim().isNotEmpty) 'full_name': _fullName.text.trim(),
       if (_nik.text.trim().isNotEmpty) 'nik': _nik.text.trim(),
-      if (_birthPlace != null) 'birth_place': _birthPlace!.id,
+      if (_birthPlaceText.text.trim().isNotEmpty)
+        'birth_place_text': _birthPlaceText.text.trim(),
       if (_pickedDate != null)
         'birth_date': DateFormat('yyyy-MM-dd').format(_pickedDate!),
       if (_gender != null) 'gender': _gender,
@@ -816,33 +811,12 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     ),
                                   ),
                                   const SizedBox(height: 14),
-                                  // Tempat lahir – regency picker
-                                  _RegionPickerField(
+                                  M3TextField(
+                                    controller: _birthPlaceText,
                                     label: 'Tempat Lahir',
-                                    hint: 'Pilih kabupaten/kota',
+                                    hint: 'Sesuai KTP',
                                     prefixIcon: Icons.location_city_outlined,
-                                    selected: _birthPlace,
-                                    onTap: () async {
-                                      final items =
-                                          await readRegionListWithRetry(
-                                            ref,
-                                            () => ref.read(
-                                              regenciesProvider.future,
-                                            ),
-                                            () => ref.invalidate(
-                                              regenciesProvider,
-                                            ),
-                                          );
-                                      if (!mounted) return;
-                                      final picked = await _showRegionPicker(
-                                        title: 'Pilih Kota/Kabupaten',
-                                        items: items,
-                                        selected: _birthPlace,
-                                      );
-                                      if (picked != null) {
-                                        setState(() => _birthPlace = picked);
-                                      }
-                                    },
+                                    upperCase: true,
                                   ),
                                   const SizedBox(height: 14),
                                   M3TextField(

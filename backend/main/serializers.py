@@ -15,6 +15,8 @@ from .models import (
     ApplicationStatus,
     ApplicationStatusHistory,
     BatchAnnouncement,
+    InterviewCohort,
+    InterviewCohortAnnouncement,
     JobApplication,
     JobStatus,
     LamaranBatch,
@@ -241,18 +243,25 @@ class JobApplicationSerializer(serializers.ModelSerializer):
     company_name = serializers.SerializerMethodField(read_only=True)
     assigned_by_name = serializers.SerializerMethodField(read_only=True)
     batch_name = serializers.SerializerMethodField(read_only=True)
+    batch_tahap_order = serializers.IntegerField(
+        source="batch.tahap_order", read_only=True, allow_null=True,
+    )
+    batch_tahap_label = serializers.SerializerMethodField(read_only=True)
+    interview_cohort_name = serializers.SerializerMethodField(read_only=True)
     pra_seleksi_date = serializers.DateTimeField(
         source="batch.pra_seleksi_date", read_only=True
     )
     pra_seleksi_location = serializers.CharField(
         source="batch.pra_seleksi_location", read_only=True
     )
-    interview_date = serializers.DateTimeField(
-        source="batch.interview_date", read_only=True
+    pra_seleksi_notes = serializers.CharField(
+        source="batch.pra_seleksi_notes", read_only=True
     )
-    interview_location = serializers.CharField(
-        source="batch.interview_location", read_only=True
-    )
+    # Interview info: prefer InterviewCohort, fall back to legacy batch fields.
+    # Keeps mobile JSON shape stable so older app builds keep working.
+    interview_date = serializers.SerializerMethodField(read_only=True)
+    interview_location = serializers.SerializerMethodField(read_only=True)
+    interview_notes = serializers.SerializerMethodField(read_only=True)
     cooldown_eligible_date = serializers.SerializerMethodField(read_only=True)
     status_history = ApplicationStatusHistorySerializer(many=True, read_only=True)
     applicant_nik = serializers.SerializerMethodField(read_only=True)
@@ -285,11 +294,17 @@ class JobApplicationSerializer(serializers.ModelSerializer):
             "company_name",
             "batch",
             "batch_name",
+            "batch_tahap_order",
+            "batch_tahap_label",
+            "interview_cohort",
+            "interview_cohort_name",
             "status",
             "pra_seleksi_date",
             "pra_seleksi_location",
+            "pra_seleksi_notes",
             "interview_date",
             "interview_location",
+            "interview_notes",
             "pra_seleksi_confirmed_at",
             "interview_confirmed_at",
             "applied_at",
@@ -322,9 +337,15 @@ class JobApplicationSerializer(serializers.ModelSerializer):
             "job_title",
             "company_name",
             "batch_name",
+            "batch_tahap_order",
+            "batch_tahap_label",
+            "interview_cohort",
+            "interview_cohort_name",
             "cooldown_eligible_date",
             "pra_seleksi_confirmed_at",
             "interview_confirmed_at",
+            "pra_seleksi_notes",
+            "interview_notes",
             "status_history",
             "attendance_by_stage",
             "attendance_marked_at_by_stage",
@@ -423,6 +444,46 @@ class JobApplicationSerializer(serializers.ModelSerializer):
             return None
         return getattr(batch, "name", None)
 
+    def get_batch_tahap_label(self, obj) -> str | None:
+        batch = getattr(obj, "batch", None)
+        if not batch:
+            return None
+        # `display_tahap_label` falls back to "Pra-Seleksi {tahap_order}".
+        return batch.display_tahap_label
+
+    def get_interview_cohort_name(self, obj) -> str | None:
+        cohort = getattr(obj, "interview_cohort", None)
+        if not cohort:
+            return None
+        return getattr(cohort, "name", None)
+
+    def _interview_field(self, obj, field: str):
+        """
+        Resolve interview metadata with cohort-first / batch-fallback rule.
+
+        - If the application has an interview_cohort, return its value.
+        - Otherwise, fall back to the legacy field on the batch (kept for
+          backward compatibility with old data and old mobile builds).
+        """
+        cohort = getattr(obj, "interview_cohort", None)
+        if cohort is not None:
+            return getattr(cohort, field, None)
+        batch = getattr(obj, "batch", None)
+        if batch is None:
+            return None
+        return getattr(batch, field, None)
+
+    def get_interview_date(self, obj):
+        return self._interview_field(obj, "interview_date")
+
+    def get_interview_location(self, obj) -> str:
+        value = self._interview_field(obj, "interview_location")
+        return value or ""
+
+    def get_interview_notes(self, obj) -> str:
+        value = self._interview_field(obj, "interview_notes")
+        return value or ""
+
     def get_cooldown_eligible_date(self, obj):
         """Serializable version of the model property."""
         return obj.cooldown_eligible_date
@@ -508,6 +569,8 @@ class ApplicationTransitionSerializer(serializers.Serializer):
       INTERVIEW   → DITERIMA  | DITOLAK
       DITERIMA    → BERANGKAT | DITOLAK
       BERANGKAT   → SELESAI
+
+    `interview_cohort` is required when target = INTERVIEW.
     """
 
     status = serializers.ChoiceField(
@@ -525,6 +588,27 @@ class ApplicationTransitionSerializer(serializers.Serializer):
         allow_null=True,
         help_text="Wajib diisi saat transisi ke SELESAI. Default: hari ini.",
     )
+    interview_cohort = serializers.PrimaryKeyRelatedField(
+        queryset=InterviewCohort.objects.all(),
+        required=False,
+        allow_null=True,
+        help_text=(
+            "ID InterviewCohort tujuan. Wajib saat status tujuan = INTERVIEW. "
+            "Cohort harus di lowongan yang sama dengan lamaran."
+        ),
+    )
+
+    def validate(self, attrs):
+        target_status = attrs.get("status")
+        cohort = attrs.get("interview_cohort")
+        if target_status == ApplicationStatus.INTERVIEW and cohort is None:
+            raise serializers.ValidationError({
+                "interview_cohort": (
+                    "Wajib diisi saat memindahkan pelamar ke tahap Interview. "
+                    "Pilih sesi interview yang akan menerima pelamar."
+                )
+            })
+        return attrs
 
 
 class BulkApplicationTransitionSerializer(ApplicationTransitionSerializer):
@@ -568,11 +652,20 @@ class LamaranBatchSerializer(serializers.ModelSerializer):
     """
     Full read serializer for LamaranBatch.
     Returned by GET /api/batches/ and GET /api/batches/{id}/.
+
+    Note: `interview_date / interview_location / interview_notes` are
+    DEPRECATED on the batch. Interview metadata now lives on
+    `InterviewCohort`. They are still serialized for backward compatibility
+    with older clients.
     """
 
     job_title = serializers.SerializerMethodField(read_only=True)
     created_by_name = serializers.SerializerMethodField(read_only=True)
+    display_tahap_label = serializers.CharField(read_only=True)
     applicant_count = serializers.IntegerField(read_only=True)
+    pra_seleksi_count = serializers.SerializerMethodField(read_only=True)
+    rejected_count = serializers.SerializerMethodField(read_only=True)
+    advanced_count = serializers.SerializerMethodField(read_only=True)
     confirmed_pra_seleksi_count = serializers.IntegerField(read_only=True)
     confirmed_interview_count = serializers.IntegerField(read_only=True)
     diterima_count = serializers.SerializerMethodField(read_only=True)
@@ -586,16 +679,23 @@ class LamaranBatchSerializer(serializers.ModelSerializer):
             "job_title",
             "name",
             "notes",
+            # Tahapan
+            "tahap_order",
+            "tahap_label",
+            "display_tahap_label",
             # Pra-seleksi schedule
             "pra_seleksi_date",
             "pra_seleksi_location",
             "pra_seleksi_notes",
-            # Interview schedule
+            # Deprecated interview schedule (kept for backward compat)
             "interview_date",
             "interview_location",
             "interview_notes",
             # Stats
             "applicant_count",
+            "pra_seleksi_count",
+            "advanced_count",
+            "rejected_count",
             "confirmed_pra_seleksi_count",
             "confirmed_interview_count",
             "diterima_count",
@@ -609,9 +709,13 @@ class LamaranBatchSerializer(serializers.ModelSerializer):
         read_only_fields = [
             "id",
             "job_title",
+            "display_tahap_label",
             "created_by",
             "created_by_name",
             "applicant_count",
+            "pra_seleksi_count",
+            "advanced_count",
+            "rejected_count",
             "confirmed_pra_seleksi_count",
             "confirmed_interview_count",
             "diterima_count",
@@ -627,6 +731,21 @@ class LamaranBatchSerializer(serializers.ModelSerializer):
         if not obj.created_by:
             return None
         return obj.created_by.full_name or obj.created_by.email
+
+    def get_pra_seleksi_count(self, obj) -> int:
+        return obj.applications.filter(status=ApplicationStatus.PRA_SELEKSI).count()
+
+    def get_advanced_count(self, obj) -> int:
+        """Pelamar yang sudah lanjut ke tahap interview atau berikutnya."""
+        return obj.applications.filter(status__in=[
+            ApplicationStatus.INTERVIEW,
+            ApplicationStatus.DITERIMA,
+            ApplicationStatus.BERANGKAT,
+            ApplicationStatus.SELESAI,
+        ]).count()
+
+    def get_rejected_count(self, obj) -> int:
+        return obj.applications.filter(status=ApplicationStatus.DITOLAK).count()
 
     def get_diterima_count(self, obj) -> int:
         return obj.applications.filter(status=ApplicationStatus.DITERIMA).count()
@@ -650,7 +769,7 @@ class LamaranBatchSerializer(serializers.ModelSerializer):
 class LamaranBatchCreateSerializer(serializers.Serializer):
     """
     Input serializer for POST /api/batches/.
-    Admin creates a new batch for a specific job opening.
+    Admin creates a new batch (one tahapan pra-seleksi) for a specific job.
     """
 
     job = serializers.PrimaryKeyRelatedField(
@@ -666,6 +785,35 @@ class LamaranBatchCreateSerializer(serializers.Serializer):
         allow_blank=True,
         help_text="Catatan umum untuk batch ini.",
     )
+    tahap_order = serializers.IntegerField(
+        required=False,
+        min_value=1,
+        max_value=50,
+        help_text=(
+            "Urutan tahapan pra-seleksi (1 = tahap pertama). Boleh sama dengan "
+            "batch lain pada lowongan yang sama jika tahap dibagi paralel."
+        ),
+    )
+    tahap_label = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=120,
+        help_text="Label tahapan (mis. 'Psikotes', 'FGD'). Opsional.",
+    )
+
+
+class LamaranBatchUpdateSerializer(serializers.ModelSerializer):
+    """Input serializer for PATCH /api/batches/{id}/ — name/notes/tahapan."""
+
+    class Meta:
+        model = LamaranBatch
+        fields = ["name", "notes", "tahap_order", "tahap_label"]
+        extra_kwargs = {
+            "name": {"required": False},
+            "notes": {"required": False, "allow_blank": True},
+            "tahap_order": {"required": False, "min_value": 1, "max_value": 50},
+            "tahap_label": {"required": False, "allow_blank": True},
+        }
 
 
 class GroupAssignSerializer(serializers.Serializer):
@@ -865,6 +1013,310 @@ class BatchAnnouncementCreateSerializer(serializers.Serializer):
             '{"selection_type":"statuses","statuses":["PRA_SELEKSI","INTERVIEW"]}.'
         ),
     )
+
+    def validate(self, attrs):
+        from .batch_announcement_recipients import (
+            default_recipient_config,
+            validate_recipient_config,
+        )
+
+        config = attrs.get("recipient_config")
+        if config is None:
+            attrs["recipient_config"] = default_recipient_config()
+        else:
+            ok, err = validate_recipient_config(config)
+            if not ok:
+                raise serializers.ValidationError({"recipient_config": err})
+        return attrs
+
+
+# ---------------------------------------------------------------------------
+# InterviewCohort — sesi interview untuk lowongan
+# ---------------------------------------------------------------------------
+
+
+class InterviewCohortSerializer(serializers.ModelSerializer):
+    """
+    Read serializer for InterviewCohort.
+
+    Stats are computed from `applications` related manager (status grouping)
+    so a single endpoint hit is enough to render the cohort dashboard card.
+    """
+
+    job_title = serializers.SerializerMethodField(read_only=True)
+    created_by_name = serializers.SerializerMethodField(read_only=True)
+    applicant_count = serializers.IntegerField(read_only=True)
+    confirmed_interview_count = serializers.IntegerField(read_only=True)
+    interview_count = serializers.SerializerMethodField(read_only=True)
+    diterima_count = serializers.SerializerMethodField(read_only=True)
+    berangkat_count = serializers.SerializerMethodField(read_only=True)
+    selesai_count = serializers.SerializerMethodField(read_only=True)
+    ditolak_count = serializers.SerializerMethodField(read_only=True)
+    pengumpulan_dokumen_confirmed_count = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = InterviewCohort
+        fields = [
+            "id",
+            "job",
+            "job_title",
+            "name",
+            "notes",
+            "interview_date",
+            "interview_location",
+            "interview_notes",
+            "is_active",
+            "applicant_count",
+            "interview_count",
+            "diterima_count",
+            "berangkat_count",
+            "selesai_count",
+            "ditolak_count",
+            "confirmed_interview_count",
+            "pengumpulan_dokumen_confirmed_count",
+            "created_by",
+            "created_by_name",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "job_title",
+            "created_by",
+            "created_by_name",
+            "applicant_count",
+            "interview_count",
+            "diterima_count",
+            "berangkat_count",
+            "selesai_count",
+            "ditolak_count",
+            "confirmed_interview_count",
+            "pengumpulan_dokumen_confirmed_count",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_job_title(self, obj) -> str:
+        return obj.job.title if obj.job else ""
+
+    def get_created_by_name(self, obj) -> str | None:
+        if not obj.created_by:
+            return None
+        return obj.created_by.full_name or obj.created_by.email
+
+    def _count_for(self, obj, status_value: str) -> int:
+        return obj.applications.filter(status=status_value).count()
+
+    def get_interview_count(self, obj) -> int:
+        return self._count_for(obj, ApplicationStatus.INTERVIEW)
+
+    def get_diterima_count(self, obj) -> int:
+        return self._count_for(obj, ApplicationStatus.DITERIMA)
+
+    def get_berangkat_count(self, obj) -> int:
+        return self._count_for(obj, ApplicationStatus.BERANGKAT)
+
+    def get_selesai_count(self, obj) -> int:
+        return self._count_for(obj, ApplicationStatus.SELESAI)
+
+    def get_ditolak_count(self, obj) -> int:
+        return self._count_for(obj, ApplicationStatus.DITOLAK)
+
+    def get_pengumpulan_dokumen_confirmed_count(self, obj) -> int:
+        applications = obj.applications.filter(status=ApplicationStatus.DITERIMA).only(
+            "attendance_by_stage"
+        )
+        count = 0
+        for app in applications:
+            attendance_map = app.attendance_by_stage if isinstance(app.attendance_by_stage, dict) else {}
+            if attendance_map.get(ApplicationStatus.DITERIMA):
+                count += 1
+        return count
+
+
+class InterviewCohortCreateSerializer(serializers.Serializer):
+    """Input serializer for POST /api/interview-cohorts/."""
+
+    job = serializers.PrimaryKeyRelatedField(
+        queryset=LowonganKerja.objects.all(),
+        help_text="ID lowongan yang menjadi induk sesi interview.",
+    )
+    name = serializers.CharField(
+        max_length=120,
+        help_text="Nama sesi, mis. 'Interview 5 Mei 2026 — Sesi Pagi'.",
+    )
+    notes = serializers.CharField(required=False, allow_blank=True)
+    interview_date = serializers.DateTimeField(required=False, allow_null=True)
+    interview_location = serializers.CharField(
+        required=False, allow_blank=True, max_length=255,
+    )
+    interview_notes = serializers.CharField(required=False, allow_blank=True)
+
+
+class InterviewCohortUpdateSerializer(serializers.ModelSerializer):
+    """Input serializer for PATCH /api/interview-cohorts/{id}/."""
+
+    class Meta:
+        model = InterviewCohort
+        fields = [
+            "name", "notes",
+            "interview_date", "interview_location", "interview_notes",
+            "is_active",
+        ]
+        extra_kwargs = {
+            "name": {"required": False},
+            "notes": {"required": False, "allow_blank": True},
+            "interview_date": {"required": False, "allow_null": True},
+            "interview_location": {"required": False, "allow_blank": True},
+            "interview_notes": {"required": False, "allow_blank": True},
+            "is_active": {"required": False},
+        }
+
+
+class InterviewCohortScheduleSerializer(serializers.Serializer):
+    """Input serializer for PATCH /api/interview-cohorts/{id}/schedule/."""
+
+    interview_date = serializers.DateTimeField(
+        required=False, allow_null=True,
+        help_text="Tanggal & waktu interview.",
+    )
+    interview_location = serializers.CharField(
+        required=False, allow_blank=True, max_length=255,
+        help_text="Lokasi interview.",
+    )
+    interview_notes = serializers.CharField(
+        required=False, allow_blank=True,
+        help_text="Informasi tambahan untuk pelamar (dress code, dokumen, dll.).",
+    )
+
+
+class CohortBulkTransitionSerializer(serializers.Serializer):
+    """Input serializer for POST /api/interview-cohorts/{id}/bulk-transition/."""
+
+    status = serializers.ChoiceField(
+        choices=[
+            (ApplicationStatus.DITERIMA, ApplicationStatus.DITERIMA.label),
+            (ApplicationStatus.BERANGKAT, ApplicationStatus.BERANGKAT.label),
+            (ApplicationStatus.SELESAI, ApplicationStatus.SELESAI.label),
+            (ApplicationStatus.DITOLAK, ApplicationStatus.DITOLAK.label),
+        ],
+        help_text=(
+            "Status tujuan. Cohort hanya menangani transisi dari INTERVIEW ke "
+            "DITERIMA / BERANGKAT / SELESAI / DITOLAK."
+        ),
+    )
+    note = serializers.CharField(required=False, allow_blank=True, max_length=500)
+    placement_end_date = serializers.DateField(required=False, allow_null=True)
+
+
+class BatchAdvanceToCohortSerializer(serializers.Serializer):
+    """
+    Input serializer for POST /api/batches/{id}/advance-to-interview/.
+    Routes survivors of this batch into the chosen interview cohort.
+    """
+
+    interview_cohort = serializers.PrimaryKeyRelatedField(
+        queryset=InterviewCohort.objects.filter(is_active=True),
+        help_text="ID InterviewCohort tujuan (harus aktif & lowongan yang sama).",
+    )
+    application_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        required=False,
+        allow_empty=False,
+        help_text=(
+            "Subset opsional: hanya pindahkan pelamar dengan ID ini "
+            "(default: semua pelamar PRA_SELEKSI di batch). Maks. 500."
+        ),
+    )
+    note = serializers.CharField(required=False, allow_blank=True, max_length=500)
+
+    def validate_application_ids(self, value):
+        if value is None:
+            return value
+        deduped = list(dict.fromkeys(value))
+        if len(deduped) > 500:
+            raise serializers.ValidationError("Maksimal 500 lamaran per permintaan.")
+        return deduped
+
+
+class MoveApplicationsToBatchSerializer(serializers.Serializer):
+    """Re-batch (still PRA_SELEKSI) — shift survivors to the next tahapan."""
+
+    target_batch = serializers.PrimaryKeyRelatedField(
+        queryset=LamaranBatch.objects.all(),
+        help_text="ID batch tujuan (lowongan yang sama).",
+    )
+    application_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=False,
+        help_text="Daftar ID JobApplication yang dipindah. Maks. 500.",
+    )
+    note = serializers.CharField(required=False, allow_blank=True, max_length=500)
+
+    def validate_application_ids(self, value):
+        deduped = list(dict.fromkeys(value))
+        if len(deduped) > 500:
+            raise serializers.ValidationError("Maksimal 500 lamaran per permintaan.")
+        return deduped
+
+
+class MoveApplicationsToCohortSerializer(serializers.Serializer):
+    """Re-cohort (status >= INTERVIEW) — shift applicants between cohorts."""
+
+    target_cohort = serializers.PrimaryKeyRelatedField(
+        queryset=InterviewCohort.objects.all(),
+        help_text="ID InterviewCohort tujuan (harus lowongan yang sama).",
+    )
+    application_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=False,
+        help_text="Daftar ID JobApplication yang dipindah. Maks. 500.",
+    )
+    note = serializers.CharField(required=False, allow_blank=True, max_length=500)
+
+    def validate_application_ids(self, value):
+        deduped = list(dict.fromkeys(value))
+        if len(deduped) > 500:
+            raise serializers.ValidationError("Maksimal 500 lamaran per permintaan.")
+        return deduped
+
+
+# ---------------------------------------------------------------------------
+# InterviewCohortAnnouncement
+# ---------------------------------------------------------------------------
+
+
+class InterviewCohortAnnouncementSerializer(serializers.ModelSerializer):
+    """Read serializer for cohort announcements."""
+
+    created_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = InterviewCohortAnnouncement
+        fields = [
+            "id",
+            "cohort",
+            "title",
+            "body",
+            "recipient_config",
+            "created_by",
+            "created_by_name",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+    def get_created_by_name(self, obj) -> str | None:
+        if obj.created_by:
+            return obj.created_by.full_name or obj.created_by.email
+        return None
+
+
+class InterviewCohortAnnouncementCreateSerializer(serializers.Serializer):
+    """Input serializer for POST /api/interview-cohorts/{id}/announcements/."""
+
+    title = serializers.CharField(max_length=200)
+    body = serializers.CharField()
+    recipient_config = serializers.JSONField(required=False)
 
     def validate(self, attrs):
         from .batch_announcement_recipients import (

@@ -51,6 +51,8 @@ const AdminBatchListPage = lazy(() => import("@/pages/admin-batch-list-page").th
 const AdminBatchDetailPage = lazy(() => import("@/pages/admin-batch-detail-page").then(m => ({ default: m.AdminBatchDetailPage })))
 const AdminJobDetailPage = lazy(() => import("@/pages/admin-job-detail-page").then(m => ({ default: m.AdminJobDetailPage })))
 const AdminBatchFormPage = lazy(() => import("@/pages/admin-batch-form-page").then(m => ({ default: m.AdminBatchFormPage })))
+const AdminInterviewCohortFormPage = lazy(() => import("@/pages/admin-interview-cohort-form-page").then(m => ({ default: m.AdminInterviewCohortFormPage })))
+const AdminInterviewCohortDetailPage = lazy(() => import("@/pages/admin-interview-cohort-detail-page").then(m => ({ default: m.AdminInterviewCohortDetailPage })))
 const AdminChatPage = lazy(() => import("@/pages/admin-chat-page").then(m => ({ default: m.AdminChatPage })))
 const PrivacyPolicyPage = lazy(() => import("@/pages/privacy-policy-page").then(m => ({ default: m.PrivacyPolicyPage })))
 const AccountDeletionPage = lazy(() => import("@/pages/account-deletion-page").then(m => ({ default: m.AccountDeletionPage })))
@@ -142,8 +144,11 @@ function AppRoutes() {
         <Route path="lowongan-kerja" element={<AdminJobListPage />} />
         <Route path="lowongan-kerja/new" element={<AdminJobFormPage />} />
         <Route path="lowongan-kerja/:id/batch/new" element={<AdminBatchFormPage />} />
+        <Route path="lowongan-kerja/:id/sesi-interview/baru" element={<AdminInterviewCohortFormPage />} />
         <Route path="lowongan-kerja/:id/edit" element={<AdminJobDetailPage />} />
         <Route path="lowongan-kerja/:id" element={<AdminJobDetailPage />} />
+        <Route path="sesi-interview/:id/edit" element={<AdminInterviewCohortFormPage />} />
+        <Route path="sesi-interview/:id" element={<AdminInterviewCohortDetailPage />} />
         <Route path="pelamar" element={<AdminPelamarListPage />} />
         <Route path="pelamar/new" element={<AdminPelamarFormPage />} />
         <Route path="pelamar/:id" element={<AdminPelamarDetailPage />} />
@@ -182,8 +187,13 @@ function AppRoutes() {
         <Route path="berita/new" element={<AdminNewsFormPage />} />
         <Route path="berita/:id/edit" element={<AdminNewsFormPage />} />
         <Route path="lowongan-kerja" element={<AdminJobListPage />} />
+        <Route path="lowongan-kerja/new" element={<AdminJobFormPage />} />
         <Route path="lowongan-kerja/:id/batch/new" element={<AdminBatchFormPage />} />
+        <Route path="lowongan-kerja/:id/sesi-interview/baru" element={<AdminInterviewCohortFormPage />} />
+        <Route path="lowongan-kerja/:id/edit" element={<AdminJobDetailPage />} />
         <Route path="lowongan-kerja/:id" element={<AdminJobDetailPage />} />
+        <Route path="sesi-interview/:id/edit" element={<AdminInterviewCohortFormPage />} />
+        <Route path="sesi-interview/:id" element={<AdminInterviewCohortDetailPage />} />
         <Route path="pelamar" element={<AdminPelamarListPage />} />
         <Route path="pelamar/new" element={<AdminPelamarFormPage />} />
         <Route path="pelamar/:id" element={<AdminPelamarDetailPage />} />

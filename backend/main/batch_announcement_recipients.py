@@ -1,5 +1,6 @@
 """
-Recipient selection for batch announcements (admin → subset of batch applicants).
+Recipient selection for batch and cohort announcements
+(admin → subset of applicants in a batch / interview cohort).
 
 Filtering is centralized for preview, notifications (signals), and
 applicant-visible announcement lists.
@@ -11,7 +12,14 @@ from typing import Any
 
 from django.db.models import QuerySet
 
-from .models import ApplicationStatus, BatchAnnouncement, JobApplication, LamaranBatch
+from .models import (
+    ApplicationStatus,
+    BatchAnnouncement,
+    InterviewCohort,
+    InterviewCohortAnnouncement,
+    JobApplication,
+    LamaranBatch,
+)
 
 VALID_SELECTION_TYPES = frozenset({"all_active", "statuses"})
 
@@ -44,6 +52,11 @@ def validate_recipient_config(config: dict[str, Any]) -> tuple[bool, str]:
     return True, ""
 
 
+# ---------------------------------------------------------------------------
+# LamaranBatch (pra-seleksi) announcements
+# ---------------------------------------------------------------------------
+
+
 def applications_for_recipient_config(
     batch: LamaranBatch, config: dict[str, Any]
 ) -> QuerySet[JobApplication]:
@@ -66,7 +79,7 @@ def applications_for_recipient_config(
 
 
 def recipient_user_count(batch: LamaranBatch, config: dict[str, Any]) -> int:
-    """Distinct applicant users matching the config."""
+    """Distinct applicant users matching the config (batch announcement)."""
     return (
         applications_for_recipient_config(batch, config)
         .values("applicant__user_id")
@@ -78,10 +91,60 @@ def recipient_user_count(batch: LamaranBatch, config: dict[str, Any]) -> int:
 def announcement_visible_for_application(
     announcement: BatchAnnouncement, application: JobApplication
 ) -> bool:
-    """Whether this applicant's application should list this announcement."""
+    """Whether this applicant's application should see this batch announcement."""
     if application.batch_id != announcement.batch_id:
         return False
     config = announcement.recipient_config or default_recipient_config()
     return applications_for_recipient_config(announcement.batch, config).filter(
         pk=application.pk
     ).exists()
+
+
+# ---------------------------------------------------------------------------
+# InterviewCohort announcements (parallel API)
+# ---------------------------------------------------------------------------
+
+
+def applications_for_cohort_recipient_config(
+    cohort: InterviewCohort, config: dict[str, Any]
+) -> QuerySet[JobApplication]:
+    """
+    JobApplication rows in this cohort that should receive the announcement
+    (active users only).
+    """
+    qs = JobApplication.objects.filter(
+        interview_cohort=cohort,
+        applicant__user__is_active=True,
+    ).select_related("applicant__user")
+
+    selection = (config or {}).get("selection_type", "all_active")
+    if selection == "all_active":
+        return qs.exclude(status__in=JobApplication.TERMINAL_STATUSES)
+    if selection == "statuses":
+        statuses = (config or {}).get("statuses") or []
+        return qs.filter(status__in=statuses)
+    return qs.none()
+
+
+def cohort_recipient_user_count(
+    cohort: InterviewCohort, config: dict[str, Any]
+) -> int:
+    """Distinct applicant users matching the config (cohort announcement)."""
+    return (
+        applications_for_cohort_recipient_config(cohort, config)
+        .values("applicant__user_id")
+        .distinct()
+        .count()
+    )
+
+
+def cohort_announcement_visible_for_application(
+    announcement: InterviewCohortAnnouncement, application: JobApplication
+) -> bool:
+    """Whether this applicant's application should see this cohort announcement."""
+    if application.interview_cohort_id != announcement.cohort_id:
+        return False
+    config = announcement.recipient_config or default_recipient_config()
+    return applications_for_cohort_recipient_config(
+        announcement.cohort, config
+    ).filter(pk=application.pk).exists()

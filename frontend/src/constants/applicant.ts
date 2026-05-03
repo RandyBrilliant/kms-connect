@@ -79,7 +79,6 @@ export const DOCUMENT_REVIEW_STATUS_COLORS: Record<
 export const GENDER_LABELS: Record<Gender, string> = {
   M: "Laki-laki",
   F: "Perempuan",
-  O: "Lainnya",
 } as const
 
 // ============================================================================

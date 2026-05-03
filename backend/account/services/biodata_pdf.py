@@ -221,7 +221,10 @@ def generate_biodata_pdf(profile) -> bytes:
     phone       = _str(profile.contact_phone)
     address     = _str(profile.address)
 
-    birth_place = _str(profile.birth_place.name if profile.birth_place else "")
+    birth_place = _str(
+        (profile.birth_place_text or "").strip()
+        or (profile.birth_place.name if profile.birth_place else "")
+    )
     birth_date  = _fmt_date(profile.birth_date)
     ttl = ", ".join(p for p in [birth_place, birth_date] if p)
 

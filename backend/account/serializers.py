@@ -36,9 +36,6 @@ from .api_responses import (
     validate_nik_unique,
 )
 from .validators import normalize_indonesian_phone
-def _regency_queryset():
-    from regions.models import Regency
-    return Regency.objects.all()
 
 
 # ---------------------------------------------------------------------------
@@ -326,6 +323,37 @@ class CompanyUserSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 
+# Applicant biodata string fields stored UPPERCASE (parity with mobile); exclude emails & phones.
+_BIODATA_UPPER_STR_FIELDS = frozenset(
+    {
+        "birth_place_text",
+        "address",
+        "education_major",
+        "passport_number",
+        "passport_issue_place",
+        "family_card_number",
+        "diploma_number",
+        "father_name",
+        "father_occupation",
+        "mother_name",
+        "mother_occupation",
+        "spouse_name",
+        "spouse_occupation",
+        "family_address",
+        "heir_name",
+        "notes",
+        "hasil_medical",
+        "disnaker",
+        "no_sip",
+        "no_jo",
+        "bank",
+        "no_rek",
+        "no_calling_visa",
+        "nik",
+    }
+)
+
+
 def _staff_rujukan_display_name(*, full_name: str, email: str) -> str:
     """
     Label for daftar pelamar "Rujukan" column: DB full_name when set; otherwise a
@@ -385,10 +413,10 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
         allow_blank=True,
         max_length=255,
     )
-    birth_place = serializers.PrimaryKeyRelatedField(
-        queryset=_regency_queryset(),
+    birth_place_text = serializers.CharField(
         required=False,
-        allow_null=True,
+        allow_blank=True,
+        max_length=200,
     )
     score_breakdown = serializers.SerializerMethodField(read_only=True)
 
@@ -402,7 +430,7 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
             "registration_date",
             "destination_country",
             "full_name",
-            "birth_place",
+            "birth_place_text",
             "birth_place_display",
             "birth_date",
             "address",
@@ -588,9 +616,12 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
         return result or None
 
     def get_birth_place_display(self, obj):
-        """Return the regency (kab/kota) name for birth_place."""
-        if not obj or not obj.birth_place_id:
+        """Primary: birth_place_text; legacy fallback if FK still present."""
+        if not obj:
             return None
+        t = (getattr(obj, "birth_place_text", None) or "").strip()
+        if t:
+            return t
         bp = getattr(obj, "birth_place", None)
         return bp.name if bp else None
 
@@ -639,6 +670,14 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
+        for key in _BIODATA_UPPER_STR_FIELDS:
+            if key not in attrs:
+                continue
+            val = attrs[key]
+            if val is None:
+                continue
+            if isinstance(val, str):
+                attrs[key] = val.strip().upper()
         # Pelamar mengubah profil sendiri (mobile self-service / PATCH me): tidak boleh
         # mengatur staff rujukan lewat kode — hanya petugas/backoffice.
         if self.context.get("is_own_profile"):
@@ -695,8 +734,12 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
         if full_name is not None:
             stripped = full_name.strip()
             if stripped:
-                instance.user.full_name = stripped
+                instance.user.full_name = stripped.upper()
                 instance.user.save(update_fields=["full_name"])
+
+        # Single source of truth: text tempat lahir replaces legacy Regency FK.
+        if "birth_place_text" in validated_data:
+            validated_data["birth_place"] = None
 
         # Update all remaining profile fields normally
         for attr, value in validated_data.items():

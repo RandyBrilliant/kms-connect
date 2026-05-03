@@ -26,6 +26,8 @@ function buildQueryString(params: ApplicationsListParams): string {
   if (params.job != null) search.set("job", String(params.job))
   if (params.applicant != null) search.set("applicant", String(params.applicant))
   if (params.batch != null) search.set("batch", String(params.batch))
+  if (params.interview_cohort != null)
+    search.set("interview_cohort", String(params.interview_cohort))
   if (params.ordering) search.set("ordering", params.ordering)
   const qs = search.toString()
   return qs ? `?${qs}` : ""
@@ -54,6 +56,28 @@ export async function getAllApplicationsByBatch(
 
   while (true) {
     const data = await getApplications({ batch: batchId, page, page_size: pageSize })
+    all.push(...data.results)
+    if (!data.next) break
+    page += 1
+  }
+
+  return all
+}
+
+/** Same helper as `getAllApplicationsByBatch` but scoped to a cohort. */
+export async function getAllApplicationsByCohort(
+  cohortId: number
+): Promise<JobApplication[]> {
+  const pageSize = 100
+  let page = 1
+  const all: JobApplication[] = []
+
+  while (true) {
+    const data = await getApplications({
+      interview_cohort: cohortId,
+      page,
+      page_size: pageSize,
+    })
     all.push(...data.results)
     if (!data.next) break
     page += 1

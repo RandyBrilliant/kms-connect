@@ -10,7 +10,7 @@ import '../../../../core/widgets/professional/professional_card.dart';
 import '../../../../core/widgets/professional/professional_gradient_background.dart';
 import '../../data/providers/document_provider.dart';
 import '../../domain/models/document_checklist_item.dart';
-import '../../utils/open_cv_template_pdf.dart';
+import '../../utils/bundled_document_templates.dart';
 
 /// Matches backend `account.document_specs` / `seed_document_types` (PHASE_INITIAL).
 const _kDocPhaseInitialSubtitle =
@@ -764,6 +764,61 @@ class _ChecklistCard extends StatelessWidget {
                         ),
                         label: Text(
                           'Lihat contoh template CV',
+                          style: tt.labelLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.primaryDarkGreen,
+                          ),
+                        ),
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          foregroundColor: AppColors.primaryDarkGreen,
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (item.type.code == 'ijin-keluarga') ...[
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: () =>
+                            openIjinKeluargaTemplatePdf(context),
+                        icon: Icon(
+                          Icons.picture_as_pdf_outlined,
+                          size: 18,
+                          color: AppColors.primaryDarkGreen,
+                        ),
+                        label: Text(
+                          'Unduh template izin keluarga (PDF)',
+                          style: tt.labelLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.primaryDarkGreen,
+                          ),
+                        ),
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          foregroundColor: AppColors.primaryDarkGreen,
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (item.type.code ==
+                      'surat-keterangan-status-perkawinan') ...[
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: () =>
+                            openSuratStatusPerkawinanTemplateDoc(context),
+                        icon: Icon(
+                          Icons.description_outlined,
+                          size: 18,
+                          color: AppColors.primaryDarkGreen,
+                        ),
+                        label: Text(
+                          'Unduh template status perkawinan (Word)',
                           style: tt.labelLarge?.copyWith(
                             fontWeight: FontWeight.w700,
                             color: AppColors.primaryDarkGreen,

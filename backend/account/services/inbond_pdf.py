@@ -154,7 +154,10 @@ def generate_inbond_pdf(profile) -> bytes:
     passport = _str(profile.passport_number)
     id_number = nik or passport
 
-    birth_place = _str(profile.birth_place.name if profile.birth_place else "")
+    birth_place = _str(
+        (profile.birth_place_text or "").strip()
+        or (profile.birth_place.name if profile.birth_place else "")
+    )
     birth_date  = _fmt_date(profile.birth_date)
     ttl = ", ".join(p for p in [birth_place, birth_date] if p)
 

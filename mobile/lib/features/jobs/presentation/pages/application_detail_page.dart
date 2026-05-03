@@ -247,10 +247,10 @@ class _ApplicationDetailPageState extends ConsumerState<ApplicationDetailPage>
                         isCompletingPlacement: _isCompleting,
                       ),
                       const SizedBox(height: 16),
-                      // Announcements section for any application that belongs to a batch.
-                      // Some announcements are still filtered server-side by recipient_config.
-                      if (application.batch != null) ...[
-                        _SectionHeader(title: 'Pengumuman Batch'),
+                      // Batch + interview cohort broadcasts (merged on the server).
+                      if (application.batch != null ||
+                          application.interviewCohort != null) ...[
+                        _SectionHeader(title: 'Pengumuman'),
                         const SizedBox(height: 8),
                         _AnnouncementsSection(
                           applicationId: widget.applicationId,
@@ -418,9 +418,26 @@ class _InfoCard extends StatelessWidget {
                 value: application.batchName!,
               ),
             ],
+            if (application.batchTahapLabel != null &&
+                application.batchTahapLabel!.trim().isNotEmpty) ...[
+              const Divider(height: 20),
+              _InfoRow(
+                icon: Icons.layers_outlined,
+                label: 'Tahapan',
+                value: application.batchTahapLabel!,
+              ),
+            ],
+            if (application.interviewCohortName != null &&
+                application.interviewCohortName!.trim().isNotEmpty) ...[
+              const Divider(height: 20),
+              _InfoRow(
+                icon: Icons.calendar_month_outlined,
+                label: 'Sesi Interview',
+                value: application.interviewCohortName!,
+              ),
+            ],
             // Jadwal Pra-Seleksi dari batch (jika sudah dijadwalkan)
-            if (application.praSeleksiDate != null &&
-                application.batchName != null) ...[
+            if (application.praSeleksiDate != null) ...[
               const Divider(height: 20),
               _InfoRow(
                 icon: Icons.event_available_outlined,
@@ -437,10 +454,15 @@ class _InfoCard extends StatelessWidget {
                     value: application.praSeleksiLocation!,
                   ),
                 ),
+              if (application.praSeleksiNotes != null &&
+                  application.praSeleksiNotes!.trim().isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: _ScheduleNotesBlock(text: application.praSeleksiNotes!),
+                ),
             ],
-            // Jadwal Interview dari batch (hanya setelah masuk tahap INTERVIEW ke atas)
+            // Jadwal interview — gunakan data cohort (fallback batch di server).
             if (application.interviewDate != null &&
-                application.batchName != null &&
                 (application.status == 'INTERVIEW' ||
                     application.status == 'DITERIMA' ||
                     application.status == 'BERANGKAT' ||
@@ -460,6 +482,12 @@ class _InfoCard extends StatelessWidget {
                     label: 'Lokasi Interview',
                     value: application.interviewLocation!,
                   ),
+                ),
+              if (application.interviewNotes != null &&
+                  application.interviewNotes!.trim().isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: _ScheduleNotesBlock(text: application.interviewNotes!),
                 ),
             ],
             // Pra-Seleksi confirmation
@@ -671,6 +699,8 @@ class _AttendanceStageSection extends StatelessWidget {
 
   bool _isDocumentStage(String stage) => stage == 'DITERIMA';
   bool _isCompletionStage(String stage) => stage == 'SELESAI';
+  bool _requiresAttendanceConfirmation(String stage) =>
+      stage == 'PRA_SELEKSI' || stage == 'INTERVIEW';
 
   String _label(String status) {
     switch (status) {
@@ -711,8 +741,11 @@ class _AttendanceStageSection extends StatelessWidget {
               application.reachedStages.contains(stage) ||
               application.status == stage;
           final isCompletionStage = _isCompletionStage(stage);
+          final requiresAttendanceConfirmation =
+              _requiresAttendanceConfirmation(stage);
           final attended = application.attendanceByStage[stage] == true;
           final stageDone =
+              (!requiresAttendanceConfirmation && reached) ||
               attended ||
               (isCompletionStage && application.status == 'SELESAI');
           final attendedAt = application.attendanceMarkedAtByStage[stage];
@@ -721,6 +754,7 @@ class _AttendanceStageSection extends StatelessWidget {
           final docsComplete = progress?.isComplete ?? false;
           final canTap =
               reached &&
+              requiresAttendanceConfirmation &&
               !stageDone &&
               !isConfirming &&
               !isCompletionStage &&
@@ -729,6 +763,14 @@ class _AttendanceStageSection extends StatelessWidget {
 
           final subtitle = !reached
               ? 'Belum mencapai tahapan'
+              : !requiresAttendanceConfirmation
+              ? (stage == 'DITERIMA'
+                    ? 'Tahapan diterima tidak memerlukan konfirmasi kehadiran.'
+                    : stage == 'BERANGKAT'
+                    ? 'Tahapan berangkat tidak memerlukan konfirmasi kehadiran.'
+                    : stage == 'DITOLAK'
+                    ? 'Tahapan ditolak tidak memerlukan konfirmasi kehadiran.'
+                    : 'Tahapan ini tidak memerlukan konfirmasi kehadiran.')
               : stageDone
               ? (isCompletionStage
                     ? 'Berhasil selesai. Anda sudah menyelesaikan tahapan ini.'
@@ -814,6 +856,37 @@ class _AttendanceStageSection extends StatelessWidget {
           );
         }),
       ],
+    );
+  }
+}
+
+class _ScheduleNotesBlock extends StatelessWidget {
+  const _ScheduleNotesBlock({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFB),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: cs.outlineVariant.withValues(alpha: 0.35),
+        ),
+      ),
+      child: Text(
+        text,
+        style: GoogleFonts.plusJakartaSans(
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+          height: 1.45,
+          color: AppColors.textDark,
+        ),
+      ),
     );
   }
 }
@@ -1187,9 +1260,24 @@ class _AnnouncementCard extends StatelessWidget {
   final BatchAnnouncement announcement;
   final DateFormat fmt;
 
+  static String? _sourceChipLabel(BatchAnnouncement a) {
+    switch (a.kind) {
+      case 'cohort':
+        return 'Sesi Interview';
+      case 'batch':
+        return 'Pra-Seleksi';
+      default:
+        break;
+    }
+    if (a.cohort != null) return 'Sesi Interview';
+    if (a.batch != null) return 'Pra-Seleksi';
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final chipLabel = _sourceChipLabel(announcement);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -1212,9 +1300,11 @@ class _AnnouncementCard extends StatelessWidget {
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
                   child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Icon(
                         Icons.notifications_active_outlined,
@@ -1223,20 +1313,52 @@ class _AnnouncementCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: Text(
-                          announcement.title,
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textDark,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              announcement.title,
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textDark,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (chipLabel != null) ...[
+                              const SizedBox(height: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: cs.primaryContainer
+                                      .withValues(alpha: 0.45),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: cs.outlineVariant
+                                        .withValues(alpha: 0.35),
+                                  ),
+                                ),
+                                child: Text(
+                                  chipLabel,
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: cs.onPrimaryContainer,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
+                const SizedBox(width: 8),
                 Text(
                   fmt.format(announcement.createdAt),
                   style: GoogleFonts.plusJakartaSans(

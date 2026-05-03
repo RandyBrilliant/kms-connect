@@ -10,7 +10,7 @@ export type ApplicantVerificationStatus =
   | "ACCEPTED"
   | "REJECTED"
 
-export type Gender = "M" | "F" | "O"
+export type Gender = "M" | "F"
 
 export type DestinationCountry = "MALAYSIA"
 
@@ -94,7 +94,8 @@ export interface ApplicantProfile {
   registration_date: string | null
   destination_country: DestinationCountry
   full_name: string
-  birth_place: number | null
+  /** Free-text tempat lahir (UPPERCASE, parity with mobile). */
+  birth_place_text: string
   birth_place_display?: string | null
   birth_date: string | null
   address: string
@@ -220,7 +221,7 @@ export interface ApplicantUserCreateInput {
   applicant_profile: {
     full_name: string
     nik: string
-    birth_place?: number | null
+    birth_place_text?: string
     birth_date?: string | null
     address?: string
     contact_phone?: string

@@ -17,8 +17,8 @@ class RegistrationState {
   final bool isProcessing;
   final String? error;
 
-  /// Confirmed birth place region ID (FK → regions.Regency).
-  final int? birthPlaceId;
+  /// Confirmed tempat lahir (free text, uppercase on submit).
+  final String? birthPlaceText;
 
   /// Confirmed birth date in ISO format (yyyy-MM-dd).
   final String? birthDateIso;
@@ -37,7 +37,7 @@ class RegistrationState {
     this.ktpData,
     this.isProcessing = false,
     this.error,
-    this.birthPlaceId,
+    this.birthPlaceText,
     this.birthDateIso,
     this.dataDeclarationConfirmed = false,
   });
@@ -52,7 +52,7 @@ class RegistrationState {
     KtpData? ktpData,
     bool? isProcessing,
     String? error,
-    int? birthPlaceId,
+    String? birthPlaceText,
     String? birthDateIso,
     bool? dataDeclarationConfirmed,
   }) {
@@ -66,7 +66,7 @@ class RegistrationState {
       ktpData: ktpData ?? this.ktpData,
       isProcessing: isProcessing ?? this.isProcessing,
       error: error,
-      birthPlaceId: birthPlaceId ?? this.birthPlaceId,
+      birthPlaceText: birthPlaceText ?? this.birthPlaceText,
       birthDateIso: birthDateIso ?? this.birthDateIso,
       dataDeclarationConfirmed:
           dataDeclarationConfirmed ?? this.dataDeclarationConfirmed,
@@ -111,9 +111,9 @@ class RegistrationNotifier extends StateNotifier<RegistrationState> {
   }
 
   /// Saves the confirmed birth place region ID and ISO birth date from step 2.
-  void setBirthInfo({int? birthPlaceId, String? birthDateIso}) {
+  void setBirthInfo({String? birthPlaceText, String? birthDateIso}) {
     state = state.copyWith(
-      birthPlaceId: birthPlaceId,
+      birthPlaceText: birthPlaceText,
       birthDateIso: birthDateIso,
     );
   }
@@ -177,7 +177,7 @@ class RegistrationNotifier extends StateNotifier<RegistrationState> {
         referralCode: state.referralCode,
         fullName: state.ktpData?.name,
         phoneNumber: state.phoneNumber,
-        birthPlaceId: state.birthPlaceId,
+        birthPlaceText: state.birthPlaceText,
         birthDateIso: state.birthDateIso,
         dataDeclarationConfirmed: state.dataDeclarationConfirmed,
       );

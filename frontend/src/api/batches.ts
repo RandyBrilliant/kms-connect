@@ -46,10 +46,16 @@ import type {
   GroupAssignResponse,
   CheckEligibilityInput,
   EligibilityCheckResult,
+  MoveApplicationsToBatchInput,
   ScheduleBatchStageInput,
   BulkTransitionInput,
   BulkTransitionResponse,
+  UpdateBatchInput,
 } from "@/types/lamaran-batch"
+import type {
+  BatchAdvanceToCohortInput,
+  BatchAdvanceToCohortResponse,
+} from "@/types/interview-cohort"
 import type { ApplicationStatus } from "@/types/job-applications"
 
 // ---------------------------------------------------------------------------
@@ -90,10 +96,10 @@ export async function createBatch(input: CreateBatchInput): Promise<LamaranBatch
   return body as LamaranBatch
 }
 
-/** PATCH /api/batches/:id/ — update name / notes */
+/** PATCH /api/batches/:id/ — update name / notes / tahapan */
 export async function patchBatch(
   id: number,
-  input: Partial<Pick<LamaranBatch, "name" | "notes">>
+  input: UpdateBatchInput
 ): Promise<LamaranBatch> {
   const { data } = await api.patch<LamaranBatch>(`/api/batches/${id}/`, input)
   return data
@@ -280,7 +286,9 @@ export async function scheduleBatchStage(
 
 /**
  * POST /api/batches/{id}/bulk-transition/
- * Advance all eligible applications in the batch to the next status at once.
+ * Advance all PRA_SELEKSI applications in the batch to INTERVIEW (requires
+ * `interview_cohort`) or to DITOLAK. For DITERIMA/BERANGKAT/SELESAI use the
+ * cohort endpoint.
  */
 export async function bulkTransitionBatch(
   batchId: number,
@@ -290,6 +298,37 @@ export async function bulkTransitionBatch(
     `/api/batches/${batchId}/bulk-transition/`,
     input
   )
+  return data.data
+}
+
+/**
+ * POST /api/batches/{id}/advance-to-interview/
+ * Picks (a subset of) PRA_SELEKSI applicants and routes them into a
+ * specific InterviewCohort. Status flips to INTERVIEW for routed apps.
+ */
+export async function advanceBatchToInterview(
+  batchId: number,
+  input: BatchAdvanceToCohortInput
+): Promise<BatchAdvanceToCohortResponse> {
+  const { data } = await api.post<{ data: BatchAdvanceToCohortResponse }>(
+    `/api/batches/${batchId}/advance-to-interview/`,
+    input
+  )
+  return data.data
+}
+
+/**
+ * POST /api/batches/{id}/move-applicants/
+ * Re-batch survivors within PRA_SELEKSI: shift selected applicants from this
+ * batch to another tahapan (status unchanged).
+ */
+export async function moveApplicationsToBatch(
+  batchId: number,
+  input: MoveApplicationsToBatchInput
+): Promise<{ moved_count: number; target_batch: number }> {
+  const { data } = await api.post<{
+    data: { moved_count: number; target_batch: number }
+  }>(`/api/batches/${batchId}/move-applicants/`, input)
   return data.data
 }
 

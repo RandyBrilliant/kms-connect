@@ -11,6 +11,7 @@ from .models import (
     CustomUser,
     StaffProfile,
     ApplicantProfile,
+    UserRole,
     WorkExperience,
     CompanyProfile,
     DocumentType,
@@ -20,6 +21,7 @@ from .models import (
     DeviceToken,
     EmailVerificationCode,
 )
+from .serializers import _BIODATA_UPPER_STR_FIELDS
 
 
 @admin.register(CustomUser)
@@ -49,6 +51,11 @@ class CustomUserAdmin(BaseUserAdmin):
             },
         ),
     )
+
+    def save_model(self, request, obj, form, change):
+        if obj.role == UserRole.APPLICANT and (obj.full_name or "").strip():
+            obj.full_name = obj.full_name.strip().upper()
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(StaffProfile)
@@ -113,7 +120,7 @@ class ApplicantProfileAdmin(admin.ModelAdmin):
             _("I. Data CPMI (Biodata)"),
             {
                 "fields": (
-                    "birth_place",
+                    "birth_place_text",
                     "birth_date",
                     "address",
                     "district",
@@ -210,6 +217,19 @@ class ApplicantProfileAdmin(admin.ModelAdmin):
         ),
         (_("Waktu"), {"fields": ("created_at", "updated_at")}),
     )
+
+    def save_model(self, request, obj, form, change):
+        """
+        Store biodata string fields in UPPERCASE (same as API/mobile). Email is on CustomUser, unchanged here.
+        """
+        for fname in _BIODATA_UPPER_STR_FIELDS:
+            if not hasattr(obj, fname):
+                continue
+            val = getattr(obj, fname)
+            if isinstance(val, str):
+                stripped = val.strip()
+                setattr(obj, fname, stripped.upper() if stripped else stripped)
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(WorkExperience)

@@ -351,14 +351,22 @@ class ApplicationStatus(models.TextChoices):
 
 class LamaranBatch(models.Model):
     """
-    Kelompok pelamar yang ditugaskan admin ke satu lowongan kerja.
+    Satu **tahapan pra-seleksi** untuk sebuah lowongan kerja.
 
-    Admin membuat batch, lalu menambahkan pelamar ke dalamnya.
-    Setiap pelamar mendapat satu JobApplication individual di dalam batch.
+    Sebuah lowongan dapat memiliki banyak `LamaranBatch` (mis. tahap 1: CV
+    screening, tahap 2: psikotes, tahap 3: FGD). Setiap batch hanya berisi
+    pelamar yang sedang berada di tahap pra-seleksi tersebut.
 
-    Jadwal tahap (pra-seleksi/interview) disimpan di sini karena
-    semua pelamar dalam satu batch mengikuti jadwal yang sama.
-    Konfirmasi kehadiran individual disimpan di JobApplication.
+    Begitu pelamar lulus tahapan pra-seleksi, admin memindahkan mereka ke
+    `InterviewCohort` (jadwal interview yang dapat berbeda per kelompok).
+    Sejak status `INTERVIEW` ke atas, "wadah" operasional pelamar adalah
+    `InterviewCohort`, bukan lagi `LamaranBatch`.
+
+    Catatan kompatibilitas:
+    - Kolom `interview_date / interview_location / interview_notes` tetap ada
+      sementara untuk menjaga kompatibilitas data lama dan response API mobile.
+      Kolom-kolom tersebut **deprecated** dan akan dihapus pada rilis berikutnya
+      setelah seluruh klien (admin web + mobile) memakai `InterviewCohort`.
     """
 
     job = models.ForeignKey(
@@ -377,6 +385,28 @@ class LamaranBatch(models.Model):
         _("catatan"),
         blank=True,
         help_text=_("Catatan internal admin mengenai batch ini."),
+    )
+
+    # --- Tahapan pra-seleksi (urutan dalam lowongan) ---
+    tahap_order = models.PositiveSmallIntegerField(
+        _("urutan tahapan"),
+        default=1,
+        db_index=True,
+        help_text=_(
+            "Urutan tahapan pra-seleksi dalam lowongan ini (1 = tahap pertama). "
+            "Lowongan dapat memiliki banyak tahapan pra-seleksi (mis. CV → "
+            "Psikotes → FGD). Tidak harus unik — admin bisa membuat sub-batch "
+            "paralel pada tahap yang sama."
+        ),
+    )
+    tahap_label = models.CharField(
+        _("label tahapan"),
+        max_length=120,
+        blank=True,
+        help_text=_(
+            "Label deskriptif untuk tahapan, mis. 'Pra-Seleksi 1: CV Screening'. "
+            "Opsional; jika kosong, frontend menampilkan 'Pra-Seleksi {tahap_order}'."
+        ),
     )
 
     # --- Jadwal Pra-Seleksi ---
@@ -399,24 +429,28 @@ class LamaranBatch(models.Model):
         help_text=_("Instruksi atau informasi tambahan untuk pelamar mengenai pra-seleksi."),
     )
 
-    # --- Jadwal Interview ---
+    # --- DEPRECATED: jadwal interview pindah ke InterviewCohort ---
+    # Kolom dipertahankan agar response API & data historis tetap kompatibel.
     interview_date = models.DateTimeField(
-        _("tanggal & jam interview"),
+        _("tanggal & jam interview (deprecated)"),
         null=True,
         blank=True,
         db_index=True,
-        help_text=_("Tanggal dan jam pelaksanaan tahap interview."),
+        help_text=_(
+            "DEPRECATED. Jadwal interview kini disimpan di InterviewCohort. "
+            "Kolom ini hanya dipakai sebagai fallback untuk data lama."
+        ),
     )
     interview_location = models.CharField(
-        _("lokasi interview"),
+        _("lokasi interview (deprecated)"),
         max_length=255,
         blank=True,
-        help_text=_("Lokasi atau link (online/offline) pelaksanaan interview."),
+        help_text=_("DEPRECATED. Lihat InterviewCohort.interview_location."),
     )
     interview_notes = models.TextField(
-        _("info interview"),
+        _("info interview (deprecated)"),
         blank=True,
-        help_text=_("Instruksi atau informasi tambahan untuk pelamar mengenai interview."),
+        help_text=_("DEPRECATED. Lihat InterviewCohort.interview_notes."),
     )
 
     # --- Actors ---
@@ -436,17 +470,25 @@ class LamaranBatch(models.Model):
     updated_at = models.DateTimeField(_("diperbarui pada"), auto_now=True)
 
     class Meta:
-        verbose_name = _("batch lamaran")
-        verbose_name_plural = _("daftar batch lamaran")
-        ordering = ["-created_at"]
+        verbose_name = _("batch lamaran (tahap pra-seleksi)")
+        verbose_name_plural = _("daftar batch lamaran (tahap pra-seleksi)")
+        ordering = ["job", "tahap_order", "-created_at"]
         indexes = [
+            models.Index(fields=["job", "tahap_order"]),
             models.Index(fields=["job", "created_at"]),
             models.Index(fields=["pra_seleksi_date"]),
-            models.Index(fields=["interview_date"]),
         ]
 
     def __str__(self) -> str:
-        return f"{self.name} — {self.job.title}"
+        suffix = f" — {self.job.title}" if self.job_id else ""
+        return f"{self.name}{suffix}"
+
+    @property
+    def display_tahap_label(self) -> str:
+        """Human-friendly label untuk tahapan ini ("Pra-Seleksi 2: Psikotes")."""
+        if self.tahap_label:
+            return self.tahap_label
+        return f"Pra-Seleksi {self.tahap_order}"
 
     @property
     def applicant_count(self) -> int:
@@ -455,6 +497,109 @@ class LamaranBatch(models.Model):
     @property
     def confirmed_pra_seleksi_count(self) -> int:
         return self.applications.filter(pra_seleksi_confirmed_at__isnull=False).count()
+
+    @property
+    def confirmed_interview_count(self) -> int:
+        return self.applications.filter(interview_confirmed_at__isnull=False).count()
+
+
+# ---------------------------------------------------------------------------
+# InterviewCohort — wadah operasional pelamar dari INTERVIEW sampai SELESAI
+# ---------------------------------------------------------------------------
+
+
+class InterviewCohort(models.Model):
+    """
+    Satu sesi interview untuk sebuah lowongan + kelompok pelamar yang
+    melanjutkan dari interview sampai selesai/diterima/berangkat/selesai.
+
+    Beberapa `LamaranBatch` (tahapan pra-seleksi) dapat mengirimkan
+    survivor-nya ke satu cohort yang sama, atau ke cohort yang berbeda —
+    routing ditentukan admin pada saat transisi PRA_SELEKSI → INTERVIEW.
+
+    Tidak ada kendala unik per lowongan: admin bebas membuat banyak cohort
+    (mis. "Sesi Pagi" dan "Sesi Sore" pada hari yang sama).
+    """
+
+    job = models.ForeignKey(
+        LowonganKerja,
+        on_delete=models.CASCADE,
+        related_name="interview_cohorts",
+        verbose_name=_("lowongan"),
+        help_text=_("Lowongan tempat sesi interview ini diadakan."),
+    )
+    name = models.CharField(
+        _("nama sesi interview"),
+        max_length=120,
+        help_text=_("Identitas singkat sesi interview, mis. 'Interview 5 Mei 2026 — Sesi Pagi'."),
+    )
+    notes = models.TextField(
+        _("catatan"),
+        blank=True,
+        help_text=_("Catatan internal admin untuk sesi ini."),
+    )
+
+    interview_date = models.DateTimeField(
+        _("tanggal & jam interview"),
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=_("Tanggal dan jam pelaksanaan interview untuk cohort ini."),
+    )
+    interview_location = models.CharField(
+        _("lokasi interview"),
+        max_length=255,
+        blank=True,
+        help_text=_("Lokasi atau link (online/offline) pelaksanaan interview."),
+    )
+    interview_notes = models.TextField(
+        _("info interview"),
+        blank=True,
+        help_text=_("Informasi tambahan untuk pelamar (dress code, dokumen, link, dll.)."),
+    )
+
+    is_active = models.BooleanField(
+        _("aktif"),
+        default=True,
+        db_index=True,
+        help_text=_(
+            "Tandai non-aktif jika sesi sudah selesai dan tidak boleh menerima "
+            "pelamar baru. Cohort tetap menyimpan riwayat pelamar yang sudah "
+            "berada di dalamnya."
+        ),
+    )
+
+    created_by = models.ForeignKey(
+        CustomUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="interview_cohorts_created",
+        limit_choices_to={
+            "role__in": [UserRole.MASTER_ADMIN, UserRole.ADMIN, UserRole.STAFF]
+        },
+        verbose_name=_("dibuat oleh"),
+        help_text=_("Admin/Staf yang membuat sesi interview ini."),
+    )
+    created_at = models.DateTimeField(_("dibuat pada"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("diperbarui pada"), auto_now=True)
+
+    class Meta:
+        verbose_name = _("sesi interview")
+        verbose_name_plural = _("daftar sesi interview")
+        ordering = ["job", "-interview_date", "-created_at"]
+        indexes = [
+            models.Index(fields=["job", "is_active"]),
+            models.Index(fields=["interview_date"]),
+        ]
+
+    def __str__(self) -> str:
+        suffix = f" — {self.job.title}" if self.job_id else ""
+        return f"{self.name}{suffix}"
+
+    @property
+    def applicant_count(self) -> int:
+        return self.applications.count()
 
     @property
     def confirmed_interview_count(self) -> int:
@@ -526,8 +671,26 @@ class JobApplication(models.Model):
         related_name="applications",
         null=True,
         blank=True,
-        verbose_name=_("batch"),
-        help_text=_("Batch lamaran tempat pelamar ini terdaftar."),
+        verbose_name=_("batch pra-seleksi"),
+        help_text=_(
+            "Batch (tahap pra-seleksi) tempat pelamar ini sedang berada. "
+            "Dapat dipindahkan antar batch saat masih di status PRA_SELEKSI."
+        ),
+    )
+    interview_cohort = models.ForeignKey(
+        "InterviewCohort",
+        on_delete=models.PROTECT,
+        related_name="applications",
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name=_("sesi interview"),
+        help_text=_(
+            "Cohort interview tempat pelamar ini ditempatkan saat dipindahkan "
+            "ke status INTERVIEW. Sejak status INTERVIEW ke atas, semua aksi "
+            "bulk (transition, announcement, export) dilakukan pada cohort, "
+            "bukan lagi pada batch."
+        ),
     )
 
     # --- Status ---
@@ -637,6 +800,7 @@ class JobApplication(models.Model):
             models.Index(fields=["applicant", "status"]),
             models.Index(fields=["job", "status"]),
             models.Index(fields=["batch", "status"]),
+            models.Index(fields=["interview_cohort", "status"]),
             models.Index(fields=["status", "applied_at"]),
             # Eligibility check: applicant active across any job
             models.Index(fields=["applicant", "status", "job"]),
@@ -790,4 +954,71 @@ class BatchAnnouncement(models.Model):
 
     def __str__(self) -> str:
         return f"[{self.batch.name}] {self.title}"
+
+
+# ---------------------------------------------------------------------------
+# InterviewCohortAnnouncement — broadcast pesan admin ke seluruh cohort
+# ---------------------------------------------------------------------------
+
+
+def default_interview_cohort_announcement_recipient_config():
+    """Default JSON for InterviewCohortAnnouncement.recipient_config."""
+    return {"selection_type": "all_active"}
+
+
+class InterviewCohortAnnouncement(models.Model):
+    """
+    Pengumuman/broadcast dari admin untuk semua pelamar di sebuah
+    `InterviewCohort`. Pasangan dari `BatchAnnouncement` untuk tahap
+    INTERVIEW ke atas.
+    """
+
+    cohort = models.ForeignKey(
+        InterviewCohort,
+        on_delete=models.CASCADE,
+        related_name="announcements",
+        verbose_name=_("sesi interview"),
+        help_text=_("Cohort interview penerima pengumuman ini."),
+    )
+    title = models.CharField(
+        _("judul"),
+        max_length=200,
+        help_text=_("Judul singkat pengumuman, misal: 'Jadwal Interview Diperbarui'."),
+    )
+    body = models.TextField(
+        _("isi pesan"),
+        help_text=_("Isi lengkap pengumuman yang akan dibaca oleh pelamar."),
+    )
+    recipient_config = models.JSONField(
+        _("konfigurasi penerima"),
+        default=default_interview_cohort_announcement_recipient_config,
+        help_text=_(
+            'Siapa yang menerima notifikasi & melihat pengumuman, mis. '
+            '{"selection_type": "all_active"} atau '
+            '{"selection_type": "statuses", "statuses": ["INTERVIEW","DITERIMA"]}.'
+        ),
+    )
+    created_by = models.ForeignKey(
+        CustomUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cohort_announcements_created",
+        limit_choices_to={
+            "role__in": [UserRole.MASTER_ADMIN, UserRole.ADMIN, UserRole.STAFF]
+        },
+        verbose_name=_("dibuat oleh"),
+    )
+    created_at = models.DateTimeField(_("dibuat pada"), auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = _("pengumuman sesi interview")
+        verbose_name_plural = _("daftar pengumuman sesi interview")
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["cohort", "created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"[{self.cohort.name}] {self.title}"
 

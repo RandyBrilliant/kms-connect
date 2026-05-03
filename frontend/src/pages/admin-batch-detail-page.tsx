@@ -1,12 +1,12 @@
 /**
- * Admin — Batch Detail page.
+ * Admin — Batch Detail page (Pra-Seleksi tahapan).
  *
- * Sections:
- * 1. Header — batch name, job, counts, quick-action buttons.
- * 2. Schedule — set/update Pra-Seleksi and Interview dates + locations.
- * 3. Applications — table of all applicants in this batch with status badges.
- * 4. Assign — button to open BatchAssignDialog (search → select → assign).
- * 5. Bulk Transition — move all eligible applicants to next stage at once.
+ * A batch is one tahapan pra-seleksi for a job. Interview-onwards lives on
+ * `InterviewCohort`. From this page admins can:
+ * 1. View batch metadata and pra-seleksi schedule.
+ * 2. Assign new applicants and broadcast announcements.
+ * 3. Move PRA_SELEKSI survivors → InterviewCohort (advance-to-interview)
+ *    or → DITOLAK. Subsequent stages are managed inside the cohort.
  */
 
 import { useEffect, useMemo, useState } from "react"
@@ -16,6 +16,7 @@ import { format } from "date-fns"
 import { id as idLocale } from "date-fns/locale"
 import {
   IconArrowLeft,
+  IconArrowsRightLeft,
   IconBell,
   IconCalendar,
   IconChevronRight,
@@ -23,6 +24,7 @@ import {
   IconChevronDown,
   IconExternalLink,
   IconFileSpreadsheet,
+  IconInfoCircle,
   IconMapPin,
   IconSearch,
   IconSend,
@@ -69,6 +71,16 @@ import {
 import { ApplicantAdminProcessDialog } from "@/components/applicants/applicant-admin-process-dialog"
 import { ApplicantDetailPreviewDialog } from "@/components/batches/applicant-detail-preview-dialog"
 import { BatchAssignDialog } from "@/components/batches/batch-assign-dialog"
+import { BatchSelectField } from "@/components/batches/batch-select-field"
+import { CohortSelectField } from "@/components/interview-cohorts/cohort-select-field"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -89,6 +101,8 @@ import {
   createBatchAnnouncement,
   previewBatchAnnouncementRecipients,
   exportBatchExcel,
+  advanceBatchToInterview,
+  moveApplicationsToBatch,
 } from "@/api/batches"
 import {
   bulkTransitionApplications,
@@ -115,6 +129,34 @@ function formatDate(value: string | null | undefined) {
   return format(new Date(value), "dd MMM yyyy HH:mm", { locale: idLocale })
 }
 
+/** Row labels for konfirmasi kehadiran — depends on which status tab is active. */
+function attendanceKonfirmasiForTab(
+  app: JobApplication,
+  tabStatus: ApplicationStatus
+): { sudah: boolean; waktuIso: string | null; applicable: boolean } {
+  if (tabStatus === "PRA_SELEKSI") {
+    const sudah =
+      Boolean(app.pra_seleksi_confirmed_at) ||
+      app.attendance_by_stage?.PRA_SELEKSI === true
+    const waktuIso =
+      app.pra_seleksi_confirmed_at ??
+      app.attendance_marked_at_by_stage?.PRA_SELEKSI ??
+      null
+    return { sudah, waktuIso, applicable: true }
+  }
+  if (tabStatus === "INTERVIEW") {
+    const sudah =
+      Boolean(app.interview_confirmed_at) ||
+      app.attendance_by_stage?.INTERVIEW === true
+    const waktuIso =
+      app.interview_confirmed_at ??
+      app.attendance_marked_at_by_stage?.INTERVIEW ??
+      null
+    return { sudah, waktuIso, applicable: true }
+  }
+  return { sudah: false, waktuIso: null, applicable: false }
+}
+
 function announcementRecipientSummary(
   cfg?: BatchAnnouncementRecipientConfig | null
 ): string {
@@ -131,6 +173,7 @@ function announcementRecipientSummary(
 
 interface StageScheduleCardProps {
   batchId: number
+  /** Reserved for future tahapan-specific schedules. Currently always "pra_seleksi". */
   stage: BatchStage
   title: string
   currentDate: string | null
@@ -293,13 +336,16 @@ function StageScheduleCard({
 // Helpers / constants
 // ---------------------------------------------------------------------------
 
+/**
+ * Forward bulk-transitions allowed *from a batch view*. Post-pra-seleksi stages
+ * are managed via InterviewCohort, so forwards from INTERVIEW/DITERIMA/BERANGKAT
+ * are intentionally absent here — the UI redirects admins to the cohort.
+ */
 const NEXT_FORWARD: Partial<Record<ApplicationStatus, ApplicationStatus>> = {
   PRA_SELEKSI: "INTERVIEW",
-  INTERVIEW:   "DITERIMA",
-  DITERIMA:    "BERANGKAT",
-  BERANGKAT:   "SELESAI",
 }
-const CAN_REJECT: ApplicationStatus[] = ["PRA_SELEKSI", "INTERVIEW", "DITERIMA"]
+/** Batch view only supports rejecting applicants while still in PRA_SELEKSI. */
+const CAN_REJECT: ApplicationStatus[] = ["PRA_SELEKSI"]
 
 function applicationMatchesStageSearch(app: JobApplication, q: string): boolean {
   const needle = q.trim().toLowerCase()
@@ -331,10 +377,12 @@ const STATUS_TABS: { value: ApplicationStatus; label: string }[] = [
 
 function BatchStatusTab({
   batchId,
+  jobId,
   status,
   apps,
 }: {
   batchId: number
+  jobId: number
   status: ApplicationStatus
   apps: JobApplication[]
 }) {
@@ -344,16 +392,24 @@ function BatchStatusTab({
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [stageSearch, setStageSearch] = useState("")
   const [note, setNote] = useState("")
-  const [placementDate, setPlacementDate] = useState("")
   const [loading, setLoading] = useState(false)
   const [processUserId, setProcessUserId] = useState<number | null>(null)
   const [processUserLabel, setProcessUserLabel] = useState("")
   const [previewUserId, setPreviewUserId] = useState<number | null>(null)
   const [previewUserLabel, setPreviewUserLabel] = useState("")
+  const [advanceCohortId, setAdvanceCohortId] = useState<number | null>(null)
+  const [advanceDialogOpen, setAdvanceDialogOpen] = useState(false)
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false)
+  const [moveTargetBatchId, setMoveTargetBatchId] = useState<number | null>(null)
+  const [moveNote, setMoveNote] = useState("")
 
   const nextStatus = NEXT_FORWARD[status]
-  const canReject  = CAN_REJECT.includes(status)
-  const needsPlacementDate = nextStatus === "SELESAI"
+  const canReject = CAN_REJECT.includes(status)
+  const isManagedByCohort =
+    status === "INTERVIEW" ||
+    status === "DITERIMA" ||
+    status === "BERANGKAT" ||
+    status === "SELESAI"
 
   const filteredApps = useMemo(
     () => apps.filter((a) => applicationMatchesStageSearch(a, stageSearch)),
@@ -401,40 +457,40 @@ function BatchStatusTab({
     })
   }
 
-  const runTransition = async (targetStatus: ApplicationStatus) => {
+  /**
+   * Reject selected PRA_SELEKSI applications. Forward transitions to INTERVIEW
+   * are handled separately via `runAdvanceToCohort` because they require a
+   * cohort to route survivors into.
+   */
+  const runRejectSelected = async () => {
     const ids = Array.from(selected)
     if (!ids.length) return
-    if (targetStatus === "SELESAI" && !placementDate) {
-      toast.error("Masukkan tanggal selesai kerja terlebih dahulu.")
-      return
-    }
     setLoading(true)
     try {
       const result = await bulkTransitionApplications({
         application_ids: ids,
-        status: targetStatus,
+        status: "DITOLAK",
         note: note.trim() || undefined,
-        ...(targetStatus === "SELESAI" ? { placement_end_date: placementDate } : {}),
       })
       await queryClient.invalidateQueries({ queryKey: ["applications"] })
       await queryClient.invalidateQueries({ queryKey: ["batch", batchId] })
+      await queryClient.invalidateQueries({ queryKey: ["batches", { job: jobId }] })
       setSelected(new Set())
       setNote("")
-      setPlacementDate("")
 
       if (result.updated_count > 0) {
-        toast.success(
-          `${result.updated_count} pelamar dipindahkan ke ${APPLICATION_STATUS_LABELS[targetStatus]}.`
-        )
+        toast.success(`${result.updated_count} pelamar ditolak.`)
       }
       if (result.failed_count > 0) {
         const reasonFreq = new Map<string, number>()
         for (const item of result.failed) {
           reasonFreq.set(item.reason, (reasonFreq.get(item.reason) ?? 0) + 1)
         }
-        const topReason = Array.from(reasonFreq.entries()).sort((a, b) => b[1] - a[1])[0]?.[0]
+        const topReason = Array.from(reasonFreq.entries()).sort(
+          (a, b) => b[1] - a[1]
+        )[0]?.[0]
         toast.error(
-          `${result.failed_count} pelamar gagal dipindahkan.`,
+          `${result.failed_count} pelamar gagal ditolak.`,
           topReason ?? "Cek status terbaru lalu coba lagi."
         )
       }
@@ -445,9 +501,109 @@ function BatchStatusTab({
     }
   }
 
+  const runAdvanceToCohort = async () => {
+    const ids = Array.from(selected)
+    if (!ids.length) return
+    if (advanceCohortId == null) {
+      toast.error("Pilih sesi interview tujuan terlebih dahulu.")
+      return
+    }
+    setLoading(true)
+    try {
+      const result = await advanceBatchToInterview(batchId, {
+        interview_cohort: advanceCohortId,
+        application_ids: ids,
+        note: note.trim() || undefined,
+      })
+      await queryClient.invalidateQueries({ queryKey: ["applications"] })
+      await queryClient.invalidateQueries({ queryKey: ["batch", batchId] })
+      await queryClient.invalidateQueries({
+        queryKey: ["interview-cohort", advanceCohortId],
+      })
+      // Job detail `/lowongan-kerja/:id` — Interview & Pra-Seleksi tabs use these keys
+      await queryClient.invalidateQueries({ queryKey: ["interview-cohorts"] })
+      await queryClient.invalidateQueries({ queryKey: ["batches", { job: jobId }] })
+      await queryClient.invalidateQueries({
+        queryKey: ["cohort-applications", advanceCohortId],
+      })
+      setSelected(new Set())
+      setNote("")
+      setAdvanceCohortId(null)
+      setAdvanceDialogOpen(false)
+
+      if (result.updated_count > 0) {
+        toast.success(
+          `${result.updated_count} pelamar dipindahkan ke sesi interview.`
+        )
+      }
+      if (result.failed_count > 0) {
+        const reasonFreq = new Map<string, number>()
+        for (const item of result.failed) {
+          reasonFreq.set(item.reason, (reasonFreq.get(item.reason) ?? 0) + 1)
+        }
+        const topReason = Array.from(reasonFreq.entries()).sort(
+          (a, b) => b[1] - a[1]
+        )[0]?.[0]
+        toast.error(
+          `${result.failed_count} pelamar gagal dipindahkan.`,
+          topReason ?? "Cek status terbaru lalu coba lagi."
+        )
+      }
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })
+        ?.response?.data?.detail
+      toast.error("Gagal memindahkan ke sesi interview.", detail ?? "Coba lagi.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const runMoveToBatch = async () => {
+    const ids = Array.from(selected)
+    if (!ids.length) return
+    if (moveTargetBatchId == null) {
+      toast.error("Pilih batch tujuan terlebih dahulu.")
+      return
+    }
+    setLoading(true)
+    try {
+      const res = await moveApplicationsToBatch(batchId, {
+        target_batch: moveTargetBatchId,
+        application_ids: ids,
+        note: moveNote.trim() || undefined,
+      })
+      await queryClient.invalidateQueries({ queryKey: ["applications"] })
+      await queryClient.invalidateQueries({ queryKey: ["batch", batchId] })
+      await queryClient.invalidateQueries({
+        queryKey: ["batch", moveTargetBatchId],
+      })
+      await queryClient.invalidateQueries({ queryKey: ["batches", { job: jobId }] })
+      setSelected(new Set())
+      setMoveNote("")
+      setMoveTargetBatchId(null)
+      setMoveDialogOpen(false)
+      toast.success(
+        res.moved_count > 0
+          ? `${res.moved_count} pelamar dipindah ke batch lain.`
+          : "Tidak ada yang dipindahkan."
+      )
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })
+        ?.response?.data?.detail
+      toast.error("Gagal memindahkan batch.", detail ?? "Coba lagi.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const showCheckboxCol = apps.length > 0 && !!(nextStatus || canReject)
   const showDocProgressCol = status === "DITERIMA"
-  const tableColSpan = (showCheckboxCol ? 1 : 0) + 8 + (showDocProgressCol ? 1 : 0)
+  const showCohortCol = isManagedByCohort
+  const tableColSpan =
+    (showCheckboxCol ? 1 : 0) +
+    7 +
+    (showDocProgressCol ? 1 : 0) +
+    (showCohortCol ? 1 : 0)
 
   return (
     <div className="flex flex-col gap-4">
@@ -464,11 +620,31 @@ function BatchStatusTab({
         </div>
       )}
 
-      {/* Action bar — only shown when there are selectable apps */}
+      {/* Cohort-managed banner — INTERVIEW+ stages are now controlled inside
+          the InterviewCohort, not the batch. */}
+      {isManagedByCohort && apps.length > 0 && (
+        <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40 p-3 text-sm">
+          <IconInfoCircle className="mt-0.5 size-4 shrink-0 text-amber-600" />
+          <div className="flex-1">
+            <p className="font-medium text-amber-900 dark:text-amber-200">
+              Pelamar di tahap ini dikelola pada Sesi Interview.
+            </p>
+            <p className="text-xs text-amber-800/80 dark:text-amber-200/80">
+              Buka detail Sesi Interview yang relevan untuk mengubah status,
+              membuat pengumuman, atau memindahkan pelamar antar sesi.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Action bar — only shown for PRA_SELEKSI / DITOLAK on this page */}
       {filteredApps.length > 0 && (nextStatus || canReject) && (
         <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-muted/30 p-3">
           <div className="flex flex-col gap-1 flex-1 min-w-[160px]">
-            <Label className="text-xs">Catatan transisi <span className="text-muted-foreground">(opsional)</span></Label>
+            <Label className="text-xs">
+              Catatan transisi{" "}
+              <span className="text-muted-foreground">(opsional)</span>
+            </Label>
             <Input
               placeholder="Catatan..."
               value={note}
@@ -476,17 +652,6 @@ function BatchStatusTab({
               className="h-8 text-sm"
             />
           </div>
-          {needsPlacementDate && (
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs">Tanggal Selesai Kerja</Label>
-              <Input
-                type="date"
-                value={placementDate}
-                onChange={(e) => setPlacementDate(e.target.value)}
-                className="h-8 text-sm w-[160px]"
-              />
-            </div>
-          )}
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             {selected.size > 0 ? (
               <span className="font-medium text-foreground">
@@ -501,15 +666,28 @@ function BatchStatusTab({
               <span>Pilih pelamar dulu</span>
             )}
           </div>
-          {nextStatus && (
+          {nextStatus === "INTERVIEW" && (
             <Button
               size="sm"
               className="cursor-pointer"
               disabled={selected.size === 0 || loading}
-              onClick={() => runTransition(nextStatus)}
+              onClick={() => setAdvanceDialogOpen(true)}
             >
               <IconChevronRight className="mr-1 size-4" />
-              {loading ? "Memproses..." : `Transisi ke ${APPLICATION_STATUS_LABELS[nextStatus]}`}
+              Pindahkan ke Sesi Interview
+            </Button>
+          )}
+          {status === "PRA_SELEKSI" && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="cursor-pointer"
+              disabled={selected.size === 0 || loading}
+              onClick={() => setMoveDialogOpen(true)}
+              title="Pindahkan ke tahapan pra-seleksi lain (status tidak berubah)"
+            >
+              <IconArrowsRightLeft className="mr-1 size-4" />
+              Pindah ke Tahapan Lain
             </Button>
           )}
           {canReject && (
@@ -518,7 +696,7 @@ function BatchStatusTab({
               variant="destructive"
               className="cursor-pointer"
               disabled={selected.size === 0 || loading}
-              onClick={() => runTransition("DITOLAK")}
+              onClick={() => void runRejectSelected()}
             >
               <IconX className="mr-1 size-4" />
               {loading ? "Memproses..." : "Tolak Terpilih"}
@@ -526,6 +704,125 @@ function BatchStatusTab({
           )}
         </div>
       )}
+
+      {/* Advance-to-cohort dialog */}
+      <Dialog open={advanceDialogOpen} onOpenChange={setAdvanceDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Pindahkan ke Sesi Interview</DialogTitle>
+            <DialogDescription>
+              Pilih sesi interview tujuan. Status pelamar yang dipilih akan
+              berubah ke <span className="font-medium">Interview</span> dan
+              ditautkan ke sesi tersebut. Pengumuman, jadwal, dan transisi
+              berikutnya akan dikelola di sesi.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
+              <span className="font-medium">{selected.size}</span> pelamar akan
+              dipindahkan.
+            </div>
+            <CohortSelectField
+              jobId={jobId}
+              value={advanceCohortId}
+              onChange={setAdvanceCohortId}
+              required
+              helperText="Hanya sesi yang masih aktif yang ditampilkan."
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              className="cursor-pointer"
+              disabled={loading}
+              onClick={() => {
+                setAdvanceDialogOpen(false)
+                setAdvanceCohortId(null)
+              }}
+            >
+              Batal
+            </Button>
+            <Button
+              type="button"
+              className="cursor-pointer"
+              disabled={loading || advanceCohortId == null || selected.size === 0}
+              onClick={() => void runAdvanceToCohort()}
+            >
+              {loading ? "Memproses..." : "Pindahkan"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Re-batch within pra-seleksi */}
+      <Dialog
+        open={moveDialogOpen}
+        onOpenChange={(open) => {
+          setMoveDialogOpen(open)
+          if (!open) {
+            setMoveTargetBatchId(null)
+            setMoveNote("")
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Pindah ke Tahapan Lain</DialogTitle>
+            <DialogDescription>
+              Pilih batch pra-seleksi tujuan di lowongan yang sama. Status
+              pelamar tetap <span className="font-medium">Pra-Seleksi</span>
+              — hanya wadah tahapan yang berubah.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
+              <span className="font-medium">{selected.size}</span> pelamar yang
+              dipilih akan dipindahkan.
+            </div>
+            <BatchSelectField
+              jobId={jobId}
+              value={moveTargetBatchId}
+              onChange={setMoveTargetBatchId}
+              excludeBatchId={batchId}
+              required
+              helperText="Biasanya untuk memindahkan survivor ke tahapan berikutnya (mis. Psikotes)."
+            />
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">
+                Catatan <span className="text-muted-foreground">(opsional)</span>
+              </Label>
+              <Input
+                placeholder="Catatan internal..."
+                value={moveNote}
+                onChange={(e) => setMoveNote(e.target.value)}
+                className="h-8 text-sm"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              className="cursor-pointer"
+              disabled={loading}
+              onClick={() => setMoveDialogOpen(false)}
+            >
+              Batal
+            </Button>
+            <Button
+              type="button"
+              className="cursor-pointer"
+              disabled={
+                loading || moveTargetBatchId == null || selected.size === 0
+              }
+              onClick={() => void runMoveToBatch()}
+            >
+              {loading ? "Memproses..." : "Pindahkan"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Table */}
       <div className="overflow-auto rounded-lg border">
@@ -544,9 +841,9 @@ function BatchStatusTab({
               <TableHead>Pelamar</TableHead>
               <TableHead>NIK</TableHead>
               <TableHead>Rujukan</TableHead>
-              <TableHead>Hadir Tahap Ini</TableHead>
-              <TableHead>Konfirmasi Pra-Sel.</TableHead>
-              <TableHead>Konfirmasi Interview</TableHead>
+              <TableHead className="whitespace-nowrap">Konfirmasi hadir</TableHead>
+              <TableHead className="whitespace-nowrap">Waktu konfirmasi</TableHead>
+              {showCohortCol && <TableHead>Sesi Interview</TableHead>}
               {showDocProgressCol && <TableHead>Pengumpulan Dokumen</TableHead>}
               <TableHead>Tanggal Ditambahkan</TableHead>
               <TableHead className="w-[88px] text-right">Aksi</TableHead>
@@ -555,7 +852,9 @@ function BatchStatusTab({
           <TableBody>
             {apps.length ? (
               filteredApps.length ? (
-              pagedApps.map((app) => (
+              pagedApps.map((app) => {
+                const konfirmasi = attendanceKonfirmasiForTab(app, status)
+                return (
                 <TableRow
                   key={app.id}
                   className="hover:bg-muted/50 cursor-pointer"
@@ -594,28 +893,53 @@ function BatchStatusTab({
                     )}
                   </TableCell>
                   <TableCell className="text-sm">
-                    {app.status === "SELESAI" ? (
-                      <span className="text-green-600">Selesai</span>
-                    ) : app.attendance_by_stage?.[app.status] ? (
-                      <span className="text-green-600">Hadir</span>
+                    {!konfirmasi.applicable ? (
+                      <span className="text-muted-foreground">—</span>
+                    ) : konfirmasi.sudah ? (
+                      <Badge
+                        variant="outline"
+                        className="border-green-600/40 bg-green-50 text-green-800 font-normal"
+                      >
+                        Sudah
+                      </Badge>
                     ) : (
-                      <span className="text-muted-foreground">Belum</span>
+                      <Badge variant="secondary" className="font-normal">
+                        Belum
+                      </Badge>
                     )}
                   </TableCell>
-                  <TableCell className="text-sm">
-                    {app.pra_seleksi_confirmed_at ? (
-                      <span className="text-green-600">{formatDate(app.pra_seleksi_confirmed_at)}</span>
-                    ) : (
-                      <span className="text-muted-foreground">Belum</span>
-                    )}
+                  <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                    {!konfirmasi.applicable || !konfirmasi.waktuIso
+                      ? "—"
+                      : formatDate(konfirmasi.waktuIso)}
                   </TableCell>
-                  <TableCell className="text-sm">
-                    {app.interview_confirmed_at ? (
-                      <span className="text-green-600">{formatDate(app.interview_confirmed_at)}</span>
-                    ) : (
-                      <span className="text-muted-foreground">Belum</span>
-                    )}
-                  </TableCell>
+                  {showCohortCol && (
+                    <TableCell
+                      className="text-sm"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {app.interview_cohort != null ? (
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 text-primary text-sm underline-offset-2 hover:underline cursor-pointer"
+                          onClick={() =>
+                            navigate(
+                              joinAdminPath(
+                                basePath,
+                                `/sesi-interview/${app.interview_cohort}`
+                              )
+                            )
+                          }
+                          title="Buka sesi interview"
+                        >
+                          {app.interview_cohort_name || `Sesi #${app.interview_cohort}`}
+                          <IconExternalLink className="size-3" />
+                        </button>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                  )}
                   {showDocProgressCol && (
                     <TableCell className="text-sm">
                       {app.document_collection_progress ? (
@@ -734,7 +1058,8 @@ function BatchStatusTab({
                     </div>
                   </TableCell>
                 </TableRow>
-              ))
+                )
+              })
               ) : (
                 <TableRow>
                   <TableCell
@@ -956,24 +1281,11 @@ export function AdminBatchDetailPage() {
     },
   })
 
-  const bulkTransition = useMutation({
-    mutationFn: () => Promise.resolve({ updated_count: 0 }),
-    onSuccess: () => {},
-  })
-
   // Group by status for tabs
   const appsByStatus = STATUS_TABS.reduce(
     (acc, t) => ({ ...acc, [t.value]: sortedApps.filter((a) => a.status === t.value) }),
     {} as Record<ApplicationStatus, typeof sortedApps>
   )
-
-  // Infer dominant status (for legacy use if needed)
-  const statusFreq = sortedApps.reduce(
-    (acc, a) => ({ ...acc, [a.status]: (acc[a.status] ?? 0) + 1 }),
-    {} as Record<string, number>
-  )
-  void statusFreq
-  void bulkTransition
 
   usePageTitle(batch ? `Batch: ${batch.name}` : "Detail Batch")
 
@@ -1056,7 +1368,15 @@ export function AdminBatchDetailPage() {
           </Button>
           <div>
             <h1 className="text-2xl font-bold">{batch.name}</h1>
-            <p className="text-muted-foreground text-sm">{batch.job_title}</p>
+            <p className="text-muted-foreground text-sm">
+              {batch.job_title}
+              {batch.display_tahap_label ? (
+                <>
+                  {" · "}
+                  <span className="font-medium">{batch.display_tahap_label}</span>
+                </>
+              ) : null}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -1125,8 +1445,9 @@ export function AdminBatchDetailPage() {
         </div>
       </div>
 
-      {/* Stats row */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+      {/* Stats row — pra-seleksi specific. Interview/diterima/dst. tracked
+          on the related InterviewCohort. */}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Card>
           <CardContent className="pt-4 pb-4">
             <div className="flex items-center gap-3">
@@ -1134,6 +1455,28 @@ export function AdminBatchDetailPage() {
               <div>
                 <p className="text-2xl font-bold">{batch.applicant_count}</p>
                 <p className="text-xs text-muted-foreground">Total Pelamar</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4 pb-4">
+            <div className="flex items-center gap-3">
+              <IconUsers className="size-5 text-muted-foreground" />
+              <div>
+                <p className="text-2xl font-bold">{batch.pra_seleksi_count}</p>
+                <p className="text-xs text-muted-foreground">Masih di Pra-Seleksi</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4 pb-4">
+            <div className="flex items-center gap-3">
+              <IconChevronRight className="size-5 text-muted-foreground" />
+              <div>
+                <p className="text-2xl font-bold">{batch.advanced_count}</p>
+                <p className="text-xs text-muted-foreground">Lanjut ke Interview</p>
               </div>
             </div>
           </CardContent>
@@ -1149,38 +1492,17 @@ export function AdminBatchDetailPage() {
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-4 pb-4">
-            <div className="flex items-center gap-3">
-              <IconCalendar className="size-5 text-muted-foreground" />
-              <div>
-                <p className="text-2xl font-bold">{batch.confirmed_interview_count}</p>
-                <p className="text-xs text-muted-foreground">Konfirmasi Interview</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
-      {/* Schedule cards */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <StageScheduleCard
-          batchId={batchId}
-          stage="pra_seleksi"
-          title="Pra-Seleksi"
-          currentDate={batch.pra_seleksi_date}
-          currentLocation={batch.pra_seleksi_location}
-          currentNotes={batch.pra_seleksi_notes}
-        />
-        <StageScheduleCard
-          batchId={batchId}
-          stage="interview"
-          title="Interview"
-          currentDate={batch.interview_date}
-          currentLocation={batch.interview_location}
-          currentNotes={batch.interview_notes}
-        />
-      </div>
+      {/* Pra-Seleksi schedule. Interview schedules now live on InterviewCohort. */}
+      <StageScheduleCard
+        batchId={batchId}
+        stage="pra_seleksi"
+        title="Pra-Seleksi"
+        currentDate={batch.pra_seleksi_date}
+        currentLocation={batch.pra_seleksi_location}
+        currentNotes={batch.pra_seleksi_notes}
+      />
 
       {/* Announcements panel */}
       <Card>
@@ -1190,9 +1512,11 @@ export function AdminBatchDetailPage() {
             Pengumuman Batch
           </CardTitle>
           <CardDescription>
-            Kirim pengumuman ke pelamar di batch ini. Batasi penerima berdasarkan tahapan
-            lamaran; pelamar hanya melihat pengumuman yang sesuai tahapan mereka. Digunakan
-            pada Pra-Seleksi dan Interview sebagai pengganti chat per-orang.
+            Kirim pengumuman pra-seleksi ke pelamar di batch ini. Batasi
+            penerima berdasarkan tahapan lamaran. Untuk pengumuman seputar
+            interview, gunakan halaman <span className="font-medium">Sesi Interview</span> agar
+            pelamar yang sudah terhubung ke sesi tertentu menerima informasi
+            yang tepat.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -1355,6 +1679,7 @@ export function AdminBatchDetailPage() {
           <TabsContent key={t.value} value={t.value} className="mt-4">
             <BatchStatusTab
               batchId={batchId}
+              jobId={batch.job}
               status={t.value}
               apps={appsByStatus[t.value]}
             />
@@ -1369,6 +1694,7 @@ export function AdminBatchDetailPage() {
         onSuccess={() => {
           queryClient.invalidateQueries({ queryKey: ["applications"] })
           queryClient.invalidateQueries({ queryKey: ["batch", batchId] })
+          queryClient.invalidateQueries({ queryKey: ["batches", { job: batch.job }] })
         }}
       />
 
@@ -1389,8 +1715,13 @@ export function AdminBatchDetailPage() {
                     status dan chat
                   </li>
                   <li>Pengumuman batch yang terkait</li>
-                  <li>Jadwal pra-seleksi dan interview yang tercatat pada batch ini</li>
+                  <li>Jadwal pra-seleksi yang tercatat pada batch ini</li>
                 </ul>
+                <p>
+                  Catatan: <span className="font-medium text-foreground">Sesi Interview</span> yang
+                  terkait dengan pelamar di batch ini tidak ikut terhapus — sesi
+                  dapat dipakai juga oleh batch lain dalam lowongan yang sama.
+                </p>
                 <p>
                   Akun pelamar <span className="font-medium text-foreground">tidak</span>{" "}
                   dihapus; hanya data lamaran mereka pada batch ini.

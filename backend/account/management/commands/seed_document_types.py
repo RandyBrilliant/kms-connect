@@ -22,11 +22,11 @@ DOCUMENT_NAMES = {
     "cv":                            ("Daftar Riwayat Hidup (CV)",        False, 7,  "Contoh format tersedia di aplikasi. PDF, maks. 2 MB.", INITIAL),
     "sertifikat-keterampilan":        ("Sertifikat Keterampilan",           False, 8,  "Jika ada. PDF, maks. 2 MB.", INITIAL),
     # ── POST_INTERVIEW ───────────────────────────────────────────────────────
-    "ijin-keluarga":                  ("Surat Izin Keluarga (Form Biru)",   True,  9,  "PDF, maks. 2 MB.", POST),
+    "ijin-keluarga":                  ("Surat Izin Keluarga (Form Biru)",   True,  9,  "Template PDF tersedia di aplikasi. PDF, maks. 2 MB.", POST),
     "surat-keterangan-pemberi-ijin":  ("Surat Keterangan Pemberi Izin",     True,  10, "PDF, maks. 2 MB.", POST),
     "ktp-orangtua-wali":              ("KTP Orangtua / Wali",               True,  11, "JPG/PNG, maks. 500 KB.", POST),
     "surat-kesehatan":                ("Surat Kesehatan",                   True,  12, "PDF, maks. 2 MB.", POST),
-    "surat-keterangan-status-perkawinan": ("Surat Keterangan Status Perkawinan", True, 13, "PDF, maks. 2 MB.", POST),
+    "surat-keterangan-status-perkawinan": ("Surat Keterangan Status Perkawinan", True, 13, "Template Word tersedia di aplikasi; unggah sebagai PDF. PDF, maks. 2 MB.", POST),
     "buku-nikah":                     ("Buku Nikah",                        False, 14, "Bagi yang sudah menikah. JPG/PNG, maks. 500 KB.", POST),
     "perjanjian-penempatan":          ("Perjanjian Penempatan",             True,  15, "PDF, maks. 2 MB.", POST),
 }

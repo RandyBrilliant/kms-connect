@@ -18,7 +18,7 @@ import '../../../../core/widgets/professional/professional_card.dart';
 import '../../../../core/widgets/professional/professional_gradient_background.dart';
 import '../../../documents/data/providers/document_provider.dart';
 import '../../../documents/domain/models/document_type.dart';
-import '../../utils/open_cv_template_pdf.dart';
+import '../../utils/bundled_document_templates.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Page
@@ -476,8 +476,38 @@ class _UploadDocumentPageState extends ConsumerState<UploadDocumentPage> {
                               ],
 
                               if (_selectedType?.code == 'cv') ...[
-                                _CvTemplateBanner(
+                                _BundledTemplateBanner(
+                                  title: 'Contoh format CV',
+                                  subtitle:
+                                      'Buka template resmi untuk diisi, lalu unggah sebagai PDF di bawah.',
+                                  usePdfIcon: true,
                                   onOpen: () => openCvTemplatePdf(context),
+                                ),
+                                const SizedBox(height: 12),
+                              ],
+                              if (_selectedType?.code == 'ijin-keluarga') ...[
+                                _BundledTemplateBanner(
+                                  title: 'Template Surat Izin Keluarga',
+                                  subtitle:
+                                      'Buka berkas PDF ini, lengkapi sesuai petunjuk, lalu unggah PDF di bawah.',
+                                  usePdfIcon: true,
+                                  onOpen: () =>
+                                      openIjinKeluargaTemplatePdf(context),
+                                ),
+                                const SizedBox(height: 12),
+                              ],
+                              if (_selectedType?.code ==
+                                  'surat-keterangan-status-perkawinan') ...[
+                                _BundledTemplateBanner(
+                                  title:
+                                      'Template Surat Keterangan Status Perkawinan',
+                                  subtitle:
+                                      'Buka dokumen Word, isi data Anda, lalu simpan atau ekspor ke PDF sebelum mengunggah.',
+                                  usePdfIcon: false,
+                                  onOpen: () =>
+                                      openSuratStatusPerkawinanTemplateDoc(
+                                        context,
+                                      ),
                                 ),
                                 const SizedBox(height: 12),
                               ],
@@ -770,12 +800,21 @@ class _UploadDocumentPageState extends ConsumerState<UploadDocumentPage> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CV template (bundled asset, type code `cv`)
+// Bundled templates (`bundled_document_templates.dart`)
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _CvTemplateBanner extends StatelessWidget {
-  const _CvTemplateBanner({required this.onOpen});
+class _BundledTemplateBanner extends StatelessWidget {
+  const _BundledTemplateBanner({
+    required this.title,
+    required this.subtitle,
+    required this.onOpen,
+    this.usePdfIcon = true,
+  });
+
+  final String title;
+  final String subtitle;
   final VoidCallback onOpen;
+  final bool usePdfIcon;
 
   @override
   Widget build(BuildContext context) {
@@ -799,9 +838,11 @@ class _CvTemplateBanner extends StatelessWidget {
                   color: const Color(0xFFDBEAFE),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(
-                  Icons.picture_as_pdf_rounded,
-                  color: Color(0xFF1D4ED8),
+                child: Icon(
+                  usePdfIcon
+                      ? Icons.picture_as_pdf_rounded
+                      : Icons.description_rounded,
+                  color: const Color(0xFF1D4ED8),
                   size: 22,
                 ),
               ),
@@ -811,7 +852,7 @@ class _CvTemplateBanner extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Contoh format CV',
+                      title,
                       style: tt.titleSmall?.copyWith(
                         fontWeight: FontWeight.w800,
                         color: const Color(0xFF1E3A8A),
@@ -819,7 +860,7 @@ class _CvTemplateBanner extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Buka template resmi untuk diisi, lalu unggah sebagai PDF di bawah.',
+                      subtitle,
                       style: tt.bodySmall?.copyWith(
                         color: cs.onSurfaceVariant,
                         height: 1.35,
@@ -836,10 +877,10 @@ class _CvTemplateBanner extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 4),
-                        Icon(
+                        const Icon(
                           Icons.open_in_new_rounded,
                           size: 16,
-                          color: const Color(0xFF2563EB),
+                          color: Color(0xFF2563EB),
                         ),
                       ],
                     ),

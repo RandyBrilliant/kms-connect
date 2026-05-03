@@ -29,15 +29,14 @@ from .document_specs import validate_document_file, compress_image_file
 from .validators import validate_indonesian_phone, normalize_indonesian_phone
 
 
-def _resolve_birth_place(birth_place_id):
-    """Return a regions.Regency instance for the given PK, or None."""
-    if not birth_place_id:
-        return None
-    try:
-        from regions.models import Regency
-        return Regency.objects.get(pk=int(birth_place_id))
-    except Exception:
-        return None
+def _normalize_birth_place_text(raw) -> str:
+    """Free-text tempat lahir; strip and uppercase (parity with mobile KTP)."""
+    if raw is None:
+        return ""
+    s = str(raw).strip()
+    if not s:
+        return ""
+    return s[:200].upper()
 
 
 def _parse_birth_date(birth_date_str):
@@ -184,8 +183,9 @@ class ApplicantRegistrationView(APIView):
         # Ambil full_name dari form (dikirim dari mobile setelah OCR/input manual)
         full_name = request.data.get("full_name", "").strip()
 
-        # Parse birth_place (optional FK) and birth_date (optional date)
-        birth_place = _resolve_birth_place(request.data.get("birth_place"))
+        birth_place_text = _normalize_birth_place_text(
+            request.data.get("birth_place_text")
+        )
         birth_date = _parse_birth_date(request.data.get("birth_date", ""))
 
         # Validasi usia: minimal 18 tahun, maksimal 45 tahun
@@ -220,7 +220,7 @@ class ApplicantRegistrationView(APIView):
                 role=UserRole.APPLICANT,
                 is_active=True,
                 email_verified=False,  # Perlu verifikasi email
-                full_name=full_name,
+                full_name=full_name.upper() if full_name else full_name,
             )
         except Exception as e:
             return Response(
@@ -240,7 +240,7 @@ class ApplicantRegistrationView(APIView):
                 submitted_at=timezone.now(),
                 referrer=referrer_user,
                 contact_phone=phone_number if phone_number else "",
-                birth_place=birth_place,
+                birth_place_text=birth_place_text,
                 birth_date=birth_date,
             )
         except Exception as e:
@@ -602,8 +602,9 @@ class GoogleCompleteRegistrationView(APIView):
             user.full_name = full_name
             user.save(update_fields=["full_name"])
 
-        # Parse birth_place (optional FK) and birth_date (optional date)
-        birth_place = _resolve_birth_place(request.data.get("birth_place"))
+        birth_place_text = _normalize_birth_place_text(
+            request.data.get("birth_place_text")
+        )
         birth_date = _parse_birth_date(request.data.get("birth_date", ""))
 
         # Create or update ApplicantProfile
@@ -616,7 +617,7 @@ class GoogleCompleteRegistrationView(APIView):
                     "submitted_at": timezone.now(),
                     "referrer": referrer_user,
                     "contact_phone": phone_number,
-                    "birth_place": birth_place,
+                    "birth_place_text": birth_place_text,
                     "birth_date": birth_date,
                 },
             )
@@ -625,13 +626,13 @@ class GoogleCompleteRegistrationView(APIView):
             profile.referrer = referrer_user
             if phone_number:
                 profile.contact_phone = phone_number
-            if birth_place:
-                profile.birth_place = birth_place
+            if birth_place_text:
+                profile.birth_place_text = birth_place_text
             if birth_date:
                 profile.birth_date = birth_date
             update_fields = ["nik", "referrer", "contact_phone"]
-            if birth_place:
-                update_fields.append("birth_place")
+            if birth_place_text:
+                update_fields.append("birth_place_text")
             if birth_date:
                 update_fields.append("birth_date")
             profile.save(update_fields=update_fields)
@@ -685,11 +686,11 @@ class GoogleCompleteRegistrationView(APIView):
 class KTPOcrPreviewView(APIView):
     """
     Public endpoint untuk OCR preview KTP sebelum registrasi.
-    Menerima file KTP, menjalankan OCR, mengembalikan data parsed.
-    Tidak membuat user/profile, hanya untuk preview data.
-    
-    Uses bounding box extraction for improved accuracy.
-    Returns birth_place_regency with matched regency info if found.
+    Menerima file KTP, menjalankan OCR, mengembalikan **hanya NIK** di body.
+    Field lain (nama, tempat/tanggal lahir) diisi manual oleh pengguna.
+
+    Full parse masih dijalankan di server untuk memverifikasi bahwa NIK
+    terbaca; data selain NIK tidak dikembalikan ke klien.
     """
 
     permission_classes = [AllowAny]
@@ -760,10 +761,14 @@ class KTPOcrPreviewView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
+            nik_value = str(parsed_data["nik"]).strip()
             return Response(
                 success_response(
-                    data=parsed_data,
-                    detail="Data KTP berhasil diekstrak. Silakan periksa dan lengkapi data yang kosong.",
+                    data={"nik": nik_value},
+                    detail=(
+                        "NIK berhasil dibaca dari foto KTP. Silakan isi nama, "
+                        "tempat lahir, dan tanggal lahir secara manual sesuai KTP."
+                    ),
                 ),
                 status=status.HTTP_200_OK,
             )

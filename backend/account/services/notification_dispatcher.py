@@ -33,6 +33,7 @@ import logging
 from typing import Any
 
 from django.core.cache import cache
+from django.utils import timezone as dj_timezone
 
 from ..models import (
     CustomUser,
@@ -259,6 +260,19 @@ def _serialise_context(ctx: dict) -> dict:
     return safe
 
 
+def _format_notification_datetime(dt) -> str:
+    """
+    Format datetimes for notification body/email copy in the active TIME_ZONE
+    (Asia/Jakarta). Matches how the admin UI shows wall-clock time for the same
+    stored instant (UTC in DB → local display).
+    """
+    if dt is None:
+        return ""
+    if dj_timezone.is_aware(dt):
+        dt = dj_timezone.localtime(dt)
+    return dt.strftime("%d %B %Y, %H:%M")
+
+
 def build_application_context(application) -> dict[str, Any]:
     """
     Build a notification context dict from a JobApplication instance.
@@ -283,9 +297,20 @@ def build_application_context(application) -> dict[str, Any]:
     except Exception:
         pass
     try:
-        if application.batch and application.batch.interview_date:
-            interview_date_str = application.batch.interview_date.strftime("%d %B %Y, %H:%M")
-            interview_location = application.batch.interview_location or ""
+        # Cohort-first / batch-fallback — same rule as JobApplicationSerializer
+        # interview_* fields. Deprecated batch interview columns must not be the
+        # only source after InterviewCohort migration.
+        cohort = getattr(application, "interview_cohort", None)
+        batch = getattr(application, "batch", None)
+        interview_dt = None
+        if cohort is not None:
+            interview_dt = cohort.interview_date
+            interview_location = (cohort.interview_location or "").strip()
+        elif batch is not None:
+            interview_dt = batch.interview_date
+            interview_location = (batch.interview_location or "").strip()
+        if interview_dt:
+            interview_date_str = _format_notification_datetime(interview_dt)
     except Exception:
         pass
 

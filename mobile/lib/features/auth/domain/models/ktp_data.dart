@@ -1,10 +1,7 @@
-/// Data extracted from KTP via OCR.
+/// Payload from KTP OCR preview (`/auth/ocr-preview/`).
 ///
-/// Only the four fields that can be reliably read from a KTP photo are
-/// included: NIK, nama, tempat lahir, and tanggal lahir.
-///
-/// Optionally includes [birthPlaceRegency] if the backend successfully
-/// matched the OCR birth_place to a regency in the database.
+/// The API returns **only [nik]**; nama, tempat lahir, tanggal lahir, and
+/// regency match are filled in manually during registration / profile.
 class KtpData {
   final String? nik;
   final String? name;
@@ -70,7 +67,7 @@ class KtpData {
     );
   }
 
-  /// Whether any OCR field was successfully extracted.
+  /// True when preview returned usable data (typically NIK only).
   bool get hasData =>
       nik != null || name != null || birthPlace != null || birthDate != null;
 }

@@ -71,11 +71,21 @@ class JobApplication {
   final String? companyName;
   final int? batch;
   final String? batchName;
+  /// Pra-seleksi tahapan order/label from `LamaranBatch` (when batch present).
+  final int? batchTahapOrder;
+  final String? batchTahapLabel;
+  /// Interview session group (`InterviewCohort`) after pra-seleksi.
+  final int? interviewCohort;
+  final String? interviewCohortName;
   final String status;
   final DateTime? praSeleksiDate;
   final String? praSeleksiLocation;
+  /// Additional instructions for pra-seleksi (from batch).
+  final String? praSeleksiNotes;
   final DateTime? interviewDate;
   final String? interviewLocation;
+  /// Additional instructions for interview (from cohort, legacy batch fallback).
+  final String? interviewNotes;
   final DateTime? praSeleksiConfirmedAt;
   final DateTime? interviewConfirmedAt;
   final DateTime appliedAt;
@@ -103,11 +113,17 @@ class JobApplication {
     this.companyName,
     this.batch,
     this.batchName,
+    this.batchTahapOrder,
+    this.batchTahapLabel,
+    this.interviewCohort,
+    this.interviewCohortName,
     required this.status,
     this.praSeleksiDate,
     this.praSeleksiLocation,
+    this.praSeleksiNotes,
     this.interviewDate,
     this.interviewLocation,
+    this.interviewNotes,
     this.praSeleksiConfirmedAt,
     this.interviewConfirmedAt,
     required this.appliedAt,
@@ -185,11 +201,17 @@ class JobApplication {
       companyName: json['company_name']?.toString(),
       batch: _safeIntOrNull(json['batch']),
       batchName: json['batch_name']?.toString(),
+      batchTahapOrder: _safeIntOrNull(json['batch_tahap_order']),
+      batchTahapLabel: json['batch_tahap_label']?.toString(),
+      interviewCohort: _safeIntOrNull(json['interview_cohort']),
+      interviewCohortName: json['interview_cohort_name']?.toString(),
       status: (json['status'] ?? '') as String,
       praSeleksiDate: ApiDateTime.parse(json['pra_seleksi_date']),
       praSeleksiLocation: json['pra_seleksi_location']?.toString(),
+      praSeleksiNotes: json['pra_seleksi_notes']?.toString(),
       interviewDate: ApiDateTime.parse(json['interview_date']),
       interviewLocation: json['interview_location']?.toString(),
+      interviewNotes: json['interview_notes']?.toString(),
       praSeleksiConfirmedAt: ApiDateTime.parse(json['pra_seleksi_confirmed_at']),
       interviewConfirmedAt: ApiDateTime.parse(json['interview_confirmed_at']),
       appliedAt: ApiDateTime.parseRequired(

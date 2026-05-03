@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
+import { CohortSelectField } from "@/components/interview-cohorts/cohort-select-field"
 import { useTransitionApplicationMutation } from "@/hooks/use-applications-query"
 import {
   APPLICATION_STATUS_LABELS,
@@ -51,12 +52,15 @@ const ADMIN_TRANSITIONS: Partial<Record<ApplicationStatus, ApplicationStatus[]>>
 
 // Date is required only when transitioning to SELESAI
 const STATUSES_REQUIRING_DATE: ApplicationStatus[] = ["SELESAI"]
+// Cohort is required when transitioning to INTERVIEW
+const STATUSES_REQUIRING_COHORT: ApplicationStatus[] = ["INTERVIEW"]
 
 const formSchema = z
   .object({
     status: z.string().min(1, "Pilih status baru"),
     note: z.string().max(500, "Catatan maksimal 500 karakter").optional(),
     placement_end_date: z.string().optional(),
+    interview_cohort: z.number().int().positive().nullable().optional(),
   })
   .refine(
     (data) => {
@@ -68,6 +72,18 @@ const formSchema = z
     {
       message: "Tanggal selesai kerja wajib diisi untuk status ini",
       path: ["placement_end_date"],
+    }
+  )
+  .refine(
+    (data) => {
+      if (STATUSES_REQUIRING_COHORT.includes(data.status as ApplicationStatus)) {
+        return data.interview_cohort != null
+      }
+      return true
+    },
+    {
+      message: "Pilih sesi interview untuk pelamar ini",
+      path: ["interview_cohort"],
     }
   )
 
@@ -100,6 +116,7 @@ export function TransitionApplicationDialog({
       status: "",
       note: "",
       placement_end_date: "",
+      interview_cohort: null as number | null,
     },
     onSubmit: async ({ value }) => {
       const result = formSchema.safeParse(value)
@@ -110,6 +127,7 @@ export function TransitionApplicationDialog({
           status: values.status as ApplicationStatus,
           note: values.note || undefined,
           placement_end_date: values.placement_end_date || null,
+          interview_cohort: values.interview_cohort ?? null,
         })
         toast.success(
           "Status diperbarui",
@@ -186,6 +204,27 @@ export function TransitionApplicationDialog({
                 </Field>
               )}
             </form.Field>
+
+            <form.Subscribe selector={(state) => state.values.status}>
+              {(status) =>
+                STATUSES_REQUIRING_COHORT.includes(status as ApplicationStatus) && (
+                  <form.Field name="interview_cohort">
+                    {(field) => (
+                      <Field>
+                        <CohortSelectField
+                          jobId={application.job}
+                          value={field.state.value ?? null}
+                          onChange={(v) => field.handleChange(v)}
+                          required
+                          helperText="Pelamar akan dipindahkan ke sesi ini saat status berubah ke Interview."
+                        />
+                        <FieldError errors={fieldErrors(field.state.meta.errors as unknown[])} />
+                      </Field>
+                    )}
+                  </form.Field>
+                )
+              }
+            </form.Subscribe>
 
             <form.Subscribe selector={(state) => state.values.status}>
               {(status) =>

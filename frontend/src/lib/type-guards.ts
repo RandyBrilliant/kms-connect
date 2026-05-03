@@ -61,7 +61,7 @@ export function isVerificationStatus(
  * Check if value is a valid Gender
  */
 export function isGender(value: unknown): value is Gender {
-  return typeof value === "string" && ["L", "P"].includes(value)
+  return typeof value === "string" && (value === "M" || value === "F")
 }
 
 /**
@@ -254,7 +254,7 @@ export function hasCompleteBiodata(profile: ApplicantProfile): boolean {
   return !!(
     profile.full_name &&
     profile.nik &&
-    profile.birth_place &&
+    (profile.birth_place_text?.trim() || profile.birth_place_display?.trim()) &&
     profile.birth_date &&
     profile.gender &&
     profile.religion &&

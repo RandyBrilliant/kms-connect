@@ -56,11 +56,10 @@ ADMIN_OR_STAFF_ROLES = frozenset(
 
 
 class Gender(models.TextChoices):
-    """Jenis kelamin untuk profil pelamar."""
+    """Jenis kelamin untuk profil pelamar (hanya Laki-laki / Perempuan)."""
 
     MALE = "M", _("Laki-laki")
     FEMALE = "F", _("Perempuan")
-    OTHER = "O", _("Lainnya")
 
 
 class ApplicantVerificationStatus(models.TextChoices):
@@ -466,8 +465,14 @@ class ApplicantProfile(models.Model):
         null=True,
         blank=True,
         related_name="applicant_profiles_birth_place",
-        verbose_name=_("tempat lahir"),
-        help_text=_("Kabupaten/Kota tempat lahir."),
+        verbose_name=_("tempat lahir (legacy)"),
+        help_text=_("Legacy FK — diganti oleh birth_place_text. Dikosongkan setelah migrasi."),
+    )
+    birth_place_text = models.CharField(
+        _("tempat lahir"),
+        max_length=200,
+        blank=True,
+        help_text=_("Tempat lahir (teks bebas, biasanya huruf kapital seperti di KTP)."),
     )
     birth_date = models.DateField(
         _("tanggal lahir"),
@@ -1835,10 +1840,11 @@ class ApplicantDocument(models.Model):
         if not self.ocr_data:
             return None
         data = self.ocr_data
+        raw_place = (data.get("birth_place") or "").strip()
         return {
             "full_name": data.get("name") or data.get("full_name") or "",
             "nik": data.get("nik") or "",
-            "birth_place": data.get("birth_place") or "",
+            "birth_place_text": raw_place.upper() if raw_place else "",
             "birth_date": data.get("birth_date") or "",
             "address": data.get("address") or "",
             "gender": (data.get("gender") or "").upper()[:1] or "",

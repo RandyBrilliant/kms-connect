@@ -124,7 +124,6 @@ const STATUS_LABELS: Record<string, string> = {
 const GENDER_LABELS: Record<string, string> = {
   M: "Laki-laki",
   F: "Perempuan",
-  O: "Lainnya",
 }
 
 export function AdminLaporanPage() {
