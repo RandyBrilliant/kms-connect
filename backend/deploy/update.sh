@@ -68,10 +68,26 @@ echo -e "${GREEN}✓ Services started${NC}"
 
 echo ""
 echo -e "${BLUE}[5/5] Running migrations...${NC}"
-sleep 5
-docker compose $COMPOSE_OPTS exec -T api python manage.py migrate --noinput || {
-    echo -e "${YELLOW}⚠ Migrations had issues${NC}"
-}
+# Wait for the api container to actually accept commands AND for the DB to be reachable.
+for attempt in 1 2 3 4 5 6 7 8 9 10; do
+    if docker compose $COMPOSE_OPTS exec -T api python manage.py migrate --check >/dev/null 2>&1; then
+        echo -e "${GREEN}✓ DB reachable, migrations up to date${NC}"
+        break
+    fi
+    if docker compose $COMPOSE_OPTS exec -T api python -c "import django; django.setup()" >/dev/null 2>&1; then
+        break
+    fi
+    echo -e "${YELLOW}…api not ready yet (attempt $attempt/10), retrying in 3s${NC}"
+    sleep 3
+done
+
+if ! docker compose $COMPOSE_OPTS exec -T api python manage.py migrate --noinput; then
+    echo -e "${RED}❌ Migrations FAILED. Aborting deploy so you can investigate before traffic hits a half-migrated DB.${NC}"
+    echo -e "${YELLOW}Inspect with:${NC}"
+    echo "  docker compose $COMPOSE_OPTS exec -T api python manage.py showmigrations"
+    echo "  docker compose $COMPOSE_OPTS logs --tail 200 api"
+    exit 1
+fi
 echo -e "${GREEN}✓ Migrations completed${NC}"
 
 echo ""
