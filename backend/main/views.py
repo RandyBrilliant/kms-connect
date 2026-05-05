@@ -1360,6 +1360,52 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
             .prefetch_related("status_history__changed_by")
         )
 
+    @action(detail=False, methods=["get"], url_path="export-excel")
+    def export_excel(self, request):
+        """
+        GET /api/applications/export-excel/
+
+        Export pelamar berdasarkan filter list aplikasi saat ini.
+        Mendukung query params yang sama dengan endpoint list:
+          - status
+          - job
+          - applicant
+          - batch
+          - interview_cohort
+          - search
+          - ordering
+        """
+        from django.http import HttpResponse
+
+        applications = self.filter_queryset(self.get_queryset()).order_by(
+            "applicant__user__full_name"
+        )
+        applicant_user_ids = applications.values_list(
+            "applicant__user_id", flat=True
+        ).distinct()
+
+        applicants_qs = (
+            CustomUser.objects.filter(
+                id__in=applicant_user_ids,
+                role=UserRole.APPLICANT,
+            )
+            .prefetch_related(
+                "applicant_profile__work_experiences",
+                "applicant_profile__documents__document_type",
+                "applicant_profile__documents__reviewed_by",
+            )
+            .order_by("applicant_profile__created_at")
+        )
+        excel_file = generate_applicants_excel(applicants_qs, request)
+
+        filename = "pelamar_applications_filter.xlsx"
+        response = HttpResponse(
+            excel_file.read(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+
     @action(detail=True, methods=["patch"], url_path="transition")
     def transition(self, request, pk=None):
         """

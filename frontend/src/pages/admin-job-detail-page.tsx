@@ -90,7 +90,7 @@ import { goBackOrDefault } from "@/lib/back-navigation"
 import { getJob } from "@/api/jobs"
 import { getBatches } from "@/api/batches"
 import { getInterviewCohorts } from "@/api/interview-cohorts"
-import { getApplications } from "@/api/applications"
+import { exportApplicationsExcel, getApplications } from "@/api/applications"
 import { createBroadcast, sendBroadcast } from "@/api/notifications"
 import type { JobItem, EmploymentType, JobStatus as JobStatusType } from "@/types/jobs"
 import type { ApplicationStatus } from "@/types/job-applications"
@@ -678,6 +678,7 @@ function ApplicationsTab({
   const [announcementTitle, setAnnouncementTitle] = useState("")
   const [announcementBody, setAnnouncementBody] = useState("")
   const [confirmAnnouncementOpen, setConfirmAnnouncementOpen] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
   const queryClient = useQueryClient()
 
   const { data, isLoading } = useQuery({
@@ -729,6 +730,26 @@ function ApplicationsTab({
     announcementTitle.trim().length > 0 &&
     announcementBody.trim().length > 0
   const emptyColSpan = 5 + (showCohortCol ? 1 : 0) + (showDocCol ? 1 : 0)
+
+  const handleExportExcel = async () => {
+    setIsExporting(true)
+    try {
+      await exportApplicationsExcel(
+        {
+          job: jobId,
+          status,
+          search: stageSearch.trim() || undefined,
+          ordering: "applicant_name",
+        },
+        `pelamar_${status.toLowerCase()}.xlsx`
+      )
+      toast.success("File Excel berhasil diunduh.")
+    } catch {
+      toast.error("Gagal mengunduh data Excel.")
+    } finally {
+      setIsExporting(false)
+    }
+  }
 
   const sendAnnouncementMutation = useMutation({
     mutationFn: async () => {
@@ -791,17 +812,30 @@ function ApplicationsTab({
   return (
     <>
       <div className="flex flex-col gap-4">
-        <p className="text-sm text-muted-foreground">
-          {totalCount} pelamar
-          {totalCount > 0 ? (
-            <span className="text-muted-foreground/80">
-              {" "}
-              (menampilkan{" "}
-              {(currentPage - 1) * APPLICATIONS_TAB_PAGE_SIZE + 1}–
-              {Math.min(currentPage * APPLICATIONS_TAB_PAGE_SIZE, totalCount)})
-            </span>
-          ) : null}
-        </p>
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <p className="text-sm text-muted-foreground">
+            {totalCount} pelamar
+            {totalCount > 0 ? (
+              <span className="text-muted-foreground/80">
+                {" "}
+                (menampilkan{" "}
+                {(currentPage - 1) * APPLICATIONS_TAB_PAGE_SIZE + 1}–
+                {Math.min(currentPage * APPLICATIONS_TAB_PAGE_SIZE, totalCount)})
+              </span>
+            ) : null}
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="cursor-pointer"
+            disabled={isExporting || totalCount === 0}
+            onClick={() => void handleExportExcel()}
+          >
+            <IconFileSpreadsheet className="mr-2 size-4" />
+            {isExporting ? "Mengunduh..." : "Export Excel"}
+          </Button>
+        </div>
 
         {enableAcceptedAnnouncement && (
           <Card>

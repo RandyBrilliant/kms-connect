@@ -20,6 +20,7 @@ import {
   IconArrowsRightLeft,
   IconBell,
   IconCalendar,
+  IconChevronDown,
   IconClipboardList,
   IconDownload,
   IconExternalLink,
@@ -69,6 +70,13 @@ import {
 } from "@/components/ui/table"
 import { DatePicker } from "@/components/ui/date-picker"
 import { Checkbox } from "@/components/ui/checkbox"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { ApplicationStatusBadge } from "@/components/applications/application-status-badge"
 import { ApplicantAdminProcessDialog } from "@/components/applicants/applicant-admin-process-dialog"
 import { ApplicantDetailPreviewDialog } from "@/components/batches/applicant-detail-preview-dialog"
@@ -1224,6 +1232,9 @@ export function AdminInterviewCohortDetailPage() {
   usePageTitle(cohortQuery.data ? cohortQuery.data.name : "Detail Sesi Interview")
 
   const apps = useMemo(() => applicationsQuery.data ?? [], [applicationsQuery.data])
+  const [activeStatusTab, setActiveStatusTab] =
+    useState<ApplicationStatus>("INTERVIEW")
+  const [isExporting, setIsExporting] = useState(false)
   const appsByStatus = useMemo(() => {
     const map: Record<ApplicationStatus, JobApplication[]> = {
       PRA_SELEKSI: [],
@@ -1237,6 +1248,25 @@ export function AdminInterviewCohortDetailPage() {
     for (const a of apps) map[a.status]?.push(a)
     return map
   }, [apps])
+
+  const exportStatusChoices: { label: string; value?: ApplicationStatus }[] = [
+    { label: "Diterima", value: "DITERIMA" },
+    { label: "Ditolak", value: "DITOLAK" },
+    { label: "Cadangan", value: "CADANGAN" },
+    { label: "Semua" },
+  ]
+
+  async function handleExportExcel(statuses?: ApplicationStatus[]) {
+    setIsExporting(true)
+    try {
+      await exportCohortExcel(cohortId, cohortQuery.data?.name ?? "sesi_interview", statuses)
+      toast.success("File Excel berhasil diunduh.")
+    } catch {
+      toast.error("Gagal mengunduh Excel.")
+    } finally {
+      setIsExporting(false)
+    }
+  }
 
   const toggleActiveMutation = useMutation({
     mutationFn: (next: boolean) =>
@@ -1345,18 +1375,49 @@ export function AdminInterviewCohortDetailPage() {
           >
             {cohort.is_active ? "Tandai Non-aktif" : "Aktifkan Kembali"}
           </Button>
-          <Button
-            variant="outline"
-            className="cursor-pointer"
-            onClick={() =>
-              exportCohortExcel(cohort.id, cohort.name).catch(() =>
-                toast.error("Gagal mengunduh Excel.")
-              )
-            }
-          >
-            <IconDownload className="mr-2 size-4" />
-            Export Excel
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                className="cursor-pointer"
+                disabled={isExporting || apps.length === 0}
+              >
+                <IconDownload className="mr-2 size-4" />
+                {isExporting ? "Mengunduh..." : "Export Excel"}
+                <IconChevronDown className="ml-1 size-4 opacity-70" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[240px]">
+              <DropdownMenuItem
+                className="cursor-pointer flex-col items-start gap-0"
+                disabled={appsByStatus[activeStatusTab].length === 0}
+                onClick={() => handleExportExcel([activeStatusTab])}
+              >
+                <span className="font-medium">Tahapan tab saat ini</span>
+                <span className="text-muted-foreground text-xs font-normal">
+                  {APPLICATION_STATUS_LABELS[activeStatusTab]} (
+                  {appsByStatus[activeStatusTab].length} pelamar)
+                </span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {exportStatusChoices.map((opt) => {
+                const count = opt.value ? appsByStatus[opt.value].length : apps.length
+                return (
+                  <DropdownMenuItem
+                    key={opt.label}
+                    className="cursor-pointer justify-between gap-4"
+                    disabled={count === 0}
+                    onClick={() => handleExportExcel(opt.value ? [opt.value] : undefined)}
+                  >
+                    <span>{opt.label}</span>
+                    <span className="text-muted-foreground tabular-nums text-xs">
+                      {count}
+                    </span>
+                  </DropdownMenuItem>
+                )
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -1423,7 +1484,10 @@ export function AdminInterviewCohortDetailPage() {
 
       <AnnouncementsCard cohortId={cohort.id} />
 
-      <Tabs defaultValue="INTERVIEW">
+      <Tabs
+        value={activeStatusTab}
+        onValueChange={(v) => setActiveStatusTab(v as ApplicationStatus)}
+      >
         <TabsList className="h-auto flex-wrap gap-1">
           {COHORT_STATUS_TABS.map((t) => (
             <TabsTrigger key={t.value} value={t.value}>
