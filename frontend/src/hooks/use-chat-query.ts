@@ -10,6 +10,8 @@ import {
   getChatThreads,
   getChatThread,
   getChatMessages,
+  getChatUnreadSummary,
+  markChatThreadRead,
   sendChatMessage,
   closeChatThread,
   reopenChatThread,
@@ -26,6 +28,7 @@ export const chatKeys = {
   threadList: (params: ChatThreadsListParams) =>
     [...chatKeys.threads(), params] as const,
   thread: (id: number) => [...chatKeys.threads(), id] as const,
+  unreadSummary: () => [...chatKeys.threads(), "unread-summary"] as const,
   messages: (threadId: number) =>
     [...chatKeys.all, "messages", threadId] as const,
 }
@@ -42,6 +45,15 @@ export function useChatThreadQuery(id: number | null, enabled = true) {
     queryKey: chatKeys.thread(id ?? 0),
     queryFn: () => getChatThread(id!),
     enabled: enabled && id != null && id > 0,
+  })
+}
+
+export function useChatUnreadSummaryQuery(enabled = true) {
+  return useQuery({
+    queryKey: chatKeys.unreadSummary(),
+    queryFn: getChatUnreadSummary,
+    enabled,
+    refetchInterval: enabled ? POLL_INTERVAL_MS : false,
   })
 }
 
@@ -66,6 +78,19 @@ export function useSendMessageMutation(threadId: number) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: chatKeys.messages(threadId) })
       queryClient.invalidateQueries({ queryKey: chatKeys.threads() })
+      queryClient.invalidateQueries({ queryKey: chatKeys.unreadSummary() })
+    },
+  })
+}
+
+export function useMarkThreadReadMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (threadId: number) => markChatThreadRead(threadId),
+    onSuccess: (_marked, threadId) => {
+      queryClient.invalidateQueries({ queryKey: chatKeys.messages(threadId) })
+      queryClient.invalidateQueries({ queryKey: chatKeys.threads() })
+      queryClient.invalidateQueries({ queryKey: chatKeys.unreadSummary() })
     },
   })
 }
@@ -77,6 +102,7 @@ export function useCloseChatThreadMutation() {
     onSuccess: (_data, threadId) => {
       queryClient.invalidateQueries({ queryKey: chatKeys.thread(threadId) })
       queryClient.invalidateQueries({ queryKey: chatKeys.threads() })
+      queryClient.invalidateQueries({ queryKey: chatKeys.unreadSummary() })
     },
   })
 }
@@ -88,6 +114,7 @@ export function useReopenChatThreadMutation() {
     onSuccess: (_data, threadId) => {
       queryClient.invalidateQueries({ queryKey: chatKeys.thread(threadId) })
       queryClient.invalidateQueries({ queryKey: chatKeys.threads() })
+      queryClient.invalidateQueries({ queryKey: chatKeys.unreadSummary() })
     },
   })
 }

@@ -19,7 +19,7 @@
 
 import { type ReactNode, useState, useEffect, useMemo } from "react"
 import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom"
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { format } from "date-fns"
 import { id as idLocale } from "date-fns/locale"
 import {
@@ -63,7 +63,20 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { usePageTitle } from "@/hooks/use-page-title"
 import { useAdminDashboard } from "@/contexts/admin-dashboard-context"
 import { useAuth } from "@/hooks/use-auth"
@@ -78,6 +91,7 @@ import { getJob } from "@/api/jobs"
 import { getBatches } from "@/api/batches"
 import { getInterviewCohorts } from "@/api/interview-cohorts"
 import { getApplications } from "@/api/applications"
+import { createBroadcast, sendBroadcast } from "@/api/notifications"
 import type { JobItem, EmploymentType, JobStatus as JobStatusType } from "@/types/jobs"
 import type { ApplicationStatus } from "@/types/job-applications"
 
@@ -658,6 +672,13 @@ function ApplicationsTab({
   const [previewUserLabel, setPreviewUserLabel] = useState("")
   const [processUserId, setProcessUserId] = useState<number | null>(null)
   const [processUserLabel, setProcessUserLabel] = useState("")
+  const [selectedApplicantUsers, setSelectedApplicantUsers] = useState<Set<number>>(
+    new Set()
+  )
+  const [announcementTitle, setAnnouncementTitle] = useState("")
+  const [announcementBody, setAnnouncementBody] = useState("")
+  const [confirmAnnouncementOpen, setConfirmAnnouncementOpen] = useState(false)
+  const queryClient = useQueryClient()
 
   const { data, isLoading } = useQuery({
     queryKey: ["applications", { job: jobId, status, page, search: stageSearch }],
@@ -688,7 +709,84 @@ function ApplicationsTab({
   const filteredApps = sortedApps
   const showCohortCol = status !== "DITOLAK"
   const showDocCol = status === "DITERIMA"
+  const enableAcceptedAnnouncement = status === "DITERIMA"
+  const selectableApplicantUsers = filteredApps
+    .map((a) => a.applicant_user)
+    .filter((v): v is number => typeof v === "number")
+  const allSelectableChecked =
+    selectableApplicantUsers.length > 0 &&
+    selectableApplicantUsers.every((id) => selectedApplicantUsers.has(id))
+  const selectedRecipientIds = Array.from(selectedApplicantUsers)
+  const selectedRecipientNames = filteredApps
+    .filter(
+      (app) =>
+        typeof app.applicant_user === "number" &&
+        selectedApplicantUsers.has(app.applicant_user)
+    )
+    .map((app) => app.applicant_name)
+  const canSendAnnouncement =
+    selectedRecipientIds.length > 0 &&
+    announcementTitle.trim().length > 0 &&
+    announcementBody.trim().length > 0
   const emptyColSpan = 5 + (showCohortCol ? 1 : 0) + (showDocCol ? 1 : 0)
+
+  const sendAnnouncementMutation = useMutation({
+    mutationFn: async () => {
+      const created = await createBroadcast({
+        title: announcementTitle.trim(),
+        message: announcementBody.trim(),
+        notification_type: "BROADCAST",
+        priority: "NORMAL",
+        recipient_config: {
+          selection_type: "users",
+          user_ids: selectedRecipientIds,
+        },
+        send_email: false,
+        send_in_app: true,
+        send_push: true,
+      })
+      return sendBroadcast(created.id)
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["broadcasts"] })
+      toast.success(
+        "Pengumuman dikirim",
+        `Pengumuman dikirim ke ${selectedRecipientIds.length} pelamar terpilih.`
+      )
+      setAnnouncementTitle("")
+      setAnnouncementBody("")
+      setSelectedApplicantUsers(new Set())
+    },
+    onError: (err: unknown) => {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response
+        ?.data?.detail
+      toast.error("Gagal mengirim pengumuman", detail ?? "Coba lagi nanti.")
+    },
+  })
+
+  const toggleSelectAllApplicants = () => {
+    setSelectedApplicantUsers((prev) => {
+      const next = new Set(prev)
+      if (allSelectableChecked) {
+        selectableApplicantUsers.forEach((id) => next.delete(id))
+      } else {
+        selectableApplicantUsers.forEach((id) => next.add(id))
+      }
+      return next
+    })
+  }
+
+  const toggleSelectApplicant = (applicantUserId: number) => {
+    setSelectedApplicantUsers((prev) => {
+      const next = new Set(prev)
+      if (next.has(applicantUserId)) {
+        next.delete(applicantUserId)
+      } else {
+        next.add(applicantUserId)
+      }
+      return next
+    })
+  }
 
   return (
     <>
@@ -704,6 +802,71 @@ function ApplicationsTab({
             </span>
           ) : null}
         </p>
+
+        {enableAcceptedAnnouncement && (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Pengumuman Tahap Diterima</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Pilih pelamar pada tabel, lalu kirim pengumuman hanya ke pelamar terpilih.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-1.5 md:col-span-2">
+                  <Label htmlFor="accepted-announcement-title">Judul</Label>
+                  <Input
+                    id="accepted-announcement-title"
+                    value={announcementTitle}
+                    onChange={(e) => setAnnouncementTitle(e.target.value)}
+                    placeholder="Contoh: Info pemberkasan tahap diterima"
+                    maxLength={200}
+                  />
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <Label htmlFor="accepted-announcement-body">Isi pengumuman</Label>
+                  <Textarea
+                    id="accepted-announcement-body"
+                    value={announcementBody}
+                    onChange={(e) => setAnnouncementBody(e.target.value)}
+                    placeholder="Tulis isi pengumuman untuk pelamar yang dipilih..."
+                    rows={4}
+                    maxLength={3000}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="text-xs text-muted-foreground">
+                  {selectedRecipientIds.length} pelamar terpilih
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="cursor-pointer"
+                  disabled={!canSendAnnouncement || sendAnnouncementMutation.isPending}
+                  onClick={() => setConfirmAnnouncementOpen(true)}
+                >
+                  {sendAnnouncementMutation.isPending
+                    ? "Mengirim..."
+                    : "Kirim Pengumuman"}
+                </Button>
+              </div>
+              {selectedRecipientNames.length > 0 && (
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="mb-1 text-xs font-medium text-foreground">
+                    Preview penerima:
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {selectedRecipientNames.slice(0, 8).join(", ")}
+                    {selectedRecipientNames.length > 8
+                      ? `, dan ${selectedRecipientNames.length - 8} pelamar lainnya`
+                      : ""}
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         <div className="relative max-w-md">
           <IconSearch className="text-muted-foreground absolute left-3 top-1/2 size-4 -translate-y-1/2" />
@@ -728,6 +891,15 @@ function ApplicationsTab({
             <Table>
               <TableHeader>
                 <TableRow>
+                  {enableAcceptedAnnouncement && (
+                    <TableHead className="w-[42px]">
+                      <Checkbox
+                        checked={allSelectableChecked}
+                        onCheckedChange={toggleSelectAllApplicants}
+                        aria-label="Pilih semua pelamar di tabel"
+                      />
+                    </TableHead>
+                  )}
                   <TableHead>Pelamar</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Tahapan / Batch</TableHead>
@@ -747,6 +919,19 @@ function ApplicationsTab({
                 {filteredApps.length ? (
                   filteredApps.map((app) => (
                     <TableRow key={app.id} className="hover:bg-muted/50">
+                      {enableAcceptedAnnouncement && (
+                        <TableCell>
+                          {app.applicant_user ? (
+                            <Checkbox
+                              checked={selectedApplicantUsers.has(app.applicant_user)}
+                              onCheckedChange={() =>
+                                toggleSelectApplicant(app.applicant_user as number)
+                              }
+                              aria-label={`Pilih ${app.applicant_name}`}
+                            />
+                          ) : null}
+                        </TableCell>
+                      )}
                       <TableCell>
                         <div className="flex flex-col">
                           <span className="font-medium">{app.applicant_name}</span>
@@ -866,7 +1051,7 @@ function ApplicationsTab({
                 ) : (
                   <TableRow>
                     <TableCell
-                      colSpan={emptyColSpan}
+                      colSpan={emptyColSpan + (enableAcceptedAnnouncement ? 1 : 0)}
                       className="h-20 text-center text-muted-foreground"
                     >
                       Tidak ada pelamar dengan status ini.
@@ -939,6 +1124,57 @@ function ApplicationsTab({
           }
         }}
       />
+      <AlertDialog
+        open={confirmAnnouncementOpen}
+        onOpenChange={setConfirmAnnouncementOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Kirim pengumuman ke pelamar terpilih?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <p>
+                  Pengumuman akan dikirim ke{" "}
+                  <span className="font-medium text-foreground">
+                    {selectedRecipientIds.length}
+                  </span>{" "}
+                  pelamar di tahap Diterima.
+                </p>
+                {selectedRecipientNames.length > 0 && (
+                  <p className="text-xs">
+                    {selectedRecipientNames.slice(0, 10).join(", ")}
+                    {selectedRecipientNames.length > 10
+                      ? `, dan ${selectedRecipientNames.length - 10} lainnya`
+                      : ""}
+                  </p>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              type="button"
+              className="cursor-pointer"
+              disabled={sendAnnouncementMutation.isPending}
+            >
+              Batal
+            </AlertDialogCancel>
+            <AlertDialogAction
+              type="button"
+              className="cursor-pointer"
+              disabled={!canSendAnnouncement || sendAnnouncementMutation.isPending}
+              onClick={(e) => {
+                e.preventDefault()
+                sendAnnouncementMutation.mutate()
+              }}
+            >
+              {sendAnnouncementMutation.isPending
+                ? "Mengirim..."
+                : "Ya, Kirim Pengumuman"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   )
 }

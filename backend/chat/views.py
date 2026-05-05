@@ -16,7 +16,7 @@ Applicant endpoints (IsApplicant):
 """
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
-from django.db.models import Q
+from django.db.models import Count, Q
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -57,7 +57,7 @@ class ChatThreadViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ChatThreadSerializer
     permission_classes = [IsBackofficeAdmin]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ["is_closed", "application__job", "application__applicant"]
+    filterset_fields = ["application", "is_closed", "application__job", "application__applicant"]
     search_fields = [
         "application__applicant__user__full_name",
         "application__applicant__user__email",
@@ -76,6 +76,30 @@ class ChatThreadViewSet(viewsets.ReadOnlyModelViewSet):
                 "application__assigned_by",
             )
             .prefetch_related("messages__sender")
+        )
+
+    @action(detail=False, methods=["get"], url_path="unread-summary")
+    def unread_summary(self, request):
+        """
+        GET /api/chat/threads/unread-summary/
+        Returns aggregate unread stats for the current admin/staff user.
+        """
+        threads_qs = self.filter_queryset(self.get_queryset())
+        unread_threads_qs = threads_qs.filter(messages__is_read=False).exclude(
+            messages__sender=request.user
+        )
+        unread_threads = unread_threads_qs.distinct().count()
+        unread_messages = unread_threads_qs.aggregate(
+            total=Count("messages", distinct=False)
+        )["total"] or 0
+
+        return Response(
+            success_response(
+                data={
+                    "unread_threads": unread_threads,
+                    "unread_messages": unread_messages,
+                }
+            )
         )
 
     @action(detail=True, methods=["get"], url_path="messages")
@@ -145,6 +169,21 @@ class ChatThreadViewSet(viewsets.ReadOnlyModelViewSet):
             ),
             status=status.HTTP_201_CREATED,
         )
+
+    @action(detail=True, methods=["post"], url_path="read")
+    def mark_read(self, request, pk=None):
+        """
+        POST /api/chat/threads/{id}/read/
+        Mark unread messages in this thread as read for current user.
+        """
+        thread = self.get_object()
+        marked = (
+            thread.messages
+            .filter(is_read=False)
+            .exclude(sender=request.user)
+            .update(is_read=True, read_at=timezone.now())
+        )
+        return Response(success_response(data={"marked_read": marked}))
 
     @action(detail=True, methods=["post"], url_path="close")
     def close(self, request, pk=None):

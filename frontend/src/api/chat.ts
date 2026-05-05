@@ -9,6 +9,7 @@ import type {
   ChatThread,
   ChatMessage,
   ChatThreadsListParams,
+  ChatUnreadSummary,
   SendMessageInput,
 } from "@/types/chat"
 
@@ -32,6 +33,14 @@ export async function getChatThreads(
     `/api/chat/threads/${buildQueryString(params)}`
   )
   return data
+}
+
+/** GET /api/chat/threads/unread-summary/ */
+export async function getChatUnreadSummary(): Promise<ChatUnreadSummary> {
+  const { data } = await api.get<{ data: ChatUnreadSummary }>(
+    "/api/chat/threads/unread-summary/"
+  )
+  return data.data
 }
 
 /** GET /api/chat/threads/:id/ */
@@ -65,6 +74,14 @@ export async function sendChatMessage(
     input
   )
   return data.data
+}
+
+/** POST /api/chat/threads/:id/read/ */
+export async function markChatThreadRead(threadId: number): Promise<number> {
+  const { data } = await api.post<{ data: { marked_read: number } }>(
+    `/api/chat/threads/${threadId}/read/`
+  )
+  return data.data.marked_read
 }
 
 /** POST /api/chat/threads/:id/close/ */

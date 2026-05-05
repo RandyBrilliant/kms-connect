@@ -10,6 +10,7 @@ import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarMenu,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
@@ -31,6 +32,7 @@ export function NavMain({
     url: string
     icon?: Icon
     matchPaths?: string[]
+    badgeCount?: number
   }[]
   showQuickActions?: boolean
 }) {
@@ -73,6 +75,11 @@ export function NavMain({
                   <span>{item.title}</span>
                 </Link>
               </SidebarMenuButton>
+              {!!item.badgeCount && item.badgeCount > 0 && (
+                <SidebarMenuBadge>
+                  {item.badgeCount > 99 ? "99+" : item.badgeCount}
+                </SidebarMenuBadge>
+              )}
             </SidebarMenuItem>
           ))}
         </SidebarMenu>

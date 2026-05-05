@@ -43,6 +43,11 @@ export interface ChatThreadsListParams {
   application?: number
 }
 
+export interface ChatUnreadSummary {
+  unread_threads: number
+  unread_messages: number
+}
+
 export interface SendMessageInput {
   body: string
 }

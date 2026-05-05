@@ -131,6 +131,9 @@ export function useChatWebSocket(
               queryClient.invalidateQueries({
                 queryKey: chatKeys.threads(),
               })
+              queryClient.invalidateQueries({
+                queryKey: chatKeys.unreadSummary(),
+              })
               // Clear typing when message arrives
               setTypingUser(null)
               break
@@ -148,6 +151,9 @@ export function useChatWebSocket(
             case "chat.read":
               queryClient.invalidateQueries({
                 queryKey: chatKeys.messages(threadId),
+              })
+              queryClient.invalidateQueries({
+                queryKey: chatKeys.unreadSummary(),
               })
               break
           }

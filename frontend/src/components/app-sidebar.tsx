@@ -15,6 +15,7 @@ import {
 } from "@tabler/icons-react"
 
 import { useAuth } from "@/hooks/use-auth"
+import { useChatUnreadSummaryQuery } from "@/hooks/use-chat-query"
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
 import {
@@ -107,7 +108,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           : user?.role === "COMPANY"
             ? "/company"
             : ""
-  const navItems = getNavItems(basePath, user?.role)
+  const canSeeChat = user?.role === "MASTER_ADMIN" || user?.role === "ADMIN"
+  const { data: chatUnreadSummary } = useChatUnreadSummaryQuery(canSeeChat)
+  const unreadChatCount = chatUnreadSummary?.unread_messages ?? 0
+  const navItems = getNavItems(basePath, user?.role).map((item) =>
+    item.title === "Chat" ? { ...item, badgeCount: unreadChatCount } : item
+  )
   const displayName =
     (user?.full_name && user.full_name.trim()) ||
     (user?.email ? user.email.split("@")[0] : "") ||

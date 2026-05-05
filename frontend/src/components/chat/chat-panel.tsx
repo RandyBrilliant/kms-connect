@@ -16,6 +16,7 @@ import {
   useChatThreadQuery,
   useChatMessagesQuery,
   useSendMessageMutation,
+  useMarkThreadReadMutation,
   useCloseChatThreadMutation,
   useReopenChatThreadMutation,
 } from "@/hooks/use-chat-query"
@@ -43,6 +44,7 @@ export function ChatPanel({
   const { data: thread } = useChatThreadQuery(threadId)
   const { data: messages, isLoading } = useChatMessagesQuery(threadId)
   const sendMutation = useSendMessageMutation(threadId)
+  const markReadMutation = useMarkThreadReadMutation()
   const closeMutation = useCloseChatThreadMutation()
   const reopenMutation = useReopenChatThreadMutation()
 
@@ -58,6 +60,11 @@ export function ChatPanel({
   }, [messages])
 
   // Mark as read when panel opens
+  useEffect(() => {
+    markReadMutation.mutate(threadId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [threadId])
+
   useEffect(() => {
     if (threadId && connected) {
       sendMarkRead()
