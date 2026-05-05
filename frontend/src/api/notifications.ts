@@ -17,6 +17,24 @@ import type {
   NotificationPreferenceUpdate,
 } from "@/types/notification"
 
+/**
+ * Many Django endpoints return `{ code: "success", data: T, detail?: string }`.
+ * DRF paginated lists use `{ count, results, ... }` without `code` — pass through unchanged.
+ */
+function unwrapSuccessData<T>(axiosData: unknown): T {
+  if (
+    axiosData !== null &&
+    typeof axiosData === "object" &&
+    "code" in axiosData &&
+    (axiosData as { code: unknown }).code === "success" &&
+    "data" in axiosData &&
+    (axiosData as { data: unknown }).data !== undefined
+  ) {
+    return (axiosData as { data: T }).data
+  }
+  return axiosData as T
+}
+
 function buildNotificationsQueryString(params: NotificationsListParams): string {
   const search = new URLSearchParams()
   if (params.page != null) search.set("page", String(params.page))
@@ -57,28 +75,28 @@ export async function getNotifications(
 
 /** GET /api/notifications/:id/ - Retrieve single notification */
 export async function getNotification(id: number): Promise<Notification> {
-  const { data } = await api.get<Notification>(`/api/notifications/${id}/`)
-  return data
+  const { data } = await api.get<unknown>(`/api/notifications/${id}/`)
+  return unwrapSuccessData<Notification>(data)
 }
 
 /** PATCH /api/notifications/:id/mark-read/ - Mark notification as read */
 export async function markNotificationRead(id: number): Promise<Notification> {
-  const { data } = await api.patch<Notification>(`/api/notifications/${id}/mark-read/`)
-  return data
+  const { data } = await api.patch<unknown>(`/api/notifications/${id}/mark-read/`)
+  return unwrapSuccessData<Notification>(data)
 }
 
 /** POST /api/notifications/mark-all-read/ - Mark all notifications as read */
 export async function markAllNotificationsRead(): Promise<{ updated_count: number }> {
-  const { data } = await api.post<{ updated_count: number }>(
+  const { data } = await api.post<unknown>(
     `/api/notifications/mark-all-read/`
   )
-  return data
+  return unwrapSuccessData<{ updated_count: number }>(data)
 }
 
 /** GET /api/notifications/unread-count/ - Get unread notification count */
 export async function getUnreadNotificationCount(): Promise<{ count: number }> {
-  const { data } = await api.get<{ count: number }>(`/api/notifications/unread-count/`)
-  return data
+  const { data } = await api.get<unknown>(`/api/notifications/unread-count/`)
+  return unwrapSuccessData<{ count: number }>(data)
 }
 
 /** DELETE /api/notifications/:id/ - Delete notification */

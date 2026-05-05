@@ -1533,7 +1533,7 @@ class AdminInbondPdfView(APIView):
 class NotificationViewSet(viewsets.ModelViewSet):
     """
     ViewSet untuk notifikasi pengguna saat ini.
-    GET /api/notifications/ - List notifikasi (unread first)
+    GET /api/notifications/ - List notifikasi (newest first; gunakan ?is_read= untuk filter)
     GET /api/notifications/{id}/ - Detail notifikasi
     PATCH /api/notifications/{id}/mark-read/ - Tandai sebagai dibaca
     DELETE /api/notifications/{id}/ - Hapus notifikasi

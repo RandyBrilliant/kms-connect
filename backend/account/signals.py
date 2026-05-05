@@ -266,7 +266,8 @@ def notify_on_verification_status_change(
                 event=NotificationEvent.PROFILE_SUBMITTED,
                 users=admins_staff,
                 context=ctx,
-                action_url=f"/pelamar/{instance.pk}",
+                # SPA + API use CustomUser id, not ApplicantProfile.pk (they often differ).
+                action_url=f"/pelamar/{instance.user_id}",
                 action_label="Review Profil",
                 deduplicate=True,
             )

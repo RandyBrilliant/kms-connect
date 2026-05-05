@@ -37,6 +37,12 @@ class _KtpGalleryCropScreenState extends State<KtpGalleryCropScreen> {
   bool _isSaving = false;
   Size? _sourceSize;
   bool _isLoadingSize = true;
+  /// One-shot initial pan/zoom so the guide spans the full image width (see [_applyInitialFitWidthTransform]).
+  bool _didApplyInitialTransform = false;
+
+  /// Allow zooming out below 1 so tall/wide photos fit inside the frame.
+  static const double _minScale = 0.2;
+  static const double _maxScale = 8.0;
 
   double get _guideRatio => widget.ratioX / widget.ratioY;
 
@@ -117,9 +123,6 @@ class _KtpGalleryCropScreenState extends State<KtpGalleryCropScreen> {
       );
     }
 
-    final screen = MediaQuery.sizeOf(context);
-    final guide = _guideRect(screen);
-
     return Scaffold(
       backgroundColor: Colors.black,
       body: LayoutBuilder(
@@ -129,6 +132,18 @@ class _KtpGalleryCropScreenState extends State<KtpGalleryCropScreen> {
             viewport: viewport,
             sourceSize: _sourceSize!,
           );
+          final guide = _guideRect(viewport);
+
+          if (!_didApplyInitialTransform) {
+            _didApplyInitialTransform = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              _applyInitialFitWidthTransform(
+                imageRect: imageRect,
+                guideRect: guide,
+              );
+            });
+          }
 
           return Stack(
             children: [
@@ -137,12 +152,12 @@ class _KtpGalleryCropScreenState extends State<KtpGalleryCropScreen> {
                 child: ClipRect(
                   child: InteractiveViewer(
                     transformationController: _transformController,
-                    minScale: 1,
-                    maxScale: 5,
+                    minScale: _minScale,
+                    maxScale: _maxScale,
                     constrained: false,
                     panEnabled: true,
                     scaleEnabled: true,
-                    boundaryMargin: const EdgeInsets.all(300),
+                    boundaryMargin: const EdgeInsets.all(800),
                     child: SizedBox(
                       width: imageRect.width,
                       height: imageRect.height,
@@ -258,6 +273,29 @@ class _KtpGalleryCropScreenState extends State<KtpGalleryCropScreen> {
     final left = (size.width - frameWidth) / 2;
     final top = (size.height - frameHeight) / 2;
     return Rect.fromLTWH(left, top, frameWidth, frameHeight);
+  }
+
+  /// Aligns the crop guide's left/right with the image's left/right at scale [s],
+  /// so the guide uses the full width of the bitmap (matches [_cropByCurrentTransform] math).
+  void _applyInitialFitWidthTransform({
+    required Rect imageRect,
+    required Rect guideRect,
+  }) {
+    final iw = imageRect.width;
+    if (iw <= 0) return;
+
+    final rawScale = guideRect.width / iw;
+    final s0 = rawScale.clamp(_minScale, _maxScale);
+    final tx = guideRect.left - imageRect.left;
+    final ty = guideRect.top - imageRect.top;
+
+    final m = Matrix4.identity();
+    m.setEntry(0, 0, s0);
+    m.setEntry(1, 1, s0);
+    m.setEntry(2, 2, 1.0);
+    m.setEntry(0, 3, tx);
+    m.setEntry(1, 3, ty);
+    _transformController.value = m;
   }
 
   Rect _imageContainRect({required Size viewport, required Size sourceSize}) {

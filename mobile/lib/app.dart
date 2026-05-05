@@ -38,6 +38,7 @@ import 'features/auth/data/providers/auth_provider.dart';
 import 'features/profile/data/providers/profile_provider.dart';
 import 'features/documents/data/providers/document_provider.dart';
 import 'config/strings.dart';
+import 'core/navigation/root_scaffold_messenger.dart';
 
 /// A [ChangeNotifier] that bridges Riverpod [AuthState] changes to GoRouter's
 /// [refreshListenable], so the router is created ONCE and only re-evaluates
@@ -378,6 +379,7 @@ class App extends ConsumerWidget {
     final router = ref.watch(routerProvider);
     
     return MaterialApp.router(
+      scaffoldMessengerKey: rootScaffoldMessengerKey,
       title: AppStrings.appName,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,

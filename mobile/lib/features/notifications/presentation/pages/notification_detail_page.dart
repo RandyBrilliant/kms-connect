@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../../../config/colors.dart';
 import '../../data/providers/notification_provider.dart';
 import '../../domain/models/app_notification.dart';
+import '../delete_undo_snackbar.dart';
 
 /// Full-screen view of a single notification (title, body, metadata, optional action).
 class NotificationDetailPage extends ConsumerStatefulWidget {
@@ -66,6 +67,46 @@ class _NotificationDetailPageState extends ConsumerState<NotificationDetailPage>
     }
   }
 
+  Future<void> _deleteNotification() async {
+    final notification = _notification;
+    if (notification == null) return;
+
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Hapus notifikasi?'),
+          content: const Text(
+            'Notifikasi yang dihapus tidak bisa dikembalikan.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.error,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Hapus'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (approved != true || !mounted) return;
+
+    ref
+        .read(notificationProvider.notifier)
+        .queueDeleteNotification(notification.id);
+    showNotificationDeleteUndoSnackBar(ref, notification.id);
+    if (!mounted) return;
+    context.go('/notifications');
+  }
+
   @override
   Widget build(BuildContext context) {
     final topPad = MediaQuery.paddingOf(context).top;
@@ -78,6 +119,7 @@ class _NotificationDetailPageState extends ConsumerState<NotificationDetailPage>
         children: [
           _DetailHeader(
             topPad: topPad,
+            onDelete: _notification == null ? null : _deleteNotification,
             onBack: () {
               if (context.canPop()) {
                 context.pop();
@@ -112,10 +154,15 @@ class _NotificationDetailPageState extends ConsumerState<NotificationDetailPage>
 }
 
 class _DetailHeader extends StatelessWidget {
-  const _DetailHeader({required this.topPad, required this.onBack});
+  const _DetailHeader({
+    required this.topPad,
+    required this.onBack,
+    this.onDelete,
+  });
 
   final double topPad;
   final VoidCallback onBack;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -174,6 +221,31 @@ class _DetailHeader extends StatelessWidget {
               ),
             ),
           ),
+          if (onDelete != null)
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onDelete,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: AppColors.error.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppColors.error.withValues(alpha: 0.2),
+                      width: 1,
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.delete_outline_rounded,
+                    color: AppColors.error,
+                    size: 20,
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

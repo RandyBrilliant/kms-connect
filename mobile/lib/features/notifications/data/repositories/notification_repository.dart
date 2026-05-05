@@ -75,13 +75,7 @@ class NotificationRepository {
       final response = await _apiClient.dio.patch(
         ApiEndpoints.markNotificationRead(id),
       );
-
-      final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
-        response.data,
-        (data) => data as Map<String, dynamic>,
-      );
-
-      return AppNotification.fromJson(apiResponse.data!);
+      return _parseNotificationFromAny(response.data, response);
     } on DioException catch (e) {
       throw _handleError(e);
     }
@@ -94,6 +88,48 @@ class NotificationRepository {
     } on DioException catch (e) {
       throw _handleError(e);
     }
+  }
+
+  /// Delete a notification owned by current user.
+  Future<void> deleteNotification(int id) async {
+    try {
+      await _apiClient.dio.delete(ApiEndpoints.notificationDetail(id));
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  AppNotification _parseNotificationFromAny(dynamic raw, Response response) {
+    if (raw is Map<String, dynamic>) {
+      if (raw['data'] is Map<String, dynamic>) {
+        return AppNotification.fromJson(raw['data'] as Map<String, dynamic>);
+      }
+
+      // Some responses may already be the notification object itself.
+      if (raw.containsKey('id') && raw.containsKey('title')) {
+        return AppNotification.fromJson(raw);
+      }
+    }
+
+    // Keep the old ApiResponse fallback for compatibility.
+    try {
+      final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
+        raw as Map<String, dynamic>,
+        (data) => data as Map<String, dynamic>,
+      );
+      if (apiResponse.data != null) {
+        return AppNotification.fromJson(apiResponse.data!);
+      }
+    } catch (_) {
+      // Fall through to a normalized error.
+    }
+
+    throw DioException(
+      requestOptions: response.requestOptions,
+      response: response,
+      type: DioExceptionType.badResponse,
+      message: 'Format respons notifikasi tidak valid',
+    );
   }
 
   DioException _handleError(DioException error) {

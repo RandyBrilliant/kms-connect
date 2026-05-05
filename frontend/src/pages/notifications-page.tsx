@@ -66,10 +66,9 @@ export function NotificationsPage() {
 
   const handleMarkAsRead = async (id: number) => {
     try {
-      await markNotificationRead(id)
-      // Update local state
+      const updated = await markNotificationRead(id)
       setNotifications((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
+        prev.map((n) => (n.id === id ? { ...n, ...updated } : n))
       )
     } catch (error) {
       console.error("Failed to mark as read:", error)
