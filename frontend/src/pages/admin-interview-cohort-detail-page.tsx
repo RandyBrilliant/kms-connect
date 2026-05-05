@@ -8,7 +8,7 @@
  * Bulk transitions, announcements, and export are scoped to this cohort.
  */
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
 import type { QueryClient } from "@tanstack/react-query"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
@@ -25,6 +25,7 @@ import {
   IconExternalLink,
   IconEye,
   IconFileSpreadsheet,
+  IconSearch,
   IconMapPin,
   IconPencil,
   IconUsers,
@@ -140,6 +141,21 @@ function formatDateOnly(value: string | null | undefined) {
   return format(new Date(value), "dd MMM yyyy", { locale: idLocale })
 }
 
+function applicationMatchesStageSearch(app: JobApplication, q: string): boolean {
+  const needle = q.trim().toLowerCase()
+  if (!needle) return true
+  const hay = [
+    app.applicant_name,
+    app.applicant_email,
+    app.applicant_nik,
+    app.referrer_display_name,
+    app.referrer_code,
+  ]
+    .map((s) => (s || "").toLowerCase())
+    .join(" ")
+  return hay.includes(needle)
+}
+
 /** Kehadiran / dokumen per tab — mirrors batch detail semantics where relevant. */
 function cohortKonfirmasiForTab(
   app: JobApplication,
@@ -171,6 +187,7 @@ function cohortKonfirmasiForTab(
 
 const COHORT_STATUS_TABS: { value: ApplicationStatus; label: string }[] = [
   { value: "INTERVIEW", label: "Interview" },
+  { value: "CADANGAN", label: "Cadangan" },
   { value: "DITERIMA", label: "Diterima" },
   { value: "BERANGKAT", label: "Berangkat" },
   { value: "SELESAI", label: "Selesai" },
@@ -179,11 +196,13 @@ const COHORT_STATUS_TABS: { value: ApplicationStatus; label: string }[] = [
 
 const NEXT_FORWARD: Partial<Record<ApplicationStatus, ApplicationStatus>> = {
   INTERVIEW: "DITERIMA",
+  CADANGAN: "DITERIMA",
   DITERIMA: "BERANGKAT",
   BERANGKAT: "SELESAI",
 }
 
-const CAN_REJECT_FROM: ApplicationStatus[] = ["INTERVIEW", "DITERIMA"]
+const CAN_REJECT_FROM: ApplicationStatus[] = ["INTERVIEW", "CADANGAN", "DITERIMA"]
+const COHORT_TAB_PAGE_SIZE = 20
 
 // ---------------------------------------------------------------------------
 // Schedule + edit card
@@ -389,14 +408,47 @@ function CohortStatusTab({
   const [previewUserLabel, setPreviewUserLabel] = useState("")
   const [processUserId, setProcessUserId] = useState<number | null>(null)
   const [processUserLabel, setProcessUserLabel] = useState("")
+  const [currentPage, setCurrentPage] = useState(1)
+  const [stageSearch, setStageSearch] = useState("")
 
   const nextStatus = NEXT_FORWARD[status]
   const canReject = CAN_REJECT_FROM.includes(status)
   const needsPlacementDate = nextStatus === "SELESAI"
 
   const eligibleCount = apps.filter((a) => a.status === status).length
+  const sortedApps = useMemo(
+    () =>
+      [...apps].sort((a, b) =>
+        (a.applicant_name || "").localeCompare(b.applicant_name || "", "id", {
+          sensitivity: "base",
+        })
+      ),
+    [apps]
+  )
+  const filteredApps = useMemo(
+    () => sortedApps.filter((a) => applicationMatchesStageSearch(a, stageSearch)),
+    [sortedApps, stageSearch]
+  )
+  const pageCount = Math.max(1, Math.ceil(filteredApps.length / COHORT_TAB_PAGE_SIZE))
+  const safePage = Math.min(currentPage, pageCount)
+  const pageStart = (safePage - 1) * COHORT_TAB_PAGE_SIZE
+  const pagedApps = filteredApps.slice(pageStart, pageStart + COHORT_TAB_PAGE_SIZE)
 
-  const pageIds = apps.map((a) => a.id)
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [status, apps.length])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [stageSearch])
+
+  useEffect(() => {
+    if (currentPage > pageCount) {
+      setCurrentPage(pageCount)
+    }
+  }, [currentPage, pageCount])
+
+  const pageIds = pagedApps.map((a) => a.id)
   const allSelected =
     pageIds.length > 0 && pageIds.every((id) => selected.has(id))
 
@@ -616,6 +668,30 @@ function CohortStatusTab({
         }}
       />
 
+      {sortedApps.length > 0 && (
+        <div className="relative max-w-md">
+          <IconSearch className="text-muted-foreground absolute left-3 top-1/2 size-4 -translate-y-1/2" />
+          <Input
+            placeholder="Cari nama, email, NIK, atau rujukan..."
+            value={stageSearch}
+            onChange={(e) => setStageSearch(e.target.value)}
+            className="pl-9 h-9 text-sm"
+            aria-label="Filter pelamar di tahap ini"
+          />
+        </div>
+      )}
+
+      <p className="text-sm text-muted-foreground">
+        {filteredApps.length} pelamar
+        {filteredApps.length > 0 ? (
+          <span className="text-muted-foreground/80">
+            {" "}
+            (menampilkan {pageStart + 1}–
+            {Math.min(pageStart + COHORT_TAB_PAGE_SIZE, filteredApps.length)})
+          </span>
+        ) : null}
+      </p>
+
       {/* Bulk action bar — transitions only checked rows */}
       {(nextStatus || canReject) && eligibleCount > 0 && (
         <Card>
@@ -644,6 +720,18 @@ function CohortStatusTab({
                 >
                   <IconArrowRight className="mr-2 size-4" />
                   Pindahkan ke {APPLICATION_STATUS_LABELS[nextStatus]}
+                </Button>
+              )}
+              {/* INTERVIEW tab: also allow bulk-marking as CADANGAN */}
+              {status === "INTERVIEW" && (
+                <Button
+                  variant="outline"
+                  className="cursor-pointer"
+                  disabled={selected.size === 0}
+                  onClick={() => setConfirmTarget("CADANGAN")}
+                >
+                  <IconArrowRight className="mr-2 size-4" />
+                  Tandai sebagai Cadangan
                 </Button>
               )}
               {canReject && (
@@ -686,18 +774,22 @@ function CohortStatusTab({
                   ? "Konfirmasi kehadiran"
                   : status === "DITERIMA"
                     ? "Konfirmasi dokumen"
-                    : "Konfirmasi"}
+                    : status === "CADANGAN"
+                      ? "Konfirmasi interview"
+                      : "Konfirmasi"}
               </TableHead>
               <TableHead className="whitespace-nowrap">Tanggal konfirmasi</TableHead>
               {showDocProgressCol && (
                 <TableHead className="min-w-[11rem]">Pengumpulan Dokumen</TableHead>
               )}
-              <TableHead className="text-right">Aksi</TableHead>
+              <TableHead className="text-right sticky right-0 bg-background z-10">
+                Aksi
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {apps.length ? (
-              apps.map((app) => {
+            {pagedApps.length ? (
+              pagedApps.map((app) => {
                 const konfirmasi = cohortKonfirmasiForTab(app, status)
                 return (
                 <TableRow
@@ -778,7 +870,7 @@ function CohortStatusTab({
                     </TableCell>
                   )}
                   <TableCell
-                    className="text-right"
+                    className="text-right sticky right-0 bg-background"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <div className="flex items-center justify-end gap-0.5">
@@ -875,6 +967,39 @@ function CohortStatusTab({
           </TableBody>
         </Table>
       </div>
+
+      {pageCount > 1 && (
+        <div className="flex items-center justify-between gap-2 flex-wrap text-xs text-muted-foreground">
+          <div>
+            Halaman{" "}
+            <span className="font-medium text-foreground">
+              {safePage} / {pageCount}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 cursor-pointer"
+              disabled={safePage <= 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            >
+              Sebelumnya
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 cursor-pointer"
+              disabled={safePage >= pageCount}
+              onClick={() => setCurrentPage((p) => Math.min(pageCount, p + 1))}
+            >
+              Berikutnya
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Confirm dialog for bulk transition */}
       <Dialog
@@ -1098,17 +1223,18 @@ export function AdminInterviewCohortDetailPage() {
 
   usePageTitle(cohortQuery.data ? cohortQuery.data.name : "Detail Sesi Interview")
 
-  const apps = applicationsQuery.data ?? []
+  const apps = useMemo(() => applicationsQuery.data ?? [], [applicationsQuery.data])
   const appsByStatus = useMemo(() => {
     const map: Record<ApplicationStatus, JobApplication[]> = {
       PRA_SELEKSI: [],
       INTERVIEW: [],
+      CADANGAN: [],
       DITERIMA: [],
       DITOLAK: [],
       BERANGKAT: [],
       SELESAI: [],
     }
-    for (const a of apps) map[a.status].push(a)
+    for (const a of apps) map[a.status]?.push(a)
     return map
   }, [apps])
 
@@ -1235,7 +1361,7 @@ export function AdminInterviewCohortDetailPage() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <SummaryCard
           icon={<IconUsers className="size-4" />}
           label="Total Pelamar"
@@ -1245,6 +1371,11 @@ export function AdminInterviewCohortDetailPage() {
           icon={<IconUserCheck className="size-4" />}
           label="Interview"
           value={cohort.interview_count}
+        />
+        <SummaryCard
+          icon={<IconUserCheck className="size-4" />}
+          label="Cadangan"
+          value={cohort.cadangan_count}
         />
         <SummaryCard
           icon={<IconUserCheck className="size-4" />}

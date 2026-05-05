@@ -1048,6 +1048,7 @@ class InterviewCohortSerializer(serializers.ModelSerializer):
     applicant_count = serializers.IntegerField(read_only=True)
     confirmed_interview_count = serializers.IntegerField(read_only=True)
     interview_count = serializers.SerializerMethodField(read_only=True)
+    cadangan_count = serializers.SerializerMethodField(read_only=True)
     diterima_count = serializers.SerializerMethodField(read_only=True)
     berangkat_count = serializers.SerializerMethodField(read_only=True)
     selesai_count = serializers.SerializerMethodField(read_only=True)
@@ -1068,6 +1069,7 @@ class InterviewCohortSerializer(serializers.ModelSerializer):
             "is_active",
             "applicant_count",
             "interview_count",
+            "cadangan_count",
             "diterima_count",
             "berangkat_count",
             "selesai_count",
@@ -1086,6 +1088,7 @@ class InterviewCohortSerializer(serializers.ModelSerializer):
             "created_by_name",
             "applicant_count",
             "interview_count",
+            "cadangan_count",
             "diterima_count",
             "berangkat_count",
             "selesai_count",
@@ -1109,6 +1112,9 @@ class InterviewCohortSerializer(serializers.ModelSerializer):
 
     def get_interview_count(self, obj) -> int:
         return self._count_for(obj, ApplicationStatus.INTERVIEW)
+
+    def get_cadangan_count(self, obj) -> int:
+        return self._count_for(obj, ApplicationStatus.CADANGAN)
 
     def get_diterima_count(self, obj) -> int:
         return self._count_for(obj, ApplicationStatus.DITERIMA)
@@ -1195,14 +1201,15 @@ class CohortBulkTransitionSerializer(serializers.Serializer):
 
     status = serializers.ChoiceField(
         choices=[
+            (ApplicationStatus.CADANGAN, ApplicationStatus.CADANGAN.label),
             (ApplicationStatus.DITERIMA, ApplicationStatus.DITERIMA.label),
             (ApplicationStatus.BERANGKAT, ApplicationStatus.BERANGKAT.label),
             (ApplicationStatus.SELESAI, ApplicationStatus.SELESAI.label),
             (ApplicationStatus.DITOLAK, ApplicationStatus.DITOLAK.label),
         ],
         help_text=(
-            "Status tujuan. Cohort hanya menangani transisi dari INTERVIEW ke "
-            "DITERIMA / BERANGKAT / SELESAI / DITOLAK."
+            "Status tujuan. Cohort menangani transisi dari INTERVIEW ke "
+            "CADANGAN / DITERIMA / BERANGKAT / SELESAI / DITOLAK."
         ),
     )
     note = serializers.CharField(required=False, allow_blank=True, max_length=500)

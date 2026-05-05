@@ -33,6 +33,7 @@ export interface InterviewCohort {
   // Counts (computed by serializer)
   applicant_count: number
   interview_count: number
+  cadangan_count: number
   diterima_count: number
   berangkat_count: number
   selesai_count: number
@@ -81,7 +82,7 @@ export interface ScheduleCohortInput {
 export interface CohortBulkTransitionInput {
   status: Extract<
     ApplicationStatus,
-    "DITERIMA" | "BERANGKAT" | "SELESAI" | "DITOLAK"
+    "CADANGAN" | "DITERIMA" | "BERANGKAT" | "SELESAI" | "DITOLAK"
   >
   note?: string
   placement_end_date?: string | null

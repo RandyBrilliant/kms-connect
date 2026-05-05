@@ -350,6 +350,8 @@ class _ApplicationDetailPageState extends ConsumerState<ApplicationDetailPage>
         return 'Pra-Seleksi';
       case 'INTERVIEW':
         return 'Interview';
+      case 'CADANGAN':
+        return 'Cadangan';
       case 'DITERIMA':
         return 'Diterima';
       case 'BERANGKAT':
@@ -464,6 +466,7 @@ class _InfoCard extends StatelessWidget {
             // Jadwal interview — gunakan data cohort (fallback batch di server).
             if (application.interviewDate != null &&
                 (application.status == 'INTERVIEW' ||
+                    application.status == 'CADANGAN' ||
                     application.status == 'DITERIMA' ||
                     application.status == 'BERANGKAT' ||
                     application.status == 'SELESAI')) ...[
@@ -708,6 +711,8 @@ class _AttendanceStageSection extends StatelessWidget {
         return 'Pra-Seleksi';
       case 'INTERVIEW':
         return 'Interview';
+      case 'CADANGAN':
+        return 'Cadangan';
       case 'DITERIMA':
         return 'Diterima';
       case 'BERANGKAT':
@@ -764,7 +769,9 @@ class _AttendanceStageSection extends StatelessWidget {
           final subtitle = !reached
               ? 'Belum mencapai tahapan'
               : !requiresAttendanceConfirmation
-              ? (stage == 'DITERIMA'
+              ? (stage == 'CADANGAN'
+                    ? 'Anda masuk daftar cadangan — menunggu konfirmasi slot.'
+                    : stage == 'DITERIMA'
                     ? 'Tahapan diterima tidak memerlukan konfirmasi kehadiran.'
                     : stage == 'BERANGKAT'
                     ? 'Tahapan berangkat tidak memerlukan konfirmasi kehadiran.'

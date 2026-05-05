@@ -323,14 +323,18 @@ class LowonganKerja(models.Model):
 
 class ApplicationStatus(models.TextChoices):
     """
-    Status lamaran kerja — 6-tahap Finite State Machine (FSM).
+    Status lamaran kerja — 7-tahap Finite State Machine (FSM).
 
     Semua lamaran dibuat oleh admin melalui batch assignment.
     Tidak ada self-apply — admin memilih pelamar ke dalam LamaranBatch.
 
     Flow:
       PRA_SELEKSI → INTERVIEW → DITERIMA → BERANGKAT → SELESAI
-      PRA_SELEKSI | INTERVIEW | DITERIMA → DITOLAK  (terminal negatif)
+      INTERVIEW → CADANGAN → DITERIMA | DITOLAK  (jalur cadangan)
+      PRA_SELEKSI | INTERVIEW | CADANGAN | DITERIMA → DITOLAK  (terminal negatif)
+
+    CADANGAN: Pelamar lulus interview namun ditempatkan sebagai cadangan.
+    Dapat dipromosikan ke DITERIMA jika slot utama mundur.
 
     Pelamar mengkonfirmasi kehadiran di tahap PRA_SELEKSI dan INTERVIEW.
     Transitions ditegakkan di main.services.ApplicationService.
@@ -338,6 +342,7 @@ class ApplicationStatus(models.TextChoices):
 
     PRA_SELEKSI = "PRA_SELEKSI", _("Tahap Pra-Seleksi")
     INTERVIEW   = "INTERVIEW",   _("Tahap Interview")
+    CADANGAN    = "CADANGAN",    _("Tahap Cadangan")   # reserve: menunggu slot
     DITERIMA    = "DITERIMA",    _("Tahap Diterima")
     DITOLAK     = "DITOLAK",     _("Tahap Ditolak")    # terminal: negatif
     BERANGKAT   = "BERANGKAT",   _("Tahap Berangkat")
@@ -630,6 +635,7 @@ class JobApplication(models.Model):
     ACTIVE_STATUSES = [
         ApplicationStatus.PRA_SELEKSI,
         ApplicationStatus.INTERVIEW,
+        ApplicationStatus.CADANGAN,
         ApplicationStatus.DITERIMA,
         ApplicationStatus.BERANGKAT,
     ]
@@ -644,6 +650,7 @@ class JobApplication(models.Model):
     ATTENDANCE_TRACKED_STATUSES = [
         ApplicationStatus.PRA_SELEKSI,
         ApplicationStatus.INTERVIEW,
+        ApplicationStatus.CADANGAN,
         ApplicationStatus.DITERIMA,
         ApplicationStatus.BERANGKAT,
         ApplicationStatus.SELESAI,

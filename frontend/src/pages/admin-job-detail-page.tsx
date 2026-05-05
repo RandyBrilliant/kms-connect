@@ -17,7 +17,7 @@
  * they are managed inside their owning batch / cohort detail pages.
  */
 
-import { type ReactNode, useState, useEffect } from "react"
+import { type ReactNode, useState, useEffect, useMemo } from "react"
 import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import { format } from "date-fns"
@@ -35,6 +35,7 @@ import {
   IconMapPin,
   IconPencil,
   IconPlus,
+  IconSearch,
   IconUserCheck,
   IconUsers,
   IconUsersGroup,
@@ -61,6 +62,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { usePageTitle } from "@/hooks/use-page-title"
 import { useAdminDashboard } from "@/contexts/admin-dashboard-context"
@@ -113,14 +115,17 @@ const EMPLOYMENT_TYPE_MAP: Record<string, string> = {
 /**
  * Status tabs surfaced at the job level. PRA_SELEKSI and INTERVIEW are
  * intentionally excluded — admins manage those inside the owning batch /
- * cohort detail pages.
+ * cohort detail pages. CADANGAN is included as it is a post-interview holding
+ * state visible at the job level.
  */
 const DOWNSTREAM_STATUS_TABS: { value: ApplicationStatus; label: string }[] = [
+  { value: "CADANGAN", label: "Cadangan" },
   { value: "DITERIMA", label: "Diterima" },
   { value: "BERANGKAT", label: "Berangkat" },
   { value: "SELESAI", label: "Selesai" },
   { value: "DITOLAK", label: "Ditolak" },
 ]
+const MASTER_TAHAPAN_PAGE_SIZE = 20
 
 // ---------------------------------------------------------------------------
 // Sub-component: Edit form
@@ -200,20 +205,36 @@ function PraSeleksiTab({
   batchBase: string
 }) {
   const navigate = useNavigate()
+  const [page, setPage] = useState(1)
 
   const { data, isLoading } = useQuery({
-    queryKey: ["batches", { job: jobId }],
+    queryKey: ["batches", { job: jobId, page, mode: "job-detail-master" }],
     queryFn: () =>
-      getBatches({ job: jobId, page_size: 100, ordering: "tahap_order,created_at" }),
+      getBatches({
+        job: jobId,
+        page,
+        page_size: MASTER_TAHAPAN_PAGE_SIZE,
+        ordering: "tahap_order,created_at",
+      }),
   })
 
   const batches = data?.results ?? []
+  const totalCount = data?.count ?? 0
+  const pageCount = Math.max(1, Math.ceil(totalCount / MASTER_TAHAPAN_PAGE_SIZE))
+  const currentPage = Math.min(page, pageCount)
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <p className="text-sm text-muted-foreground">
-          {batches.length} tahapan pra-seleksi.{" "}
+          {totalCount} tahapan pra-seleksi.{" "}
+          {totalCount > 0 ? (
+            <span className="text-muted-foreground/80">
+              (menampilkan{" "}
+              {(currentPage - 1) * MASTER_TAHAPAN_PAGE_SIZE + 1}–
+              {Math.min(currentPage * MASTER_TAHAPAN_PAGE_SIZE, totalCount)}){" "}
+            </span>
+          ) : null}
           <span className="text-xs">
             Setiap tahapan adalah batch pelamar yang diseleksi sebelum interview.
           </span>
@@ -346,6 +367,39 @@ function PraSeleksiTab({
           </Table>
         )}
       </div>
+
+      {pageCount > 1 && (
+        <div className="flex items-center justify-between gap-2 flex-wrap text-xs text-muted-foreground">
+          <div>
+            Halaman{" "}
+            <span className="font-medium text-foreground">
+              {currentPage} / {pageCount}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 cursor-pointer"
+              disabled={currentPage <= 1 || isLoading}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              Sebelumnya
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 cursor-pointer"
+              disabled={currentPage >= pageCount || isLoading}
+              onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+            >
+              Berikutnya
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -364,24 +418,36 @@ function InterviewCohortsTab({
   cohortBase: string
 }) {
   const navigate = useNavigate()
+  const [page, setPage] = useState(1)
 
   const { data, isLoading } = useQuery({
-    queryKey: ["interview-cohorts", { job: jobId, mode: "job-detail" }],
+    queryKey: ["interview-cohorts", { job: jobId, page, mode: "job-detail" }],
     queryFn: () =>
       getInterviewCohorts({
         job: jobId,
-        page_size: 100,
+        page,
+        page_size: MASTER_TAHAPAN_PAGE_SIZE,
         ordering: "-interview_date,-created_at",
       }),
   })
 
   const cohorts = data?.results ?? []
+  const totalCount = data?.count ?? 0
+  const pageCount = Math.max(1, Math.ceil(totalCount / MASTER_TAHAPAN_PAGE_SIZE))
+  const currentPage = Math.min(page, pageCount)
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <p className="text-sm text-muted-foreground">
-          {cohorts.length} sesi interview.{" "}
+          {totalCount} sesi interview.{" "}
+          {totalCount > 0 ? (
+            <span className="text-muted-foreground/80">
+              (menampilkan{" "}
+              {(currentPage - 1) * MASTER_TAHAPAN_PAGE_SIZE + 1}–
+              {Math.min(currentPage * MASTER_TAHAPAN_PAGE_SIZE, totalCount)}){" "}
+            </span>
+          ) : null}
           <span className="text-xs">
             Sesi mengelola tahap Interview hingga Selesai. Pelamar dirutekan ke
             sesi dari batch pra-seleksi.
@@ -527,6 +593,39 @@ function InterviewCohortsTab({
           </Table>
         )}
       </div>
+
+      {pageCount > 1 && (
+        <div className="flex items-center justify-between gap-2 flex-wrap text-xs text-muted-foreground">
+          <div>
+            Halaman{" "}
+            <span className="font-medium text-foreground">
+              {currentPage} / {pageCount}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 cursor-pointer"
+              disabled={currentPage <= 1 || isLoading}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              Sebelumnya
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 cursor-pointer"
+              disabled={currentPage >= pageCount || isLoading}
+              onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+            >
+              Berikutnya
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -554,24 +653,22 @@ function ApplicationsTab({
 }) {
   const navigate = useNavigate()
   const [page, setPage] = useState(1)
+  const [stageSearch, setStageSearch] = useState("")
   const [previewUserId, setPreviewUserId] = useState<number | null>(null)
   const [previewUserLabel, setPreviewUserLabel] = useState("")
   const [processUserId, setProcessUserId] = useState<number | null>(null)
   const [processUserLabel, setProcessUserLabel] = useState("")
 
-  useEffect(() => {
-    setPage(1)
-  }, [jobId, status])
-
   const { data, isLoading } = useQuery({
-    queryKey: ["applications", { job: jobId, status, page }],
+    queryKey: ["applications", { job: jobId, status, page, search: stageSearch }],
     queryFn: () =>
       getApplications({
         job: jobId,
         status,
         page,
         page_size: APPLICATIONS_TAB_PAGE_SIZE,
-        ordering: "-applied_at",
+        search: stageSearch.trim() || undefined,
+        ordering: "applicant_name",
       }),
   })
 
@@ -579,13 +676,16 @@ function ApplicationsTab({
   const pageCount = Math.max(1, Math.ceil(totalCount / APPLICATIONS_TAB_PAGE_SIZE))
   const currentPage = Math.min(page, pageCount)
 
-  useEffect(() => {
-    if (!data || isLoading) return
-    const maxPage = Math.max(1, Math.ceil(data.count / APPLICATIONS_TAB_PAGE_SIZE))
-    if (page > maxPage) setPage(maxPage)
-  }, [data, isLoading, page])
-
-  const apps = data?.results ?? []
+  const sortedApps = useMemo(
+    () =>
+      [...(data?.results ?? [])].sort((a, b) =>
+        (a.applicant_name || "").localeCompare(b.applicant_name || "", "id", {
+          sensitivity: "base",
+        })
+      ),
+    [data?.results]
+  )
+  const filteredApps = sortedApps
   const showCohortCol = status !== "DITOLAK"
   const showDocCol = status === "DITERIMA"
   const emptyColSpan = 5 + (showCohortCol ? 1 : 0) + (showDocCol ? 1 : 0)
@@ -604,6 +704,20 @@ function ApplicationsTab({
             </span>
           ) : null}
         </p>
+
+        <div className="relative max-w-md">
+          <IconSearch className="text-muted-foreground absolute left-3 top-1/2 size-4 -translate-y-1/2" />
+          <Input
+            placeholder="Cari nama, email, NIK, atau rujukan..."
+            value={stageSearch}
+            onChange={(e) => {
+              setStageSearch(e.target.value)
+              setPage(1)
+            }}
+            className="pl-9 h-9 text-sm"
+            aria-label="Filter pelamar di tahap ini"
+          />
+        </div>
 
         <div className="overflow-hidden rounded-lg border">
           {isLoading ? (
@@ -624,12 +738,14 @@ function ApplicationsTab({
                     </TableHead>
                   )}
                   <TableHead>Tanggal Lamar</TableHead>
-                  <TableHead className="text-right w-[180px]">Aksi</TableHead>
+                  <TableHead className="text-right w-[180px] sticky right-0 bg-background z-10">
+                    Aksi
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {apps.length ? (
-                  apps.map((app) => (
+                {filteredApps.length ? (
+                  filteredApps.map((app) => (
                     <TableRow key={app.id} className="hover:bg-muted/50">
                       <TableCell>
                         <div className="flex flex-col">
@@ -683,7 +799,7 @@ function ApplicationsTab({
                       <TableCell className="text-sm text-muted-foreground">
                         {formatDate(app.applied_at)}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right sticky right-0 bg-background">
                         <div className="flex items-center justify-end gap-0.5">
                           <Button
                             type="button"

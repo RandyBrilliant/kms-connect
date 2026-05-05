@@ -43,6 +43,7 @@ class NotificationEvent(str, Enum):
     # ---- Job application status ----
     APPLICATION_ASSIGNED = "application.assigned"   # → Applicant (PRA_SELEKSI initial)
     APPLICATION_INTERVIEW = "application.interview" # → Applicant
+    APPLICATION_CADANGAN = "application.cadangan"   # → Applicant (CADANGAN reserve)
     APPLICATION_ACCEPTED = "application.accepted"   # → Applicant (DITERIMA)
     APPLICATION_REJECTED = "application.rejected"   # → Applicant
     APPLICATION_DEPARTED = "application.departed"   # → Applicant (BERANGKAT)
@@ -175,6 +176,14 @@ _EVENT_CONFIG: dict[NotificationEvent, EventConfig] = {
     NotificationEvent.APPLICATION_INTERVIEW: EventConfig(
         notification_type=NotificationType.SUCCESS,
         priority=NotificationPriority.URGENT,
+        send_email=True,
+        send_push=True,
+        email_pref_field="email_application_updates",
+        push_pref_field="push_application_updates",
+    ),
+    NotificationEvent.APPLICATION_CADANGAN: EventConfig(
+        notification_type=NotificationType.WARNING,
+        priority=NotificationPriority.HIGH,
         send_email=True,
         send_push=True,
         email_pref_field="email_application_updates",
@@ -420,6 +429,19 @@ def _tmpl_application_interview(ctx: dict) -> tuple[str, str]:
         body += f" Lokasi: {location}."
     body += " Segera konfirmasi kehadiran Anda."
     return ("Undangan Interview", body)
+
+
+@_t(NotificationEvent.APPLICATION_CADANGAN)
+def _tmpl_application_cadangan(ctx: dict) -> tuple[str, str]:
+    job_title = ctx.get("job_title", "lowongan")
+    company = ctx.get("company_name", "")
+    company_str = f" di {company}" if company else ""
+    return (
+        "Anda Masuk Daftar Cadangan",
+        f"Anda telah lulus tahap Interview untuk posisi «{job_title}»{company_str} "
+        "dan ditempatkan sebagai pelamar cadangan. "
+        "Anda akan diprioritaskan jika slot utama tersedia. Pantau terus status lamaran Anda.",
+    )
 
 
 @_t(NotificationEvent.APPLICATION_ACCEPTED)

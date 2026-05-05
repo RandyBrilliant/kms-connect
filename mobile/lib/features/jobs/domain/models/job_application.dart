@@ -56,6 +56,7 @@ class JobApplication {
   static const List<String> stageOrder = <String>[
     'PRA_SELEKSI',
     'INTERVIEW',
+    'CADANGAN',
     'DITERIMA',
     'BERANGKAT',
     'SELESAI',
@@ -247,6 +248,8 @@ class JobApplication {
         return 'Pra-Seleksi';
       case 'INTERVIEW':
         return 'Interview';
+      case 'CADANGAN':
+        return 'Cadangan';
       case 'DITERIMA':
         return 'Diterima';
       case 'DITOLAK':
@@ -265,6 +268,8 @@ class JobApplication {
       case 'PRA_SELEKSI':
       case 'INTERVIEW':
         return const Color(0xFF17A2B8); // info / blue
+      case 'CADANGAN':
+        return const Color(0xFFF59E0B); // amber / warning — reserve/standby
       case 'DITERIMA':
       case 'BERANGKAT':
         return const Color(0xFF28A745); // success / green

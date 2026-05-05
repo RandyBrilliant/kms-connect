@@ -48,7 +48,8 @@ _ADMIN_ROLES = frozenset(
 
 TRANSITIONS: dict[tuple[str, str], list[str]] = {
     ("PRA_SELEKSI", "admin"): ["INTERVIEW", "DITOLAK"],
-    ("INTERVIEW",   "admin"): ["DITERIMA",  "DITOLAK"],
+    ("INTERVIEW",   "admin"): ["DITERIMA", "CADANGAN", "DITOLAK"],
+    ("CADANGAN",    "admin"): ["DITERIMA", "DITOLAK"],
     ("DITERIMA",    "admin"): ["BERANGKAT", "DITOLAK"],
     ("BERANGKAT",   "admin"): ["SELESAI"],
     # DITOLAK and SELESAI are terminal — no transitions out

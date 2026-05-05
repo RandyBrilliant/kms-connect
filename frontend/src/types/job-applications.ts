@@ -3,7 +3,8 @@
  *
  * FSM (admin-only transitions):
  *   PRA_SELEKSI → INTERVIEW | DITOLAK
- *   INTERVIEW   → DITERIMA  | DITOLAK
+ *   INTERVIEW   → DITERIMA | CADANGAN | DITOLAK
+ *   CADANGAN    → DITERIMA | DITOLAK
  *   DITERIMA    → BERANGKAT | DITOLAK
  *   BERANGKAT   → SELESAI
  *   DITOLAK / SELESAI = terminal
@@ -16,6 +17,7 @@
 export type ApplicationStatus =
   | "PRA_SELEKSI"
   | "INTERVIEW"
+  | "CADANGAN"
   | "DITERIMA"
   | "DITOLAK"
   | "BERANGKAT"
@@ -25,6 +27,7 @@ export type ApplicationStatus =
 export const ACTIVE_APPLICATION_STATUSES: ApplicationStatus[] = [
   "PRA_SELEKSI",
   "INTERVIEW",
+  "CADANGAN",
   "DITERIMA",
   "BERANGKAT",
 ]
@@ -165,6 +168,7 @@ export interface CompanyDashboardStats {
 export const APPLICATION_STATUS_LABELS: Record<ApplicationStatus, string> = {
   PRA_SELEKSI: "Pra-Seleksi",
   INTERVIEW: "Interview",
+  CADANGAN: "Cadangan",
   DITERIMA: "Diterima",
   DITOLAK: "Ditolak",
   BERANGKAT: "Berangkat",
@@ -178,6 +182,7 @@ export const APPLICATION_STATUS_VARIANTS: Record<
 > = {
   PRA_SELEKSI: "secondary",
   INTERVIEW: "secondary",
+  CADANGAN: "outline",
   DITERIMA: "default",
   DITOLAK: "destructive",
   BERANGKAT: "default",

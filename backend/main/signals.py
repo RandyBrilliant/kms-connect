@@ -90,6 +90,7 @@ def notify_on_application_status_change(
     status_event_map = {
         ApplicationStatus.PRA_SELEKSI: NotificationEvent.APPLICATION_ASSIGNED,
         ApplicationStatus.INTERVIEW:   NotificationEvent.APPLICATION_INTERVIEW,
+        ApplicationStatus.CADANGAN:    NotificationEvent.APPLICATION_CADANGAN,
         ApplicationStatus.DITERIMA:    NotificationEvent.APPLICATION_ACCEPTED,
         ApplicationStatus.DITOLAK:     NotificationEvent.APPLICATION_REJECTED,
         ApplicationStatus.BERANGKAT:   NotificationEvent.APPLICATION_DEPARTED,

@@ -16,6 +16,7 @@ const _kStatuses = <(String, String)>[
   ('', 'Semua'),
   ('PRA_SELEKSI', 'Pra-Seleksi'),
   ('INTERVIEW', 'Interview'),
+  ('CADANGAN', 'Cadangan'),
   ('DITERIMA', 'Diterima'),
   ('DITOLAK', 'Ditolak'),
   ('BERANGKAT', 'Berangkat'),

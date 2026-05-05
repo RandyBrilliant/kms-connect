@@ -45,7 +45,8 @@ import { toast } from "@/lib/toast"
 // Mirrors backend services.py TRANSITIONS — role = "admin"
 const ADMIN_TRANSITIONS: Partial<Record<ApplicationStatus, ApplicationStatus[]>> = {
   PRA_SELEKSI: ["INTERVIEW", "DITOLAK"],
-  INTERVIEW: ["DITERIMA", "DITOLAK"],
+  INTERVIEW: ["DITERIMA", "CADANGAN", "DITOLAK"],
+  CADANGAN: ["DITERIMA", "DITOLAK"],
   DITERIMA: ["BERANGKAT", "DITOLAK"],
   BERANGKAT: ["SELESAI"],
 }
