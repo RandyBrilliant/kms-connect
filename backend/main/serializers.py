@@ -679,12 +679,12 @@ class LamaranBatchSerializer(serializers.ModelSerializer):
     job_title = serializers.SerializerMethodField(read_only=True)
     created_by_name = serializers.SerializerMethodField(read_only=True)
     display_tahap_label = serializers.CharField(read_only=True)
-    applicant_count = serializers.IntegerField(read_only=True)
+    applicant_count = serializers.SerializerMethodField(read_only=True)
     pra_seleksi_count = serializers.SerializerMethodField(read_only=True)
     rejected_count = serializers.SerializerMethodField(read_only=True)
     advanced_count = serializers.SerializerMethodField(read_only=True)
-    confirmed_pra_seleksi_count = serializers.IntegerField(read_only=True)
-    confirmed_interview_count = serializers.IntegerField(read_only=True)
+    confirmed_pra_seleksi_count = serializers.SerializerMethodField(read_only=True)
+    confirmed_interview_count = serializers.SerializerMethodField(read_only=True)
     diterima_count = serializers.SerializerMethodField(read_only=True)
     pengumpulan_dokumen_confirmed_count = serializers.SerializerMethodField(read_only=True)
 
@@ -749,15 +749,33 @@ class LamaranBatchSerializer(serializers.ModelSerializer):
             return None
         return obj.created_by.full_name or obj.created_by.email
 
+    def get_applicant_count(self, obj) -> int:
+        annotated = getattr(obj, "_annotated_applicant_count", None)
+        if annotated is not None:
+            return int(annotated)
+        return int(getattr(obj, "applicant_count", 0))
+
+    def get_confirmed_pra_seleksi_count(self, obj) -> int:
+        annotated = getattr(obj, "_annotated_confirmed_pra_seleksi_count", None)
+        if annotated is not None:
+            return int(annotated)
+        return int(getattr(obj, "confirmed_pra_seleksi_count", 0))
+
+    def get_confirmed_interview_count(self, obj) -> int:
+        annotated = getattr(obj, "_annotated_confirmed_interview_count", None)
+        if annotated is not None:
+            return int(annotated)
+        return int(getattr(obj, "confirmed_interview_count", 0))
+
     def get_pra_seleksi_count(self, obj) -> int:
-        annotated = getattr(obj, "pra_seleksi_count", None)
+        annotated = getattr(obj, "_annotated_pra_seleksi_count", None)
         if annotated is not None:
             return int(annotated)
         return obj.applications.filter(status=ApplicationStatus.PRA_SELEKSI).count()
 
     def get_advanced_count(self, obj) -> int:
         """Pelamar yang sudah lanjut ke tahap interview atau berikutnya."""
-        annotated = getattr(obj, "advanced_count", None)
+        annotated = getattr(obj, "_annotated_advanced_count", None)
         if annotated is not None:
             return int(annotated)
         return obj.applications.filter(status__in=[
@@ -768,13 +786,13 @@ class LamaranBatchSerializer(serializers.ModelSerializer):
         ]).count()
 
     def get_rejected_count(self, obj) -> int:
-        annotated = getattr(obj, "rejected_count", None)
+        annotated = getattr(obj, "_annotated_rejected_count", None)
         if annotated is not None:
             return int(annotated)
         return obj.applications.filter(status=ApplicationStatus.DITOLAK).count()
 
     def get_diterima_count(self, obj) -> int:
-        annotated = getattr(obj, "diterima_count", None)
+        annotated = getattr(obj, "_annotated_diterima_count", None)
         if annotated is not None:
             return int(annotated)
         return obj.applications.filter(status=ApplicationStatus.DITERIMA).count()
@@ -784,7 +802,7 @@ class LamaranBatchSerializer(serializers.ModelSerializer):
         Number of DITERIMA-stage applications where applicant already clicked
         "Dokumen Selesai" (stored in attendance_by_stage['DITERIMA']).
         """
-        annotated = getattr(obj, "pengumpulan_dokumen_confirmed_count", None)
+        annotated = getattr(obj, "_annotated_pengumpulan_dokumen_confirmed_count", None)
         if annotated is not None:
             return int(annotated)
         applications = obj.applications.filter(status=ApplicationStatus.DITERIMA).only(
@@ -1077,8 +1095,8 @@ class InterviewCohortSerializer(serializers.ModelSerializer):
 
     job_title = serializers.SerializerMethodField(read_only=True)
     created_by_name = serializers.SerializerMethodField(read_only=True)
-    applicant_count = serializers.IntegerField(read_only=True)
-    confirmed_interview_count = serializers.IntegerField(read_only=True)
+    applicant_count = serializers.SerializerMethodField(read_only=True)
+    confirmed_interview_count = serializers.SerializerMethodField(read_only=True)
     interview_count = serializers.SerializerMethodField(read_only=True)
     cadangan_count = serializers.SerializerMethodField(read_only=True)
     diterima_count = serializers.SerializerMethodField(read_only=True)
@@ -1139,14 +1157,26 @@ class InterviewCohortSerializer(serializers.ModelSerializer):
             return None
         return obj.created_by.full_name or obj.created_by.email
 
+    def get_applicant_count(self, obj) -> int:
+        annotated = getattr(obj, "_annotated_applicant_count", None)
+        if annotated is not None:
+            return int(annotated)
+        return int(getattr(obj, "applicant_count", 0))
+
+    def get_confirmed_interview_count(self, obj) -> int:
+        annotated = getattr(obj, "_annotated_confirmed_interview_count", None)
+        if annotated is not None:
+            return int(annotated)
+        return int(getattr(obj, "confirmed_interview_count", 0))
+
     def _count_for(self, obj, status_value: str) -> int:
         annotated_field = {
-            ApplicationStatus.INTERVIEW: "interview_count",
-            ApplicationStatus.CADANGAN: "cadangan_count",
-            ApplicationStatus.DITERIMA: "diterima_count",
-            ApplicationStatus.BERANGKAT: "berangkat_count",
-            ApplicationStatus.SELESAI: "selesai_count",
-            ApplicationStatus.DITOLAK: "ditolak_count",
+            ApplicationStatus.INTERVIEW: "_annotated_interview_count",
+            ApplicationStatus.CADANGAN: "_annotated_cadangan_count",
+            ApplicationStatus.DITERIMA: "_annotated_diterima_count",
+            ApplicationStatus.BERANGKAT: "_annotated_berangkat_count",
+            ApplicationStatus.SELESAI: "_annotated_selesai_count",
+            ApplicationStatus.DITOLAK: "_annotated_ditolak_count",
         }.get(status_value)
         if annotated_field:
             annotated = getattr(obj, annotated_field, None)
@@ -1173,7 +1203,7 @@ class InterviewCohortSerializer(serializers.ModelSerializer):
         return self._count_for(obj, ApplicationStatus.DITOLAK)
 
     def get_pengumpulan_dokumen_confirmed_count(self, obj) -> int:
-        annotated = getattr(obj, "pengumpulan_dokumen_confirmed_count", None)
+        annotated = getattr(obj, "_annotated_pengumpulan_dokumen_confirmed_count", None)
         if annotated is not None:
             return int(annotated)
         applications = obj.applications.filter(status=ApplicationStatus.DITERIMA).only(

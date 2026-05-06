@@ -241,13 +241,13 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
         return (
             LamaranBatch.objects.select_related("job", "job__company", "created_by")
             .annotate(
-                applicant_count=Count("applications", distinct=True),
-                pra_seleksi_count=Count(
+                _annotated_applicant_count=Count("applications", distinct=True),
+                _annotated_pra_seleksi_count=Count(
                     "applications",
                     filter=Q(applications__status=ApplicationStatus.PRA_SELEKSI),
                     distinct=True,
                 ),
-                advanced_count=Count(
+                _annotated_advanced_count=Count(
                     "applications",
                     filter=Q(
                         applications__status__in=[
@@ -259,27 +259,27 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
                     ),
                     distinct=True,
                 ),
-                rejected_count=Count(
+                _annotated_rejected_count=Count(
                     "applications",
                     filter=Q(applications__status=ApplicationStatus.DITOLAK),
                     distinct=True,
                 ),
-                diterima_count=Count(
+                _annotated_diterima_count=Count(
                     "applications",
                     filter=Q(applications__status=ApplicationStatus.DITERIMA),
                     distinct=True,
                 ),
-                confirmed_pra_seleksi_count=Count(
+                _annotated_confirmed_pra_seleksi_count=Count(
                     "applications",
                     filter=Q(applications__pra_seleksi_confirmed_at__isnull=False),
                     distinct=True,
                 ),
-                confirmed_interview_count=Count(
+                _annotated_confirmed_interview_count=Count(
                     "applications",
                     filter=Q(applications__interview_confirmed_at__isnull=False),
                     distinct=True,
                 ),
-                pengumpulan_dokumen_confirmed_count=Count(
+                _annotated_pengumpulan_dokumen_confirmed_count=Count(
                     "applications",
                     filter=Q(
                         applications__status=ApplicationStatus.DITERIMA,
@@ -1015,43 +1015,43 @@ class InterviewCohortViewSet(viewsets.ModelViewSet):
             InterviewCohort.objects
             .select_related("job", "job__company", "created_by")
             .annotate(
-                applicant_count=Count("applications", distinct=True),
-                interview_count=Count(
+                _annotated_applicant_count=Count("applications", distinct=True),
+                _annotated_interview_count=Count(
                     "applications",
                     filter=Q(applications__status=ApplicationStatus.INTERVIEW),
                     distinct=True,
                 ),
-                cadangan_count=Count(
+                _annotated_cadangan_count=Count(
                     "applications",
                     filter=Q(applications__status=ApplicationStatus.CADANGAN),
                     distinct=True,
                 ),
-                diterima_count=Count(
+                _annotated_diterima_count=Count(
                     "applications",
                     filter=Q(applications__status=ApplicationStatus.DITERIMA),
                     distinct=True,
                 ),
-                berangkat_count=Count(
+                _annotated_berangkat_count=Count(
                     "applications",
                     filter=Q(applications__status=ApplicationStatus.BERANGKAT),
                     distinct=True,
                 ),
-                selesai_count=Count(
+                _annotated_selesai_count=Count(
                     "applications",
                     filter=Q(applications__status=ApplicationStatus.SELESAI),
                     distinct=True,
                 ),
-                ditolak_count=Count(
+                _annotated_ditolak_count=Count(
                     "applications",
                     filter=Q(applications__status=ApplicationStatus.DITOLAK),
                     distinct=True,
                 ),
-                confirmed_interview_count=Count(
+                _annotated_confirmed_interview_count=Count(
                     "applications",
                     filter=Q(applications__interview_confirmed_at__isnull=False),
                     distinct=True,
                 ),
-                pengumpulan_dokumen_confirmed_count=Count(
+                _annotated_pengumpulan_dokumen_confirmed_count=Count(
                     "applications",
                     filter=Q(
                         applications__status=ApplicationStatus.DITERIMA,
