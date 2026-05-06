@@ -21,6 +21,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.filters import OrderingFilter, SearchFilter
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -170,13 +171,30 @@ class ChatThreadViewSet(viewsets.ReadOnlyModelViewSet):
             status=status.HTTP_201_CREATED,
         )
 
-    @action(detail=True, methods=["post"], url_path="read")
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="read",
+        permission_classes=[IsAuthenticated],
+    )
     def mark_read(self, request, pk=None):
         """
         POST /api/chat/threads/{id}/read/
         Mark unread messages in this thread as read for current user.
+        Accessible for dashboard operators (master admin/admin/staff).
         """
         thread = self.get_object()
+        user = request.user
+        allowed_roles = {"MASTER_ADMIN", "ADMIN", "STAFF"}
+        if not (user and user.is_authenticated and (user.is_superuser or user.role in allowed_roles)):
+            return Response(
+                error_response(
+                    detail="Anda tidak memiliki izin untuk menandai pesan sebagai dibaca.",
+                    code=ApiCode.PERMISSION_DENIED,
+                ),
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         marked = (
             thread.messages
             .filter(is_read=False)

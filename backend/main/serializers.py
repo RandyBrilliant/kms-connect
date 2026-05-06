@@ -263,7 +263,7 @@ class JobApplicationSerializer(serializers.ModelSerializer):
     interview_location = serializers.SerializerMethodField(read_only=True)
     interview_notes = serializers.SerializerMethodField(read_only=True)
     cooldown_eligible_date = serializers.SerializerMethodField(read_only=True)
-    status_history = ApplicationStatusHistorySerializer(many=True, read_only=True)
+    status_history = serializers.SerializerMethodField(read_only=True)
     applicant_nik = serializers.SerializerMethodField(read_only=True)
     referrer_display_name = serializers.SerializerMethodField(read_only=True)
     referrer_code = serializers.SerializerMethodField(read_only=True)
@@ -488,6 +488,16 @@ class JobApplicationSerializer(serializers.ModelSerializer):
         """Serializable version of the model property."""
         return obj.cooldown_eligible_date
 
+    def get_status_history(self, obj):
+        include = bool(self.context.get("include_status_history"))
+        if not include:
+            return []
+        return ApplicationStatusHistorySerializer(
+            obj.status_history.all(),
+            many=True,
+            context=self.context,
+        ).data
+
     def get_reached_stages(self, obj) -> list[str]:
         reached: list[str] = []
         seen = set()
@@ -519,6 +529,13 @@ class JobApplicationSerializer(serializers.ModelSerializer):
         return {code: bool(marked_at.get(code)) for code in JobApplication.ATTENDANCE_TRACKED_STATUSES}
 
     def get_document_collection_progress(self, obj) -> dict:
+        if obj.status != ApplicationStatus.DITERIMA:
+            return {
+                "items": [],
+                "done_count": 0,
+                "total_count": 0,
+                "is_complete": False,
+            }
         return ApplicationService.get_document_collection_progress(obj)
 
     def get_pengumpulan_dokumen_complete(self, obj) -> bool:
@@ -733,10 +750,16 @@ class LamaranBatchSerializer(serializers.ModelSerializer):
         return obj.created_by.full_name or obj.created_by.email
 
     def get_pra_seleksi_count(self, obj) -> int:
+        annotated = getattr(obj, "pra_seleksi_count", None)
+        if annotated is not None:
+            return int(annotated)
         return obj.applications.filter(status=ApplicationStatus.PRA_SELEKSI).count()
 
     def get_advanced_count(self, obj) -> int:
         """Pelamar yang sudah lanjut ke tahap interview atau berikutnya."""
+        annotated = getattr(obj, "advanced_count", None)
+        if annotated is not None:
+            return int(annotated)
         return obj.applications.filter(status__in=[
             ApplicationStatus.INTERVIEW,
             ApplicationStatus.DITERIMA,
@@ -745,9 +768,15 @@ class LamaranBatchSerializer(serializers.ModelSerializer):
         ]).count()
 
     def get_rejected_count(self, obj) -> int:
+        annotated = getattr(obj, "rejected_count", None)
+        if annotated is not None:
+            return int(annotated)
         return obj.applications.filter(status=ApplicationStatus.DITOLAK).count()
 
     def get_diterima_count(self, obj) -> int:
+        annotated = getattr(obj, "diterima_count", None)
+        if annotated is not None:
+            return int(annotated)
         return obj.applications.filter(status=ApplicationStatus.DITERIMA).count()
 
     def get_pengumpulan_dokumen_confirmed_count(self, obj) -> int:
@@ -755,6 +784,9 @@ class LamaranBatchSerializer(serializers.ModelSerializer):
         Number of DITERIMA-stage applications where applicant already clicked
         "Dokumen Selesai" (stored in attendance_by_stage['DITERIMA']).
         """
+        annotated = getattr(obj, "pengumpulan_dokumen_confirmed_count", None)
+        if annotated is not None:
+            return int(annotated)
         applications = obj.applications.filter(status=ApplicationStatus.DITERIMA).only(
             "attendance_by_stage"
         )
@@ -1108,6 +1140,18 @@ class InterviewCohortSerializer(serializers.ModelSerializer):
         return obj.created_by.full_name or obj.created_by.email
 
     def _count_for(self, obj, status_value: str) -> int:
+        annotated_field = {
+            ApplicationStatus.INTERVIEW: "interview_count",
+            ApplicationStatus.CADANGAN: "cadangan_count",
+            ApplicationStatus.DITERIMA: "diterima_count",
+            ApplicationStatus.BERANGKAT: "berangkat_count",
+            ApplicationStatus.SELESAI: "selesai_count",
+            ApplicationStatus.DITOLAK: "ditolak_count",
+        }.get(status_value)
+        if annotated_field:
+            annotated = getattr(obj, annotated_field, None)
+            if annotated is not None:
+                return int(annotated)
         return obj.applications.filter(status=status_value).count()
 
     def get_interview_count(self, obj) -> int:
@@ -1129,6 +1173,9 @@ class InterviewCohortSerializer(serializers.ModelSerializer):
         return self._count_for(obj, ApplicationStatus.DITOLAK)
 
     def get_pengumpulan_dokumen_confirmed_count(self, obj) -> int:
+        annotated = getattr(obj, "pengumpulan_dokumen_confirmed_count", None)
+        if annotated is not None:
+            return int(annotated)
         applications = obj.applications.filter(status=ApplicationStatus.DITERIMA).only(
             "attendance_by_stage"
         )
@@ -1138,6 +1185,14 @@ class InterviewCohortSerializer(serializers.ModelSerializer):
             if attendance_map.get(ApplicationStatus.DITERIMA):
                 count += 1
         return count
+
+
+class JobApplicationListSerializer(JobApplicationSerializer):
+    """
+    Lightweight list serializer for admin application tables.
+    `status_history` stays empty here to avoid large payload and expensive
+    relation prefetch on list endpoints.
+    """
 
 
 class InterviewCohortCreateSerializer(serializers.Serializer):

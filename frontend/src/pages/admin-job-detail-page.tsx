@@ -213,10 +213,12 @@ function PraSeleksiTab({
   jobId,
   jobsBase,
   batchBase,
+  enabled = true,
 }: {
   jobId: number
   jobsBase: string
   batchBase: string
+  enabled?: boolean
 }) {
   const navigate = useNavigate()
   const [page, setPage] = useState(1)
@@ -230,6 +232,7 @@ function PraSeleksiTab({
         page_size: MASTER_TAHAPAN_PAGE_SIZE,
         ordering: "tahap_order,created_at",
       }),
+    enabled,
   })
 
   const batches = data?.results ?? []
@@ -426,10 +429,12 @@ function InterviewCohortsTab({
   jobId,
   jobsBase,
   cohortBase,
+  enabled = true,
 }: {
   jobId: number
   jobsBase: string
   cohortBase: string
+  enabled?: boolean
 }) {
   const navigate = useNavigate()
   const [page, setPage] = useState(1)
@@ -443,6 +448,7 @@ function InterviewCohortsTab({
         page_size: MASTER_TAHAPAN_PAGE_SIZE,
         ordering: "-interview_date,-created_at",
       }),
+    enabled,
   })
 
   const cohorts = data?.results ?? []
@@ -657,6 +663,7 @@ function ApplicationsTab({
   cohortBase,
   lamaranBase,
   pelamarBase,
+  enabled = true,
 }: {
   jobId: number
   status: ApplicationStatus
@@ -664,6 +671,7 @@ function ApplicationsTab({
   cohortBase: string
   lamaranBase: string
   pelamarBase: string
+  enabled?: boolean
 }) {
   const navigate = useNavigate()
   const [page, setPage] = useState(1)
@@ -692,6 +700,7 @@ function ApplicationsTab({
         search: stageSearch.trim() || undefined,
         ordering: "applicant_name",
       }),
+    enabled,
   })
 
   const totalCount = data?.count ?? 0
@@ -1445,6 +1454,7 @@ export function AdminJobDetailPage() {
             jobId={jobId}
             jobsBase={jobsBase}
             batchBase={batchBase}
+            enabled={activeTab === "pra_seleksi"}
           />
         </TabsContent>
 
@@ -1454,6 +1464,7 @@ export function AdminJobDetailPage() {
             jobId={jobId}
             jobsBase={jobsBase}
             cohortBase={cohortBase}
+            enabled={activeTab === "interview"}
           />
         </TabsContent>
 
@@ -1467,6 +1478,7 @@ export function AdminJobDetailPage() {
               cohortBase={cohortBase}
               lamaranBase={lamaranBase}
               pelamarBase={pelamarBase}
+              enabled={activeTab === t.value}
             />
           </TabsContent>
         ))}

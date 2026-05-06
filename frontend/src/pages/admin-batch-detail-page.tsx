@@ -11,7 +11,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useQuery, useMutation, useQueries, useQueryClient } from "@tanstack/react-query"
 import { format } from "date-fns"
 import { id as idLocale } from "date-fns/locale"
 import {
@@ -106,7 +106,7 @@ import {
 } from "@/api/batches"
 import {
   bulkTransitionApplications,
-  getAllApplicationsByBatch,
+  getApplications,
 } from "@/api/applications"
 import {
   APPLICATION_STATUS_LABELS,
@@ -370,6 +370,28 @@ const STATUS_TABS: { value: ApplicationStatus; label: string }[] = [
   { value: "SELESAI",     label: "Selesai" },
   { value: "DITOLAK",     label: "Ditolak" },
 ]
+
+async function getAllApplicationsByBatchAndStatus(
+  batchId: number,
+  status: ApplicationStatus
+): Promise<JobApplication[]> {
+  const pageSize = 100
+  let page = 1
+  const all: JobApplication[] = []
+  while (true) {
+    const data = await getApplications({
+      batch: batchId,
+      status,
+      page,
+      page_size: pageSize,
+      ordering: "applicant_name",
+    })
+    all.push(...data.results)
+    if (!data.next) break
+    page += 1
+  }
+  return all
+}
 
 // ---------------------------------------------------------------------------
 // Sub-component: per-status tab with checkboxes + transition actions
@@ -1206,19 +1228,37 @@ export function AdminBatchDetailPage() {
     queryFn: () => getBatch(batchId),
   })
 
-  const { data: apps = [] } = useQuery({
-    queryKey: ["applications", { batch: batchId, mode: "all-pages" }],
-    queryFn: () => getAllApplicationsByBatch(batchId),
+  const activeTabAppsQuery = useQuery({
+    queryKey: ["applications", { batch: batchId, status: activeStatusTab, page_size: 100 }],
+    queryFn: () => getAllApplicationsByBatchAndStatus(batchId, activeStatusTab),
     enabled: !!batch,
   })
 
-  const sortedApps = useMemo(() => {
-    return [...apps].sort((a, b) =>
-      (a.applicant_name || "").localeCompare(b.applicant_name || "", "id", {
-        sensitivity: "base",
-      })
-    )
-  }, [apps])
+  const activeTabApps = activeTabAppsQuery.data ?? []
+  const statusCountQueries = useQueries({
+    queries: STATUS_TABS.map((t) => ({
+      queryKey: ["applications", "count", { batch: batchId, status: t.value }],
+      queryFn: async () => {
+        const res = await getApplications({
+          batch: batchId,
+          status: t.value,
+          page: 1,
+          page_size: 1,
+        })
+        return res.count
+      },
+      enabled: !!batch,
+      staleTime: 30_000,
+    })),
+  })
+  const statusCounts = useMemo(
+    () =>
+      STATUS_TABS.reduce(
+        (acc, t, idx) => ({ ...acc, [t.value]: statusCountQueries[idx]?.data ?? 0 }),
+        {} as Record<ApplicationStatus, number>
+      ),
+    [statusCountQueries]
+  )
 
   const { data: announcements = [], isLoading: annoLoading } = useQuery({    queryKey: ["batch-announcements", batchId],
     queryFn: () => getBatchAnnouncements(batchId),
@@ -1282,9 +1322,16 @@ export function AdminBatchDetailPage() {
   })
 
   // Group by status for tabs
-  const appsByStatus = STATUS_TABS.reduce(
-    (acc, t) => ({ ...acc, [t.value]: sortedApps.filter((a) => a.status === t.value) }),
-    {} as Record<ApplicationStatus, typeof sortedApps>
+  const appsByStatus = useMemo(
+    () =>
+      STATUS_TABS.reduce(
+        (acc, t) => ({
+          ...acc,
+          [t.value]: t.value === activeStatusTab ? activeTabApps : [],
+        }),
+        {} as Record<ApplicationStatus, JobApplication[]>
+      ),
+    [activeStatusTab, activeTabApps]
   )
 
   usePageTitle(batch ? `Batch: ${batch.name}` : "Detail Batch")
@@ -1396,7 +1443,7 @@ export function AdminBatchDetailPage() {
               <Button
                 variant="outline"
                 className="cursor-pointer"
-                disabled={isExporting || apps.length === 0}
+                disabled={isExporting || batch.applicant_count === 0}
               >
                 <IconFileSpreadsheet className="mr-2 size-4" />
                 {isExporting ? "Mengunduh..." : "Export Excel"}
@@ -1406,13 +1453,13 @@ export function AdminBatchDetailPage() {
             <DropdownMenuContent align="end" className="min-w-[240px]">
               <DropdownMenuItem
                 className="cursor-pointer flex-col items-start gap-0"
-                disabled={appsByStatus[activeStatusTab].length === 0}
+                disabled={statusCounts[activeStatusTab] === 0}
                 onClick={() => handleExportExcel([activeStatusTab])}
               >
                 <span className="font-medium">Tahapan tab saat ini</span>
                 <span className="text-muted-foreground text-xs font-normal">
                   {APPLICATION_STATUS_LABELS[activeStatusTab]} (
-                  {appsByStatus[activeStatusTab].length} pelamar)
+                  {statusCounts[activeStatusTab]} pelamar)
                 </span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
@@ -1420,12 +1467,12 @@ export function AdminBatchDetailPage() {
                 <DropdownMenuItem
                   key={t.value}
                   className="cursor-pointer justify-between gap-4"
-                  disabled={appsByStatus[t.value].length === 0}
+                  disabled={statusCounts[t.value] === 0}
                   onClick={() => handleExportExcel([t.value])}
                 >
                   <span>{t.label}</span>
                   <span className="text-muted-foreground tabular-nums text-xs">
-                    {appsByStatus[t.value].length}
+                    {statusCounts[t.value]}
                   </span>
                 </DropdownMenuItem>
               ))}
@@ -1667,9 +1714,9 @@ export function AdminBatchDetailPage() {
           {STATUS_TABS.map((t) => (
             <TabsTrigger key={t.value} value={t.value}>
               {t.label}
-              {appsByStatus[t.value].length > 0 && (
+              {statusCounts[t.value] > 0 && (
                 <Badge variant="secondary" className="ml-1.5 rounded-full px-1.5 py-0 text-xs">
-                  {appsByStatus[t.value].length}
+                  {statusCounts[t.value]}
                 </Badge>
               )}
             </TabsTrigger>

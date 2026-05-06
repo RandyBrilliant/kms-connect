@@ -7,6 +7,7 @@ Company/Staff self-service: read-only views of their own data.
 """
 
 from django.shortcuts import get_object_or_404
+from django.db.models import Count, Q
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -63,6 +64,7 @@ from .serializers import (
     InterviewCohortScheduleSerializer,
     InterviewCohortSerializer,
     InterviewCohortUpdateSerializer,
+    JobApplicationListSerializer,
     JobApplicationSerializer,
     LamaranBatchCreateSerializer,
     LamaranBatchSerializer,
@@ -238,7 +240,54 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return (
             LamaranBatch.objects.select_related("job", "job__company", "created_by")
-            .prefetch_related("applications")
+            .annotate(
+                applicant_count=Count("applications", distinct=True),
+                pra_seleksi_count=Count(
+                    "applications",
+                    filter=Q(applications__status=ApplicationStatus.PRA_SELEKSI),
+                    distinct=True,
+                ),
+                advanced_count=Count(
+                    "applications",
+                    filter=Q(
+                        applications__status__in=[
+                            ApplicationStatus.INTERVIEW,
+                            ApplicationStatus.DITERIMA,
+                            ApplicationStatus.BERANGKAT,
+                            ApplicationStatus.SELESAI,
+                        ]
+                    ),
+                    distinct=True,
+                ),
+                rejected_count=Count(
+                    "applications",
+                    filter=Q(applications__status=ApplicationStatus.DITOLAK),
+                    distinct=True,
+                ),
+                diterima_count=Count(
+                    "applications",
+                    filter=Q(applications__status=ApplicationStatus.DITERIMA),
+                    distinct=True,
+                ),
+                confirmed_pra_seleksi_count=Count(
+                    "applications",
+                    filter=Q(applications__pra_seleksi_confirmed_at__isnull=False),
+                    distinct=True,
+                ),
+                confirmed_interview_count=Count(
+                    "applications",
+                    filter=Q(applications__interview_confirmed_at__isnull=False),
+                    distinct=True,
+                ),
+                pengumpulan_dokumen_confirmed_count=Count(
+                    "applications",
+                    filter=Q(
+                        applications__status=ApplicationStatus.DITERIMA,
+                        applications__attendance_by_stage__has_key=ApplicationStatus.DITERIMA,
+                    ),
+                    distinct=True,
+                ),
+            )
         )
 
     def _get_batch_for_action(self, pk):
@@ -965,7 +1014,52 @@ class InterviewCohortViewSet(viewsets.ModelViewSet):
         return (
             InterviewCohort.objects
             .select_related("job", "job__company", "created_by")
-            .prefetch_related("applications")
+            .annotate(
+                applicant_count=Count("applications", distinct=True),
+                interview_count=Count(
+                    "applications",
+                    filter=Q(applications__status=ApplicationStatus.INTERVIEW),
+                    distinct=True,
+                ),
+                cadangan_count=Count(
+                    "applications",
+                    filter=Q(applications__status=ApplicationStatus.CADANGAN),
+                    distinct=True,
+                ),
+                diterima_count=Count(
+                    "applications",
+                    filter=Q(applications__status=ApplicationStatus.DITERIMA),
+                    distinct=True,
+                ),
+                berangkat_count=Count(
+                    "applications",
+                    filter=Q(applications__status=ApplicationStatus.BERANGKAT),
+                    distinct=True,
+                ),
+                selesai_count=Count(
+                    "applications",
+                    filter=Q(applications__status=ApplicationStatus.SELESAI),
+                    distinct=True,
+                ),
+                ditolak_count=Count(
+                    "applications",
+                    filter=Q(applications__status=ApplicationStatus.DITOLAK),
+                    distinct=True,
+                ),
+                confirmed_interview_count=Count(
+                    "applications",
+                    filter=Q(applications__interview_confirmed_at__isnull=False),
+                    distinct=True,
+                ),
+                pengumpulan_dokumen_confirmed_count=Count(
+                    "applications",
+                    filter=Q(
+                        applications__status=ApplicationStatus.DITERIMA,
+                        applications__attendance_by_stage__has_key=ApplicationStatus.DITERIMA,
+                    ),
+                    distinct=True,
+                ),
+            )
         )
 
     def _get_cohort_for_action(self, pk):
@@ -1311,6 +1405,16 @@ class InterviewCohortViewSet(viewsets.ModelViewSet):
 
 
 class JobApplicationViewSet(viewsets.ModelViewSet):
+    def get_serializer_class(self):
+        if self.action == "list":
+            return JobApplicationListSerializer
+        return JobApplicationSerializer
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["include_status_history"] = self.action == "retrieve"
+        return context
+
     """
     Read + individual transitions for JobApplication (admin/backoffice).
 
@@ -1346,7 +1450,7 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
         return [IsBackofficeAdmin()]
 
     def get_queryset(self):
-        return (
+        qs = (
             JobApplication.objects
             .select_related(
                 "applicant",
@@ -1357,8 +1461,10 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
                 "interview_cohort",
                 "assigned_by",
             )
-            .prefetch_related("status_history__changed_by")
         )
+        if self.action == "retrieve":
+            qs = qs.prefetch_related("status_history__changed_by")
+        return qs
 
     @action(detail=False, methods=["get"], url_path="export-excel")
     def export_excel(self, request):
