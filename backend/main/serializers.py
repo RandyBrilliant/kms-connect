@@ -278,6 +278,7 @@ class JobApplicationSerializer(serializers.ModelSerializer):
     pengumpulan_dokumen_pending_items = serializers.SerializerMethodField(read_only=True)
     pengumpulan_dokumen_pending_labels = serializers.SerializerMethodField(read_only=True)
     diterima_step_confirmations = serializers.SerializerMethodField(read_only=True)
+    diterima_current_step = serializers.CharField(read_only=True)
 
     class Meta:
         model = JobApplication
@@ -325,6 +326,7 @@ class JobApplicationSerializer(serializers.ModelSerializer):
             "pengumpulan_dokumen_pending_items",
             "pengumpulan_dokumen_pending_labels",
             "diterima_step_confirmations",
+            "diterima_current_step",
             "created_at",
             "updated_at",
         ]
@@ -359,6 +361,7 @@ class JobApplicationSerializer(serializers.ModelSerializer):
             "pengumpulan_dokumen_pending_items",
             "pengumpulan_dokumen_pending_labels",
             "diterima_step_confirmations",
+            "diterima_current_step",
             "applied_at",
             "created_at",
             "updated_at",

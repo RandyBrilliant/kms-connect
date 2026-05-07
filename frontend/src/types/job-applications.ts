@@ -125,6 +125,12 @@ export interface JobApplication {
    * Value is ISO-8601 timestamp when confirmed, or null if not yet confirmed.
    */
   diterima_step_confirmations?: Record<string, string | null>
+  /**
+   * The sub-step the applicant is currently at within the DITERIMA flow.
+   * Admin advances this through bulk-advance-diterima-step.
+   * Null/absent for applications not yet in DITERIMA.
+   */
+  diterima_current_step?: DocumentCollectionStepCode | null
   created_at: string
   updated_at: string
 }
@@ -151,6 +157,21 @@ export const DOCUMENT_COLLECTION_STEP_LABELS: Record<DocumentCollectionStepCode,
   PDO_KILANG: "PDO Kilang",
   PERSIAPAN_KEBERANGKATAN: "Persiapan Keberangkatan",
 }
+
+/** Ordered list of the 9 DITERIMA sub-steps, first → last. */
+export const DOCUMENT_COLLECTION_STEP_ORDER: DocumentCollectionStepCode[] = [
+  "MASUK_BERKAS_ASLI",
+  "MEDICAL",
+  "BUAT_ID_PEKERJA",
+  "BUAT_PASPOR",
+  "FWCMS",
+  "PSIKOLOGI_TEST",
+  "PAP_BP3MI",
+  "PDO_KILANG",
+  "PERSIAPAN_KEBERANGKATAN",
+]
+
+export const DITERIMA_LAST_STEP: DocumentCollectionStepCode = "PERSIAPAN_KEBERANGKATAN"
 
 export interface ApplicationsListParams {
   page?: number

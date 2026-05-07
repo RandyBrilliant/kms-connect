@@ -738,6 +738,46 @@ class JobApplication(models.Model):
             '{"PRA_SELEKSI":"2026-01-01T10:00:00+07:00","INTERVIEW":"..."}'
         ),
     )
+    # Ordered sub-steps within the DITERIMA stage.  The admin advances the
+    # applicant one step at a time; only after reaching the last step can the
+    # application be transitioned to BERANGKAT.
+    DITERIMA_STEP_ORDER = [
+        "MASUK_BERKAS_ASLI",
+        "MEDICAL",
+        "BUAT_ID_PEKERJA",
+        "BUAT_PASPOR",
+        "FWCMS",
+        "PSIKOLOGI_TEST",
+        "PAP_BP3MI",
+        "PDO_KILANG",
+        "PERSIAPAN_KEBERANGKATAN",
+    ]
+    DITERIMA_STEP_CHOICES = [
+        ("MASUK_BERKAS_ASLI", "Masuk Berkas Asli"),
+        ("MEDICAL", "Medical"),
+        ("BUAT_ID_PEKERJA", "Buat ID Pekerja"),
+        ("BUAT_PASPOR", "Buat Paspor"),
+        ("FWCMS", "FWCMS"),
+        ("PSIKOLOGI_TEST", "Psikologi Test"),
+        ("PAP_BP3MI", "PAP BP3MI"),
+        ("PDO_KILANG", "PDO Kilang"),
+        ("PERSIAPAN_KEBERANGKATAN", "Persiapan Keberangkatan"),
+    ]
+    DITERIMA_LAST_STEP = "PERSIAPAN_KEBERANGKATAN"
+
+    diterima_current_step = models.CharField(
+        _("sub-tahapan diterima saat ini"),
+        max_length=30,
+        choices=DITERIMA_STEP_CHOICES,
+        default="MASUK_BERKAS_ASLI",
+        db_index=True,
+        help_text=_(
+            "Posisi pelamar dalam alur sub-tahapan Diterima (9 langkah berurutan). "
+            "Dimulai dari Masuk Berkas Asli, diakhiri Persiapan Keberangkatan. "
+            "Dikendalikan oleh admin; setelah langkah terakhir, admin dapat "
+            "memindahkan ke tahap Berangkat."
+        ),
+    )
     diterima_step_confirmations = models.JSONField(
         _("konfirmasi per langkah tahap diterima"),
         default=dict,

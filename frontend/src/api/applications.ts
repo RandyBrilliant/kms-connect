@@ -154,6 +154,27 @@ export async function bulkTransitionApplications(
   return data.data
 }
 
+export interface BulkAdvanceDiterimaStepResponse {
+  advanced: number[]
+  skipped: number[]
+  errors: Record<string, string>
+}
+
+/**
+ * POST /api/applications/bulk-advance-diterima-step/
+ * Admin advances a list of DITERIMA applicants to the next sub-step.
+ * Applications at the last step (PERSIAPAN_KEBERANGKATAN) are skipped.
+ */
+export async function bulkAdvanceDiterimaStep(
+  applicationIds: number[]
+): Promise<BulkAdvanceDiterimaStepResponse> {
+  const { data } = await api.post<{ data: BulkAdvanceDiterimaStepResponse }>(
+    "/api/applications/bulk-advance-diterima-step/",
+    { application_ids: applicationIds }
+  )
+  return data.data
+}
+
 /** PATCH /api/applications/:id/ — admin updates notes field */
 export async function patchApplication(
   id: number,

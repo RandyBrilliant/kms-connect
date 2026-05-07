@@ -109,6 +109,9 @@ class JobApplication {
   final List<String> reachedStages;
   final DocumentCollectionProgress? documentCollectionProgress;
   final bool pengumpulanDokumenComplete;
+  /// Current admin-controlled sub-step within DITERIMA.
+  /// Example values: MASUK_BERKAS_ASLI, MEDICAL, ..., PERSIAPAN_KEBERANGKATAN.
+  final String? diterimaCurrentStep;
   /// Per-step confirmation timestamps for the 9 document-collection steps
   /// within the DITERIMA stage. Keys are step codes (e.g. "MEDICAL").
   /// Value is the DateTime when confirmed, or null if not yet confirmed.
@@ -151,6 +154,7 @@ class JobApplication {
     this.reachedStages = const [],
     this.documentCollectionProgress,
     this.pengumpulanDokumenComplete = false,
+    this.diterimaCurrentStep,
     this.diterimastepConfirmations = const {},
     required this.createdAt,
     required this.updatedAt,
@@ -251,6 +255,7 @@ class JobApplication {
       reachedStages: reachedStages,
       documentCollectionProgress: dcp,
       pengumpulanDokumenComplete: json['pengumpulan_dokumen_complete'] == true,
+      diterimaCurrentStep: json['diterima_current_step']?.toString(),
       diterimastepConfirmations: diterimastepConfirmations,
       createdAt: ApiDateTime.parseRequired(
         json['created_at'],

@@ -90,11 +90,18 @@ import { goBackOrDefault } from "@/lib/back-navigation"
 import { getJob } from "@/api/jobs"
 import { getBatches } from "@/api/batches"
 import { getInterviewCohorts } from "@/api/interview-cohorts"
-import { exportApplicationsExcel, getApplications } from "@/api/applications"
+import {
+  bulkAdvanceDiterimaStep,
+  bulkTransitionApplications,
+  exportApplicationsExcel,
+  getApplications,
+} from "@/api/applications"
 import { createBroadcast, sendBroadcast } from "@/api/notifications"
 import type { JobItem, EmploymentType, JobStatus as JobStatusType } from "@/types/jobs"
 import {
+  DITERIMA_LAST_STEP,
   DOCUMENT_COLLECTION_STEP_LABELS,
+  DOCUMENT_COLLECTION_STEP_ORDER,
   type ApplicationStatus,
   type DocumentCollectionStepCode,
 } from "@/types/job-applications"
@@ -694,6 +701,10 @@ function ApplicationsTab({
   const [selectedDiterimaStep, setSelectedDiterimaStep] = useState<"ALL" | DocumentCollectionStepCode>(
     "ALL"
   )
+  // Selection state for the admin "advance to next sub-step" action.
+  // Only active when viewing a specific (non-ALL) DITERIMA sub-step tab.
+  const [selectedAdvanceAppIds, setSelectedAdvanceAppIds] = useState<Set<number>>(new Set())
+  const [isAdvancing, setIsAdvancing] = useState(false)
   const queryClient = useQueryClient()
 
   const { data, isLoading } = useQuery({
@@ -735,16 +746,58 @@ function ApplicationsTab({
   const showDocCol = status === "DITERIMA"
   const showDiterimaStepFilter = status === "DITERIMA"
   const diterimaStepOptions = useMemo(
-    () => Object.entries(DOCUMENT_COLLECTION_STEP_LABELS) as Array<[DocumentCollectionStepCode, string]>,
+    () =>
+      DOCUMENT_COLLECTION_STEP_ORDER.map(
+        (code) => [code, DOCUMENT_COLLECTION_STEP_LABELS[code]] as [DocumentCollectionStepCode, string]
+      ),
     []
   )
-  const enableAcceptedAnnouncement = status === "DITERIMA"
+
+  // Whether we're on a specific (non-ALL) DITERIMA sub-step tab.
+  const onDiterimaSubStep =
+    status === "DITERIMA" && selectedDiterimaStep !== "ALL"
+  const isLastDiterimaStep = selectedDiterimaStep === DITERIMA_LAST_STEP
+  const nextDiterimaStepLabel = useMemo(() => {
+    if (!onDiterimaSubStep || isLastDiterimaStep) return null
+    const idx = DOCUMENT_COLLECTION_STEP_ORDER.indexOf(
+      selectedDiterimaStep as DocumentCollectionStepCode
+    )
+    if (idx < 0 || idx >= DOCUMENT_COLLECTION_STEP_ORDER.length - 1) return null
+    return DOCUMENT_COLLECTION_STEP_LABELS[DOCUMENT_COLLECTION_STEP_ORDER[idx + 1]]
+  }, [onDiterimaSubStep, isLastDiterimaStep, selectedDiterimaStep])
+
+  const enableAcceptedAnnouncement = status === "DITERIMA" && !onDiterimaSubStep
   const selectableApplicantUsers = filteredApps
     .map((a) => a.applicant_user)
     .filter((v): v is number => typeof v === "number")
   const allSelectableChecked =
     selectableApplicantUsers.length > 0 &&
     selectableApplicantUsers.every((id) => selectedApplicantUsers.has(id))
+
+  // Advance-action selection helpers (sub-step tabs only).
+  const selectableAdvanceIds = filteredApps.map((a) => a.id)
+  const allAdvanceChecked =
+    selectableAdvanceIds.length > 0 &&
+    selectableAdvanceIds.every((id) => selectedAdvanceAppIds.has(id))
+  const toggleSelectAllAdvance = () => {
+    setSelectedAdvanceAppIds((prev) => {
+      const next = new Set(prev)
+      if (allAdvanceChecked) {
+        selectableAdvanceIds.forEach((id) => next.delete(id))
+      } else {
+        selectableAdvanceIds.forEach((id) => next.add(id))
+      }
+      return next
+    })
+  }
+  const toggleSelectAdvance = (appId: number) => {
+    setSelectedAdvanceAppIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(appId)) next.delete(appId)
+      else next.add(appId)
+      return next
+    })
+  }
   const selectedRecipientIds = Array.from(selectedApplicantUsers)
   const selectedRecipientNames = filteredApps
     .filter(
@@ -757,7 +810,8 @@ function ApplicationsTab({
     selectedRecipientIds.length > 0 &&
     announcementTitle.trim().length > 0 &&
     announcementBody.trim().length > 0
-  const emptyColSpan = 5 + (showCohortCol ? 1 : 0) + (showDocCol ? 1 : 0)
+  const showCheckboxCol = onDiterimaSubStep || enableAcceptedAnnouncement
+  const emptyColSpan = 5 + (showCohortCol ? 1 : 0) + (showDocCol ? 1 : 0) + (showCheckboxCol ? 1 : 0)
 
   const handleExportExcel = async () => {
     setIsExporting(true)
@@ -784,6 +838,41 @@ function ApplicationsTab({
       toast.error("Gagal mengunduh data Excel.")
     } finally {
       setIsExporting(false)
+    }
+  }
+
+  const handleAdvanceDiterimaStep = async () => {
+    const ids = Array.from(selectedAdvanceAppIds)
+    if (!ids.length) return
+    setIsAdvancing(true)
+    try {
+      if (isLastDiterimaStep) {
+        // Transition to master BERANGKAT status using the existing bulk endpoint.
+        await bulkTransitionApplications({ application_ids: ids, status: "BERANGKAT", note: "" })
+        toast.success(`${ids.length} pelamar dipindahkan ke tahap Berangkat.`)
+      } else {
+        const result = await bulkAdvanceDiterimaStep(ids)
+        const count = result.advanced.length
+        const skipped = result.skipped.length
+        if (count > 0) {
+          toast.success(
+            `${count} pelamar dipindahkan ke ${nextDiterimaStepLabel ?? "sub-tahapan berikutnya"}.` +
+              (skipped > 0 ? ` ${skipped} dilewati.` : "")
+          )
+        } else {
+          toast.error("Tidak ada pelamar yang berhasil dipindahkan.")
+        }
+      }
+      await queryClient.invalidateQueries({
+        queryKey: ["applications", { job: jobId, status }],
+        exact: false,
+      })
+      setSelectedAdvanceAppIds(new Set())
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      toast.error("Gagal memindahkan pelamar", detail ?? "Coba lagi nanti.")
+    } finally {
+      setIsAdvancing(false)
     }
   }
 
@@ -880,6 +969,7 @@ function ApplicationsTab({
               onValueChange={(v) => {
                 setSelectedDiterimaStep(v as "ALL" | DocumentCollectionStepCode)
                 setPage(1)
+                setSelectedAdvanceAppIds(new Set())
               }}
             >
               <TabsList className="h-auto w-full justify-start overflow-x-auto flex-nowrap">
@@ -891,6 +981,43 @@ function ApplicationsTab({
                 ))}
               </TabsList>
             </Tabs>
+          </div>
+        )}
+
+        {/* Action bar: advance applicants through DITERIMA sub-steps (shown only on sub-step tabs) */}
+        {onDiterimaSubStep && (
+          <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/30 p-3">
+            <span className="text-sm text-muted-foreground">
+              {selectedAdvanceAppIds.size > 0
+                ? `${selectedAdvanceAppIds.size} pelamar terpilih`
+                : "Pilih pelamar untuk dipindahkan"}
+            </span>
+            <div className="ml-auto flex flex-wrap gap-2">
+              {isLastDiterimaStep ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={selectedAdvanceAppIds.size === 0 || isAdvancing}
+                  onClick={() => void handleAdvanceDiterimaStep()}
+                  className="cursor-pointer"
+                >
+                  {isAdvancing ? "Memindahkan..." : "Pindahkan ke Berangkat"}
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  disabled={selectedAdvanceAppIds.size === 0 || isAdvancing}
+                  onClick={() => void handleAdvanceDiterimaStep()}
+                  className="cursor-pointer"
+                >
+                  {isAdvancing
+                    ? "Memindahkan..."
+                    : `Pindahkan ke ${nextDiterimaStepLabel ?? "Berikutnya"}`}
+                </Button>
+              )}
+            </div>
           </div>
         )}
 
@@ -982,7 +1109,15 @@ function ApplicationsTab({
             <Table>
               <TableHeader>
                 <TableRow>
-                  {enableAcceptedAnnouncement && (
+                  {onDiterimaSubStep ? (
+                    <TableHead className="w-[42px]">
+                      <Checkbox
+                        checked={allAdvanceChecked}
+                        onCheckedChange={toggleSelectAllAdvance}
+                        aria-label="Pilih semua pelamar di tabel"
+                      />
+                    </TableHead>
+                  ) : enableAcceptedAnnouncement ? (
                     <TableHead className="w-[42px]">
                       <Checkbox
                         checked={allSelectableChecked}
@@ -990,14 +1125,14 @@ function ApplicationsTab({
                         aria-label="Pilih semua pelamar di tabel"
                       />
                     </TableHead>
-                  )}
+                  ) : null}
                   <TableHead>Pelamar</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Tahapan / Batch</TableHead>
                   {showCohortCol && <TableHead>Sesi Interview</TableHead>}
                   {showDocCol && (
                     <TableHead className="min-w-[11rem]">
-                      Pengumpulan Dokumen
+                      {onDiterimaSubStep ? "Konfirmasi Pelamar" : "Pengumpulan Dokumen"}
                     </TableHead>
                   )}
                   <TableHead>Tanggal Lamar</TableHead>
@@ -1010,7 +1145,15 @@ function ApplicationsTab({
                 {filteredApps.length ? (
                   filteredApps.map((app) => (
                     <TableRow key={app.id} className="hover:bg-muted/50">
-                      {enableAcceptedAnnouncement && (
+                      {onDiterimaSubStep ? (
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedAdvanceAppIds.has(app.id)}
+                            onCheckedChange={() => toggleSelectAdvance(app.id)}
+                            aria-label={`Pilih ${app.applicant_name}`}
+                          />
+                        </TableCell>
+                      ) : enableAcceptedAnnouncement ? (
                         <TableCell>
                           {app.applicant_user ? (
                             <Checkbox
@@ -1022,7 +1165,7 @@ function ApplicationsTab({
                             />
                           ) : null}
                         </TableCell>
-                      )}
+                      ) : null}
                       <TableCell>
                         <div className="flex flex-col">
                           <span className="font-medium">{app.applicant_name}</span>
@@ -1069,7 +1212,14 @@ function ApplicationsTab({
                       )}
                       {showDocCol && (
                         <TableCell className="text-sm align-top">
-                          <DocumentCollectionProgressCell app={app} />
+                          <DocumentCollectionProgressCell
+                            app={app}
+                            highlightStep={
+                              onDiterimaSubStep
+                                ? (selectedDiterimaStep as DocumentCollectionStepCode)
+                                : undefined
+                            }
+                          />
                         </TableCell>
                       )}
                       <TableCell className="text-sm text-muted-foreground">
@@ -1142,7 +1292,7 @@ function ApplicationsTab({
                 ) : (
                   <TableRow>
                     <TableCell
-                      colSpan={emptyColSpan + (enableAcceptedAnnouncement ? 1 : 0)}
+                      colSpan={emptyColSpan}
                       className="h-20 text-center text-muted-foreground"
                     >
                       Tidak ada pelamar dengan status ini.

@@ -596,6 +596,7 @@ class _InfoCard extends StatelessWidget {
               const SizedBox(height: 14),
               _DocumentCollectionSection(
                 progress: application.documentCollectionProgress!,
+                currentStepCode: application.diterimaCurrentStep,
                 onConfirmStep: onConfirmDocumentStep,
                 confirmingStepCode: confirmingStepCode,
               ),
@@ -662,11 +663,13 @@ class _InfoCard extends StatelessWidget {
 class _DocumentCollectionSection extends StatelessWidget {
   const _DocumentCollectionSection({
     required this.progress,
+    this.currentStepCode,
     this.onConfirmStep,
     this.confirmingStepCode,
   });
 
   final DocumentCollectionProgress progress;
+  final String? currentStepCode;
   /// Called when pelamar taps "Konfirmasi" on a step. Arg is step code.
   final ValueChanged<String>? onConfirmStep;
   /// Step code currently being confirmed (shows a loading spinner).
@@ -725,12 +728,38 @@ class _DocumentCollectionSection extends StatelessWidget {
                 : AppColors.textMedium,
           ),
         ),
+        if (currentStepCode != null && currentStepCode!.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEFF7FF),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: const Color(0xFF17A2B8).withValues(alpha: 0.35),
+              ),
+            ),
+            child: Text(
+              'Tahapan aktif saat ini: ${_stepLabel(currentStepCode!)}',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF0E6F83),
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: 8),
         ...progress.items.map((item) {
           final isConfirming = confirmingStepCode == item.code;
+          final isCurrentStep = currentStepCode == item.code;
           // Can confirm only when data is ready and not yet confirmed.
           final canConfirm =
-              item.done && !item.confirmed && onConfirmStep != null;
+              item.done &&
+              !item.confirmed &&
+              onConfirmStep != null &&
+              (currentStepCode == null || isCurrentStep);
 
           IconData leadingIcon;
           Color leadingColor;
@@ -762,11 +791,15 @@ class _DocumentCollectionSection extends StatelessWidget {
             decoration: BoxDecoration(
               color: item.confirmed
                   ? const Color(0xFFF0FBF4)
+                  : isCurrentStep
+                  ? const Color(0xFFEFF7FF)
                   : const Color(0xFFF8FAFB),
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
                 color: item.confirmed
                     ? const Color(0xFF28A745).withValues(alpha: 0.3)
+                    : isCurrentStep
+                    ? const Color(0xFF17A2B8).withValues(alpha: 0.35)
                     : AppColors.divider.withValues(alpha: 0.4),
               ),
             ),
@@ -779,7 +812,7 @@ class _DocumentCollectionSection extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        item.label,
+                        isCurrentStep ? '${item.label} (Tahapan Aktif)' : item.label,
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
@@ -840,6 +873,31 @@ class _DocumentCollectionSection extends StatelessWidget {
         }),
       ],
     );
+  }
+
+  String _stepLabel(String code) {
+    switch (code) {
+      case 'MASUK_BERKAS_ASLI':
+        return 'Masuk Berkas Asli';
+      case 'MEDICAL':
+        return 'Medical';
+      case 'BUAT_ID_PEKERJA':
+        return 'Buat ID Pekerja';
+      case 'BUAT_PASPOR':
+        return 'Buat Paspor';
+      case 'FWCMS':
+        return 'FWCMS';
+      case 'PSIKOLOGI_TEST':
+        return 'Psikologi Test';
+      case 'PAP_BP3MI':
+        return 'PAP BP3MI';
+      case 'PDO_KILANG':
+        return 'PDO Kilang';
+      case 'PERSIAPAN_KEBERANGKATAN':
+        return 'Persiapan Keberangkatan';
+      default:
+        return code;
+    }
   }
 }
 

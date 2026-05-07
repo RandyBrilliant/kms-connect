@@ -615,6 +615,61 @@ class ApplicationService:
         return application
 
     @classmethod
+    @transaction.atomic
+    def admin_advance_diterima_step(
+        cls,
+        application: JobApplication,
+        actor: "CustomUser",
+    ) -> JobApplication:
+        """
+        Admin advances a single application to the next DITERIMA sub-step.
+
+        The 9 sub-steps are sequential.  Advancing past the last step
+        (PERSIAPAN_KEBERANGKATAN) is not allowed here; use the normal
+        ``transition(BERANGKAT)`` call from the PERSIAPAN_KEBERANGKATAN tab.
+
+        Raises:
+          TransitionError — actor is not admin, wrong status, or already at
+                            the last step.
+        """
+        actor_role = (
+            "admin"
+            if (actor.role in _ADMIN_ROLES or actor.is_superuser)
+            else "applicant"
+        )
+        if actor_role != "admin":
+            raise TransitionError(
+                "Hanya admin/staff yang dapat memindahkan sub-tahapan Diterima."
+            )
+
+        if application.status != ApplicationStatus.DITERIMA:
+            raise TransitionError(
+                "Lamaran tidak berada di tahap Diterima. "
+                "Perpindahan sub-tahapan hanya berlaku di tahap Diterima."
+            )
+
+        step_order = [code for code, _ in cls.DOCUMENT_COLLECTION_STEP_ORDER]
+        current = application.diterima_current_step or step_order[0]
+
+        if current not in step_order:
+            # Defensive: unknown step → reset to first
+            current = step_order[0]
+
+        current_idx = step_order.index(current)
+
+        if current_idx >= len(step_order) - 1:
+            last_label = cls.DOCUMENT_COLLECTION_STEP_ORDER[-1][1]
+            raise TransitionError(
+                f"Pelamar sudah berada di langkah terakhir ({last_label}). "
+                "Gunakan aksi 'Pindahkan ke Berangkat' untuk melanjutkan."
+            )
+
+        next_step = step_order[current_idx + 1]
+        application.diterima_current_step = next_step
+        application.save(update_fields=["diterima_current_step", "updated_at"])
+        return application
+
+    @classmethod
     def _ensure_document_collection_complete(cls, application: JobApplication) -> None:
         progress = cls.get_document_collection_progress(application)
         if progress["is_complete"]:
@@ -726,6 +781,12 @@ class ApplicationService:
         if new_status == ApplicationStatus.INTERVIEW and interview_cohort is not None:
             application.interview_cohort = interview_cohort
             update_fields.append("interview_cohort")
+
+        # When entering DITERIMA, reset sub-step to the beginning of the
+        # 9-step sequential flow so the admin can advance from step 1.
+        if new_status == ApplicationStatus.DITERIMA:
+            application.diterima_current_step = cls.DOCUMENT_COLLECTION_STEP_ORDER[0][0]
+            update_fields.append("diterima_current_step")
 
         # SELESAI requires placement_end_date for cooldown calculation
         if new_status == ApplicationStatus.SELESAI:
@@ -986,6 +1047,13 @@ class ApplicationService:
 
         old_statuses = {app.pk: app.status for app in apps}
 
+        # When bulk-transitioning into DITERIMA, also reset the sub-step so
+        # the admin begins advancing from MASUK_BERKAS_ASLI.
+        if new_status == ApplicationStatus.DITERIMA:
+            update_kwargs["diterima_current_step"] = (
+                cls.DOCUMENT_COLLECTION_STEP_ORDER[0][0]
+            )
+
         cohort.applications.filter(pk__in=[a.pk for a in apps]).update(**update_kwargs)
 
         ApplicationStatusHistory.objects.bulk_create([
@@ -1003,6 +1071,8 @@ class ApplicationService:
             app.status = new_status
             if new_status == ApplicationStatus.SELESAI:
                 app.placement_end_date = update_kwargs["placement_end_date"]
+            if new_status == ApplicationStatus.DITERIMA:
+                app.diterima_current_step = update_kwargs["diterima_current_step"]
 
         return apps
 

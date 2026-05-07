@@ -1488,21 +1488,14 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
 
     def _filter_queryset_by_diterima_step(self, queryset, step_code: str):
         """
-        Filter queryset for selected DITERIMA sub-step.
-        Current semantics: keep applicants in DITERIMA whose selected step
-        is not yet confirmed by pelamar (actionable queue for admin follow-up).
+        Filter queryset to applicants currently at *step_code* within the
+        DITERIMA sub-step flow.  Uses the indexed DB column for efficiency
+        (O(log n) instead of the previous O(n) Python loop).
         """
-        diterima_apps = queryset.filter(status=ApplicationStatus.DITERIMA)
-        selected_ids: list[int] = []
-        for app in diterima_apps:
-            progress = ApplicationService.get_document_collection_progress(app)
-            item = next(
-                (step for step in progress.get("items", []) if step.get("code") == step_code),
-                None,
-            )
-            if item and not bool(item.get("confirmed")):
-                selected_ids.append(app.id)
-        return queryset.filter(id__in=selected_ids)
+        return queryset.filter(
+            status=ApplicationStatus.DITERIMA,
+            diterima_current_step=step_code,
+        )
 
     def list(self, request, *args, **kwargs):
         try:
@@ -1586,6 +1579,74 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
         )
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response
+
+    @action(detail=False, methods=["post"], url_path="bulk-advance-diterima-step")
+    def bulk_advance_diterima_step(self, request):
+        """
+        POST /api/applications/bulk-advance-diterima-step/
+
+        Advance a list of DITERIMA applicants to the next sub-step in the
+        9-step sequential flow.  All applications must currently be in
+        DITERIMA status; applications already at the last step are skipped
+        and reported in the response.
+
+        Body: { "application_ids": [1, 2, 3] }
+
+        Response:
+          {
+            "advanced": [<id>, ...],      # successfully advanced
+            "skipped": [<id>, ...],       # already at last step
+            "errors": { "<id>": "msg" }   # other per-app errors
+          }
+        """
+        ids = request.data.get("application_ids", [])
+        if not isinstance(ids, list) or not ids:
+            return Response(
+                error_response(
+                    detail="application_ids harus berupa list non-kosong.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Resolve applications the requester is allowed to see.
+        queryset = self.get_queryset().filter(pk__in=ids)
+        app_map: dict[int, JobApplication] = {app.pk: app for app in queryset}
+
+        advanced: list[int] = []
+        skipped: list[int] = []
+        errors: dict[str, str] = {}
+
+        for app_id in ids:
+            try:
+                app_id = int(app_id)
+            except (TypeError, ValueError):
+                errors[str(app_id)] = "ID tidak valid."
+                continue
+
+            app = app_map.get(app_id)
+            if app is None:
+                errors[str(app_id)] = "Lamaran tidak ditemukan atau tidak dapat diakses."
+                continue
+
+            try:
+                ApplicationService.admin_advance_diterima_step(app, request.user)
+                advanced.append(app_id)
+            except TransitionError as exc:
+                # Already at last step is expected; surface cleanly.
+                skipped.append(app_id)
+                errors[str(app_id)] = str(exc)
+
+        return Response(
+            success_response(
+                data={"advanced": advanced, "skipped": skipped, "errors": errors},
+                message=(
+                    f"{len(advanced)} pelamar berhasil dipindahkan ke sub-tahapan berikutnya."
+                    + (f" {len(skipped)} dilewati." if skipped else "")
+                ),
+            ),
+            status=status.HTTP_200_OK,
+        )
 
     @action(detail=True, methods=["patch"], url_path="transition")
     def transition(self, request, pk=None):
