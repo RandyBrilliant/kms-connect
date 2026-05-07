@@ -1640,7 +1640,7 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
         return Response(
             success_response(
                 data={"advanced": advanced, "skipped": skipped, "errors": errors},
-                message=(
+                detail=(
                     f"{len(advanced)} pelamar berhasil dipindahkan ke sub-tahapan berikutnya."
                     + (f" {len(skipped)} dilewati." if skipped else "")
                 ),
