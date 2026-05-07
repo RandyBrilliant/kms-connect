@@ -68,13 +68,6 @@ import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -867,41 +860,39 @@ function ApplicationsTab({
               </span>
             ) : null}
           </p>
-          <div className="flex items-center gap-2 flex-wrap">
-            {showDiterimaStepFilter && (
-              <Select
-                value={selectedDiterimaStep}
-                onValueChange={(v) => {
-                  setSelectedDiterimaStep(v as "ALL" | DocumentCollectionStepCode)
-                  setPage(1)
-                }}
-              >
-                <SelectTrigger className="h-8 w-[270px] cursor-pointer text-xs">
-                  <SelectValue placeholder="Filter sub-tahapan Diterima (untuk export)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">Semua Tahapan Diterima</SelectItem>
-                  {diterimaStepOptions.map(([code, label]) => (
-                    <SelectItem key={code} value={code}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="cursor-pointer"
-              disabled={isExporting || totalCount === 0}
-              onClick={() => void handleExportExcel()}
-            >
-              <IconFileSpreadsheet className="mr-2 size-4" />
-              {isExporting ? "Mengunduh..." : "Export Excel"}
-            </Button>
-          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="cursor-pointer"
+            disabled={isExporting || totalCount === 0}
+            onClick={() => void handleExportExcel()}
+          >
+            <IconFileSpreadsheet className="mr-2 size-4" />
+            {isExporting ? "Mengunduh..." : "Export Excel"}
+          </Button>
         </div>
+
+        {showDiterimaStepFilter && (
+          <div className="rounded-lg border bg-muted/20 p-2">
+            <Tabs
+              value={selectedDiterimaStep}
+              onValueChange={(v) => {
+                setSelectedDiterimaStep(v as "ALL" | DocumentCollectionStepCode)
+                setPage(1)
+              }}
+            >
+              <TabsList className="h-auto w-full justify-start overflow-x-auto flex-nowrap">
+                <TabsTrigger value="ALL">Semua Tahapan</TabsTrigger>
+                {diterimaStepOptions.map(([code, label]) => (
+                  <TabsTrigger key={code} value={code}>
+                    {label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+          </div>
+        )}
 
         {enableAcceptedAnnouncement && (
           <Card>
