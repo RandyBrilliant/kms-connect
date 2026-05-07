@@ -557,6 +557,7 @@ class ApplicationService:
           - Only the owner applicant may confirm.
           - Application must currently be at DITERIMA status.
           - step_code must be a valid DOCUMENT_COLLECTION_STEP_ORDER key.
+          - step_code must match the current active DITERIMA sub-step.
           - The underlying data for the step must already be satisfied (admin has
             filled in the required fields / uploaded required documents) before
             the pelamar can confirm it.
@@ -584,6 +585,12 @@ class ApplicationService:
             raise ValueError(
                 f"Kode langkah '{step_code}' tidak valid. "
                 f"Pilihan: {', '.join(c for c, _ in cls.DOCUMENT_COLLECTION_STEP_ORDER)}."
+            )
+        current_step = application.diterima_current_step or cls.DOCUMENT_COLLECTION_STEP_ORDER[0][0]
+        if step_code != current_step:
+            raise TransitionError(
+                "Langkah ini belum aktif untuk Anda. "
+                "Konfirmasi hanya bisa dilakukan pada sub-tahapan yang sedang berjalan."
             )
 
         # Check whether underlying data is ready for this step
@@ -662,6 +669,19 @@ class ApplicationService:
             raise TransitionError(
                 f"Pelamar sudah berada di langkah terakhir ({last_label}). "
                 "Gunakan aksi 'Pindahkan ke Berangkat' untuk melanjutkan."
+            )
+
+        # Pelamar must explicitly confirm the active step before admin can move on.
+        step_confirmations = (
+            dict(application.diterima_step_confirmations)
+            if isinstance(application.diterima_step_confirmations, dict)
+            else {}
+        )
+        if not step_confirmations.get(current):
+            current_label = dict(cls.DOCUMENT_COLLECTION_STEP_ORDER).get(current, current)
+            raise TransitionError(
+                f"Pelamar belum menandai '{current_label}' sebagai selesai. "
+                "Minta pelamar konfirmasi dahulu sebelum lanjut ke langkah berikutnya."
             )
 
         next_step = step_order[current_idx + 1]

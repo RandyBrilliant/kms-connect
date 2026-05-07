@@ -743,7 +743,7 @@ function ApplicationsTab({
   )
   const filteredApps = sortedApps
   const showCohortCol = status !== "DITOLAK"
-  const showDocCol = status === "DITERIMA"
+  const showDocCol = status === "DITERIMA" && selectedDiterimaStep !== "ALL"
   const showDiterimaStepFilter = status === "DITERIMA"
   const diterimaStepOptions = useMemo(
     () =>

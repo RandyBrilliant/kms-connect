@@ -117,6 +117,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   bool? _hasPassport;
   DateTime? _pickedPassportIssueDate;
   DateTime? _pickedPassportExpiryDate;
+  final Set<String> _missingRequiredFields = <String>{};
 
   @override
   void initState() {
@@ -448,8 +449,114 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     if (picked != null && mounted) onPicked(picked);
   }
 
+  List<String> _collectMissingRequiredFields() {
+    final missing = <String>[];
+
+    void requireText(TextEditingController c, String label) {
+      if (c.text.trim().isEmpty) missing.add(label);
+    }
+
+    void requireValue(Object? v, String label) {
+      if (v == null) missing.add(label);
+    }
+
+    // Data pribadi
+    requireText(_fullName, 'Nama Lengkap');
+    requireText(_nik, 'NIK');
+    requireText(_birthPlaceText, 'Tempat Lahir');
+    requireValue(_pickedDate, 'Tanggal Lahir');
+    requireValue(_gender, 'Jenis Kelamin');
+    requireText(_phone, 'Nomor Telepon');
+    requireValue(_religion, 'Agama');
+    requireValue(_maritalStatus, 'Status Perkawinan');
+
+    // Pendidikan & fisik
+    requireValue(_educationLevel, 'Pendidikan Terakhir');
+    requireText(_educationMajor, 'Jurusan');
+    requireText(_heightCm, 'Tinggi (cm)');
+    requireText(_weightKg, 'Berat (kg)');
+    requireValue(_wearsGlasses, 'Memakai Kacamata');
+    requireValue(_writingHand, 'Menulis dengan Tangan');
+    requireText(_shoeSize, 'Ukuran Sepatu');
+    requireValue(_shirtSize, 'Ukuran Baju');
+
+    // Alamat KTP
+    requireText(_address, 'Alamat Lengkap');
+    requireText(_postalCode, 'Kode Pos');
+    requireValue(_province, 'Provinsi');
+    requireValue(_kabupaten, 'Kabupaten / Kota');
+    requireValue(_kecamatan, 'Kecamatan');
+    requireValue(_kelurahan, 'Kelurahan / Desa');
+
+    // Data dokumen
+    requireText(_familyCardNumber, 'Nomor Kartu Keluarga');
+    requireText(_diplomaNumber, 'Nomor Ijazah');
+    requireText(_bpjsNumber, 'Nomor BPJS / KIS');
+
+    // Data paspor
+    requireValue(_hasPassport, 'Memiliki Paspor');
+    if (_hasPassport == true) {
+      requireText(_passportNumber, 'Nomor Paspor');
+      requireText(_passportIssuePlace, 'Tempat Terbit Paspor');
+      requireValue(_pickedPassportIssueDate, 'Tanggal Terbit Paspor');
+      requireValue(_pickedPassportExpiryDate, 'Tanggal Berakhir Paspor');
+    }
+
+    // Data keluarga
+    requireText(_siblingCount, 'Jumlah Saudara');
+    requireText(_birthOrder, 'Anak ke-');
+    if (!_fatherAlmarhum) {
+      requireText(_fatherName, 'Nama Ayah');
+      requireValue(_pickedFatherBirthDate, 'Tanggal Lahir Ayah');
+      requireText(_fatherOccupation, 'Pekerjaan Ayah');
+      requireText(_fatherPhone, 'No. Telepon Ayah');
+    }
+    if (!_motherAlmarhum) {
+      requireText(_motherName, 'Nama Ibu');
+      requireValue(_pickedMotherBirthDate, 'Tanggal Lahir Ibu');
+      requireText(_motherOccupation, 'Pekerjaan Ibu');
+      requireText(_motherPhone, 'No. Telepon Ibu');
+    }
+    requireText(_familyAddress, 'Alamat Orang Tua / Keluarga');
+    requireText(_familyPostalCode, 'Kode Pos Orang Tua / Keluarga');
+    requireValue(_familyProvince, 'Provinsi Orang Tua / Keluarga');
+    requireValue(_familyKabupaten, 'Kab/Kota Orang Tua / Keluarga');
+    requireValue(_familyKecamatan, 'Kecamatan Orang Tua / Keluarga');
+    requireValue(_familyKelurahan, 'Kelurahan Orang Tua / Keluarga');
+
+    // Data pasangan: optional (client request).
+
+    // Ahli waris
+    requireText(_heirName, 'Nama Ahli Waris');
+    requireValue(_heirRelationship, 'Hubungan Ahli Waris');
+    requireText(_heirContactPhone, 'No. Telepon Ahli Waris');
+
+    return missing;
+  }
+
+  String? _requiredErrorText(String fieldLabel) {
+    return _missingRequiredFields.contains(fieldLabel) ? 'Wajib diisi' : null;
+  }
+
   Future<void> _handleSave() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
+    final missing = _collectMissingRequiredFields();
+    if (missing.isNotEmpty) {
+      setState(() {
+        _missingRequiredFields
+          ..clear()
+          ..addAll(missing);
+      });
+      CustomToast.show(
+        context,
+        message: 'Lengkapi field wajib: ${missing.first}',
+        type: ToastType.error,
+      );
+      return;
+    }
+    if (_missingRequiredFields.isNotEmpty) {
+      setState(_missingRequiredFields.clear);
+    }
     final data = <String, dynamic>{
       if (_fullName.text.trim().isNotEmpty) 'full_name': _fullName.text.trim(),
       if (_nik.text.trim().isNotEmpty) 'nik': _nik.text.trim(),
@@ -832,18 +939,16 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     selected: _gender,
                                     onChanged: (g) =>
                                         setState(() => _gender = g),
+                                    errorText: _requiredErrorText(
+                                      'Jenis Kelamin',
+                                    ),
                                   ),
                                   const SizedBox(height: 14),
                                   PhoneInputField(
                                     controller: _phone,
                                     label: 'Nomor Telepon',
                                     hint: '812xxxxxxxx',
-                                    validator: (v) {
-                                      if (v == null || v.trim().isEmpty) {
-                                        return null;
-                                      }
-                                      return validatePhoneNumber(v);
-                                    },
+                                    validator: validatePhoneNumber,
                                   ),
                                   const SizedBox(height: 14),
                                   _DropdownField<String>(
@@ -861,6 +966,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     ],
                                     onChanged: (v) =>
                                         setState(() => _religion = v),
+                                    errorText: _requiredErrorText('Agama'),
                                   ),
                                   const SizedBox(height: 14),
                                   _DropdownField<String>(
@@ -876,6 +982,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     ],
                                     onChanged: (v) =>
                                         setState(() => _maritalStatus = v),
+                                    errorText: _requiredErrorText(
+                                      'Status Perkawinan',
+                                    ),
                                   ),
                                 ],
                               ),
@@ -902,6 +1011,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     ],
                                     onChanged: (v) =>
                                         setState(() => _educationLevel = v),
+                                    errorText: _requiredErrorText(
+                                      'Pendidikan Terakhir',
+                                    ),
                                   ),
                                   const SizedBox(height: 14),
                                   M3TextField(
@@ -956,6 +1068,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     ],
                                     onChanged: (v) =>
                                         setState(() => _wearsGlasses = v),
+                                    errorText: _requiredErrorText(
+                                      'Memakai Kacamata',
+                                    ),
                                   ),
                                   const SizedBox(height: 14),
                                   _DropdownField<String>(
@@ -969,6 +1084,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     ],
                                     onChanged: (v) =>
                                         setState(() => _writingHand = v),
+                                    errorText: _requiredErrorText(
+                                      'Menulis dengan Tangan',
+                                    ),
                                   ),
                                   const SizedBox(height: 14),
                                   Row(
@@ -1003,6 +1121,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                           ],
                                           onChanged: (v) =>
                                               setState(() => _shirtSize = v),
+                                          errorText: _requiredErrorText(
+                                            'Ukuran Baju',
+                                          ),
                                         ),
                                       ),
                                     ],
@@ -1044,6 +1165,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     hint: 'Pilih provinsi',
                                     prefixIcon: Icons.map_outlined,
                                     selected: _province,
+                                    errorText: _requiredErrorText('Provinsi'),
                                     onTap: () async {
                                       final items =
                                           await readRegionListWithRetry(
@@ -1081,6 +1203,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     prefixIcon: Icons.location_city_outlined,
                                     selected: _kabupaten,
                                     enabled: _province != null,
+                                    errorText: _requiredErrorText(
+                                      'Kabupaten / Kota',
+                                    ),
                                     onTap: () async {
                                       if (_province == null) return;
                                       final pid = _province!.id;
@@ -1121,6 +1246,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     prefixIcon: Icons.place_outlined,
                                     selected: _kecamatan,
                                     enabled: _kabupaten != null,
+                                    errorText: _requiredErrorText('Kecamatan'),
                                     onTap: () async {
                                       if (_kabupaten == null) return;
                                       final rid = _kabupaten!.id;
@@ -1160,6 +1286,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     prefixIcon: Icons.villa_outlined,
                                     selected: _kelurahan,
                                     enabled: _kecamatan != null,
+                                    errorText: _requiredErrorText(
+                                      'Kelurahan / Desa',
+                                    ),
                                     onTap: () async {
                                       if (_kecamatan == null) return;
                                       final did = _kecamatan!.id;
@@ -1241,6 +1370,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     ],
                                     onChanged: (v) =>
                                         setState(() => _hasPassport = v),
+                                    errorText: _requiredErrorText(
+                                      'Memiliki Paspor',
+                                    ),
                                   ),
                                   if (_hasPassport == true) ...[
                                     const SizedBox(height: 14),
@@ -1402,12 +1534,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     controller: _fatherPhone,
                                     label: 'No. Telepon Ayah',
                                     hint: '812xxxxxxxx',
-                                    validator: (v) {
-                                      if (v == null || v.trim().isEmpty) {
-                                        return null;
-                                      }
-                                      return validatePhoneNumber(v);
-                                    },
+                                    validator: (v) => _fatherAlmarhum
+                                        ? null
+                                        : validatePhoneNumber(v),
                                   ),
                                   const SizedBox(height: 18),
                                   _SubLabel('Ibu'),
@@ -1464,12 +1593,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     controller: _motherPhone,
                                     label: 'No. Telepon Ibu',
                                     hint: '812xxxxxxxx',
-                                    validator: (v) {
-                                      if (v == null || v.trim().isEmpty) {
-                                        return null;
-                                      }
-                                      return validatePhoneNumber(v);
-                                    },
+                                    validator: (v) => _motherAlmarhum
+                                        ? null
+                                        : validatePhoneNumber(v),
                                   ),
                                   const SizedBox(height: 14),
                                   M3TextField(
@@ -1499,6 +1625,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     hint: 'Pilih provinsi',
                                     prefixIcon: Icons.map_outlined,
                                     selected: _familyProvince,
+                                    errorText: _requiredErrorText(
+                                      'Provinsi Orang Tua / Keluarga',
+                                    ),
                                     onTap: () async {
                                       final items =
                                           await readRegionListWithRetry(
@@ -1535,6 +1664,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     prefixIcon: Icons.location_city_outlined,
                                     selected: _familyKabupaten,
                                     enabled: _familyProvince != null,
+                                    errorText: _requiredErrorText(
+                                      'Kab/Kota Orang Tua / Keluarga',
+                                    ),
                                     onTap: () async {
                                       if (_familyProvince == null) return;
                                       final pid = _familyProvince!.id;
@@ -1574,6 +1706,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     prefixIcon: Icons.place_outlined,
                                     selected: _familyKecamatan,
                                     enabled: _familyKabupaten != null,
+                                    errorText: _requiredErrorText(
+                                      'Kecamatan Orang Tua / Keluarga',
+                                    ),
                                     onTap: () async {
                                       if (_familyKabupaten == null) return;
                                       final rid = _familyKabupaten!.id;
@@ -1612,6 +1747,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     prefixIcon: Icons.villa_outlined,
                                     selected: _familyKelurahan,
                                     enabled: _familyKecamatan != null,
+                                    errorText: _requiredErrorText(
+                                      'Kelurahan Orang Tua / Keluarga',
+                                    ),
                                     onTap: () async {
                                       if (_familyKecamatan == null) return;
                                       final did = _familyKecamatan!.id;
@@ -1721,18 +1859,16 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     selected: _heirRelationship,
                                     onChanged: (v) =>
                                         setState(() => _heirRelationship = v),
+                                    errorText: _requiredErrorText(
+                                      'Hubungan Ahli Waris',
+                                    ),
                                   ),
                                   const SizedBox(height: 14),
                                   PhoneInputField(
                                     controller: _heirContactPhone,
                                     label: 'No. Telepon Ahli Waris',
                                     hint: '812xxxxxxxx',
-                                    validator: (v) {
-                                      if (v == null || v.trim().isEmpty) {
-                                        return null;
-                                      }
-                                      return validatePhoneNumber(v);
-                                    },
+                                    validator: validatePhoneNumber,
                                   ),
                                 ],
                               ),
@@ -1980,6 +2116,7 @@ class _RegionPickerField extends StatelessWidget {
     required this.onTap,
     this.selected,
     this.enabled = true,
+    this.errorText,
   });
 
   final String label;
@@ -1988,21 +2125,39 @@ class _RegionPickerField extends StatelessWidget {
   final Region? selected;
   final VoidCallback onTap;
   final bool enabled;
+  final String? errorText;
 
   @override
   Widget build(BuildContext context) {
-    return Opacity(
-      opacity: enabled ? 1 : 0.6,
-      child: IgnorePointer(
-        ignoring: !enabled,
-        child: ProfessionalDropdownField(
-          valueText: selected?.name ?? '',
-          label: label,
-          hint: hint,
-          prefixIcon: prefixIcon,
-          onTap: onTap,
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Opacity(
+          opacity: enabled ? 1 : 0.6,
+          child: IgnorePointer(
+            ignoring: !enabled,
+            child: ProfessionalDropdownField(
+              valueText: selected?.name ?? '',
+              label: label,
+              hint: hint,
+              prefixIcon: prefixIcon,
+              onTap: onTap,
+            ),
+          ),
         ),
-      ),
+        if (errorText != null) ...[
+          const SizedBox(height: 6),
+          Padding(
+            padding: const EdgeInsets.only(left: 12),
+            child: Text(
+              errorText!,
+              style: tt.bodySmall?.copyWith(color: cs.error),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -2293,6 +2448,7 @@ class _DropdownField<T> extends StatelessWidget {
     required this.hint,
     required this.items,
     required this.onChanged,
+    this.errorText,
     super.key,
   });
 
@@ -2304,30 +2460,48 @@ class _DropdownField<T> extends StatelessWidget {
   /// Each item is `(value, displayLabel)`.
   final List<(T, String)> items;
   final ValueChanged<T?> onChanged;
+  final String? errorText;
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
     final selectedLabel = _dropdownLabelForValue(value, items);
-    return ProfessionalDropdownField(
-      valueText: selectedLabel ?? '',
-      label: label,
-      hint: hint,
-      prefixIcon: prefixIcon,
-      onTap: () async {
-        final result = await showModalBottomSheet<_OptionPick<T>?>(
-          context: context,
-          isScrollControlled: true,
-          backgroundColor: Colors.transparent,
-          builder: (_) => _SimpleOptionSheet<T>(
-            title: label,
-            hint: hint,
-            value: value,
-            items: items,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ProfessionalDropdownField(
+          valueText: selectedLabel ?? '',
+          label: label,
+          hint: hint,
+          prefixIcon: prefixIcon,
+          onTap: () async {
+            final result = await showModalBottomSheet<_OptionPick<T>?>(
+              context: context,
+              isScrollControlled: true,
+              backgroundColor: Colors.transparent,
+              builder: (_) => _SimpleOptionSheet<T>(
+                title: label,
+                hint: hint,
+                value: value,
+                items: items,
+              ),
+            );
+            if (result == null) return;
+            onChanged(result.value);
+          },
+        ),
+        if (errorText != null) ...[
+          const SizedBox(height: 6),
+          Padding(
+            padding: const EdgeInsets.only(left: 12),
+            child: Text(
+              errorText!,
+              style: tt.bodySmall?.copyWith(color: cs.error),
+            ),
           ),
-        );
-        if (result == null) return;
-        onChanged(result.value);
-      },
+        ],
+      ],
     );
   }
 }
@@ -2551,9 +2725,14 @@ class _SimpleOptionSheetState<T> extends State<_SimpleOptionSheet<T>> {
 
 /// M3 SegmentedButton gender picker.
 class _GenderSelector extends StatelessWidget {
-  const _GenderSelector({required this.selected, required this.onChanged});
+  const _GenderSelector({
+    required this.selected,
+    required this.onChanged,
+    this.errorText,
+  });
   final String? selected;
   final ValueChanged<String?> onChanged;
+  final String? errorText;
 
   @override
   Widget build(BuildContext context) {
@@ -2592,6 +2771,16 @@ class _GenderSelector extends StatelessWidget {
             ),
           ),
         ),
+        if (errorText != null) ...[
+          const SizedBox(height: 6),
+          Padding(
+            padding: const EdgeInsets.only(left: 12),
+            child: Text(
+              errorText!,
+              style: tt.bodySmall?.copyWith(color: cs.error),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -2602,10 +2791,12 @@ class _HeirRelationshipSelector extends StatelessWidget {
   const _HeirRelationshipSelector({
     required this.selected,
     required this.onChanged,
+    this.errorText,
   });
 
   final String? selected;
   final ValueChanged<String?> onChanged;
+  final String? errorText;
 
   static const _options = <(String, String)>[
     ('SUAMI', 'Suami'),
@@ -2629,6 +2820,7 @@ class _HeirRelationshipSelector extends StatelessWidget {
       hint: 'Pilih hubungan',
       items: _options,
       onChanged: onChanged,
+      errorText: errorText,
     );
   }
 }

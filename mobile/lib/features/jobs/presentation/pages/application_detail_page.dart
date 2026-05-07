@@ -102,7 +102,7 @@ class _ApplicationDetailPageState extends ConsumerState<ApplicationDetailPage>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Langkah berhasil dikonfirmasi!'),
+            content: Text('Langkah berhasil ditandai selesai!'),
             backgroundColor: Color(0xFF28A745),
           ),
         );
@@ -754,12 +754,12 @@ class _DocumentCollectionSection extends StatelessWidget {
         ...progress.items.map((item) {
           final isConfirming = confirmingStepCode == item.code;
           final isCurrentStep = currentStepCode == item.code;
-          // Can confirm only when data is ready and not yet confirmed.
-          final canConfirm =
-              item.done &&
+          // Show action only on active step; enable it when data is ready.
+          final isActionStep =
               !item.confirmed &&
               onConfirmStep != null &&
               (currentStepCode == null || isCurrentStep);
+          final canConfirm = isActionStep && item.done;
 
           IconData leadingIcon;
           Color leadingColor;
@@ -833,17 +833,22 @@ class _DocumentCollectionSection extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (canConfirm || isConfirming) ...[
+                if (isActionStep || isConfirming) ...[
                   const SizedBox(width: 8),
                   FilledButton(
                     onPressed: isConfirming
                         ? null
-                        : () => onConfirmStep!(item.code),
+                        : (canConfirm ? () => onConfirmStep!(item.code) : null),
                     style: FilledButton.styleFrom(
                       minimumSize: const Size(0, 30),
-                      backgroundColor: const Color(0xFF17A2B8),
+                      backgroundColor: canConfirm
+                          ? const Color(0xFF17A2B8)
+                          : AppColors.textMedium,
                       disabledBackgroundColor:
-                          const Color(0xFF17A2B8).withValues(alpha: 0.5),
+                          (canConfirm
+                                  ? const Color(0xFF17A2B8)
+                                  : AppColors.textMedium)
+                              .withValues(alpha: 0.5),
                       padding: const EdgeInsets.symmetric(horizontal: 10),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -859,7 +864,7 @@ class _DocumentCollectionSection extends StatelessWidget {
                             ),
                           )
                         : Text(
-                            'Konfirmasi',
+                            canConfirm ? 'Tandai Selesai' : 'Belum Siap',
                             style: GoogleFonts.plusJakartaSans(
                               fontSize: 10,
                               fontWeight: FontWeight.w700,
