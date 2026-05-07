@@ -876,6 +876,26 @@ function ApplicationsTab({
     }
   }
 
+  const handleRejectFromDiterimaSubStep = async () => {
+    const ids = Array.from(selectedAdvanceAppIds)
+    if (!ids.length) return
+    setIsAdvancing(true)
+    try {
+      await bulkTransitionApplications({ application_ids: ids, status: "DITOLAK", note: "" })
+      toast.success(`${ids.length} pelamar dipindahkan ke tahap Ditolak.`)
+      await queryClient.invalidateQueries({
+        queryKey: ["applications", { job: jobId, status }],
+        exact: false,
+      })
+      setSelectedAdvanceAppIds(new Set())
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      toast.error("Gagal memindahkan pelamar ke Ditolak", detail ?? "Coba lagi nanti.")
+    } finally {
+      setIsAdvancing(false)
+    }
+  }
+
   const sendAnnouncementMutation = useMutation({
     mutationFn: async () => {
       const created = await createBroadcast({
@@ -998,6 +1018,16 @@ function ApplicationsTab({
                 : "Pilih pelamar untuk dipindahkan"}
             </span>
             <div className="ml-auto flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                disabled={selectedAdvanceAppIds.size === 0 || isAdvancing}
+                onClick={() => void handleRejectFromDiterimaSubStep()}
+                className="cursor-pointer"
+              >
+                {isAdvancing ? "Memproses..." : "Pindahkan ke Ditolak"}
+              </Button>
               {isLastDiterimaStep ? (
                 <Button
                   type="button"
