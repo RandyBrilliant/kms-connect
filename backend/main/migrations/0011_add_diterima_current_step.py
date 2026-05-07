@@ -70,12 +70,12 @@ def set_diterima_current_step(apps, schema_editor):
     # Only update rows that are in DITERIMA status.
     # "DITERIMA" is the string value stored in the DB column.
     diterima_apps = JobApplication.objects.filter(status="DITERIMA").select_related(
-        "applicant_user__applicantprofile"
+        "applicant"
     )
     to_update = []
     for app in diterima_apps:
         try:
-            profile = app.applicant_user.applicantprofile
+            profile = app.applicant
             inferred = _infer_current_step(profile)
         except Exception:
             # If profile is missing, default to first step – safest.
