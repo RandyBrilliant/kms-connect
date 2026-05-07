@@ -963,7 +963,12 @@ function ApplicationsTab({
         </div>
 
         {showDiterimaStepFilter && (
-          <div className="rounded-lg border bg-muted/20 p-2">
+          <div className="rounded-lg border bg-muted/20 p-2 space-y-2">
+            <p className="px-1 text-xs text-muted-foreground">
+              Untuk memindahkan pelamar ke sub-tahapan berikutnya, pilih salah satu tab sub-tahapan
+              (bukan <span className="font-medium">Semua Tahapan</span>), lalu centang pelamar di
+              tabel dan klik tombol <span className="font-medium">Pindahkan</span>.
+            </p>
             <Tabs
               value={selectedDiterimaStep}
               onValueChange={(v) => {
@@ -1132,7 +1137,7 @@ function ApplicationsTab({
                   {showCohortCol && <TableHead>Sesi Interview</TableHead>}
                   {showDocCol && (
                     <TableHead className="min-w-[11rem]">
-                      {onDiterimaSubStep ? "Konfirmasi Pelamar" : "Pengumpulan Dokumen"}
+                      Konfirmasi Pelamar
                     </TableHead>
                   )}
                   <TableHead>Tanggal Lamar</TableHead>
