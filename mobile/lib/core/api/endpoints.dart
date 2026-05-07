@@ -67,6 +67,8 @@ class ApiEndpoints {
       '$baseUrl/applicants/me/applications/$id/';
   static String confirmAttendance(int id) =>
       '$baseUrl/applicants/me/applications/$id/confirm/';
+  static String confirmDocumentStep(int id) =>
+      '$baseUrl/applicants/me/applications/$id/confirm-step/';
   static String completeApplication(int id) =>
       '$baseUrl/applicants/me/applications/$id/complete/';
   static String applicationAnnouncements(int id) =>

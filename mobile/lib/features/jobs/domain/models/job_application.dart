@@ -6,11 +6,17 @@ class DocumentCollectionProgressItem {
   final String code;
   final String label;
   final bool done;
+  /// Whether the pelamar has explicitly confirmed this step.
+  final bool confirmed;
+  /// Timestamp when the pelamar confirmed this step, or null if not yet confirmed.
+  final DateTime? confirmedAt;
 
   const DocumentCollectionProgressItem({
     required this.code,
     required this.label,
     required this.done,
+    this.confirmed = false,
+    this.confirmedAt,
   });
 
   factory DocumentCollectionProgressItem.fromJson(Map<String, dynamic> json) {
@@ -18,6 +24,8 @@ class DocumentCollectionProgressItem {
       code: json['code']?.toString() ?? '',
       label: json['label']?.toString() ?? '',
       done: json['done'] == true,
+      confirmed: json['confirmed'] == true,
+      confirmedAt: ApiDateTime.parse(json['confirmed_at']),
     );
   }
 }
@@ -101,6 +109,10 @@ class JobApplication {
   final List<String> reachedStages;
   final DocumentCollectionProgress? documentCollectionProgress;
   final bool pengumpulanDokumenComplete;
+  /// Per-step confirmation timestamps for the 9 document-collection steps
+  /// within the DITERIMA stage. Keys are step codes (e.g. "MEDICAL").
+  /// Value is the DateTime when confirmed, or null if not yet confirmed.
+  final Map<String, DateTime?> diterimastepConfirmations;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -139,6 +151,7 @@ class JobApplication {
     this.reachedStages = const [],
     this.documentCollectionProgress,
     this.pengumpulanDokumenComplete = false,
+    this.diterimastepConfirmations = const {},
     required this.createdAt,
     required this.updatedAt,
   });
@@ -192,6 +205,14 @@ class JobApplication {
         ? DocumentCollectionProgress.fromJson(dcpRaw)
         : null;
 
+    final stepConfirmRaw = json['diterima_step_confirmations'];
+    final diterimastepConfirmations = <String, DateTime?>{};
+    if (stepConfirmRaw is Map<String, dynamic>) {
+      for (final entry in stepConfirmRaw.entries) {
+        diterimastepConfirmations[entry.key] = ApiDateTime.parse(entry.value);
+      }
+    }
+
     return JobApplication(
       id: _safeInt(json['id']),
       applicant: _safeInt(json['applicant']),
@@ -230,6 +251,7 @@ class JobApplication {
       reachedStages: reachedStages,
       documentCollectionProgress: dcp,
       pengumpulanDokumenComplete: json['pengumpulan_dokumen_complete'] == true,
+      diterimastepConfirmations: diterimastepConfirmations,
       createdAt: ApiDateTime.parseRequired(
         json['created_at'],
         fieldName: 'created_at',

@@ -52,6 +52,8 @@ class _ApplicationDetailPageState extends ConsumerState<ApplicationDetailPage>
 
   bool _isConfirming = false;
   bool _isCompleting = false;
+  // Tracks which document step is currently being confirmed (prevents double-tap).
+  String? _confirmingStepCode;
 
   @override
   void dispose() {
@@ -87,6 +89,35 @@ class _ApplicationDetailPageState extends ConsumerState<ApplicationDetailPage>
       }
     } finally {
       if (mounted) setState(() => _isConfirming = false);
+    }
+  }
+
+  Future<void> _confirmDocumentStep({required String stepCode}) async {
+    if (_confirmingStepCode != null) return;
+    setState(() => _confirmingStepCode = stepCode);
+    try {
+      final repo = ref.read(jobRepositoryProvider);
+      await repo.confirmDocumentStep(widget.applicationId, stepCode: stepCode);
+      ref.invalidate(applicationDetailProvider(widget.applicationId));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Langkah berhasil dikonfirmasi!'),
+            backgroundColor: Color(0xFF28A745),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal mengkonfirmasi langkah: $e'),
+            backgroundColor: const Color(0xFFDC3545),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _confirmingStepCode = null);
     }
   }
 
@@ -245,6 +276,9 @@ class _ApplicationDetailPageState extends ConsumerState<ApplicationDetailPage>
                         isConfirming: _isConfirming,
                         onConfirmCompletedPlacement: _confirmCompletedPlacement,
                         isCompletingPlacement: _isCompleting,
+                        onConfirmDocumentStep: (stepCode) =>
+                            _confirmDocumentStep(stepCode: stepCode),
+                        confirmingStepCode: _confirmingStepCode,
                       ),
                       const SizedBox(height: 16),
                       // Batch + interview cohort broadcasts (merged on the server).
@@ -377,6 +411,8 @@ class _InfoCard extends StatelessWidget {
     this.isConfirming = false,
     this.onConfirmCompletedPlacement,
     this.isCompletingPlacement = false,
+    this.onConfirmDocumentStep,
+    this.confirmingStepCode,
   });
 
   final JobApplication application;
@@ -384,6 +420,10 @@ class _InfoCard extends StatelessWidget {
   final bool isConfirming;
   final VoidCallback? onConfirmCompletedPlacement;
   final bool isCompletingPlacement;
+  /// Called when pelamar taps "Konfirmasi" for a document step. Arg is step code.
+  final ValueChanged<String>? onConfirmDocumentStep;
+  /// The step code currently being confirmed (shows loading indicator).
+  final String? confirmingStepCode;
 
   @override
   Widget build(BuildContext context) {
@@ -556,6 +596,8 @@ class _InfoCard extends StatelessWidget {
               const SizedBox(height: 14),
               _DocumentCollectionSection(
                 progress: application.documentCollectionProgress!,
+                onConfirmStep: onConfirmDocumentStep,
+                confirmingStepCode: confirmingStepCode,
               ),
             ],
             if (application.status == 'BERANGKAT' &&
@@ -618,26 +660,63 @@ class _InfoCard extends StatelessWidget {
 }
 
 class _DocumentCollectionSection extends StatelessWidget {
-  const _DocumentCollectionSection({required this.progress});
+  const _DocumentCollectionSection({
+    required this.progress,
+    this.onConfirmStep,
+    this.confirmingStepCode,
+  });
 
   final DocumentCollectionProgress progress;
+  /// Called when pelamar taps "Konfirmasi" on a step. Arg is step code.
+  final ValueChanged<String>? onConfirmStep;
+  /// Step code currently being confirmed (shows a loading spinner).
+  final String? confirmingStepCode;
 
   @override
   Widget build(BuildContext context) {
+    final fmtDt = DateFormat('dd MMM yyyy, HH:mm', 'id_ID');
+    final confirmedCount = progress.items.where((i) => i.confirmed).length;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'Pengumpulan Dokumen',
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            color: AppColors.textDark,
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Pengumpulan Dokumen',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textDark,
+                ),
+              ),
+            ),
+            // Confirmed badge
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: confirmedCount == progress.totalCount
+                    ? const Color(0xFF28A745).withValues(alpha: 0.12)
+                    : AppColors.divider.withValues(alpha: 0.25),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                '$confirmedCount/${progress.totalCount} dikonfirmasi',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: confirmedCount == progress.totalCount
+                      ? const Color(0xFF28A745)
+                      : AppColors.textMedium,
+                ),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 4),
         Text(
-          '${progress.doneCount}/${progress.totalCount} selesai',
+          '${progress.doneCount}/${progress.totalCount} data siap',
           style: GoogleFonts.plusJakartaSans(
             fontSize: 11,
             fontWeight: FontWeight.w600,
@@ -647,43 +726,118 @@ class _DocumentCollectionSection extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        ...progress.items.map(
-          (item) => Container(
+        ...progress.items.map((item) {
+          final isConfirming = confirmingStepCode == item.code;
+          // Can confirm only when data is ready and not yet confirmed.
+          final canConfirm =
+              item.done && !item.confirmed && onConfirmStep != null;
+
+          IconData leadingIcon;
+          Color leadingColor;
+          if (item.confirmed) {
+            leadingIcon = Icons.verified_rounded;
+            leadingColor = const Color(0xFF28A745);
+          } else if (item.done) {
+            leadingIcon = Icons.check_circle_outline_rounded;
+            leadingColor = const Color(0xFF17A2B8);
+          } else {
+            leadingIcon = Icons.radio_button_unchecked_rounded;
+            leadingColor = AppColors.textMedium;
+          }
+
+          String subtitle;
+          if (item.confirmed && item.confirmedAt != null) {
+            subtitle = 'Dikonfirmasi • ${fmtDt.format(item.confirmedAt!)}';
+          } else if (item.confirmed) {
+            subtitle = 'Dikonfirmasi';
+          } else if (item.done) {
+            subtitle = 'Data siap — belum dikonfirmasi';
+          } else {
+            subtitle = 'Menunggu admin melengkapi data';
+          }
+
+          return Container(
             margin: const EdgeInsets.only(bottom: 6),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFB),
+              color: item.confirmed
+                  ? const Color(0xFFF0FBF4)
+                  : const Color(0xFFF8FAFB),
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                color: AppColors.divider.withValues(alpha: 0.4),
+                color: item.confirmed
+                    ? const Color(0xFF28A745).withValues(alpha: 0.3)
+                    : AppColors.divider.withValues(alpha: 0.4),
               ),
             ),
             child: Row(
               children: [
-                Icon(
-                  item.done
-                      ? Icons.check_circle_rounded
-                      : Icons.radio_button_unchecked_rounded,
-                  size: 17,
-                  color: item.done
-                      ? const Color(0xFF28A745)
-                      : AppColors.textMedium,
-                ),
+                Icon(leadingIcon, size: 17, color: leadingColor),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
-                    item.label,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textDark,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.label,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textDark,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                          color: item.confirmed
+                              ? const Color(0xFF28A745)
+                              : AppColors.textMedium,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
+                if (canConfirm || isConfirming) ...[
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: isConfirming
+                        ? null
+                        : () => onConfirmStep!(item.code),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(0, 30),
+                      backgroundColor: const Color(0xFF17A2B8),
+                      disabledBackgroundColor:
+                          const Color(0xFF17A2B8).withValues(alpha: 0.5),
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: isConfirming
+                        ? const SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Text(
+                            'Konfirmasi',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                  ),
+                ],
               ],
             ),
-          ),
-        ),
+          );
+        }),
       ],
     );
   }
@@ -766,13 +920,20 @@ class _AttendanceStageSection extends StatelessWidget {
               onConfirmStage != null &&
               (!isDocumentStage || docsComplete);
 
+          // For DITERIMA: count per-step confirmations for the subtitle
+          final confirmedStepCount = isDocumentStage && progress != null
+              ? progress.items.where((i) => i.confirmed).length
+              : 0;
+
           final subtitle = !reached
               ? 'Belum mencapai tahapan'
               : !requiresAttendanceConfirmation
               ? (stage == 'CADANGAN'
                     ? 'Anda masuk daftar cadangan — menunggu konfirmasi slot.'
                     : stage == 'DITERIMA'
-                    ? 'Tahapan diterima tidak memerlukan konfirmasi kehadiran.'
+                    ? (progress == null
+                          ? 'Konfirmasi setiap langkah dokumen di bawah ini.'
+                          : '$confirmedStepCount/${progress.totalCount} langkah dikonfirmasi')
                     : stage == 'BERANGKAT'
                     ? 'Tahapan berangkat tidak memerlukan konfirmasi kehadiran.'
                     : stage == 'DITOLAK'

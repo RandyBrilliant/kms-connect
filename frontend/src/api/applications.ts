@@ -14,6 +14,7 @@ import type {
   BulkTransitionApplicationsInput,
   BulkTransitionApplicationsResponse,
   TransitionApplicationInput,
+  DocumentCollectionStepCode,
 } from "@/types/job-applications"
 import type { BatchAnnouncement } from "@/types/lamaran-batch"
 
@@ -23,6 +24,7 @@ function buildQueryString(params: ApplicationsListParams): string {
   if (params.page_size != null) search.set("page_size", String(params.page_size))
   if (params.search) search.set("search", params.search)
   if (params.status && params.status !== "ALL") search.set("status", params.status)
+  if (params.diterima_step) search.set("diterima_step", params.diterima_step)
   if (params.job != null) search.set("job", String(params.job))
   if (params.applicant != null) search.set("applicant", String(params.applicant))
   if (params.batch != null) search.set("batch", String(params.batch))
@@ -191,6 +193,23 @@ export async function confirmApplicationAttendance(
 ): Promise<JobApplication> {
   const { data } = await api.post<{ data: JobApplication }>(
     `/api/applicants/me/applications/${id}/confirm/`
+  )
+  return data.data
+}
+
+/**
+ * POST /api/applicants/me/applications/:id/confirm-step/
+ * Applicant confirms a single document-collection step within the DITERIMA stage.
+ * The underlying data for the step must already be filled by admin before confirming.
+ * Idempotent — confirming an already-confirmed step returns the unchanged application.
+ */
+export async function confirmDocumentStep(
+  id: number,
+  step: DocumentCollectionStepCode
+): Promise<JobApplication> {
+  const { data } = await api.post<{ data: JobApplication }>(
+    `/api/applicants/me/applications/${id}/confirm-step/`,
+    { step }
   )
   return data.data
 }

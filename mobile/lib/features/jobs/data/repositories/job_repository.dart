@@ -191,6 +191,45 @@ class JobRepository {
     }
   }
 
+  /// Confirm a single document-collection step within the DITERIMA stage.
+  ///
+  /// [stepCode] must be one of the 9 valid step codes:
+  ///   MASUK_BERKAS_ASLI, MEDICAL, BUAT_ID_PEKERJA, BUAT_PASPOR, FWCMS,
+  ///   PSIKOLOGI_TEST, PAP_BP3MI, PDO_KILANG, PERSIAPAN_KEBERANGKATAN
+  ///
+  /// The underlying data must already be filled by admin before calling this.
+  /// Confirmation is idempotent — confirming an already-confirmed step succeeds.
+  Future<JobApplication> confirmDocumentStep(
+    int applicationId, {
+    required String stepCode,
+  }) async {
+    try {
+      final response = await _apiClient.dio.post(
+        ApiEndpoints.confirmDocumentStep(applicationId),
+        data: {'step': stepCode},
+      );
+      final data = response.data;
+      if (data is Map<String, dynamic>) {
+        if (data.containsKey('id')) {
+          return JobApplication.fromJson(data);
+        }
+        final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
+          data,
+          (d) => d as Map<String, dynamic>,
+        );
+        if (apiResponse.data != null) {
+          return JobApplication.fromJson(apiResponse.data!);
+        }
+      }
+      throw DioException(
+        requestOptions: response.requestOptions,
+        message: 'Gagal mengkonfirmasi langkah dokumen',
+      );
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
   /// Applicant self-confirmation: BERANGKAT -> SELESAI.
   Future<JobApplication> completeApplication(int applicationId) async {
     try {

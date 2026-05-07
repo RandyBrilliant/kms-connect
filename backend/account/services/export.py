@@ -216,6 +216,41 @@ def _format_date_dmy(value: Any) -> str:
     return str(value)
 
 
+def _format_date_dd_mon_yyyy(value: Any) -> str:
+    """Format date/datetime as DD-Mon-YYYY (e.g. 14-Mar-2012)."""
+    if not value:
+        return "-"
+
+    dt_value: date | None = None
+    if isinstance(value, datetime):
+        dt_value = value.date()
+    elif isinstance(value, date):
+        dt_value = value
+    elif isinstance(value, str):
+        try:
+            dt_value = datetime.fromisoformat(value).date()
+        except ValueError:
+            return value
+    else:
+        return str(value)
+
+    month_abbr = [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
+    ]
+    return f"{dt_value.day:02d}-{month_abbr[dt_value.month - 1]}-{dt_value.year}"
+
+
 def _safe_name(obj: Any) -> str:
     if not obj:
         return "-"
@@ -581,7 +616,7 @@ def generate_applicants_excel(applicants: Iterable[Any], request: Any = None) ->
             elif field_path == "contact_phone":
                 value = _get_nested_value(profile, "contact_phone")
             elif field_path == "birth_date":
-                value = _format_date_dmy(getattr(profile, "birth_date", None))
+                value = _format_date_dd_mon_yyyy(getattr(profile, "birth_date", None))
             elif field_path == "birth_place":
                 t = (getattr(profile, "birth_place_text", None) or "").strip()
                 if t:

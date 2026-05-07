@@ -470,13 +470,33 @@ class ApplicationService:
     def get_document_collection_progress(cls, application: JobApplication) -> dict:
         """
         Build checklist progress for the DITERIMA-stage document collection flow.
+
+        Each item now contains:
+          - code: step code string
+          - label: human-readable label
+          - done: whether the underlying data requirement is satisfied (admin-filled)
+          - confirmed: whether the pelamar has explicitly confirmed this step
+          - confirmed_at: ISO-8601 timestamp of confirmation, or None
         """
         from account.models import ApplicantDocument
+
+        # Step confirmations by pelamar
+        step_confirmations = (
+            dict(application.diterima_step_confirmations)
+            if isinstance(application.diterima_step_confirmations, dict)
+            else {}
+        )
 
         profile = getattr(application, "applicant", None)
         if not profile:
             items = [
-                {"code": code, "label": label, "done": False}
+                {
+                    "code": code,
+                    "label": label,
+                    "done": False,
+                    "confirmed": False,
+                    "confirmed_at": None,
+                }
                 for code, label in cls.DOCUMENT_COLLECTION_STEP_ORDER
             ]
             return {"items": items, "done_count": 0, "total_count": len(items), "is_complete": False}
@@ -503,10 +523,16 @@ class ApplicationService:
             "PERSIAPAN_KEBERANGKATAN": bool(getattr(profile, "tgl_calling_visa", None))
             and bool((getattr(profile, "no_calling_visa", "") or "").strip()),
         }
-        items = [
-            {"code": code, "label": label, "done": bool(checks.get(code))}
-            for code, label in cls.DOCUMENT_COLLECTION_STEP_ORDER
-        ]
+        items = []
+        for code, label in cls.DOCUMENT_COLLECTION_STEP_ORDER:
+            confirmed_at = step_confirmations.get(code) or None
+            items.append({
+                "code": code,
+                "label": label,
+                "done": bool(checks.get(code)),
+                "confirmed": bool(confirmed_at),
+                "confirmed_at": confirmed_at,
+            })
         done_count = sum(1 for item in items if item["done"])
         total_count = len(items)
         return {
@@ -515,6 +541,78 @@ class ApplicationService:
             "total_count": total_count,
             "is_complete": done_count == total_count,
         }
+
+    @classmethod
+    @transaction.atomic
+    def confirm_document_step(
+        cls,
+        application: JobApplication,
+        applicant_user: "CustomUser",
+        step_code: str,
+    ) -> JobApplication:
+        """
+        Pelamar confirms a single document-collection step within the DITERIMA stage.
+
+        Rules:
+          - Only the owner applicant may confirm.
+          - Application must currently be at DITERIMA status.
+          - step_code must be a valid DOCUMENT_COLLECTION_STEP_ORDER key.
+          - The underlying data for the step must already be satisfied (admin has
+            filled in the required fields / uploaded required documents) before
+            the pelamar can confirm it.
+          - Confirming is idempotent on already-confirmed steps (returns 200, no change).
+
+        Raises:
+          TransitionError — unauthorized or wrong stage.
+          ValueError      — invalid step code or data not yet ready.
+        """
+        try:
+            profile = applicant_user.applicant_profile
+        except Exception:
+            raise TransitionError("Hanya pelamar yang dapat mengkonfirmasi langkah ini.")
+
+        if application.applicant_id != profile.pk:
+            raise TransitionError("Anda tidak berhak mengkonfirmasi lamaran ini.")
+
+        if application.status != ApplicationStatus.DITERIMA:
+            raise TransitionError(
+                "Konfirmasi langkah hanya tersedia saat lamaran berada di tahap Diterima."
+            )
+
+        valid_codes = {code for code, _ in cls.DOCUMENT_COLLECTION_STEP_ORDER}
+        if step_code not in valid_codes:
+            raise ValueError(
+                f"Kode langkah '{step_code}' tidak valid. "
+                f"Pilihan: {', '.join(c for c, _ in cls.DOCUMENT_COLLECTION_STEP_ORDER)}."
+            )
+
+        # Check whether underlying data is ready for this step
+        progress = cls.get_document_collection_progress(application)
+        step_item = next((i for i in progress["items"] if i["code"] == step_code), None)
+        if step_item is None:
+            raise ValueError(f"Langkah '{step_code}' tidak ditemukan dalam daftar progress.")
+
+        if not step_item["done"]:
+            label = step_item["label"]
+            raise ValueError(
+                f"Langkah '{label}' belum siap dikonfirmasi. "
+                "Admin harus melengkapi data terlebih dahulu."
+            )
+
+        # Idempotent: already confirmed → no-op
+        if step_item["confirmed"]:
+            return application
+
+        now = timezone.now()
+        step_confirmations = (
+            dict(application.diterima_step_confirmations)
+            if isinstance(application.diterima_step_confirmations, dict)
+            else {}
+        )
+        step_confirmations[step_code] = now.isoformat()
+        application.diterima_step_confirmations = step_confirmations
+        application.save(update_fields=["diterima_step_confirmations", "updated_at"])
+        return application
 
     @classmethod
     def _ensure_document_collection_complete(cls, application: JobApplication) -> None:

@@ -49,6 +49,7 @@ from .models import (
 from .serializers import (
     ApplicantSearchSerializer,
     ApplicationAttendanceConfirmSerializer,
+    ApplicationDocumentStepConfirmSerializer,
     BatchAdvanceToCohortSerializer,
     BulkApplicationTransitionSerializer,
     ApplicationTransitionSerializer,
@@ -1466,6 +1467,64 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
             qs = qs.prefetch_related("status_history__changed_by")
         return qs
 
+    def _parse_diterima_step_param(self, request) -> str | None:
+        """
+        Parse and validate optional query param `diterima_step`.
+        Returns normalized step code or None if not provided.
+        Raises ValueError when provided but invalid.
+        """
+        raw = (request.query_params.get("diterima_step") or "").strip().upper()
+        if not raw:
+            return None
+        valid_step_codes = {
+            code for code, _ in ApplicationService.DOCUMENT_COLLECTION_STEP_ORDER
+        }
+        if raw not in valid_step_codes:
+            raise ValueError(
+                "Parameter diterima_step tidak valid. "
+                f"Pilihan: {', '.join(sorted(valid_step_codes))}."
+            )
+        return raw
+
+    def _filter_queryset_by_diterima_step(self, queryset, step_code: str):
+        """
+        Filter queryset for selected DITERIMA sub-step.
+        Current semantics: keep applicants in DITERIMA whose selected step
+        is not yet confirmed by pelamar (actionable queue for admin follow-up).
+        """
+        diterima_apps = queryset.filter(status=ApplicationStatus.DITERIMA)
+        selected_ids: list[int] = []
+        for app in diterima_apps:
+            progress = ApplicationService.get_document_collection_progress(app)
+            item = next(
+                (step for step in progress.get("items", []) if step.get("code") == step_code),
+                None,
+            )
+            if item and not bool(item.get("confirmed")):
+                selected_ids.append(app.id)
+        return queryset.filter(id__in=selected_ids)
+
+    def list(self, request, *args, **kwargs):
+        try:
+            diterima_step = self._parse_diterima_step_param(request)
+        except ValueError as e:
+            return Response(
+                error_response(detail=str(e), code=ApiCode.VALIDATION_ERROR),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        queryset = self.filter_queryset(self.get_queryset())
+        if diterima_step:
+            queryset = self._filter_queryset_by_diterima_step(queryset, diterima_step)
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
     @action(detail=False, methods=["get"], url_path="export-excel")
     def export_excel(self, request):
         """
@@ -1486,6 +1545,22 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
         applications = self.filter_queryset(self.get_queryset()).order_by(
             "applicant__user__full_name"
         )
+
+        # Optional DITERIMA sub-step filter.
+        # Intended for admin "Master Tahapan > Diterima" export:
+        # - without parameter: export all rows from current list filter
+        # - with diterima_step: export only applicants in DITERIMA where the
+        #   selected step is not yet confirmed by pelamar (actionable queue).
+        try:
+            diterima_step = self._parse_diterima_step_param(request)
+        except ValueError as e:
+            return Response(
+                error_response(detail=str(e), code=ApiCode.VALIDATION_ERROR),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if diterima_step:
+            applications = self._filter_queryset_by_diterima_step(applications, diterima_step)
+
         applicant_user_ids = applications.values_list(
             "applicant__user_id", flat=True
         ).distinct()
@@ -1771,6 +1846,58 @@ class ApplicantJobApplicationViewSet(viewsets.ReadOnlyModelViewSet):
                 data=out.data,
                 detail="Status lamaran berhasil dikonfirmasi menjadi Selesai.",
             )
+        )
+
+    @action(detail=True, methods=["post"], url_path="confirm-step")
+    def confirm_step(self, request, pk=None):
+        """
+        POST /api/applicants/me/applications/{id}/confirm-step/
+        Body: { "step": "<STEP_CODE>" }
+
+        Pelamar mengkonfirmasi satu langkah pengumpulan dokumen dalam tahap Diterima.
+        Langkah harus sudah siap (data diisi oleh admin) sebelum bisa dikonfirmasi.
+        Konfirmasi bersifat idempoten — langkah yang sudah dikonfirmasi tidak berubah.
+
+        Valid step codes:
+          MASUK_BERKAS_ASLI, MEDICAL, BUAT_ID_PEKERJA, BUAT_PASPOR, FWCMS,
+          PSIKOLOGI_TEST, PAP_BP3MI, PDO_KILANG, PERSIAPAN_KEBERANGKATAN
+        """
+        application = self.get_object()
+
+        payload = ApplicationDocumentStepConfirmSerializer(data=request.data or {})
+        if not payload.is_valid():
+            return Response(
+                error_response(
+                    detail="Data tidak valid.",
+                    code=ApiCode.VALIDATION_ERROR,
+                    errors=payload.errors,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            ApplicationService.confirm_document_step(
+                application=application,
+                applicant_user=request.user,
+                step_code=payload.validated_data["step"],
+            )
+        except TransitionError as e:
+            return Response(
+                error_response(detail=str(e), code=ApiCode.PERMISSION_DENIED),
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        except ValueError as e:
+            return Response(
+                error_response(detail=str(e), code=ApiCode.VALIDATION_ERROR),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        out = JobApplicationSerializer(
+            self.get_queryset().get(pk=application.pk),
+            context={"request": request},
+        )
+        return Response(
+            success_response(data=out.data, detail="Langkah berhasil dikonfirmasi.")
         )
 
     @action(detail=True, methods=["get"], url_path="announcements")

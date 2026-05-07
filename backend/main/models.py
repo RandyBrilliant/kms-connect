@@ -738,6 +738,16 @@ class JobApplication(models.Model):
             '{"PRA_SELEKSI":"2026-01-01T10:00:00+07:00","INTERVIEW":"..."}'
         ),
     )
+    diterima_step_confirmations = models.JSONField(
+        _("konfirmasi per langkah tahap diterima"),
+        default=dict,
+        blank=True,
+        help_text=_(
+            "Peta waktu konfirmasi pelamar per langkah pengumpulan dokumen di tahap Diterima. "
+            "Format: {\"MEDICAL\":\"2026-05-01T10:00:00+07:00\",\"BUAT_ID_PEKERJA\":\"...\"}. "
+            "Langkah yang belum dikonfirmasi tidak muncul di sini."
+        ),
+    )
 
     # --- Timestamps ---
     applied_at = models.DateTimeField(

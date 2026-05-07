@@ -68,6 +68,13 @@ import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -93,7 +100,11 @@ import { getInterviewCohorts } from "@/api/interview-cohorts"
 import { exportApplicationsExcel, getApplications } from "@/api/applications"
 import { createBroadcast, sendBroadcast } from "@/api/notifications"
 import type { JobItem, EmploymentType, JobStatus as JobStatusType } from "@/types/jobs"
-import type { ApplicationStatus } from "@/types/job-applications"
+import {
+  DOCUMENT_COLLECTION_STEP_LABELS,
+  type ApplicationStatus,
+  type DocumentCollectionStepCode,
+} from "@/types/job-applications"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -687,14 +698,24 @@ function ApplicationsTab({
   const [announcementBody, setAnnouncementBody] = useState("")
   const [confirmAnnouncementOpen, setConfirmAnnouncementOpen] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
+  const [selectedDiterimaStep, setSelectedDiterimaStep] = useState<"ALL" | DocumentCollectionStepCode>(
+    "ALL"
+  )
   const queryClient = useQueryClient()
 
   const { data, isLoading } = useQuery({
-    queryKey: ["applications", { job: jobId, status, page, search: stageSearch }],
+    queryKey: [
+      "applications",
+      { job: jobId, status, page, search: stageSearch, diterima_step: selectedDiterimaStep },
+    ],
     queryFn: () =>
       getApplications({
         job: jobId,
         status,
+        diterima_step:
+          status === "DITERIMA" && selectedDiterimaStep !== "ALL"
+            ? selectedDiterimaStep
+            : undefined,
         page,
         page_size: APPLICATIONS_TAB_PAGE_SIZE,
         search: stageSearch.trim() || undefined,
@@ -719,6 +740,11 @@ function ApplicationsTab({
   const filteredApps = sortedApps
   const showCohortCol = status !== "DITOLAK"
   const showDocCol = status === "DITERIMA"
+  const showDiterimaStepFilter = status === "DITERIMA"
+  const diterimaStepOptions = useMemo(
+    () => Object.entries(DOCUMENT_COLLECTION_STEP_LABELS) as Array<[DocumentCollectionStepCode, string]>,
+    []
+  )
   const enableAcceptedAnnouncement = status === "DITERIMA"
   const selectableApplicantUsers = filteredApps
     .map((a) => a.applicant_user)
@@ -747,10 +773,18 @@ function ApplicationsTab({
         {
           job: jobId,
           status,
+          diterima_step:
+            status === "DITERIMA" && selectedDiterimaStep !== "ALL"
+              ? selectedDiterimaStep
+              : undefined,
           search: stageSearch.trim() || undefined,
           ordering: "applicant_name",
         },
-        `pelamar_${status.toLowerCase()}.xlsx`
+        `pelamar_${status.toLowerCase()}${
+          status === "DITERIMA" && selectedDiterimaStep !== "ALL"
+            ? `_${selectedDiterimaStep.toLowerCase()}`
+            : ""
+        }.xlsx`
       )
       toast.success("File Excel berhasil diunduh.")
     } catch {
@@ -833,17 +867,40 @@ function ApplicationsTab({
               </span>
             ) : null}
           </p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="cursor-pointer"
-            disabled={isExporting || totalCount === 0}
-            onClick={() => void handleExportExcel()}
-          >
-            <IconFileSpreadsheet className="mr-2 size-4" />
-            {isExporting ? "Mengunduh..." : "Export Excel"}
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            {showDiterimaStepFilter && (
+              <Select
+                value={selectedDiterimaStep}
+                onValueChange={(v) => {
+                  setSelectedDiterimaStep(v as "ALL" | DocumentCollectionStepCode)
+                  setPage(1)
+                }}
+              >
+                <SelectTrigger className="h-8 w-[270px] cursor-pointer text-xs">
+                  <SelectValue placeholder="Filter sub-tahapan Diterima (untuk export)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">Semua Tahapan Diterima</SelectItem>
+                  {diterimaStepOptions.map(([code, label]) => (
+                    <SelectItem key={code} value={code}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="cursor-pointer"
+              disabled={isExporting || totalCount === 0}
+              onClick={() => void handleExportExcel()}
+            >
+              <IconFileSpreadsheet className="mr-2 size-4" />
+              {isExporting ? "Mengunduh..." : "Export Excel"}
+            </Button>
+          </div>
         </div>
 
         {enableAcceptedAnnouncement && (

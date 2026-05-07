@@ -52,6 +52,30 @@ export function DocumentCollectionProgressCell({ app }: { app: JobApplication })
           </ul>
         </div>
       ) : null}
+      {p.items?.length ? (
+        <div className="mt-1 space-y-1 border-t pt-1">
+          {p.items.map((item) => (
+            <div key={item.code} className="flex items-start justify-between gap-2 text-[11px]">
+              <span className="truncate text-muted-foreground">{item.label}</span>
+              <span
+                className={
+                  item.confirmed
+                    ? "shrink-0 text-green-600"
+                    : item.done
+                    ? "shrink-0 text-amber-600"
+                    : "shrink-0 text-muted-foreground"
+                }
+              >
+                {item.confirmed
+                  ? `Dikonfirmasi${item.confirmed_at ? ` (${formatDateTime(item.confirmed_at)})` : ""}`
+                  : item.done
+                  ? "Siap konfirmasi"
+                  : "Belum siap"}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   )
 }

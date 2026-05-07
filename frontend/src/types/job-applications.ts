@@ -101,7 +101,15 @@ export interface JobApplication {
   attendance_marked_at_by_stage?: Partial<Record<ApplicationStatus, string | null>>
   reached_stages?: ApplicationStatus[]
   document_collection_progress?: {
-    items: Array<{ code: string; label: string; done: boolean }>
+    items: Array<{
+      code: string
+      label: string
+      done: boolean
+      /** Whether the pelamar has explicitly confirmed this step */
+      confirmed: boolean
+      /** ISO-8601 timestamp when confirmed, or null */
+      confirmed_at: string | null
+    }>
     done_count: number
     total_count: number
     is_complete: boolean
@@ -111,8 +119,37 @@ export interface JobApplication {
   pengumpulan_dokumen_ready_for_departure?: boolean
   pengumpulan_dokumen_pending_items?: Array<{ code: string; label: string }>
   pengumpulan_dokumen_pending_labels?: string[]
+  /**
+   * Per-step confirmation timestamps from pelamar for the 9 document-collection steps.
+   * Keys are step codes (e.g. "MEDICAL", "BUAT_PASPOR").
+   * Value is ISO-8601 timestamp when confirmed, or null if not yet confirmed.
+   */
+  diterima_step_confirmations?: Record<string, string | null>
   created_at: string
   updated_at: string
+}
+
+export type DocumentCollectionStepCode =
+  | "MASUK_BERKAS_ASLI"
+  | "MEDICAL"
+  | "BUAT_ID_PEKERJA"
+  | "BUAT_PASPOR"
+  | "FWCMS"
+  | "PSIKOLOGI_TEST"
+  | "PAP_BP3MI"
+  | "PDO_KILANG"
+  | "PERSIAPAN_KEBERANGKATAN"
+
+export const DOCUMENT_COLLECTION_STEP_LABELS: Record<DocumentCollectionStepCode, string> = {
+  MASUK_BERKAS_ASLI: "Masuk Berkas Asli",
+  MEDICAL: "Medical",
+  BUAT_ID_PEKERJA: "Buat ID Pekerja",
+  BUAT_PASPOR: "Buat Paspor",
+  FWCMS: "FWCMS",
+  PSIKOLOGI_TEST: "Psikologi Test",
+  PAP_BP3MI: "PAP BP3MI",
+  PDO_KILANG: "PDO Kilang",
+  PERSIAPAN_KEBERANGKATAN: "Persiapan Keberangkatan",
 }
 
 export interface ApplicationsListParams {
@@ -120,6 +157,8 @@ export interface ApplicationsListParams {
   page_size?: number
   search?: string
   status?: ApplicationStatus | "ALL"
+  /** Optional filter for DITERIMA document sub-steps (used by export/list tooling). */
+  diterima_step?: DocumentCollectionStepCode
   job?: number
   applicant?: number
   batch?: number

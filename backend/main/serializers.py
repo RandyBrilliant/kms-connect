@@ -277,6 +277,7 @@ class JobApplicationSerializer(serializers.ModelSerializer):
     pengumpulan_dokumen_ready_for_departure = serializers.SerializerMethodField(read_only=True)
     pengumpulan_dokumen_pending_items = serializers.SerializerMethodField(read_only=True)
     pengumpulan_dokumen_pending_labels = serializers.SerializerMethodField(read_only=True)
+    diterima_step_confirmations = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = JobApplication
@@ -323,6 +324,7 @@ class JobApplicationSerializer(serializers.ModelSerializer):
             "pengumpulan_dokumen_ready_for_departure",
             "pengumpulan_dokumen_pending_items",
             "pengumpulan_dokumen_pending_labels",
+            "diterima_step_confirmations",
             "created_at",
             "updated_at",
         ]
@@ -356,6 +358,7 @@ class JobApplicationSerializer(serializers.ModelSerializer):
             "pengumpulan_dokumen_ready_for_departure",
             "pengumpulan_dokumen_pending_items",
             "pengumpulan_dokumen_pending_labels",
+            "diterima_step_confirmations",
             "applied_at",
             "created_at",
             "updated_at",
@@ -575,6 +578,44 @@ class JobApplicationSerializer(serializers.ModelSerializer):
             for item in self.get_pengumpulan_dokumen_pending_items(obj)
             if item.get("label")
         ]
+
+    def get_diterima_step_confirmations(self, obj) -> dict[str, str | None]:
+        """
+        Returns a map of step_code → ISO-8601 timestamp (or None) for all
+        9 document-collection steps, so the frontend always gets a complete
+        predictable shape regardless of which steps have been confirmed.
+        """
+        raw = (
+            dict(obj.diterima_step_confirmations)
+            if isinstance(obj.diterima_step_confirmations, dict)
+            else {}
+        )
+        return {
+            code: raw.get(code) or None
+            for code, _ in ApplicationService.DOCUMENT_COLLECTION_STEP_ORDER
+        }
+
+
+class ApplicationDocumentStepConfirmSerializer(serializers.Serializer):
+    """
+    Input serializer for POST /api/applicants/me/applications/{id}/confirm-step/.
+    Pelamar confirms a single document-collection step within the DITERIMA stage.
+    """
+
+    step = serializers.ChoiceField(
+        choices=[(code, label) for code, label in [
+            ("MASUK_BERKAS_ASLI", "Masuk Berkas Asli"),
+            ("MEDICAL", "Medical"),
+            ("BUAT_ID_PEKERJA", "Buat ID Pekerja"),
+            ("BUAT_PASPOR", "Buat Paspor"),
+            ("FWCMS", "FWCMS"),
+            ("PSIKOLOGI_TEST", "Psikologi Test"),
+            ("PAP_BP3MI", "PAP BP3MI"),
+            ("PDO_KILANG", "PDO Kilang"),
+            ("PERSIAPAN_KEBERANGKATAN", "Persiapan Keberangkatan"),
+        ]],
+        help_text="Kode langkah yang dikonfirmasi oleh pelamar.",
+    )
 
 
 class ApplicationTransitionSerializer(serializers.Serializer):
