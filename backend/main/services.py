@@ -631,13 +631,16 @@ class ApplicationService:
         """
         Admin advances a single application to the next DITERIMA sub-step.
 
-        The 9 sub-steps are sequential.  Advancing past the last step
+        The 9 sub-steps are sequential. Advancing past the last step
         (PERSIAPAN_KEBERANGKATAN) is not allowed here; use the normal
         ``transition(BERANGKAT)`` call from the PERSIAPAN_KEBERANGKATAN tab.
 
+        Pelamar does not need to confirm each sub-step from the mobile app;
+        admin may advance the sequence at any time while status is DITERIMA.
+
         Raises:
-          TransitionError — actor is not admin, wrong status, or already at
-                            the last step.
+            TransitionError: Actor is not admin, wrong status, or already at
+                the last step.
         """
         actor_role = (
             "admin"
@@ -671,19 +674,6 @@ class ApplicationService:
                 "Gunakan aksi 'Pindahkan ke Berangkat' untuk melanjutkan."
             )
 
-        # Pelamar must explicitly confirm the active step before admin can move on.
-        step_confirmations = (
-            dict(application.diterima_step_confirmations)
-            if isinstance(application.diterima_step_confirmations, dict)
-            else {}
-        )
-        if not step_confirmations.get(current):
-            current_label = dict(cls.DOCUMENT_COLLECTION_STEP_ORDER).get(current, current)
-            raise TransitionError(
-                f"Pelamar belum menandai '{current_label}' sebagai selesai. "
-                "Minta pelamar konfirmasi dahulu sebelum lanjut ke langkah berikutnya."
-            )
-
         next_step = step_order[current_idx + 1]
         application.diterima_current_step = next_step
         application.save(update_fields=["diterima_current_step", "updated_at"])
@@ -698,20 +688,6 @@ class ApplicationService:
         raise TransitionError(
             "Tahap Pengumpulan Dokumen belum lengkap. "
             f"Selesaikan terlebih dahulu: {', '.join(pending)}."
-        )
-
-    @classmethod
-    def _ensure_document_collection_confirmed(cls, application: JobApplication) -> None:
-        attendance_map = (
-            dict(application.attendance_by_stage)
-            if isinstance(application.attendance_by_stage, dict)
-            else {}
-        )
-        if attendance_map.get(ApplicationStatus.DITERIMA):
-            return
-        raise TransitionError(
-            "Pelamar belum mengkonfirmasi pengumpulan dokumen pada tahap Diterima. "
-            "Minta pelamar klik 'Dokumen Selesai' terlebih dahulu."
         )
 
     @classmethod
@@ -771,10 +747,6 @@ class ApplicationService:
                     "Sesi interview yang dipilih sudah ditandai non-aktif."
                 )
         # ─────────────────────────────────────────────────────────────────
-
-        if application.status == ApplicationStatus.DITERIMA and new_status == ApplicationStatus.BERANGKAT:
-            cls._ensure_document_collection_complete(application)
-            cls._ensure_document_collection_confirmed(application)
 
         # ── Quota enforcement (only when moving to DITERIMA) ──────────────
         if new_status == ApplicationStatus.DITERIMA:
@@ -980,7 +952,7 @@ class ApplicationService:
 
         Valid targets from cohort scope:
           - DITERIMA  (from INTERVIEW; quota-checked at job level)
-          - BERANGKAT (from DITERIMA; doc-collection checks)
+          - BERANGKAT (from DITERIMA)
           - SELESAI   (from BERANGKAT)
           - DITOLAK   (from INTERVIEW or DITERIMA)
 
@@ -1033,34 +1005,6 @@ class ApplicationService:
                         f"({job.quota} pelamar diterima)."
                     )
                 apps = apps[:remaining_slots]
-
-        if new_status == ApplicationStatus.BERANGKAT:
-            blocked_labels: set[str] = set()
-            missing_confirmation = False
-            for app in apps:
-                progress = cls.get_document_collection_progress(app)
-                if progress["is_complete"]:
-                    attendance_map = (
-                        dict(app.attendance_by_stage)
-                        if isinstance(app.attendance_by_stage, dict)
-                        else {}
-                    )
-                    if not attendance_map.get(ApplicationStatus.DITERIMA):
-                        missing_confirmation = True
-                else:
-                    for item in progress["items"]:
-                        if not item["done"]:
-                            blocked_labels.add(item["label"])
-            if blocked_labels:
-                raise TransitionError(
-                    "Sebagian pelamar belum menyelesaikan tahap Pengumpulan Dokumen. "
-                    f"Kekurangan: {', '.join(sorted(blocked_labels))}."
-                )
-            if missing_confirmation:
-                raise TransitionError(
-                    "Sebagian pelamar belum mengkonfirmasi 'Dokumen Selesai' "
-                    "pada tahap Diterima."
-                )
 
         if not apps:
             return []
