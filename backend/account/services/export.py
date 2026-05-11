@@ -21,8 +21,8 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill
 from openpyxl.utils import get_column_letter
 
-
 # Excel column headers follow client-provided template order.
+# NextOfKinRelationship imported lazily in spouse/wali helpers to avoid import cycles.
 EXPORT_COLUMNS = [
     ("TANGGAL DAFTAR", "registration_date"),
     ("Pemberi Rujukan", "referrer_name"),
@@ -30,10 +30,9 @@ EXPORT_COLUMNS = [
     ("Nama", "full_name"),
     ("Tempat Lahir", "birth_place"),
     ("Tanggal Lahir", "birth_date"),
-    ("Alamat", "address"),
-    ("Kota/Kabupaten", "district_display"),
-    ("Kecamatan", "subdistrict_display"),
-    ("Kelurahan/Desa", "village_display"),
+    # Alamat pelamar: baris gabungan jalan + kelurahan + kecamatan; kab/kota & provinsi terpisah
+    ("Alamat", "address_combined"),
+    ("Kabupaten/Kota", "district_display"),
     ("Provinsi", "province_display"),
     ("Kode Pos", "postal_code"),
     ("No. HP", "contact_phone"),
@@ -57,13 +56,16 @@ EXPORT_COLUMNS = [
     ("NAMA SUAMI", "spouse_name"),
     ("PEKERJAAN ", "spouse_occupation"),
     ("UMUR", "spouse_age"),
-    # Family Info
-    ("Alamat Keluarga", "family_address"),
-    ("Kota Keluarga", "family_district_display"),
-    ("Kecamatan Keluarga", "family_subdistrict_display"),
-    ("Kelurahan Keluarga", "family_village_display"),
+    # Alamat orang tua / keluarga (satu blok wilayah di profil)
+    ("Alamat Keluarga (Orang Tua)", "family_address_combined"),
+    ("Kabupaten/Kota Keluarga", "family_district_display"),
     ("Provinsi Keluarga", "family_province_display"),
     ("Kode Pos Keluarga", "family_postal_code"),
+    # Suami/istri atau wali: kolom sama dipakai jika ada nama pasangan / ahli waris terkait & ada data alamat keluarga
+    ("Alamat Suami/Istri atau Wali", "spouse_wali_address_combined"),
+    ("Kabupaten/Kota (Suami/Istri/Wali)", "spouse_wali_district_display"),
+    ("Provinsi (Suami/Istri/Wali)", "spouse_wali_province_display"),
+    ("Kode Pos (Suami/Istri/Wali)", "spouse_wali_postal_code"),
     ("No. HP Keluarga", "family_phone"),
     ("Email Keluarga", "family_email"),
     ("AGAMA", "religion"),
@@ -114,6 +116,18 @@ EXPORT_COLUMNS = [
     ("Pengalaman Kerja", "work_experiences"),
     # Documents will be added dynamically per document type
 ]
+
+# Used by list/export querysets to avoid N+1 when resolving wilayah from Village FKs.
+EXPORT_SELECT_RELATED_APPLICANT_PROFILE_REGIONS = (
+    "applicant_profile__province",
+    "applicant_profile__district",
+    "applicant_profile__village__district__regency__province",
+    "applicant_profile__family_province",
+    "applicant_profile__family_district",
+    "applicant_profile__family_village__district__regency__province",
+    "applicant_profile__referrer",
+    "applicant_profile__verified_by",
+)
 
 
 def _get_nested_value(obj: Any, path: str, default: str = "-") -> str:
@@ -279,6 +293,71 @@ def _first_non_empty(*values: Any) -> str:
         if text:
             return text
     return "-"
+
+
+def _kecamatan_name_from_village(village: Any) -> str:
+    if not village:
+        return ""
+    dist = getattr(village, "district", None)
+    return str(getattr(dist, "name", "") or "").strip()
+
+
+def _kelurahan_name_from_village(village: Any) -> str:
+    return str(getattr(village, "name", "") or "").strip() if village else ""
+
+
+def _combined_street_kel_kec(street: str, village: Any) -> str:
+    """Alamat baris: teks jalan, kelurahan, kecamatan (dipisah koma)."""
+    parts: list[str] = []
+    s = (street or "").strip()
+    if s:
+        parts.append(s)
+    kel = _kelurahan_name_from_village(village)
+    if kel:
+        parts.append(kel)
+    kec = _kecamatan_name_from_village(village)
+    if kec:
+        parts.append(kec)
+    return ", ".join(parts) if parts else "-"
+
+
+def _has_family_address_data(profile: Any) -> bool:
+    if (getattr(profile, "family_address", None) or "").strip():
+        return True
+    if getattr(profile, "family_village_id", None):
+        return True
+    if getattr(profile, "family_district_id", None):
+        return True
+    if getattr(profile, "family_province_id", None):
+        return True
+    return False
+
+
+def _show_spouse_wali_address_block(profile: Any) -> bool:
+    """
+    Tampilkan blok suami/istri/wali bila ada data alamat keluarga dan konteks pasangan/wali.
+    Orang tua (Ayah/Ibu) hanya di blok 'Alamat Keluarga'; tidak diulang di sini.
+    """
+    if not profile or not _has_family_address_data(profile):
+        return False
+    if (getattr(profile, "spouse_name", None) or "").strip():
+        return True
+    heir = (getattr(profile, "heir_name", None) or "").strip()
+    rel = getattr(profile, "heir_relationship", None) or ""
+    if not heir:
+        return False
+    if rel in ("AYAH", "IBU"):
+        return False
+    return rel in (
+        "SUAMI",
+        "ISTRI",
+        "KAKAK",
+        "ADIK",
+        "ANAK",
+        "PAMAN",
+        "BIBI",
+        "LAINNYA",
+    )
 
 
 def _work_experience_at(profile: Any, index: int):
@@ -626,24 +705,39 @@ def generate_applicants_excel(applicants: Iterable[Any], request: Any = None) ->
             elif field_path == "gender":
                 gender = _get_nested_value(profile, "gender", "")
                 value = _format_gender(gender) if gender != "-" else "-"
-            elif field_path == "address":
-                value = _get_nested_value(profile, "address")
+            elif field_path == "address_combined":
+                village = getattr(profile, "village", None)
+                value = _combined_street_kel_kec(
+                    getattr(profile, "address", None) or "",
+                    village,
+                )
             elif field_path == "province_display":
-                # Province name only
+                # Province name only; fallback from village → regency → province
                 province = getattr(profile, "province", None)
-                value = getattr(province, "name", "-") if province else "-"
+                if province:
+                    value = getattr(province, "name", "-")
+                else:
+                    village = getattr(profile, "village", None)
+                    reg = (
+                        getattr(village.district, "regency", None)
+                        if village and getattr(village, "district", None)
+                        else None
+                    )
+                    prov = getattr(reg, "province", None) if reg else None
+                    value = getattr(prov, "name", "-") if prov else "-"
             elif field_path == "district_display":
-                # Kota/Kabupaten (Regency)
+                # Kabupaten/Kota (Regency)
                 district = getattr(profile, "district", None)
-                value = _safe_name(district)
-            elif field_path == "subdistrict_display":
-                # Kecamatan should come from selected village relation.
-                village = getattr(profile, "village", None)
-                subdistrict = getattr(village, "district", None) if village else None
-                value = _safe_name(subdistrict)
-            elif field_path == "village_display":
-                village = getattr(profile, "village", None)
-                value = _safe_name(village)
+                if district:
+                    value = _safe_name(district)
+                else:
+                    village = getattr(profile, "village", None)
+                    reg = (
+                        getattr(village.district, "regency", None)
+                        if village and getattr(village, "district", None)
+                        else None
+                    )
+                    value = _safe_name(reg)
             elif field_path == "postal_code":
                 village = getattr(profile, "village", None)
                 value = _first_non_empty(
@@ -727,21 +821,38 @@ def generate_applicants_excel(applicants: Iterable[Any], request: Any = None) ->
                 value = _get_nested_value(profile, "spouse_age")
             elif field_path == "education_graduation_year":
                 value = _get_nested_value(profile, "education_graduation_year")
-            # Family Info
-            elif field_path == "family_address":
-                value = _get_nested_value(profile, "family_address")
+            # Family Info (orang tua / keluarga)
+            elif field_path == "family_address_combined":
+                fv = getattr(profile, "family_village", None)
+                value = _combined_street_kel_kec(
+                    getattr(profile, "family_address", None) or "",
+                    fv,
+                )
             elif field_path == "family_province_display":
-                # Family province name only
                 family_province = getattr(profile, "family_province", None)
-                value = getattr(family_province, "name", "-") if family_province else "-"
+                if family_province:
+                    value = getattr(family_province, "name", "-")
+                else:
+                    fv = getattr(profile, "family_village", None)
+                    reg = (
+                        getattr(fv.district, "regency", None)
+                        if fv and getattr(fv, "district", None)
+                        else None
+                    )
+                    prov = getattr(reg, "province", None) if reg else None
+                    value = getattr(prov, "name", "-") if prov else "-"
             elif field_path == "family_district_display":
-                value = _safe_name(getattr(profile, "family_district", None))
-            elif field_path == "family_subdistrict_display":
-                family_village = getattr(profile, "family_village", None)
-                family_subdistrict = getattr(family_village, "district", None) if family_village else None
-                value = _safe_name(family_subdistrict)
-            elif field_path == "family_village_display":
-                value = _safe_name(getattr(profile, "family_village", None))
+                fd = getattr(profile, "family_district", None)
+                if fd:
+                    value = _safe_name(fd)
+                else:
+                    fv = getattr(profile, "family_village", None)
+                    reg = (
+                        getattr(fv.district, "regency", None)
+                        if fv and getattr(fv, "district", None)
+                        else None
+                    )
+                    value = _safe_name(reg)
             elif field_path == "family_postal_code":
                 family_village = getattr(profile, "family_village", None)
                 value = _first_non_empty(
@@ -756,6 +867,55 @@ def generate_applicants_excel(applicants: Iterable[Any], request: Any = None) ->
                 )
             elif field_path == "family_email":
                 value = _get_nested_value(profile, "family_email")
+            elif field_path == "spouse_wali_address_combined":
+                if _show_spouse_wali_address_block(profile):
+                    fv = getattr(profile, "family_village", None)
+                    value = _combined_street_kel_kec(
+                        getattr(profile, "family_address", None) or "",
+                        fv,
+                    )
+                else:
+                    value = "-"
+            elif field_path == "spouse_wali_district_display":
+                if _show_spouse_wali_address_block(profile):
+                    fd = getattr(profile, "family_district", None)
+                    if fd:
+                        value = _safe_name(fd)
+                    else:
+                        fv = getattr(profile, "family_village", None)
+                        reg = (
+                            getattr(fv.district, "regency", None)
+                            if fv and getattr(fv, "district", None)
+                            else None
+                        )
+                        value = _safe_name(reg)
+                else:
+                    value = "-"
+            elif field_path == "spouse_wali_province_display":
+                if _show_spouse_wali_address_block(profile):
+                    fp = getattr(profile, "family_province", None)
+                    if fp:
+                        value = getattr(fp, "name", "-")
+                    else:
+                        fv = getattr(profile, "family_village", None)
+                        reg = (
+                            getattr(fv.district, "regency", None)
+                            if fv and getattr(fv, "district", None)
+                            else None
+                        )
+                        prov = getattr(reg, "province", None) if reg else None
+                        value = getattr(prov, "name", "-") if prov else "-"
+                else:
+                    value = "-"
+            elif field_path == "spouse_wali_postal_code":
+                if _show_spouse_wali_address_block(profile):
+                    family_village = getattr(profile, "family_village", None)
+                    value = _first_non_empty(
+                        getattr(profile, "family_postal_code", None),
+                        str(getattr(family_village, "code", "") or "").strip(),
+                    )
+                else:
+                    value = "-"
             # Referral & Admin
             elif field_path == "referrer_name":
                 referrer = getattr(profile, "referrer", None)
@@ -855,7 +1015,13 @@ def generate_applicants_excel(applicants: Iterable[Any], request: Any = None) ->
         min_width = max(len(label) + 2, 10)
         
         # Special handling for multi-line fields
-        if field_path in ["work_experiences", "verification_notes", "address", "family_address"]:
+        if field_path in [
+            "work_experiences",
+            "verification_notes",
+            "address_combined",
+            "family_address_combined",
+            "spouse_wali_address_combined",
+        ]:
             min_width = max(min_width, 40)  # Wider columns for long text
         # Document columns should be wide enough for URLs
         elif field_path.startswith("document_"):

@@ -778,6 +778,37 @@ _ADMIN_PROCESS_PROFILE_FIELDS = frozenset(
 )
 
 
+class BulkAdminProcessSerializer(serializers.Serializer):
+    """
+    Bulk-update admin-only process fields on ApplicantProfile for multiple pelamar.
+    Keys present in the request body are applied (PATCH semantics); omitted keys unchanged.
+    """
+
+    applicant_user_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        min_length=1,
+        max_length=500,
+    )
+    tgl_medical = serializers.DateField(required=False, allow_null=True)
+    hasil_medical = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    tgl_bayar_sml = serializers.DateField(required=False, allow_null=True)
+
+    def validate_applicant_user_ids(self, value):
+        if len(value) != len(set(value)):
+            raise serializers.ValidationError("Terdapat ID pelamar duplikat.")
+        return value
+
+    def validate(self, attrs):
+        raw = self.initial_data
+        if not isinstance(raw, dict):
+            return attrs
+        if not any(k in raw for k in ("tgl_medical", "hasil_medical", "tgl_bayar_sml")):
+            raise serializers.ValidationError(
+                "Minimal satu field tgl_medical, hasil_medical, atau tgl_bayar_sml wajib dikirim."
+            )
+        return attrs
+
+
 class ApplicantUserSerializer(serializers.ModelSerializer):
     """CRUD untuk pelamar: user + profil pelamar (nested). Admin review & backdoor create."""
 

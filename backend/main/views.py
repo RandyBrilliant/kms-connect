@@ -27,7 +27,10 @@ from account.api_responses import success_response, error_response, ApiCode
 from account.models import ApplicantProfile, ApplicantVerificationStatus, CustomUser, UserRole
 from account.serializers import _staff_rujukan_display_name
 from account.pagination import StandardResultsSetPagination
-from account.services.export import generate_applicants_excel
+from account.services.export import (
+    EXPORT_SELECT_RELATED_APPLICANT_PROFILE_REGIONS,
+    generate_applicants_excel,
+)
 
 from .eligible_applicants_query import (
     applicant_ktp_address_line,
@@ -943,6 +946,7 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
                 id__in=applicant_user_ids,
                 role=UserRole.APPLICANT,
             )
+            .select_related(*EXPORT_SELECT_RELATED_APPLICANT_PROFILE_REGIONS)
             .prefetch_related(
                 "applicant_profile__work_experiences",
                 "applicant_profile__documents__document_type",
@@ -1377,6 +1381,7 @@ class InterviewCohortViewSet(viewsets.ModelViewSet):
                 id__in=applicant_user_ids,
                 role=UserRole.APPLICANT,
             )
+            .select_related(*EXPORT_SELECT_RELATED_APPLICANT_PROFILE_REGIONS)
             .prefetch_related(
                 "applicant_profile__work_experiences",
                 "applicant_profile__documents__document_type",
@@ -1563,6 +1568,7 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
                 id__in=applicant_user_ids,
                 role=UserRole.APPLICANT,
             )
+            .select_related(*EXPORT_SELECT_RELATED_APPLICANT_PROFILE_REGIONS)
             .prefetch_related(
                 "applicant_profile__work_experiences",
                 "applicant_profile__documents__document_type",

@@ -51,6 +51,7 @@ from .serializers import (
     StaffUserSerializer,
     CompanyUserSerializer,
     ApplicantUserSerializer,
+    BulkAdminProcessSerializer,
     ApplicantProfileSerializer,
     ReferrerListSerializer,
     WorkExperienceSerializer,
@@ -67,7 +68,10 @@ from .api_responses import (
     error_response,
     success_response,
 )
-from .services.export import generate_applicants_excel
+from .services.export import (
+    EXPORT_SELECT_RELATED_APPLICANT_PROFILE_REGIONS,
+    generate_applicants_excel,
+)
 from .services.biodata_pdf import generate_biodata_pdf
 from .services.inbond_pdf import generate_inbond_pdf
 from .services.notification_delivery import send_broadcast
@@ -402,12 +406,9 @@ class ApplicantUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
     def get_queryset(self):
         return (
             CustomUser.objects.filter(role=UserRole.APPLICANT)
-            .select_related("applicant_profile__user")
             .select_related(
-                "applicant_profile__province",
-                "applicant_profile__district",
-                "applicant_profile__referrer",
-                "applicant_profile__verified_by",
+                "applicant_profile__user",
+                *EXPORT_SELECT_RELATED_APPLICANT_PROFILE_REGIONS,
             )
         )
 
@@ -469,6 +470,71 @@ class ApplicantUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
                 ),
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+    @action(detail=False, methods=["post"], url_path="bulk-admin-process")
+    def bulk_admin_process(self, request):
+        """
+        POST /api/applicants/bulk-admin-process/
+
+        Bulk-update admin medical / pembayaran fields on ApplicantProfile for many pelamar.
+        Body: { "applicant_user_ids": [1,2], "tgl_medical": "2026-01-15", "hasil_medical": "FIT", ... }
+        Only keys present in JSON are applied (omit a key to leave existing DB value unchanged).
+        """
+        serializer = BulkAdminProcessSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                error_response(
+                    detail="Data tidak valid.",
+                    code=ApiCode.VALIDATION_ERROR,
+                    errors=serializer.errors,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        ids = serializer.validated_data["applicant_user_ids"]
+        raw = request.data if isinstance(request.data, dict) else {}
+        valid_users = set(
+            CustomUser.objects.filter(id__in=ids, role=UserRole.APPLICANT).values_list(
+                "id", flat=True
+            )
+        )
+        missing = [i for i in ids if i not in valid_users]
+        if missing:
+            return Response(
+                error_response(
+                    detail=(
+                        "Beberapa ID bukan akun pelamar atau tidak ditemukan: "
+                        + ", ".join(str(x) for x in missing[:15])
+                        + ("..." if len(missing) > 15 else "")
+                    ),
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        updates: dict = {}
+        if "tgl_medical" in raw:
+            updates["tgl_medical"] = serializer.validated_data.get("tgl_medical")
+        if "hasil_medical" in raw:
+            hm = (serializer.validated_data.get("hasil_medical") or "").strip()
+            updates["hasil_medical"] = hm.upper() if hm else ""
+        if "tgl_bayar_sml" in raw:
+            updates["tgl_bayar_sml"] = serializer.validated_data.get("tgl_bayar_sml")
+        if not updates:
+            return Response(
+                error_response(
+                    detail="Tidak ada field untuk diperbarui.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        with transaction.atomic():
+            n = ApplicantProfile.objects.filter(user_id__in=ids).update(**updates)
+        return Response(
+            success_response(
+                data={"updated_count": n},
+                detail=f"{n} profil pelamar diperbarui.",
+            ),
+            status=status.HTTP_200_OK,
+        )
 
     @action(detail=True, methods=["get"], url_path="download-documents")
     def download_documents(self, request, pk=None):

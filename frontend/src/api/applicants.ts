@@ -5,6 +5,7 @@
  */
 
 import { api } from "@/lib/api"
+import type { ApiSuccessResponse } from "@/types/api"
 import type {
   ApplicantUser,
   ApplicantUserCreateInput,
@@ -92,6 +93,23 @@ export async function patchApplicant(
 ): Promise<ApplicantUser> {
   const { data } = await api.patch<ApplicantUser>(`/api/applicants/${id}/`, input)
   return data
+}
+
+/** POST /api/applicants/bulk-admin-process/ — bulk medical / SML payment fields on profiles */
+export async function bulkAdminProcessApplicants(input: {
+  applicant_user_ids: number[]
+  tgl_medical?: string | null
+  hasil_medical?: string
+  tgl_bayar_sml?: string | null
+}): Promise<{ updated_count: number }> {
+  const { data } = await api.post<ApiSuccessResponse<{ updated_count: number }>>(
+    "/api/applicants/bulk-admin-process/",
+    input
+  )
+  if (data.data == null) {
+    throw new Error("Invalid response from bulk-admin-process")
+  }
+  return data.data
 }
 
 /** POST /api/applicants/:id/deactivate/ */

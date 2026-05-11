@@ -131,6 +131,10 @@ export interface JobApplication {
    * Null/absent for applications not yet in DITERIMA.
    */
   diterima_current_step?: DocumentCollectionStepCode | null
+  /** ApplicantProfile admin fields (same job-application list payload when backend joins profile). */
+  tgl_medical?: string | null
+  hasil_medical?: string | null
+  tgl_bayar_sml?: string | null
   created_at: string
   updated_at: string
 }

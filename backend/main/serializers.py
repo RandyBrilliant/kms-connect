@@ -279,6 +279,10 @@ class JobApplicationSerializer(serializers.ModelSerializer):
     pengumpulan_dokumen_pending_labels = serializers.SerializerMethodField(read_only=True)
     diterima_step_confirmations = serializers.SerializerMethodField(read_only=True)
     diterima_current_step = serializers.CharField(read_only=True)
+    # Admin process snapshot (ApplicantProfile) — used by job detail DITERIMA / Medical table.
+    tgl_medical = serializers.SerializerMethodField(read_only=True)
+    hasil_medical = serializers.SerializerMethodField(read_only=True)
+    tgl_bayar_sml = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = JobApplication
@@ -327,6 +331,9 @@ class JobApplicationSerializer(serializers.ModelSerializer):
             "pengumpulan_dokumen_pending_labels",
             "diterima_step_confirmations",
             "diterima_current_step",
+            "tgl_medical",
+            "hasil_medical",
+            "tgl_bayar_sml",
             "created_at",
             "updated_at",
         ]
@@ -362,10 +369,35 @@ class JobApplicationSerializer(serializers.ModelSerializer):
             "pengumpulan_dokumen_pending_labels",
             "diterima_step_confirmations",
             "diterima_current_step",
+            "tgl_medical",
+            "hasil_medical",
+            "tgl_bayar_sml",
             "applied_at",
             "created_at",
             "updated_at",
         ]
+
+    def _applicant_profile_for_job_app(self, obj):
+        # JobApplication.applicant is an ApplicantProfile FK (not CustomUser).
+        return getattr(obj, "applicant", None)
+
+    def get_tgl_medical(self, obj):
+        p = self._applicant_profile_for_job_app(obj)
+        if not p or p.tgl_medical is None:
+            return None
+        return p.tgl_medical
+
+    def get_hasil_medical(self, obj) -> str:
+        p = self._applicant_profile_for_job_app(obj)
+        if not p:
+            return ""
+        return (p.hasil_medical or "").strip()
+
+    def get_tgl_bayar_sml(self, obj):
+        p = self._applicant_profile_for_job_app(obj)
+        if not p or p.tgl_bayar_sml is None:
+            return None
+        return p.tgl_bayar_sml
 
     def get_applicant_user(self, obj) -> int | None:
         applicant = getattr(obj, "applicant", None)
