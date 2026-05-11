@@ -113,6 +113,7 @@ import {
   DOCUMENT_COLLECTION_STEP_ORDER,
   type ApplicationStatus,
   type DocumentCollectionStepCode,
+  type JobApplication,
 } from "@/types/job-applications"
 
 // ---------------------------------------------------------------------------
@@ -153,6 +154,129 @@ function MedicalHasilPill({ value }: { value: string | null | undefined }) {
     <Badge variant="secondary" className="max-w-[140px] truncate font-normal">
       {value}
     </Badge>
+  )
+}
+
+/** Pelamar name/email + batch link + tahapan diterima + sesi interview (muted). */
+function PelamarTahapanSesiCell({
+  app,
+  batchBase,
+  cohortBase,
+}: {
+  app: JobApplication
+  batchBase: string
+  cohortBase: string
+}) {
+  const navigate = useNavigate()
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <span className="font-medium leading-tight">{app.applicant_name}</span>
+      <span className="text-xs text-muted-foreground">{app.applicant_email}</span>
+      <div className="text-sm text-muted-foreground">
+        {app.batch ? (
+          <button
+            type="button"
+            className="inline-flex max-w-full items-center gap-1 text-left text-primary underline-offset-2 hover:underline cursor-pointer"
+            onClick={() => navigate(`${batchBase}/${app.batch}`)}
+          >
+            <span className="truncate">
+              {app.batch_tahap_label ?? app.batch_name ?? `Batch #${app.batch}`}
+            </span>
+            <IconExternalLink className="size-3 shrink-0" />
+          </button>
+        ) : (
+          <span>—</span>
+        )}
+      </div>
+      {app.diterima_current_step ? (
+        <p className="text-[11px] leading-snug text-muted-foreground">
+          Tahapan diterima:{" "}
+          <span className="text-foreground/90">
+            {DOCUMENT_COLLECTION_STEP_LABELS[app.diterima_current_step]}
+          </span>
+        </p>
+      ) : null}
+      <div className="text-[11px] leading-snug text-muted-foreground">
+        {app.interview_cohort != null ? (
+          <button
+            type="button"
+            className="inline-flex max-w-full items-start gap-1 text-left text-muted-foreground underline-offset-2 hover:text-foreground hover:underline cursor-pointer"
+            onClick={() => navigate(`${cohortBase}/${app.interview_cohort}`)}
+          >
+            <span className="break-words">
+              Sesi interview:{" "}
+              {app.interview_cohort_name ?? `Sesi #${app.interview_cohort}`}
+            </span>
+            <IconExternalLink className="mt-0.5 size-3 shrink-0 opacity-70" />
+          </button>
+        ) : (
+          <span>Sesi interview: —</span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function PassportBerkasLink({ url }: { url: string | null | undefined }) {
+  const u = (url || "").trim()
+  if (!u) {
+    return <span className="text-muted-foreground text-xs">Belum ada berkas</span>
+  }
+  return (
+    <a
+      href={u}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1 text-sm font-medium text-primary underline-offset-4 hover:underline"
+    >
+      Lihat file
+      <IconExternalLink className="size-3.5 shrink-0" />
+    </a>
+  )
+}
+
+/** Ringkasan field paspor dari halaman profil pelamar. */
+function PassportDetailBlock({ app }: { app: JobApplication }) {
+  const rows: { label: string; value: string }[] = []
+  if (app.has_passport != null) {
+    rows.push({
+      label: "Memiliki paspor",
+      value: app.has_passport ? "Ya" : "Tidak",
+    })
+  }
+  const num = (app.passport_number || "").trim()
+  if (num) rows.push({ label: "Nomor", value: num })
+  if (app.passport_issue_date) {
+    rows.push({
+      label: "Tgl. terbit",
+      value: formatDate(app.passport_issue_date),
+    })
+  }
+  if (app.passport_expiry_date) {
+    rows.push({
+      label: "Tgl. kadaluarsa",
+      value: formatDate(app.passport_expiry_date),
+    })
+  }
+  const place = (app.passport_issue_place || "").trim()
+  if (place) rows.push({ label: "Tempat terbit", value: place })
+
+  if (!rows.length) {
+    return (
+      <span className="text-xs text-muted-foreground">
+        Detail paspor belum diisi di profil
+      </span>
+    )
+  }
+  return (
+    <div className="flex max-w-[16rem] flex-col gap-1 text-xs">
+      {rows.map((r) => (
+        <div key={r.label} className="leading-snug">
+          <span className="text-muted-foreground">{r.label}: </span>
+          <span className="text-foreground">{r.value}</span>
+        </div>
+      ))}
+    </div>
   )
 }
 
@@ -785,8 +909,20 @@ function ApplicationsTab({
   const showDocCol = status === "DITERIMA" && selectedDiterimaStep !== "ALL"
   const isMedicalDiterimaStep =
     status === "DITERIMA" && selectedDiterimaStep === "MEDICAL"
-  const showDocColEffective = showDocCol && !isMedicalDiterimaStep
-  const showCohortColEffective = showCohortCol && !isMedicalDiterimaStep
+  const isBuatIdPekerjaDiterimaStep =
+    status === "DITERIMA" && selectedDiterimaStep === "BUAT_ID_PEKERJA"
+  const isBuatPasporDiterimaStep =
+    status === "DITERIMA" && selectedDiterimaStep === "BUAT_PASPOR"
+  const showDocColEffective =
+    showDocCol &&
+    !isMedicalDiterimaStep &&
+    !isBuatIdPekerjaDiterimaStep &&
+    !isBuatPasporDiterimaStep
+  const showCohortColEffective =
+    showCohortCol &&
+    !isMedicalDiterimaStep &&
+    !isBuatIdPekerjaDiterimaStep &&
+    !isBuatPasporDiterimaStep
   const showDiterimaStepFilter = status === "DITERIMA"
   const diterimaStepOptions = useMemo(
     () =>
@@ -856,10 +992,14 @@ function ApplicationsTab({
   const showCheckboxCol = onDiterimaSubStep || enableAcceptedAnnouncement
   const emptyColSpan = isMedicalDiterimaStep
     ? (showCheckboxCol ? 1 : 0) + 6
-    : 5 +
-      (showCohortColEffective ? 1 : 0) +
-      (showDocColEffective ? 1 : 0) +
-      (showCheckboxCol ? 1 : 0)
+    : isBuatIdPekerjaDiterimaStep
+      ? (showCheckboxCol ? 1 : 0) + 4
+      : isBuatPasporDiterimaStep
+        ? (showCheckboxCol ? 1 : 0) + 5
+        : 5 +
+          (showCohortColEffective ? 1 : 0) +
+          (showDocColEffective ? 1 : 0) +
+          (showCheckboxCol ? 1 : 0)
 
   const handleExportExcel = async () => {
     setIsExporting(true)
@@ -1328,6 +1468,7 @@ function ApplicationsTab({
                   <TableHead className="whitespace-nowrap">Tgl. medical</TableHead>
                   <TableHead>Hasil medical</TableHead>
                   <TableHead className="whitespace-nowrap">Tgl. bayar SML</TableHead>
+                  <TableHead className="min-w-[11rem]">Konfirmasi Pelamar</TableHead>
                   <TableHead className="text-right w-[180px] sticky right-0 bg-background z-10">
                     Aksi
                   </TableHead>
@@ -1345,60 +1486,11 @@ function ApplicationsTab({
                         />
                       </TableCell>
                       <TableCell className="align-top min-w-0">
-                        <div className="flex min-w-0 flex-col gap-1">
-                          <span className="font-medium leading-tight">
-                            {app.applicant_name}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {app.applicant_email}
-                          </span>
-                          <div className="text-sm text-muted-foreground">
-                            {app.batch ? (
-                              <button
-                                type="button"
-                                className="inline-flex max-w-full items-center gap-1 text-left text-primary underline-offset-2 hover:underline cursor-pointer"
-                                onClick={() => navigate(`${batchBase}/${app.batch}`)}
-                              >
-                                <span className="truncate">
-                                  {app.batch_tahap_label ??
-                                    app.batch_name ??
-                                    `Batch #${app.batch}`}
-                                </span>
-                                <IconExternalLink className="size-3 shrink-0" />
-                              </button>
-                            ) : (
-                              <span>—</span>
-                            )}
-                          </div>
-                          {app.diterima_current_step ? (
-                            <p className="text-[11px] leading-snug text-muted-foreground">
-                              Tahapan diterima:{" "}
-                              <span className="text-foreground/90">
-                                {DOCUMENT_COLLECTION_STEP_LABELS[app.diterima_current_step]}
-                              </span>
-                            </p>
-                          ) : null}
-                          <div className="text-[11px] leading-snug text-muted-foreground">
-                            {app.interview_cohort != null ? (
-                              <button
-                                type="button"
-                                className="inline-flex max-w-full items-start gap-1 text-left text-muted-foreground underline-offset-2 hover:text-foreground hover:underline cursor-pointer"
-                                onClick={() =>
-                                  navigate(`${cohortBase}/${app.interview_cohort}`)
-                                }
-                              >
-                                <span className="break-words">
-                                  Sesi interview:{" "}
-                                  {app.interview_cohort_name ??
-                                    `Sesi #${app.interview_cohort}`}
-                                </span>
-                                <IconExternalLink className="mt-0.5 size-3 shrink-0 opacity-70" />
-                              </button>
-                            ) : (
-                              <span>Sesi interview: —</span>
-                            )}
-                          </div>
-                        </div>
+                        <PelamarTahapanSesiCell
+                          app={app}
+                          batchBase={batchBase}
+                          cohortBase={cohortBase}
+                        />
                       </TableCell>
                       <TableCell className="align-top text-sm whitespace-nowrap">
                         {formatDate(app.tgl_medical ?? null)}
@@ -1408,6 +1500,268 @@ function ApplicationsTab({
                       </TableCell>
                       <TableCell className="align-top text-sm whitespace-nowrap">
                         {formatDate(app.tgl_bayar_sml ?? null)}
+                      </TableCell>
+                      <TableCell className="align-top text-sm">
+                        <DocumentCollectionProgressCell
+                          app={app}
+                          highlightStep="MEDICAL"
+                        />
+                      </TableCell>
+                      <TableCell className="text-right sticky right-0 bg-background align-top">
+                        <div className="flex items-center justify-end gap-0.5">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="size-8 shrink-0 cursor-pointer text-muted-foreground"
+                            title="Lihat detail pelamar"
+                            disabled={!app.applicant_user}
+                            onClick={() => {
+                              if (!app.applicant_user) return
+                              setPreviewUserId(app.applicant_user)
+                              setPreviewUserLabel(app.applicant_name)
+                            }}
+                          >
+                            <IconEye className="size-4" />
+                            <span className="sr-only">Lihat detail pelamar</span>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="size-8 shrink-0 cursor-pointer text-muted-foreground"
+                            title="Buka halaman lamaran"
+                            onClick={() => navigate(`${lamaranBase}/${app.id}`)}
+                          >
+                            <IconExternalLink className="size-4" />
+                            <span className="sr-only">Buka halaman lamaran</span>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="size-8 shrink-0 cursor-pointer text-muted-foreground"
+                            title="Kelola dokumen pelamar"
+                            disabled={!app.applicant_user}
+                            onClick={() => {
+                              if (!app.applicant_user) return
+                              navigate(`${pelamarBase}/${app.applicant_user}`)
+                            }}
+                          >
+                            <IconFileSpreadsheet className="size-4" />
+                            <span className="sr-only">Kelola dokumen pelamar</span>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="size-8 shrink-0 cursor-pointer text-muted-foreground"
+                            title="Edit data proses"
+                            disabled={!app.applicant_user}
+                            onClick={() => {
+                              if (!app.applicant_user) return
+                              setProcessUserId(app.applicant_user)
+                              setProcessUserLabel(app.applicant_name)
+                            }}
+                          >
+                            <IconClipboardList className="size-4" />
+                            <span className="sr-only">Edit data proses</span>
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell
+                      colSpan={emptyColSpan}
+                      className="h-20 text-center text-muted-foreground"
+                    >
+                      Tidak ada pelamar dengan status ini.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          ) : isBuatIdPekerjaDiterimaStep ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[42px]">
+                    <Checkbox
+                      checked={allAdvanceChecked}
+                      onCheckedChange={toggleSelectAllAdvance}
+                      aria-label="Pilih semua pelamar di tabel"
+                    />
+                  </TableHead>
+                  <TableHead className="min-w-[14rem]">
+                    Pelamar, tahapan &amp; sesi
+                  </TableHead>
+                  <TableHead className="whitespace-nowrap min-w-[10rem]">
+                    No. ID pekerja (SISKO)
+                  </TableHead>
+                  <TableHead className="min-w-[11rem]">Konfirmasi Pelamar</TableHead>
+                  <TableHead className="text-right w-[180px] sticky right-0 bg-background z-10">
+                    Aksi
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredApps.length ? (
+                  filteredApps.map((app) => (
+                    <TableRow key={app.id} className="hover:bg-muted/50">
+                      <TableCell className="align-top">
+                        <Checkbox
+                          checked={selectedAdvanceAppIds.has(app.id)}
+                          onCheckedChange={() => toggleSelectAdvance(app.id)}
+                          aria-label={`Pilih ${app.applicant_name}`}
+                        />
+                      </TableCell>
+                      <TableCell className="align-top min-w-0">
+                        <PelamarTahapanSesiCell
+                          app={app}
+                          batchBase={batchBase}
+                          cohortBase={cohortBase}
+                        />
+                      </TableCell>
+                      <TableCell className="align-top font-mono text-sm">
+                        {(app.no_id_sisko || "").trim() || "—"}
+                      </TableCell>
+                      <TableCell className="align-top text-sm">
+                        <DocumentCollectionProgressCell
+                          app={app}
+                          highlightStep="BUAT_ID_PEKERJA"
+                        />
+                      </TableCell>
+                      <TableCell className="text-right sticky right-0 bg-background align-top">
+                        <div className="flex items-center justify-end gap-0.5">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="size-8 shrink-0 cursor-pointer text-muted-foreground"
+                            title="Lihat detail pelamar"
+                            disabled={!app.applicant_user}
+                            onClick={() => {
+                              if (!app.applicant_user) return
+                              setPreviewUserId(app.applicant_user)
+                              setPreviewUserLabel(app.applicant_name)
+                            }}
+                          >
+                            <IconEye className="size-4" />
+                            <span className="sr-only">Lihat detail pelamar</span>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="size-8 shrink-0 cursor-pointer text-muted-foreground"
+                            title="Buka halaman lamaran"
+                            onClick={() => navigate(`${lamaranBase}/${app.id}`)}
+                          >
+                            <IconExternalLink className="size-4" />
+                            <span className="sr-only">Buka halaman lamaran</span>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="size-8 shrink-0 cursor-pointer text-muted-foreground"
+                            title="Kelola dokumen pelamar"
+                            disabled={!app.applicant_user}
+                            onClick={() => {
+                              if (!app.applicant_user) return
+                              navigate(`${pelamarBase}/${app.applicant_user}`)
+                            }}
+                          >
+                            <IconFileSpreadsheet className="size-4" />
+                            <span className="sr-only">Kelola dokumen pelamar</span>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="size-8 shrink-0 cursor-pointer text-muted-foreground"
+                            title="Edit data proses"
+                            disabled={!app.applicant_user}
+                            onClick={() => {
+                              if (!app.applicant_user) return
+                              setProcessUserId(app.applicant_user)
+                              setProcessUserLabel(app.applicant_name)
+                            }}
+                          >
+                            <IconClipboardList className="size-4" />
+                            <span className="sr-only">Edit data proses</span>
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell
+                      colSpan={emptyColSpan}
+                      className="h-20 text-center text-muted-foreground"
+                    >
+                      Tidak ada pelamar dengan status ini.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          ) : isBuatPasporDiterimaStep ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[42px]">
+                    <Checkbox
+                      checked={allAdvanceChecked}
+                      onCheckedChange={toggleSelectAllAdvance}
+                      aria-label="Pilih semua pelamar di tabel"
+                    />
+                  </TableHead>
+                  <TableHead className="min-w-[14rem]">
+                    Pelamar, tahapan &amp; sesi
+                  </TableHead>
+                  <TableHead className="min-w-[8rem] whitespace-nowrap">
+                    Berkas paspor
+                  </TableHead>
+                  <TableHead className="min-w-[12rem]">Detail paspor (profil)</TableHead>
+                  <TableHead className="min-w-[11rem]">Konfirmasi Pelamar</TableHead>
+                  <TableHead className="text-right w-[180px] sticky right-0 bg-background z-10">
+                    Aksi
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredApps.length ? (
+                  filteredApps.map((app) => (
+                    <TableRow key={app.id} className="hover:bg-muted/50">
+                      <TableCell className="align-top">
+                        <Checkbox
+                          checked={selectedAdvanceAppIds.has(app.id)}
+                          onCheckedChange={() => toggleSelectAdvance(app.id)}
+                          aria-label={`Pilih ${app.applicant_name}`}
+                        />
+                      </TableCell>
+                      <TableCell className="align-top min-w-0">
+                        <PelamarTahapanSesiCell
+                          app={app}
+                          batchBase={batchBase}
+                          cohortBase={cohortBase}
+                        />
+                      </TableCell>
+                      <TableCell className="align-top">
+                        <PassportBerkasLink url={app.passport_file_url} />
+                      </TableCell>
+                      <TableCell className="align-top">
+                        <PassportDetailBlock app={app} />
+                      </TableCell>
+                      <TableCell className="align-top text-sm">
+                        <DocumentCollectionProgressCell
+                          app={app}
+                          highlightStep="BUAT_PASPOR"
+                        />
                       </TableCell>
                       <TableCell className="text-right sticky right-0 bg-background align-top">
                         <div className="flex items-center justify-end gap-0.5">

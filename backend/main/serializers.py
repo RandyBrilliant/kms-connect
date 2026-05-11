@@ -283,6 +283,14 @@ class JobApplicationSerializer(serializers.ModelSerializer):
     tgl_medical = serializers.SerializerMethodField(read_only=True)
     hasil_medical = serializers.SerializerMethodField(read_only=True)
     tgl_bayar_sml = serializers.SerializerMethodField(read_only=True)
+    no_id_sisko = serializers.SerializerMethodField(read_only=True)
+    # Paspor snapshot (profil + berkas tipe "paspor") — tab DITERIMA / Buat Paspor.
+    has_passport = serializers.SerializerMethodField(read_only=True)
+    passport_number = serializers.SerializerMethodField(read_only=True)
+    passport_issue_date = serializers.SerializerMethodField(read_only=True)
+    passport_expiry_date = serializers.SerializerMethodField(read_only=True)
+    passport_issue_place = serializers.SerializerMethodField(read_only=True)
+    passport_file_url = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = JobApplication
@@ -334,6 +342,13 @@ class JobApplicationSerializer(serializers.ModelSerializer):
             "tgl_medical",
             "hasil_medical",
             "tgl_bayar_sml",
+            "no_id_sisko",
+            "has_passport",
+            "passport_number",
+            "passport_issue_date",
+            "passport_expiry_date",
+            "passport_issue_place",
+            "passport_file_url",
             "created_at",
             "updated_at",
         ]
@@ -372,6 +387,13 @@ class JobApplicationSerializer(serializers.ModelSerializer):
             "tgl_medical",
             "hasil_medical",
             "tgl_bayar_sml",
+            "no_id_sisko",
+            "has_passport",
+            "passport_number",
+            "passport_issue_date",
+            "passport_expiry_date",
+            "passport_issue_place",
+            "passport_file_url",
             "applied_at",
             "created_at",
             "updated_at",
@@ -398,6 +420,71 @@ class JobApplicationSerializer(serializers.ModelSerializer):
         if not p or p.tgl_bayar_sml is None:
             return None
         return p.tgl_bayar_sml
+
+    def get_no_id_sisko(self, obj) -> str:
+        p = self._applicant_profile_for_job_app(obj)
+        if not p:
+            return ""
+        return (getattr(p, "no_id_sisko", None) or "").strip()
+
+    def get_has_passport(self, obj):
+        p = self._applicant_profile_for_job_app(obj)
+        if not p:
+            return None
+        return getattr(p, "has_passport", None)
+
+    def get_passport_number(self, obj) -> str:
+        p = self._applicant_profile_for_job_app(obj)
+        if not p:
+            return ""
+        return (getattr(p, "passport_number", None) or "").strip()
+
+    def get_passport_issue_place(self, obj) -> str:
+        p = self._applicant_profile_for_job_app(obj)
+        if not p:
+            return ""
+        return (getattr(p, "passport_issue_place", None) or "").strip()
+
+    def get_passport_issue_date(self, obj):
+        p = self._applicant_profile_for_job_app(obj)
+        if not p or p.passport_issue_date is None:
+            return None
+        return p.passport_issue_date
+
+    def get_passport_expiry_date(self, obj):
+        p = self._applicant_profile_for_job_app(obj)
+        if not p or p.passport_expiry_date is None:
+            return None
+        return p.passport_expiry_date
+
+    def get_passport_file_url(self, obj) -> str | None:
+        from account.models import ApplicantDocument
+
+        p = self._applicant_profile_for_job_app(obj)
+        if not p:
+            return None
+        doc = None
+        pref = getattr(p, "_prefetched_paspor_docs", None)
+        if pref is not None:
+            doc = pref[0] if pref else None
+        else:
+            doc = (
+                ApplicantDocument.objects.filter(
+                    applicant_profile=p, document_type__code="paspor"
+                )
+                .only("file")
+                .first()
+            )
+        if not doc or not doc.file:
+            return None
+        request = self.context.get("request")
+        try:
+            url = doc.file.url
+        except (ValueError, AttributeError):
+            return None
+        if request and url.startswith("/"):
+            return request.build_absolute_uri(url)
+        return url
 
     def get_applicant_user(self, obj) -> int | None:
         applicant = getattr(obj, "applicant", None)

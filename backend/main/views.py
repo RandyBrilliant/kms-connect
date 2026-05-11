@@ -6,6 +6,7 @@ Public endpoints: published news, OPEN jobs.
 Company/Staff self-service: read-only views of their own data.
 """
 
+from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404
 from django.db.models import Count, Q
 from django_filters.rest_framework import DjangoFilterBackend
@@ -24,7 +25,7 @@ from account.permissions import (
     IsStaff,
 )
 from account.api_responses import success_response, error_response, ApiCode
-from account.models import ApplicantProfile, ApplicantVerificationStatus, CustomUser, UserRole
+from account.models import ApplicantDocument, ApplicantProfile, ApplicantVerificationStatus, CustomUser, UserRole
 from account.serializers import _staff_rujukan_display_name
 from account.pagination import StandardResultsSetPagination
 from account.services.export import (
@@ -1466,6 +1467,15 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
                 "batch",
                 "interview_cohort",
                 "assigned_by",
+            )
+            .prefetch_related(
+                Prefetch(
+                    "applicant__documents",
+                    queryset=ApplicantDocument.objects.filter(
+                        document_type__code="paspor",
+                    ).select_related("document_type"),
+                    to_attr="_prefetched_paspor_docs",
+                ),
             )
         )
         if self.action == "retrieve":
