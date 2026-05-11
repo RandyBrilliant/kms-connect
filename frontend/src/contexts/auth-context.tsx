@@ -64,20 +64,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const logout = useCallback(async () => {
-    // 1. Kill the interceptor's refresh loop FIRST
+    // 1. Stop the refresh interceptor from replaying requests with dying cookies
     markSessionExpired()
-    // 2. Cancel every in-flight & pending query so nothing fires after logout
     await queryClient.cancelQueries()
-    // 3. Clear all cached data (removes query cache entirely)
-    queryClient.clear()
 
     try {
+      // 2. Clear HTTP-only auth cookies on the server *before* clearing the
+      //    query cache.  If we clear() first, the active /api/me/ query
+      //    refetches immediately while cookies still exist, repopulates the
+      //    user, and /login redirects straight back to the dashboard.
       await logoutApi()
       toast.success("Logout berhasil", "Anda telah keluar dari akun")
     } catch (error) {
-      // Even if logout API fails, local session is already cleared
       console.error("Logout error:", error)
     } finally {
+      queryClient.clear()
       navigate("/login")
     }
   }, [navigate, queryClient])

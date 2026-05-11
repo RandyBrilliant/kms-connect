@@ -281,10 +281,12 @@ CHANNEL_LAYERS = {
 # Django REST Framework & SimpleJWT (untuk serializers/views API)
 # -----------------------------------------------------------------------------
 REST_FRAMEWORK = {
+    # JWT only for the API. SessionAuthentication is omitted so browser POSTs
+    # from the SPA are not forced through DRF's CSRF checks (which break
+    # hard reloads when a Django session exists, e.g. /admin/ in the same browser).
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "account.jwt_cookie_auth.JWTCookieAuthentication",
         "rest_framework_simplejwt.authentication.JWTAuthentication",
-        "rest_framework.authentication.SessionAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
