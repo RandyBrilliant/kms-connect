@@ -50,9 +50,14 @@ function LamaranApplicationCard({
       ? joinAdminPath(basePath, `/sesi-interview/${app.interview_cohort}`)
       : null
 
-  const cohortTitle =
+  const cohortDisplayName =
     app.interview_cohort_name?.trim() ||
     (app.interview_cohort != null ? `Sesi #${app.interview_cohort}` : null)
+
+  const batchDisplayName =
+    app.batch_name?.trim() ||
+    app.batch_tahap_label?.trim() ||
+    (app.batch != null ? `Batch #${app.batch}` : null)
 
   const stepIdx = app.diterima_current_step
     ? DOCUMENT_COLLECTION_STEP_ORDER.indexOf(app.diterima_current_step)
@@ -131,13 +136,13 @@ function LamaranApplicationCard({
               <IconStack2 className="size-3.5 shrink-0 text-primary/80" aria-hidden />
               Batch pra-seleksi
             </div>
-            {batchHref && app.batch_name ? (
+            {batchHref && batchDisplayName ? (
               <Link
                 to={batchHref}
                 className="group inline-flex items-start gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline"
               >
                 <span className="min-w-0 break-words leading-snug">
-                  {app.batch_tahap_label ?? app.batch_name}
+                  {batchDisplayName}
                 </span>
                 <IconExternalLink className="mt-0.5 size-3.5 shrink-0 opacity-70 transition-opacity group-hover:opacity-100" />
               </Link>
@@ -158,12 +163,12 @@ function LamaranApplicationCard({
               <IconMicrophone2 className="size-3.5 shrink-0 text-violet-600 dark:text-violet-400" aria-hidden />
               Grup sesi interview
             </div>
-            {cohortHref && cohortTitle ? (
+            {cohortHref && cohortDisplayName ? (
               <Link
                 to={cohortHref}
                 className="group inline-flex items-start gap-1.5 text-sm font-medium text-violet-700 underline-offset-4 hover:underline dark:text-violet-300"
               >
-                <span className="min-w-0 break-words leading-snug">{cohortTitle}</span>
+                <span className="min-w-0 break-words leading-snug">{cohortDisplayName}</span>
                 <IconExternalLink className="mt-0.5 size-3.5 shrink-0 opacity-70 transition-opacity group-hover:opacity-100" />
               </Link>
             ) : (

@@ -83,7 +83,7 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
 const APPLICANT_FILTER_TRIGGER_CLASS =
   "h-9 w-full min-w-0 cursor-pointer shadow-none sm:min-h-0"
 
-/** Default list: bergabung terbaru dulu (matches backend `ApplicantUserViewSet.ordering`). */
+/** Default list order: tanggal bergabung terbaru dulu (kolom tidak ditampilkan di tabel). */
 const DEFAULT_APPLICANT_LIST_ORDERING = "-applicant_profile__created_at"
 
 /** Warna pill status verifikasi: Dikirim / Diterima / Ditolak */
@@ -119,7 +119,6 @@ const SORT_FIELD = {
   rujukan: "applicant_profile__referrer__full_name",
   skor: "applicant_profile__score",
   verifikasi: "applicant_profile__verification_status",
-  bergabung: "applicant_profile__created_at",
 } as const
 
 function SortableColumnHead({
@@ -182,8 +181,7 @@ function applicantTableHeadClass(columnId: string) {
     columnId === "select" && "w-12",
     columnId === "actions" && "w-14",
     columnId === "skor" && "tabular-nums",
-    columnId === "umur" && "tabular-nums",
-    columnId === "bergabung" && "tabular-nums"
+    columnId === "umur" && "tabular-nums"
   )
 }
 
@@ -198,7 +196,6 @@ function applicantTableCellClass(columnId: string) {
     columnId === "agama" && "max-w-[10rem] whitespace-normal",
     columnId === "skor" && "tabular-nums font-medium",
     columnId === "verifikasi" && "whitespace-normal",
-    columnId === "bergabung" && "text-muted-foreground tabular-nums text-sm",
     columnId === "actions" && "w-14 text-right"
   )
 }
@@ -632,22 +629,6 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
           if (!status) return <span className="text-muted-foreground">—</span>
           return <VerificationStatusPill status={status} />
         },
-      },
-      {
-        id: "bergabung",
-        accessorKey: "applicant_profile.created_at",
-        header: () => (
-          <SortableColumnHead
-            field={SORT_FIELD.bergabung}
-            label="Bergabung"
-            ordering={params.ordering}
-            onSort={handleSortColumn}
-          />
-        ),
-        cell: ({ row }) =>
-          formatDate(
-            row.original.applicant_profile?.created_at ?? row.original.date_joined
-          ),
       },
       {
         id: "actions",
@@ -1085,16 +1066,6 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
                             </p>
                           </div>
                         )}
-                        <div className="col-span-2 sm:col-span-1">
-                          <span className="text-muted-foreground text-xs font-medium">
-                            Bergabung
-                          </span>
-                          <p className="text-muted-foreground mt-0.5 text-xs tabular-nums">
-                            {formatDate(
-                              profile?.created_at ?? applicant.date_joined
-                            )}
-                          </p>
-                        </div>
                       </div>
 
                       {profile?.verification_status ? (
