@@ -47,6 +47,12 @@ class ApplicantUserFilterSet(django_filters.FilterSet):
         lookup_expr="exact",
         help_text="Filter pelamar by perujuk (CustomUser id — Staf/Admin).",
     )
+    # True = pelamar tanpa staff rujukan (referrer NULL), mis. daftar mandiri.
+    referrer_isnull = django_filters.BooleanFilter(
+        field_name="applicant_profile__referrer",
+        lookup_expr="isnull",
+        help_text="True: hanya pelamar tanpa staff rujukan.",
+    )
 
     gender = django_filters.ChoiceFilter(
         field_name="applicant_profile__gender",
@@ -109,6 +115,7 @@ class ApplicantUserFilterSet(django_filters.FilterSet):
             "email_verified",
             "verification_status",
             "referrer",
+            "referrer_isnull",
             "created_at_after",
             "created_at_before",
             "gender",

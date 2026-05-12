@@ -1035,11 +1035,15 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
         step_labels = dict(ApplicationService.DOCUMENT_COLLECTION_STEP_ORDER)
 
         # Limit to a few most-recent applications to keep payload small.
-        apps = (
-            JobApplication.objects.filter(applicant=profile)
-            .select_related("job", "batch", "interview_cohort")
-            .order_by("-applied_at")[:5]
-        )
+        prefetched = getattr(profile, "_job_apps_summary_prefetch", None)
+        if prefetched is None:
+            apps = list(
+                JobApplication.objects.filter(applicant=profile)
+                .select_related("job", "job__company", "batch", "interview_cohort")
+                .order_by("-applied_at")[:5]
+            )
+        else:
+            apps = list(prefetched)[:5]
 
         out = []
         for app in apps:
@@ -1051,6 +1055,11 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
             interview_cohort_name = (
                 (getattr(cohort, "name", None) or "").strip() if cohort is not None else ""
             )
+            batch = getattr(app, "batch", None)
+            batch_name = (getattr(batch, "name", None) or "").strip() if batch is not None else ""
+            batch_tahap_label = ""
+            if batch is not None:
+                batch_tahap_label = (batch.display_tahap_label or "").strip()
             diterima_code = getattr(app, "diterima_current_step", None) or None
             diterima_sub_stage_label = None
             if app.status == ApplicationStatus.DITERIMA and diterima_code:
@@ -1063,7 +1072,8 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
                     "job_id": app.job_id,
                     "job_title": getattr(app.job, "title", "") or "",
                     "batch_id": app.batch_id,
-                    "batch_name": getattr(app.batch, "name", "") if app.batch_id else "",
+                    "batch_name": batch_name,
+                    "batch_tahap_label": batch_tahap_label,
                     "interview_cohort_id": app.interview_cohort_id,
                     "interview_cohort_name": interview_cohort_name,
                     "diterima_current_step": diterima_code

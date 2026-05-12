@@ -21,7 +21,7 @@ from django.http import HttpResponse
 from datetime import timedelta, datetime
 
 from django.db import transaction
-from django.db.models import Count, F, Q
+from django.db.models import Count, F, Prefetch, Q
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 from django.utils.decorators import method_decorator
@@ -411,7 +411,7 @@ class ApplicantUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
         return [IsBackofficeAdmin()]
 
     def get_queryset(self):
-        return (
+        qs = (
             CustomUser.objects.filter(role=UserRole.APPLICANT)
             .select_related(
                 "applicant_profile__user",
@@ -419,6 +419,29 @@ class ApplicantUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
             )
             .prefetch_related("applicant_profile__inbound_transport_stage_costs")
         )
+        # Paginated list: prefetch lamaran ringkas untuk kolom lowongan/tahapan (SerializerMethodField).
+        if getattr(self, "action", None) == "list":
+            from main.models import JobApplication
+
+            qs = qs.prefetch_related(
+                Prefetch(
+                    "applicant_profile__job_applications",
+                    queryset=JobApplication.objects.select_related(
+                        "job",
+                        "job__company",
+                        "batch",
+                        "interview_cohort",
+                    ).order_by("-applied_at"),
+                    to_attr="_job_apps_summary_prefetch",
+                )
+            )
+        return qs
+
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        if getattr(self, "action", None) == "list":
+            ctx["include_applications_summary"] = True
+        return ctx
 
     def destroy(self, request, *args, **kwargs):
         return destroy_disallowed_response()

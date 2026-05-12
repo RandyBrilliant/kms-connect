@@ -220,6 +220,8 @@ export interface StaffReferralApplicationSummary {
   job_title: string
   batch_id: number | null
   batch_name: string
+  /** Label tahapan pra-seleksi (display_tahap_label). */
+  batch_tahap_label?: string
   interview_cohort_id?: number | null
   interview_cohort_name?: string
   diterima_current_step?: string | null
@@ -336,6 +338,8 @@ export interface ApplicantsListParams {
   verification_status?: ApplicantVerificationStatus
   /** Filter by staff referrer user id (GET ?referrer=) */
   referrer?: number
+  /** True = hanya pelamar tanpa staff rujukan (GET ?referrer_isnull=true) */
+  referrer_isnull?: boolean
   created_at_after?: string // Date string (YYYY-MM-DD) for filtering applicants who joined on or after this date
   created_at_before?: string // Date string (YYYY-MM-DD) for filtering applicants who joined on or before this date
   /** Jenis kelamin (GET ?gender=M|F) */

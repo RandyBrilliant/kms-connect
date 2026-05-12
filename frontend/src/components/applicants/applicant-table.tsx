@@ -56,11 +56,8 @@ import { toast } from "@/lib/toast"
 import {
   RELIGION_LABELS,
   VERIFICATION_STATUS_LABELS,
-  getGenderLabel,
-  getReligionLabel,
   getVerificationStatusLabel,
 } from "@/constants/applicant"
-import { calculateApplicantAgeYears, formatDate } from "@/lib/formatters"
 import { cn } from "@/lib/utils"
 import { isSubmittedStatus } from "@/lib/type-guards"
 import { VerificationModal } from "./verification-modal"
@@ -76,9 +73,13 @@ import type {
   ApplicantVerificationStatus,
   Gender,
   Religion,
+  StaffReferralApplicationSummary,
 } from "@/types/applicant"
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
+
+/** Synthetic SearchableSelect id — filter pelamar tanpa staff rujukan */
+const REFERRER_NONE_SELECT_ID = -2
 
 const APPLICANT_FILTER_TRIGGER_CLASS =
   "h-9 w-full min-w-0 cursor-pointer shadow-none sm:min-h-0"
@@ -113,9 +114,6 @@ function VerificationStatusPill({ status }: { status: string }) {
 /** Server-side ordering field (DRF `ordering` query) without leading `-`. */
 const SORT_FIELD = {
   pelamar: "full_name",
-  jenisKelamin: "applicant_profile__gender",
-  umur: "applicant_profile__birth_date",
-  agama: "applicant_profile__religion",
   rujukan: "applicant_profile__referrer__full_name",
   skor: "applicant_profile__score",
   verifikasi: "applicant_profile__verification_status",
@@ -181,7 +179,7 @@ function applicantTableHeadClass(columnId: string) {
     columnId === "select" && "w-12",
     columnId === "actions" && "w-14",
     columnId === "skor" && "tabular-nums",
-    columnId === "umur" && "tabular-nums"
+    columnId === "lamaran" && "min-w-[12rem] max-w-[min(28rem,40vw)]"
   )
 }
 
@@ -191,11 +189,10 @@ function applicantTableCellClass(columnId: string) {
     columnId === "select" && "w-12",
     (columnId === "pelamar" || columnId === "rujukan") &&
       "max-w-[min(22rem,32vw)] whitespace-normal",
-    columnId === "jenis_kelamin" && "whitespace-nowrap",
-    columnId === "umur" && "tabular-nums",
-    columnId === "agama" && "max-w-[10rem] whitespace-normal",
     columnId === "skor" && "tabular-nums font-medium",
     columnId === "verifikasi" && "whitespace-normal",
+    columnId === "lamaran" &&
+      "min-w-[12rem] max-w-[min(28rem,40vw)] whitespace-normal align-top text-sm",
     columnId === "actions" && "w-14 text-right"
   )
 }
@@ -261,6 +258,72 @@ function RujukanCell({ applicant }: { applicant: ApplicantUser }) {
   return (
     <div className="min-w-0 py-0.5">
       <RujukanBlock profile={applicant.applicant_profile} />
+    </div>
+  )
+}
+
+function lamaranTahapanHint(app: StaffReferralApplicationSummary): string | null {
+  const parts: string[] = []
+  const bn = (app.batch_name ?? "").trim()
+  if (bn) parts.push(`Pra-seleksi: ${bn}`)
+  const cn = (app.interview_cohort_name ?? "").trim()
+  if (cn) parts.push(`Sesi interview: ${cn}`)
+  const dt = (app.diterima_sub_stage_label ?? "").trim()
+  if (dt) parts.push(`Dokumen: ${dt}`)
+  if (parts.length === 0) return null
+  return parts.join(" · ")
+}
+
+/** Terminal / selesai — tidak ditampilkan sebagai lamaran "aktif" utama. */
+const INACTIVE_LAMARAN_STATUSES = new Set(["DITOLAK", "SELESAI"])
+
+const LAMARAN_STAGE_PRIORITY: Record<string, number> = {
+  BERANGKAT: 50,
+  DITERIMA: 40,
+  CADANGAN: 35,
+  INTERVIEW: 30,
+  PRA_SELEKSI: 20,
+}
+
+function pickPrimaryActiveLamaran(
+  rows: StaffReferralApplicationSummary[]
+): StaffReferralApplicationSummary | null {
+  const active = rows.filter((r) => !INACTIVE_LAMARAN_STATUSES.has(r.status))
+  if (active.length === 0) return null
+  active.sort((a, b) => {
+    const pa = LAMARAN_STAGE_PRIORITY[a.status] ?? 0
+    const pb = LAMARAN_STAGE_PRIORITY[b.status] ?? 0
+    if (pb !== pa) return pb - pa
+    return b.id - a.id
+  })
+  return active[0] ?? null
+}
+
+function LamaranSummaryCell({ applicant }: { applicant: ApplicantUser }) {
+  const rows = applicant.applications_summary ?? []
+  if (rows.length === 0) {
+    return (
+      <span className="text-muted-foreground text-sm">Belum ada lamaran</span>
+    )
+  }
+  const primary = pickPrimaryActiveLamaran(rows)
+  if (!primary) {
+    return (
+      <span className="text-muted-foreground text-sm">Tidak ada lamaran aktif</span>
+    )
+  }
+  const hint = lamaranTahapanHint(primary)
+  return (
+    <div className="flex min-w-0 flex-col gap-1 py-0.5">
+      <p className="break-words text-sm font-medium leading-snug">
+        {(primary.job_title ?? "").trim() || "—"}
+      </p>
+      <p className="text-muted-foreground text-xs">{primary.status_label}</p>
+      {hint ? (
+        <p className="text-muted-foreground text-xs leading-snug break-words">
+          {hint}
+        </p>
+      ) : null}
     </div>
   )
 }
@@ -345,16 +408,44 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
   )
 
   const referrerSelectItems = useMemo(
-    () =>
-      referrers.map((r) => {
+    () => [
+      {
+        id: REFERRER_NONE_SELECT_ID,
+        name: "Tanpa staff rujukan",
+      },
+      ...referrers.map((r) => {
         const label = (r.full_name ?? "").trim() || r.email
         return {
           id: r.id,
           name: r.referral_code ? `${label} · ${r.referral_code}` : label,
         }
       }),
+    ],
     [referrers]
   )
+
+  const handleReferrerSelect = useCallback((id: number | null) => {
+    if (id === REFERRER_NONE_SELECT_ID) {
+      setParams((p) => ({
+        ...p,
+        referrer: undefined,
+        referrer_isnull: true,
+        page: 1,
+      }))
+      setRowSelection({})
+      return
+    }
+    setParams((p) => ({
+      ...p,
+      referrer: id ?? undefined,
+      referrer_isnull: undefined,
+      page: 1,
+    }))
+    setRowSelection({})
+  }, [])
+
+  const referrerSelectValue =
+    params.referrer_isnull === true ? REFERRER_NONE_SELECT_ID : params.referrer ?? null
 
   const handleDateRangeChange = useCallback((range: DateRange | undefined) => {
     setDateRange(range)
@@ -407,6 +498,7 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
         email_verified: params.email_verified,
         verification_status: params.verification_status,
         referrer: params.referrer,
+        referrer_isnull: params.referrer_isnull,
         created_at_after: params.created_at_after,
         created_at_before: params.created_at_before,
         gender: params.gender,
@@ -520,68 +612,6 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
         cell: ({ row }) => <PelamarIdentityBlock applicant={row.original} />,
       },
       {
-        id: "jenis_kelamin",
-        accessorFn: (row) => row.applicant_profile?.gender ?? "",
-        header: () => (
-          <SortableColumnHead
-            field={SORT_FIELD.jenisKelamin}
-            label="Jenis kelamin"
-            ordering={params.ordering}
-            onSort={handleSortColumn}
-          />
-        ),
-        cell: ({ row }) => {
-          const g = row.original.applicant_profile?.gender
-          if (g !== "M" && g !== "F") {
-            return <span className="text-muted-foreground">—</span>
-          }
-          return <span>{getGenderLabel(g)}</span>
-        },
-      },
-      {
-        id: "umur",
-        accessorFn: (row) =>
-          calculateApplicantAgeYears(row.applicant_profile?.birth_date ?? null),
-        header: () => (
-          <SortableColumnHead
-            field={SORT_FIELD.umur}
-            label="Umur"
-            ordering={params.ordering}
-            onSort={handleSortColumn}
-          />
-        ),
-        cell: ({ row }) => {
-          const age = calculateApplicantAgeYears(
-            row.original.applicant_profile?.birth_date ?? null
-          )
-          if (age == null) {
-            return <span className="text-muted-foreground">—</span>
-          }
-          return <span>{age}</span>
-        },
-      },
-      {
-        id: "agama",
-        accessorFn: (row) => row.applicant_profile?.religion ?? "",
-        header: () => (
-          <SortableColumnHead
-            field={SORT_FIELD.agama}
-            label="Agama"
-            ordering={params.ordering}
-            onSort={handleSortColumn}
-          />
-        ),
-        cell: ({ row }) => {
-          const r = row.original.applicant_profile?.religion
-          if (!r) {
-            return <span className="text-muted-foreground">—</span>
-          }
-          return (
-            <span className="leading-snug">{getReligionLabel(r as Religion)}</span>
-          )
-        },
-      },
-      {
         id: "rujukan",
         accessorFn: (row) => staffRujukanDisplayName(row.applicant_profile),
         header: () => (
@@ -629,6 +659,16 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
           if (!status) return <span className="text-muted-foreground">—</span>
           return <VerificationStatusPill status={status} />
         },
+      },
+      {
+        id: "lamaran",
+        enableSorting: false,
+        header: () => (
+          <span className="text-sm font-semibold text-muted-foreground">
+            Lowongan &amp; tahapan
+          </span>
+        ),
+        cell: ({ row }) => <LamaranSummaryCell applicant={row.original} />,
       },
       {
         id: "actions",
@@ -790,8 +830,8 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
               <SearchableSelect
                 className="min-w-0 border-border/80 bg-background shadow-sm"
                 items={referrerSelectItems}
-                value={params.referrer ?? null}
-                onChange={(id) => handleFilterChange("referrer", id ?? undefined)}
+                value={referrerSelectValue}
+                onChange={handleReferrerSelect}
                 placeholder="Staff rujukan"
                 clearLabel="Semua rujukan"
                 loading={referrersLoading}
@@ -980,7 +1020,6 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
             data.results.map((applicant) => {
               const isSelected = rowSelection[String(applicant.id)] || false
               const profile = applicant.applicant_profile
-              const ageYears = calculateApplicantAgeYears(profile?.birth_date ?? null)
               return (
                 <article
                   key={applicant.id}
@@ -1019,35 +1058,16 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
                         </div>
                       </div>
 
+                      <div className="border-border/50 text-sm leading-relaxed">
+                        <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                          Lowongan &amp; tahapan
+                        </span>
+                        <div className="mt-1.5 min-w-0">
+                          <LamaranSummaryCell applicant={applicant} />
+                        </div>
+                      </div>
+
                       <div className="grid grid-cols-2 gap-x-3 gap-y-2 border-t border-border/50 pt-3 text-sm">
-                        <div>
-                          <span className="text-muted-foreground text-xs font-medium">
-                            Jenis kelamin
-                          </span>
-                          <p className="mt-0.5">
-                            {profile?.gender === "M" || profile?.gender === "F"
-                              ? getGenderLabel(profile.gender)
-                              : "—"}
-                          </p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground text-xs font-medium">
-                            Umur
-                          </span>
-                          <p className="mt-0.5 tabular-nums">
-                            {ageYears != null ? ageYears : "—"}
-                          </p>
-                        </div>
-                        <div className="col-span-2 sm:col-span-1">
-                          <span className="text-muted-foreground text-xs font-medium">
-                            Agama
-                          </span>
-                          <p className="mt-0.5">
-                            {profile?.religion
-                              ? getReligionLabel(profile.religion as Religion)
-                              : "—"}
-                          </p>
-                        </div>
                         <div>
                           <span className="text-muted-foreground text-xs font-medium">
                             HP
