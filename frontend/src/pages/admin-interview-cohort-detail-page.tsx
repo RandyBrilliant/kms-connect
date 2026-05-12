@@ -107,6 +107,8 @@ import { joinAdminPath, useAdminDashboard } from "@/contexts/admin-dashboard-con
 import { invalidateCohortDashboardCaches } from "@/lib/invalidate-cohort-caches"
 import { goBackOrDefault } from "@/lib/back-navigation"
 import { toast } from "@/lib/toast"
+import { cn } from "@/lib/utils"
+import { useDebounce } from "@/hooks/use-debounce"
 import { usePageTitle } from "@/hooks/use-page-title"
 
 // ---------------------------------------------------------------------------
@@ -426,6 +428,7 @@ function CohortStatusTab({
   const [processUserLabel, setProcessUserLabel] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
   const [stageSearch, setStageSearch] = useState("")
+  const debouncedStageSearch = useDebounce(stageSearch, 400)
 
   const nextStatus = NEXT_FORWARD[status]
   const canReject = CAN_REJECT_FROM.includes(status)
@@ -442,8 +445,8 @@ function CohortStatusTab({
     [apps]
   )
   const filteredApps = useMemo(
-    () => sortedApps.filter((a) => applicationMatchesStageSearch(a, stageSearch)),
-    [sortedApps, stageSearch]
+    () => sortedApps.filter((a) => applicationMatchesStageSearch(a, debouncedStageSearch)),
+    [sortedApps, debouncedStageSearch]
   )
   const pageCount = Math.max(1, Math.ceil(filteredApps.length / COHORT_TAB_PAGE_SIZE))
   const safePage = Math.min(currentPage, pageCount)
@@ -456,7 +459,7 @@ function CohortStatusTab({
 
   useEffect(() => {
     setCurrentPage(1)
-  }, [stageSearch])
+  }, [debouncedStageSearch])
 
   useEffect(() => {
     if (currentPage > pageCount) {
@@ -465,6 +468,16 @@ function CohortStatusTab({
   }, [currentPage, pageCount])
 
   const pageIds = pagedApps.map((a) => a.id)
+  const hiddenSelectedCount = useMemo(() => {
+    if (selected.size === 0) return 0
+    const visible = new Set(pageIds)
+    let n = 0
+    for (const id of selected) {
+      if (!visible.has(id)) n++
+    }
+    return n
+  }, [pageIds, selected])
+
   const allSelected =
     pageIds.length > 0 && pageIds.every((id) => selected.has(id))
 
@@ -718,6 +731,9 @@ function CohortStatusTab({
                   <span className="text-muted-foreground font-normal">
                     {" "}
                     · {selected.size} terpilih
+                    {hiddenSelectedCount > 0
+                      ? ` (${hiddenSelectedCount} di luar halaman ini)`
+                      : null}
                   </span>
                 ) : null}
               </p>
@@ -765,10 +781,10 @@ function CohortStatusTab({
       )}
 
       {/* Applicants table */}
-      <div className="overflow-hidden rounded-lg border">
+      <div className="overflow-hidden rounded-xl border border-border/60 bg-card text-card-foreground shadow-sm">
         <Table>
           <TableHeader>
-            <TableRow>
+            <TableRow className="border-border/60 bg-muted/35 hover:bg-muted/35">
               {showMoveColumn && (
                 <TableHead className="w-10">
                   <Checkbox
@@ -804,7 +820,10 @@ function CohortStatusTab({
                 return (
                 <TableRow
                   key={app.id}
-                  className="hover:bg-muted/50 cursor-pointer"
+                  className={cn(
+                    "cursor-pointer border-border/40 transition-colors hover:bg-muted/40",
+                    selected.has(app.id) && "bg-primary/[0.06]"
+                  )}
                   onClick={() => toggleOne(app.id)}
                 >
                   {showMoveColumn && (

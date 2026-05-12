@@ -19,11 +19,13 @@
 
 import { type ReactNode, useState, useEffect, useMemo } from "react"
 import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { format } from "date-fns"
 import { id as idLocale } from "date-fns/locale"
 import {
   IconArrowLeft,
+  IconChevronLeft,
+  IconChevronRight,
   IconBriefcase,
   IconBuilding,
   IconCalendar,
@@ -86,6 +88,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { useDebounce } from "@/hooks/use-debounce"
 import { usePageTitle } from "@/hooks/use-page-title"
 import { useAdminDashboard } from "@/contexts/admin-dashboard-context"
 import { useAuth } from "@/hooks/use-auth"
@@ -94,6 +97,7 @@ import { isRestrictedAdmin, type UserRole } from "@/types/auth"
 import { JobForm } from "@/components/jobs/job-form"
 import { useUpdateJobMutation } from "@/hooks/use-jobs-query"
 import { toast } from "@/lib/toast"
+import { cn } from "@/lib/utils"
 import { goBackOrDefault } from "@/lib/back-navigation"
 
 import { getJob } from "@/api/jobs"
@@ -164,6 +168,99 @@ const DOWNSTREAM_STATUS_TABS: { value: ApplicationStatus; label: string }[] = [
   { value: "DITOLAK", label: "Ditolak" },
 ]
 const MASTER_TAHAPAN_PAGE_SIZE = 20
+
+/** Matches pelamar / admin list tables: card shell + dense header/body cells */
+const JOB_DETAIL_TABLE_SHELL =
+  "overflow-hidden rounded-xl border border-border/60 bg-card text-card-foreground shadow-sm"
+const JD_HEADER_ROW = "border-border/60 bg-muted/35 hover:bg-muted/35"
+const JD_BODY_ROW =
+  "border-border/40 transition-colors hover:bg-muted/40 data-[state=selected]:bg-primary/[0.06]"
+const jdTh = (extra?: string) =>
+  cn(
+    "h-11 border-border/50 px-3 py-2 text-left align-middle text-sm font-semibold text-muted-foreground first:pl-4 last:pr-4 sm:first:pl-5 sm:last:pr-5",
+    extra
+  )
+const jdTd = (extra?: string) =>
+  cn(
+    "border-border/40 px-3 py-2.5 align-middle first:pl-4 last:pr-4 sm:first:pl-5 sm:last:pr-5",
+    extra
+  )
+
+function JobDetailPagination({
+  pageSize,
+  currentPage,
+  pageCount,
+  totalCount,
+  isFetching,
+  itemLabel,
+  onPrev,
+  onNext,
+}: {
+  pageSize: number
+  currentPage: number
+  pageCount: number
+  totalCount: number
+  isFetching: boolean
+  itemLabel: string
+  onPrev: () => void
+  onNext: () => void
+}) {
+  if (pageCount <= 1) return null
+  const rangeStart = totalCount > 0 ? (currentPage - 1) * pageSize + 1 : 0
+  const rangeEnd = Math.min(currentPage * pageSize, totalCount)
+  return (
+    <nav
+      aria-label="Paginasi tabel"
+      className="rounded-xl border border-border/60 bg-muted/15 px-4 py-3 shadow-sm sm:px-5 dark:bg-muted/10"
+    >
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <p className="text-muted-foreground text-center text-sm tabular-nums sm:text-left">
+          Menampilkan{" "}
+          <span className="font-medium text-foreground">
+            {rangeStart}–{rangeEnd}
+          </span>{" "}
+          dari <span className="font-medium text-foreground">{totalCount}</span> {itemLabel}
+          {isFetching ? (
+            <span className="text-muted-foreground/80 ml-2 text-xs">(memuat…)</span>
+          ) : null}
+        </p>
+        <div className="flex items-center justify-center gap-1 sm:justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="size-9 shrink-0 cursor-pointer rounded-lg border-border/80 shadow-sm disabled:opacity-40"
+            disabled={currentPage <= 1 || isFetching}
+            onClick={onPrev}
+            aria-label="Halaman sebelumnya"
+            title="Sebelumnya"
+          >
+            <IconChevronLeft className="size-5" stroke={2} />
+          </Button>
+          <div className="text-muted-foreground flex min-w-[5.5rem] items-center justify-center gap-1 px-2 text-sm tabular-nums">
+            <span className="font-semibold text-foreground tabular-nums">{currentPage}</span>
+            <span className="text-muted-foreground/80" aria-hidden>
+              /
+            </span>
+            <span className="tabular-nums">{pageCount}</span>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="size-9 shrink-0 cursor-pointer rounded-lg border-border/80 shadow-sm disabled:opacity-40"
+            disabled={currentPage >= pageCount || isFetching}
+            onClick={onNext}
+            aria-label="Halaman berikutnya"
+            title="Berikutnya"
+          >
+            <IconChevronRight className="size-5" stroke={2} />
+          </Button>
+        </div>
+      </div>
+    </nav>
+  )
+}
 
 // ---------------------------------------------------------------------------
 // Sub-component: Edit form
@@ -247,7 +344,7 @@ function PraSeleksiTab({
   const navigate = useNavigate()
   const [page, setPage] = useState(1)
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isFetching } = useQuery({
     queryKey: ["batches", { job: jobId, page, mode: "job-detail-master" }],
     queryFn: () =>
       getBatches({
@@ -257,12 +354,17 @@ function PraSeleksiTab({
         ordering: "tahap_order,created_at",
       }),
     enabled,
+    placeholderData: keepPreviousData,
   })
 
   const batches = data?.results ?? []
   const totalCount = data?.count ?? 0
   const pageCount = Math.max(1, Math.ceil(totalCount / MASTER_TAHAPAN_PAGE_SIZE))
   const currentPage = Math.min(page, pageCount)
+
+  useEffect(() => {
+    setPage((p) => Math.min(p, pageCount))
+  }, [pageCount])
 
   return (
     <div className="flex flex-col gap-4">
@@ -290,23 +392,23 @@ function PraSeleksiTab({
         </Button>
       </div>
 
-      <div className="overflow-hidden rounded-lg border">
-        {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      <div className={JOB_DETAIL_TABLE_SHELL}>
+        {isLoading && !data ? (
+          <div className="flex min-h-[14rem] items-center justify-center">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
           </div>
         ) : (
-          <Table>
+          <Table className="border-collapse">
             <TableHeader>
-              <TableRow>
-                <TableHead className="w-[80px]">Urutan</TableHead>
-                <TableHead>Nama Tahapan</TableHead>
-                <TableHead className="text-center">Total</TableHead>
-                <TableHead className="text-center">Pra-Seleksi</TableHead>
-                <TableHead className="text-center">Lanjut Interview</TableHead>
-                <TableHead className="text-center">Ditolak</TableHead>
-                <TableHead>Jadwal</TableHead>
-                <TableHead className="w-[60px]" />
+              <TableRow className={JD_HEADER_ROW}>
+                <TableHead className={jdTh("w-[80px]")}>Urutan</TableHead>
+                <TableHead className={jdTh()}>Nama Tahapan</TableHead>
+                <TableHead className={jdTh("text-center")}>Total</TableHead>
+                <TableHead className={jdTh("text-center")}>Pra-Seleksi</TableHead>
+                <TableHead className={jdTh("text-center")}>Lanjut Interview</TableHead>
+                <TableHead className={jdTh("text-center")}>Ditolak</TableHead>
+                <TableHead className={jdTh()}>Jadwal</TableHead>
+                <TableHead className={jdTh("w-[60px]")} />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -314,15 +416,15 @@ function PraSeleksiTab({
                 batches.map((batch) => (
                   <TableRow
                     key={batch.id}
-                    className="cursor-pointer hover:bg-muted/50"
+                    className={cn(JD_BODY_ROW, "cursor-pointer")}
                     onClick={() => navigate(`${batchBase}/${batch.id}`)}
                   >
-                    <TableCell>
+                    <TableCell className={jdTd()}>
                       <Badge variant="outline" className="font-mono">
                         Tahap {batch.tahap_order}
                       </Badge>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className={jdTd()}>
                       <div className="flex flex-col gap-0.5">
                         <span className="font-medium flex items-center gap-2">
                           <IconClipboardList className="size-4 shrink-0 text-muted-foreground" />
@@ -335,18 +437,18 @@ function PraSeleksiTab({
                         ) : null}
                       </div>
                     </TableCell>
-                    <TableCell className="text-center tabular-nums">
+                    <TableCell className={jdTd("text-center tabular-nums")}>
                       <span className="inline-flex items-center justify-center gap-1">
                         <IconUsers className="size-3.5 text-muted-foreground" />
                         {batch.applicant_count}
                       </span>
                     </TableCell>
-                    <TableCell className="text-center tabular-nums">
+                    <TableCell className={jdTd("text-center tabular-nums")}>
                       <Badge variant="secondary" className="font-mono">
                         {batch.pra_seleksi_count}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-center tabular-nums">
+                    <TableCell className={jdTd("text-center tabular-nums")}>
                       <Badge
                         variant="default"
                         className="font-mono"
@@ -355,7 +457,7 @@ function PraSeleksiTab({
                         {batch.advanced_count}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-center tabular-nums">
+                    <TableCell className={jdTd("text-center tabular-nums")}>
                       <Badge
                         variant={batch.rejected_count ? "destructive" : "outline"}
                         className="font-mono"
@@ -363,7 +465,7 @@ function PraSeleksiTab({
                         {batch.rejected_count}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
+                    <TableCell className={jdTd("text-sm text-muted-foreground")}>
                       {batch.pra_seleksi_date ? (
                         <div className="flex flex-col">
                           <span>{formatDate(batch.pra_seleksi_date)}</span>
@@ -377,7 +479,7 @@ function PraSeleksiTab({
                         <span className="text-xs italic">Belum dijadwalkan</span>
                       )}
                     </TableCell>
-                    <TableCell onClick={(e) => e.stopPropagation()}>
+                    <TableCell className={jdTd()} onClick={(e) => e.stopPropagation()}>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -391,8 +493,11 @@ function PraSeleksiTab({
                   </TableRow>
                 ))
               ) : (
-                <TableRow>
-                  <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                <TableRow className="hover:bg-transparent">
+                  <TableCell
+                    colSpan={8}
+                    className={jdTd("h-24 text-center text-muted-foreground")}
+                  >
                     Belum ada tahapan pra-seleksi untuk lowongan ini.{" "}
                     <button
                       type="button"
@@ -409,38 +514,16 @@ function PraSeleksiTab({
         )}
       </div>
 
-      {pageCount > 1 && (
-        <div className="flex items-center justify-between gap-2 flex-wrap text-xs text-muted-foreground">
-          <div>
-            Halaman{" "}
-            <span className="font-medium text-foreground">
-              {currentPage} / {pageCount}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-7 px-2 cursor-pointer"
-              disabled={currentPage <= 1 || isLoading}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-            >
-              Sebelumnya
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-7 px-2 cursor-pointer"
-              disabled={currentPage >= pageCount || isLoading}
-              onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
-            >
-              Berikutnya
-            </Button>
-          </div>
-        </div>
-      )}
+      <JobDetailPagination
+        pageSize={MASTER_TAHAPAN_PAGE_SIZE}
+        currentPage={currentPage}
+        pageCount={pageCount}
+        totalCount={totalCount}
+        isFetching={isFetching}
+        itemLabel="tahapan"
+        onPrev={() => setPage((p) => Math.max(1, p - 1))}
+        onNext={() => setPage((p) => p + 1)}
+      />
     </div>
   )
 }
@@ -463,7 +546,7 @@ function InterviewCohortsTab({
   const navigate = useNavigate()
   const [page, setPage] = useState(1)
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isFetching } = useQuery({
     queryKey: ["interview-cohorts", { job: jobId, page, mode: "job-detail" }],
     queryFn: () =>
       getInterviewCohorts({
@@ -473,12 +556,17 @@ function InterviewCohortsTab({
         ordering: "-interview_date,-created_at",
       }),
     enabled,
+    placeholderData: keepPreviousData,
   })
 
   const cohorts = data?.results ?? []
   const totalCount = data?.count ?? 0
   const pageCount = Math.max(1, Math.ceil(totalCount / MASTER_TAHAPAN_PAGE_SIZE))
   const currentPage = Math.min(page, pageCount)
+
+  useEffect(() => {
+    setPage((p) => Math.min(p, pageCount))
+  }, [pageCount])
 
   return (
     <div className="flex flex-col gap-4">
@@ -507,24 +595,24 @@ function InterviewCohortsTab({
         </Button>
       </div>
 
-      <div className="overflow-hidden rounded-lg border">
-        {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      <div className={JOB_DETAIL_TABLE_SHELL}>
+        {isLoading && !data ? (
+          <div className="flex min-h-[14rem] items-center justify-center">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
           </div>
         ) : (
-          <Table>
+          <Table className="border-collapse">
             <TableHeader>
-              <TableRow>
-                <TableHead>Nama Sesi</TableHead>
-                <TableHead>Jadwal Interview</TableHead>
-                <TableHead className="text-center">Total</TableHead>
-                <TableHead className="text-center">Interview</TableHead>
-                <TableHead className="text-center">Diterima</TableHead>
-                <TableHead className="text-center">Berangkat</TableHead>
-                <TableHead className="text-center">Selesai</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="w-[60px]" />
+              <TableRow className={JD_HEADER_ROW}>
+                <TableHead className={jdTh()}>Nama Sesi</TableHead>
+                <TableHead className={jdTh()}>Jadwal Interview</TableHead>
+                <TableHead className={jdTh("text-center")}>Total</TableHead>
+                <TableHead className={jdTh("text-center")}>Interview</TableHead>
+                <TableHead className={jdTh("text-center")}>Diterima</TableHead>
+                <TableHead className={jdTh("text-center")}>Berangkat</TableHead>
+                <TableHead className={jdTh("text-center")}>Selesai</TableHead>
+                <TableHead className={jdTh()}>Status</TableHead>
+                <TableHead className={jdTh("w-[60px]")} />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -532,10 +620,10 @@ function InterviewCohortsTab({
                 cohorts.map((cohort) => (
                   <TableRow
                     key={cohort.id}
-                    className="cursor-pointer hover:bg-muted/50"
+                    className={cn(JD_BODY_ROW, "cursor-pointer")}
                     onClick={() => navigate(`${cohortBase}/${cohort.id}`)}
                   >
-                    <TableCell>
+                    <TableCell className={jdTd()}>
                       <div className="flex flex-col gap-0.5">
                         <span className="font-medium flex items-center gap-2">
                           <IconUsersGroup className="size-4 shrink-0 text-muted-foreground" />
@@ -548,7 +636,7 @@ function InterviewCohortsTab({
                         ) : null}
                       </div>
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
+                    <TableCell className={jdTd("text-sm text-muted-foreground")}>
                       {cohort.interview_date ? (
                         <div className="flex flex-col">
                           <span className="flex items-center gap-1">
@@ -566,33 +654,33 @@ function InterviewCohortsTab({
                         <span className="text-xs italic">Belum dijadwalkan</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-center tabular-nums">
+                    <TableCell className={jdTd("text-center tabular-nums")}>
                       <span className="inline-flex items-center justify-center gap-1">
                         <IconUsers className="size-3.5 text-muted-foreground" />
                         {cohort.applicant_count}
                       </span>
                     </TableCell>
-                    <TableCell className="text-center tabular-nums">
+                    <TableCell className={jdTd("text-center tabular-nums")}>
                       <Badge variant="secondary" className="font-mono">
                         {cohort.interview_count}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-center tabular-nums">
+                    <TableCell className={jdTd("text-center tabular-nums")}>
                       <Badge variant="default" className="font-mono">
                         {cohort.diterima_count}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-center tabular-nums">
+                    <TableCell className={jdTd("text-center tabular-nums")}>
                       <Badge variant="default" className="font-mono">
                         {cohort.berangkat_count}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-center tabular-nums">
+                    <TableCell className={jdTd("text-center tabular-nums")}>
                       <Badge variant="outline" className="font-mono">
                         {cohort.selesai_count}
                       </Badge>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className={jdTd()}>
                       {cohort.is_active ? (
                         <Badge variant="default" className="gap-1">
                           <IconCircleCheck className="size-3" /> Aktif
@@ -601,7 +689,7 @@ function InterviewCohortsTab({
                         <Badge variant="outline">Non-aktif</Badge>
                       )}
                     </TableCell>
-                    <TableCell onClick={(e) => e.stopPropagation()}>
+                    <TableCell className={jdTd()} onClick={(e) => e.stopPropagation()}>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -615,10 +703,10 @@ function InterviewCohortsTab({
                   </TableRow>
                 ))
               ) : (
-                <TableRow>
+                <TableRow className="hover:bg-transparent">
                   <TableCell
                     colSpan={9}
-                    className="h-24 text-center text-muted-foreground"
+                    className={jdTd("h-24 text-center text-muted-foreground")}
                   >
                     Belum ada sesi interview untuk lowongan ini.{" "}
                     <button
@@ -638,38 +726,16 @@ function InterviewCohortsTab({
         )}
       </div>
 
-      {pageCount > 1 && (
-        <div className="flex items-center justify-between gap-2 flex-wrap text-xs text-muted-foreground">
-          <div>
-            Halaman{" "}
-            <span className="font-medium text-foreground">
-              {currentPage} / {pageCount}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-7 px-2 cursor-pointer"
-              disabled={currentPage <= 1 || isLoading}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-            >
-              Sebelumnya
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-7 px-2 cursor-pointer"
-              disabled={currentPage >= pageCount || isLoading}
-              onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
-            >
-              Berikutnya
-            </Button>
-          </div>
-        </div>
-      )}
+      <JobDetailPagination
+        pageSize={MASTER_TAHAPAN_PAGE_SIZE}
+        currentPage={currentPage}
+        pageCount={pageCount}
+        totalCount={totalCount}
+        isFetching={isFetching}
+        itemLabel="sesi"
+        onPrev={() => setPage((p) => Math.max(1, p - 1))}
+        onNext={() => setPage((p) => p + 1)}
+      />
     </div>
   )
 }
@@ -723,10 +789,22 @@ function ApplicationsTab({
   const [bulkTglBayarPsikotes, setBulkTglBayarPsikotes] = useState<Date | undefined>(undefined)
   const queryClient = useQueryClient()
 
-  const { data, isLoading } = useQuery({
+  const debouncedStageSearch = useDebounce(stageSearch, 400)
+
+  useEffect(() => {
+    setPage(1)
+  }, [debouncedStageSearch])
+
+  const { data, isLoading, isFetching } = useQuery({
     queryKey: [
       "applications",
-      { job: jobId, status, page, search: stageSearch, diterima_step: selectedDiterimaStep },
+      {
+        job: jobId,
+        status,
+        page,
+        search: debouncedStageSearch,
+        diterima_step: selectedDiterimaStep,
+      },
     ],
     queryFn: () =>
       getApplications({
@@ -738,15 +816,20 @@ function ApplicationsTab({
             : undefined,
         page,
         page_size: APPLICATIONS_TAB_PAGE_SIZE,
-        search: stageSearch.trim() || undefined,
+        search: debouncedStageSearch.trim() || undefined,
         ordering: "applicant_name",
       }),
     enabled,
+    placeholderData: keepPreviousData,
   })
 
   const totalCount = data?.count ?? 0
   const pageCount = Math.max(1, Math.ceil(totalCount / APPLICATIONS_TAB_PAGE_SIZE))
   const currentPage = Math.min(page, pageCount)
+
+  useEffect(() => {
+    setPage((p) => Math.min(p, pageCount))
+  }, [pageCount])
 
   const filteredApps = data?.results ?? EMPTY_APPLICATION_RESULTS
   const showCohortCol = status !== "DITOLAK"
@@ -863,7 +946,7 @@ function ApplicationsTab({
             status === "DITERIMA" && selectedDiterimaStep !== "ALL"
               ? selectedDiterimaStep
               : undefined,
-          search: stageSearch.trim() || undefined,
+          search: debouncedStageSearch.trim() || undefined,
           ordering: "applicant_name",
         },
         `pelamar_${status.toLowerCase()}${
@@ -1298,24 +1381,21 @@ function ApplicationsTab({
           <Input
             placeholder="Cari nama, email, NIK, atau rujukan..."
             value={stageSearch}
-            onChange={(e) => {
-              setStageSearch(e.target.value)
-              setPage(1)
-            }}
+            onChange={(e) => setStageSearch(e.target.value)}
             className="pl-9 h-9 text-sm"
             aria-label="Filter pelamar di tahap ini"
           />
         </div>
 
-        <div className="overflow-hidden rounded-lg border">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <div className={JOB_DETAIL_TABLE_SHELL}>
+          {isLoading && !data ? (
+            <div className="flex min-h-[14rem] items-center justify-center">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
             </div>
           ) : isMedicalDiterimaStep ? (
-            <Table>
+            <Table className="border-collapse">
               <TableHeader>
-                <TableRow>
+                <TableRow className={JD_HEADER_ROW}>
                   <TableHead className="w-[42px]">
                     <Checkbox
                       checked={allAdvanceChecked}
@@ -1338,7 +1418,7 @@ function ApplicationsTab({
               <TableBody>
                 {filteredApps.length ? (
                   filteredApps.map((app) => (
-                    <TableRow key={app.id} className="hover:bg-muted/50">
+                    <TableRow key={app.id} className={JD_BODY_ROW}>
                       <TableCell className="align-top">
                         <Checkbox
                           checked={selectedAdvanceAppIds.has(app.id)}
@@ -1434,9 +1514,9 @@ function ApplicationsTab({
               </TableBody>
             </Table>
           ) : isFwcmsOrPsikologiDiterimaStep ? (
-            <Table>
+            <Table className="border-collapse">
               <TableHeader>
-                <TableRow>
+                <TableRow className={JD_HEADER_ROW}>
                   <TableHead className="w-[42px]">
                     <Checkbox
                       checked={allAdvanceChecked}
@@ -1458,7 +1538,7 @@ function ApplicationsTab({
               <TableBody>
                 {filteredApps.length ? (
                   filteredApps.map((app) => (
-                    <TableRow key={app.id} className="hover:bg-muted/50">
+                    <TableRow key={app.id} className={JD_BODY_ROW}>
                       <TableCell className="align-top">
                         <Checkbox
                           checked={selectedAdvanceAppIds.has(app.id)}
@@ -1551,9 +1631,9 @@ function ApplicationsTab({
               </TableBody>
             </Table>
           ) : isBuatIdPekerjaDiterimaStep ? (
-            <Table>
+            <Table className="border-collapse">
               <TableHeader>
-                <TableRow>
+                <TableRow className={JD_HEADER_ROW}>
                   <TableHead className="w-[42px]">
                     <Checkbox
                       checked={allAdvanceChecked}
@@ -1576,7 +1656,7 @@ function ApplicationsTab({
               <TableBody>
                 {filteredApps.length ? (
                   filteredApps.map((app) => (
-                    <TableRow key={app.id} className="hover:bg-muted/50">
+                    <TableRow key={app.id} className={JD_BODY_ROW}>
                       <TableCell className="align-top">
                         <Checkbox
                           checked={selectedAdvanceAppIds.has(app.id)}
@@ -1666,9 +1746,9 @@ function ApplicationsTab({
               </TableBody>
             </Table>
           ) : isBuatPasporDiterimaStep ? (
-            <Table>
+            <Table className="border-collapse">
               <TableHeader>
-                <TableRow>
+                <TableRow className={JD_HEADER_ROW}>
                   <TableHead className="w-[42px]">
                     <Checkbox
                       checked={allAdvanceChecked}
@@ -1692,7 +1772,7 @@ function ApplicationsTab({
               <TableBody>
                 {filteredApps.length ? (
                   filteredApps.map((app) => (
-                    <TableRow key={app.id} className="hover:bg-muted/50">
+                    <TableRow key={app.id} className={JD_BODY_ROW}>
                       <TableCell className="align-top">
                         <Checkbox
                           checked={selectedAdvanceAppIds.has(app.id)}
@@ -1785,9 +1865,9 @@ function ApplicationsTab({
               </TableBody>
             </Table>
           ) : (
-            <Table>
+            <Table className="border-collapse">
               <TableHeader>
-                <TableRow>
+                <TableRow className={JD_HEADER_ROW}>
                   {onDiterimaSubStep ? (
                     <TableHead className="w-[42px]">
                       <Checkbox
@@ -1823,7 +1903,7 @@ function ApplicationsTab({
               <TableBody>
                 {filteredApps.length ? (
                   filteredApps.map((app) => (
-                    <TableRow key={app.id} className="hover:bg-muted/50">
+                    <TableRow key={app.id} className={JD_BODY_ROW}>
                       {onDiterimaSubStep ? (
                         <TableCell>
                           <Checkbox
@@ -1972,38 +2052,16 @@ function ApplicationsTab({
           )}
         </div>
 
-        {pageCount > 1 && (
-          <div className="flex items-center justify-between gap-2 flex-wrap text-xs text-muted-foreground">
-            <div>
-              Halaman{" "}
-              <span className="font-medium text-foreground">
-                {currentPage} / {pageCount}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 px-2 cursor-pointer"
-                disabled={currentPage <= 1 || isLoading}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                Sebelumnya
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 px-2 cursor-pointer"
-                disabled={currentPage >= pageCount || isLoading}
-                onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
-              >
-                Berikutnya
-              </Button>
-            </div>
-          </div>
-        )}
+        <JobDetailPagination
+          pageSize={APPLICATIONS_TAB_PAGE_SIZE}
+          currentPage={currentPage}
+          pageCount={pageCount}
+          totalCount={totalCount}
+          isFetching={isFetching}
+          itemLabel="pelamar"
+          onPrev={() => setPage((p) => Math.max(1, p - 1))}
+          onNext={() => setPage((p) => p + 1)}
+        />
       </div>
 
       <ApplicantAdminProcessDialog

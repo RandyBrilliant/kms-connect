@@ -30,6 +30,7 @@ EXPORT_COLUMNS = [
     ("Nama", "full_name"),
     ("Tempat Lahir", "birth_place"),
     ("Tanggal Lahir", "birth_date"),
+    ("Umur (tahun)", "applicant_age_years"),
     # Alamat pelamar: baris gabungan jalan + kelurahan + kecamatan; kab/kota & provinsi terpisah
     ("Alamat", "address_combined"),
     ("Kabupaten/Kota", "district_display"),
@@ -695,6 +696,9 @@ def generate_applicants_excel(applicants: Iterable[Any], request: Any = None) ->
                 value = _get_nested_value(profile, "contact_phone")
             elif field_path == "birth_date":
                 value = _format_date_dd_mon_yyyy(getattr(profile, "birth_date", None))
+            elif field_path == "applicant_age_years":
+                age_val = getattr(profile, "age", None)
+                value = age_val if age_val is not None else "-"
             elif field_path == "birth_place":
                 t = (getattr(profile, "birth_place_text", None) or "").strip()
                 if t:

@@ -121,7 +121,9 @@ import type {
 import { usePageTitle } from "@/hooks/use-page-title"
 import { useAuth } from "@/hooks/use-auth"
 import { useDeleteBatchMutation } from "@/hooks/use-batches-query"
+import { useDebounce } from "@/hooks/use-debounce"
 import { joinAdminPath, useAdminDashboard } from "@/contexts/admin-dashboard-context"
+import { cn } from "@/lib/utils"
 import { isMasterAdmin, type UserRole } from "@/types/auth"
 
 function formatDate(value: string | null | undefined) {
@@ -413,6 +415,7 @@ function BatchStatusTab({
   const queryClient = useQueryClient()
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [stageSearch, setStageSearch] = useState("")
+  const debouncedStageSearch = useDebounce(stageSearch, 400)
   const [note, setNote] = useState("")
   const [loading, setLoading] = useState(false)
   const [processUserId, setProcessUserId] = useState<number | null>(null)
@@ -434,12 +437,16 @@ function BatchStatusTab({
     status === "SELESAI"
 
   const filteredApps = useMemo(
-    () => apps.filter((a) => applicationMatchesStageSearch(a, stageSearch)),
-    [apps, stageSearch]
+    () => apps.filter((a) => applicationMatchesStageSearch(a, debouncedStageSearch)),
+    [apps, debouncedStageSearch]
   )
 
   // Simple client-side pagination per status tab to avoid very tall tables.
   const [page, setPage] = useState(1)
+
+  useEffect(() => {
+    setPage(1)
+  }, [debouncedStageSearch])
   const pageSize = 50
   const pageCount = Math.max(1, Math.ceil(filteredApps.length / pageSize))
   const currentPage = Math.min(page, pageCount)
@@ -680,7 +687,7 @@ function BatchStatusTab({
                 {selected.size} dipilih
                 {hiddenSelectedCount > 0 ? (
                   <span className="ml-1 font-normal text-muted-foreground">
-                    ({hiddenSelectedCount} tidak terlihat di filter)
+                    ({hiddenSelectedCount} di luar halaman ini)
                   </span>
                 ) : null}
               </span>
@@ -847,10 +854,10 @@ function BatchStatusTab({
       </Dialog>
 
       {/* Table */}
-      <div className="overflow-auto rounded-lg border">
+      <div className="overflow-auto rounded-xl border border-border/60 bg-card text-card-foreground shadow-sm">
         <Table>
           <TableHeader>
-            <TableRow>
+            <TableRow className="border-border/60 bg-muted/35 hover:bg-muted/35">
               {showCheckboxCol && (
                 <TableHead className="w-10">
                   <Checkbox
@@ -879,7 +886,10 @@ function BatchStatusTab({
                 return (
                 <TableRow
                   key={app.id}
-                  className="hover:bg-muted/50 cursor-pointer"
+                  className={cn(
+                    "cursor-pointer border-border/40 transition-colors hover:bg-muted/40",
+                    selected.has(app.id) && "bg-primary/[0.06]"
+                  )}
                   onClick={() => toggleOne(app.id)}
                 >
                   {showCheckboxCol && (

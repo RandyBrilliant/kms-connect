@@ -1500,6 +1500,19 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
             )
         return raw
 
+    def _parse_hasil_medical_param(self, request) -> str | None:
+        """
+        Optional query param `hasil_medical` — filter by ApplicantProfile.hasil_medical (FIT / UNFIT).
+        """
+        raw = (request.query_params.get("hasil_medical") or "").strip().upper()
+        if not raw:
+            return None
+        if raw not in ("FIT", "UNFIT"):
+            raise ValueError(
+                "Parameter hasil_medical tidak valid. Pilihan: FIT, UNFIT."
+            )
+        return raw
+
     def _filter_queryset_by_diterima_step(self, queryset, step_code: str):
         """
         Filter queryset to applicants currently at *step_code* within the
@@ -1514,6 +1527,7 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         try:
             diterima_step = self._parse_diterima_step_param(request)
+            hasil_medical = self._parse_hasil_medical_param(request)
         except ValueError as e:
             return Response(
                 error_response(detail=str(e), code=ApiCode.VALIDATION_ERROR),
@@ -1523,6 +1537,8 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
         queryset = self.filter_queryset(self.get_queryset())
         if diterima_step:
             queryset = self._filter_queryset_by_diterima_step(queryset, diterima_step)
+        if hasil_medical:
+            queryset = queryset.filter(applicant__hasil_medical__iexact=hasil_medical)
 
         page = self.paginate_queryset(queryset)
         if page is not None:
@@ -1544,6 +1560,8 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
           - applicant
           - batch
           - interview_cohort
+          - diterima_step
+          - hasil_medical (FIT atau UNFIT; filter profil pelamar)
           - search
           - ordering
         """
@@ -1560,6 +1578,7 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
         #   selected step is not yet confirmed by pelamar (actionable queue).
         try:
             diterima_step = self._parse_diterima_step_param(request)
+            hasil_medical = self._parse_hasil_medical_param(request)
         except ValueError as e:
             return Response(
                 error_response(detail=str(e), code=ApiCode.VALIDATION_ERROR),
@@ -1567,6 +1586,8 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
             )
         if diterima_step:
             applications = self._filter_queryset_by_diterima_step(applications, diterima_step)
+        if hasil_medical:
+            applications = applications.filter(applicant__hasil_medical__iexact=hasil_medical)
 
         applicant_user_ids = applications.values_list(
             "applicant__user_id", flat=True

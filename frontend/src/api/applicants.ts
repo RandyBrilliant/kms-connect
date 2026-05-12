@@ -31,6 +31,10 @@ function buildQueryString(params: ApplicantsListParams): string {
   if (params.referrer != null) search.set("referrer", String(params.referrer))
   if (params.created_at_after) search.set("created_at_after", params.created_at_after)
   if (params.created_at_before) search.set("created_at_before", params.created_at_before)
+  if (params.gender) search.set("gender", params.gender)
+  if (params.religion) search.set("religion", params.religion)
+  if (params.age_min != null) search.set("age_min", String(params.age_min))
+  if (params.age_max != null) search.set("age_max", String(params.age_max))
   if (params.ordering) search.set("ordering", params.ordering)
   const qs = search.toString()
   return qs ? `?${qs}` : ""
@@ -47,6 +51,10 @@ function buildExportQueryString(params: Omit<ApplicantsListParams, "page" | "pag
   if (params.referrer != null) search.set("referrer", String(params.referrer))
   if (params.created_at_after) search.set("created_at_after", params.created_at_after)
   if (params.created_at_before) search.set("created_at_before", params.created_at_before)
+  if (params.gender) search.set("gender", params.gender)
+  if (params.religion) search.set("religion", params.religion)
+  if (params.age_min != null) search.set("age_min", String(params.age_min))
+  if (params.age_max != null) search.set("age_max", String(params.age_max))
   if (params.ordering) search.set("ordering", params.ordering)
   const qs = search.toString()
   return qs ? `?${qs}` : ""

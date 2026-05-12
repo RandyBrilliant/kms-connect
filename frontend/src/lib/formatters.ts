@@ -3,7 +3,7 @@
  * Centralized to ensure consistency across the application.
  */
 
-import { format, formatDistanceToNow, parseISO } from "date-fns"
+import { differenceInYears, format, formatDistanceToNow, parseISO } from "date-fns"
 import { id } from "date-fns/locale"
 
 // ============================================================================
@@ -65,6 +65,23 @@ export function formatDateForInput(
     return format(dateObj, "yyyy-MM-dd")
   } catch {
     return ""
+  }
+}
+
+/**
+ * Completed years from tanggal lahir (aligned with backend ApplicantProfile age logic).
+ */
+export function calculateApplicantAgeYears(
+  birthDate: string | null | undefined,
+  referenceDate: Date = new Date()
+): number | null {
+  if (!birthDate) return null
+  try {
+    const birth = parseISO(birthDate)
+    if (Number.isNaN(birth.getTime())) return null
+    return differenceInYears(referenceDate, birth)
+  } catch {
+    return null
   }
 }
 

@@ -396,6 +396,9 @@ class ApplicantUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
         "applicant_profile__created_at",
         "applicant_profile__score",
         "applicant_profile__referrer__full_name",
+        "applicant_profile__gender",
+        "applicant_profile__religion",
+        "applicant_profile__birth_date",
     ]
     ordering = ["-applicant_profile__created_at"]
 

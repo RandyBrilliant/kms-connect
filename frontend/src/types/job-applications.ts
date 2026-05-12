@@ -131,6 +131,8 @@ export interface JobApplication {
    * Null/absent for applications not yet in DITERIMA.
    */
   diterima_current_step?: DocumentCollectionStepCode | null
+  /** Resolved label for UI (when API sends it); otherwise derive from `diterima_current_step`. */
+  diterima_sub_stage_label?: string | null
   /** ApplicantProfile admin fields (same job-application list payload when backend joins profile). */
   tgl_medical?: string | null
   hasil_medical?: string | null
@@ -195,6 +197,8 @@ export interface ApplicationsListParams {
   status?: ApplicationStatus | "ALL"
   /** Optional filter for DITERIMA document sub-steps (used by export/list tooling). */
   diterima_step?: DocumentCollectionStepCode
+  /** Filter by profile hasil medical (FIT / UNFIT); backend matches ApplicantProfile.hasil_medical. */
+  hasil_medical?: "FIT" | "UNFIT"
   job?: number
   applicant?: number
   batch?: number

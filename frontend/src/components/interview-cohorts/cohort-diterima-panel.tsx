@@ -3,9 +3,9 @@
  * bulk advance, medical/SML bulk form — aligned with admin job detail ApplicationsTab.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { format } from "date-fns"
 import { id as idLocale } from "date-fns/locale"
 import {
@@ -52,6 +52,13 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import {
   Table,
@@ -70,8 +77,10 @@ import {
 import { bulkAdminProcessApplicants } from "@/api/applicants"
 import { moveApplicationsToCohort } from "@/api/interview-cohorts"
 import { createBroadcast, sendBroadcast } from "@/api/notifications"
+import { useDebounce } from "@/hooks/use-debounce"
 import { invalidateCohortDashboardCaches } from "@/lib/invalidate-cohort-caches"
 import { toast } from "@/lib/toast"
+import { cn } from "@/lib/utils"
 import {
   DITERIMA_LAST_STEP,
   DOCUMENT_COLLECTION_STEP_LABELS,
@@ -85,6 +94,12 @@ const PAGE_SIZE = 20
 
 /** Stable fallback so `filteredApps` does not allocate a new `[]` every render while loading. */
 const EMPTY_DITERIMA_APPLICATIONS: JobApplication[] = []
+
+const COHORT_DITERIMA_TABLE_SHELL =
+  "overflow-hidden rounded-xl border border-border/60 bg-card text-card-foreground shadow-sm"
+const CD_HEADER_ROW = "border-border/60 bg-muted/35 hover:bg-muted/35"
+const CD_BODY_ROW =
+  "border-border/40 transition-colors hover:bg-muted/40 data-[state=selected]:bg-primary/[0.06]"
 
 function formatDateTimeDisplay(value: string | null | undefined) {
   if (!value) return "-"
@@ -127,6 +142,9 @@ export function CohortDiterimaPanel({
 
   const [page, setPage] = useState(1)
   const [stageSearch, setStageSearch] = useState("")
+  const debouncedStageSearch = useDebounce(stageSearch, 400)
+  /** Medical sub-tahapan only — server filter on ApplicantProfile.hasil_medical */
+  const [medicalHasilFilter, setMedicalHasilFilter] = useState<"ALL" | "FIT" | "UNFIT">("ALL")
   const [selectedDiterimaStep, setSelectedDiterimaStep] = useState<"ALL" | DocumentCollectionStepCode>(
     "ALL"
   )
@@ -157,6 +175,11 @@ export function CohortDiterimaPanel({
   const [note, setNote] = useState("")
   const [isSubmittingBulk, setIsSubmittingBulk] = useState(false)
 
+  /** Pelamar identity for selections across paginated / filtered pages (bulk medical etc.). */
+  const selectionMetaRef = useRef(
+    new Map<number, { applicantUser: number; name: string }>()
+  )
+
   const onDiterimaSubStep = selectedDiterimaStep !== "ALL"
   const isLastDiterimaStep = selectedDiterimaStep === DITERIMA_LAST_STEP
   const isMedicalStep = selectedDiterimaStep === "MEDICAL"
@@ -164,6 +187,9 @@ export function CohortDiterimaPanel({
     selectedDiterimaStep === "FWCMS" || selectedDiterimaStep === "PSIKOLOGI_TEST"
   const isBuatIdPekerjaStep = selectedDiterimaStep === "BUAT_ID_PEKERJA"
   const isBuatPasporStep = selectedDiterimaStep === "BUAT_PASPOR"
+
+  const medicalHasilApi =
+    isMedicalStep && medicalHasilFilter !== "ALL" ? medicalHasilFilter : undefined
 
   const diterimaStepOptions = useMemo(
     () =>
@@ -182,13 +208,14 @@ export function CohortDiterimaPanel({
     return DOCUMENT_COLLECTION_STEP_LABELS[DOCUMENT_COLLECTION_STEP_ORDER[idx + 1]]
   }, [onDiterimaSubStep, isLastDiterimaStep, selectedDiterimaStep])
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isFetching } = useQuery({
     queryKey: [
       "cohort-diterima-apps",
       cohortId,
       selectedDiterimaStep,
       page,
-      stageSearch,
+      debouncedStageSearch,
+      medicalHasilApi ?? null,
     ],
     queryFn: () =>
       getApplications({
@@ -197,9 +224,11 @@ export function CohortDiterimaPanel({
         diterima_step: selectedDiterimaStep !== "ALL" ? selectedDiterimaStep : undefined,
         page,
         page_size: PAGE_SIZE,
-        search: stageSearch.trim() || undefined,
+        search: debouncedStageSearch.trim() || undefined,
         ordering: "applicant_name",
+        hasil_medical: medicalHasilApi,
       }),
+    placeholderData: keepPreviousData,
   })
 
   const filteredApps = data?.results ?? EMPTY_DITERIMA_APPLICATIONS
@@ -210,11 +239,53 @@ export function CohortDiterimaPanel({
 
   useEffect(() => {
     setPage(1)
-  }, [selectedDiterimaStep, stageSearch])
+  }, [selectedDiterimaStep, debouncedStageSearch, medicalHasilFilter])
 
   useEffect(() => {
-    if (page > pageCount) setPage(pageCount)
-  }, [page, pageCount])
+    setPage((p) => Math.min(p, pageCount))
+  }, [pageCount])
+
+  useEffect(() => {
+    for (const a of filteredApps) {
+      if (typeof a.applicant_user === "number") {
+        selectionMetaRef.current.set(a.id, {
+          applicantUser: a.applicant_user,
+          name: a.applicant_name,
+        })
+      }
+    }
+  }, [filteredApps])
+
+  const resolveApplicantUsersFromAppIds = useCallback((ids: Set<number>) => {
+    const out: number[] = []
+    const seen = new Set<number>()
+    for (const appId of ids) {
+      const meta = selectionMetaRef.current.get(appId)
+      if (meta != null && !seen.has(meta.applicantUser)) {
+        seen.add(meta.applicantUser)
+        out.push(meta.applicantUser)
+      }
+    }
+    return out
+  }, [])
+
+  const pageApplicationIds = useMemo(() => new Set(filteredApps.map((a) => a.id)), [filteredApps])
+
+  const hiddenAdvanceSelectionCount = useMemo(() => {
+    let n = 0
+    for (const id of selectedAdvanceAppIds) {
+      if (!pageApplicationIds.has(id)) n++
+    }
+    return n
+  }, [selectedAdvanceAppIds, pageApplicationIds])
+
+  const hiddenAppSelectionCount = useMemo(() => {
+    let n = 0
+    for (const id of selectedAppIds) {
+      if (!pageApplicationIds.has(id)) n++
+    }
+    return n
+  }, [selectedAppIds, pageApplicationIds])
 
   const selectableAdvanceIds = filteredApps.map((a) => a.id)
   const allAdvanceChecked =
@@ -224,17 +295,38 @@ export function CohortDiterimaPanel({
   const toggleSelectAllAdvance = () => {
     setSelectedAdvanceAppIds((prev) => {
       const next = new Set(prev)
-      if (allAdvanceChecked) selectableAdvanceIds.forEach((id) => next.delete(id))
-      else selectableAdvanceIds.forEach((id) => next.add(id))
+      if (allAdvanceChecked) {
+        selectableAdvanceIds.forEach((id) => next.delete(id))
+      } else {
+        selectableAdvanceIds.forEach((id) => {
+          next.add(id)
+          const row = filteredApps.find((a) => a.id === id)
+          if (row && typeof row.applicant_user === "number") {
+            selectionMetaRef.current.set(id, {
+              applicantUser: row.applicant_user,
+              name: row.applicant_name,
+            })
+          }
+        })
+      }
       return next
     })
   }
 
-  const toggleSelectAdvance = (appId: number) => {
+  const toggleSelectAdvance = (appId: number, row?: JobApplication) => {
     setSelectedAdvanceAppIds((prev) => {
       const next = new Set(prev)
-      if (next.has(appId)) next.delete(appId)
-      else next.add(appId)
+      if (next.has(appId)) {
+        next.delete(appId)
+      } else {
+        next.add(appId)
+        if (row && typeof row.applicant_user === "number") {
+          selectionMetaRef.current.set(appId, {
+            applicantUser: row.applicant_user,
+            name: row.applicant_name,
+          })
+        }
+      }
       return next
     })
   }
@@ -255,38 +347,55 @@ export function CohortDiterimaPanel({
       if (allSelectableChecked) {
         filteredApps.forEach((a) => next.delete(a.id))
       } else {
-        filteredApps.forEach((a) => next.add(a.id))
+        filteredApps.forEach((a) => {
+          next.add(a.id)
+          if (typeof a.applicant_user === "number") {
+            selectionMetaRef.current.set(a.id, {
+              applicantUser: a.applicant_user,
+              name: a.applicant_name,
+            })
+          }
+        })
       }
       return next
     })
   }
 
-  const toggleSelectApplicantRow = (applicationId: number) => {
+  const toggleSelectApplicantRow = (applicationId: number, row?: JobApplication) => {
     setSelectedAppIds((prev) => {
       const next = new Set(prev)
-      if (next.has(applicationId)) next.delete(applicationId)
-      else next.add(applicationId)
+      if (next.has(applicationId)) {
+        next.delete(applicationId)
+      } else {
+        next.add(applicationId)
+        if (row && typeof row.applicant_user === "number") {
+          selectionMetaRef.current.set(applicationId, {
+            applicantUser: row.applicant_user,
+            name: row.applicant_name,
+          })
+        }
+      }
       return next
     })
   }
 
   const selectedRecipientIds = useMemo(() => {
     const ids = new Set<number>()
-    for (const app of filteredApps) {
-      if (!selectedAppIds.has(app.id)) continue
-      if (typeof app.applicant_user === "number") ids.add(app.applicant_user)
+    for (const appId of selectedAppIds) {
+      const meta = selectionMetaRef.current.get(appId)
+      if (meta != null) ids.add(meta.applicantUser)
     }
     return Array.from(ids)
-  }, [filteredApps, selectedAppIds])
+  }, [selectedAppIds])
 
   const selectedRecipientNames = useMemo(() => {
     const names: string[] = []
-    for (const app of filteredApps) {
-      if (!selectedAppIds.has(app.id)) continue
-      names.push(app.applicant_name)
+    for (const appId of selectedAppIds) {
+      const meta = selectionMetaRef.current.get(appId)
+      if (meta?.name) names.push(meta.name)
     }
     return names
-  }, [filteredApps, selectedAppIds])
+  }, [selectedAppIds])
 
   const enableAcceptedAnnouncement = !onDiterimaSubStep
   const canSendAnnouncement =
@@ -362,6 +471,7 @@ export function CohortDiterimaPanel({
       setBulkTglMedical(undefined)
       setBulkHasilMedical("")
       setBulkTglBayarSml(undefined)
+      setSelectedAdvanceAppIds(new Set())
     },
     onError: onBulkAdminProcessError,
   })
@@ -376,14 +486,13 @@ export function CohortDiterimaPanel({
       )
       setBulkTglFwcmPsikotes(undefined)
       setBulkTglBayarPsikotes(undefined)
+      setSelectedAdvanceAppIds(new Set())
     },
     onError: onBulkAdminProcessError,
   })
 
   const handleBulkMedicalApply = () => {
-    const applicantIds = filteredApps
-      .filter((a) => selectedAdvanceAppIds.has(a.id) && a.applicant_user)
-      .map((a) => a.applicant_user as number)
+    const applicantIds = resolveApplicantUsersFromAppIds(selectedAdvanceAppIds)
     if (!applicantIds.length) {
       toast.error("Pilih pelamar", "Centang minimal satu pelamar di tabel.")
       return
@@ -411,9 +520,7 @@ export function CohortDiterimaPanel({
   }
 
   const handleBulkFwcmsApply = () => {
-    const applicantIds = filteredApps
-      .filter((a) => selectedAdvanceAppIds.has(a.id) && a.applicant_user)
-      .map((a) => a.applicant_user as number)
+    const applicantIds = resolveApplicantUsersFromAppIds(selectedAdvanceAppIds)
     if (!applicantIds.length) {
       toast.error("Pilih pelamar", "Centang minimal satu pelamar di tabel.")
       return
@@ -743,8 +850,12 @@ export function CohortDiterimaPanel({
         <Tabs
           value={selectedDiterimaStep}
           onValueChange={(v) => {
-            setSelectedDiterimaStep(v as "ALL" | DocumentCollectionStepCode)
+            const next = v as "ALL" | DocumentCollectionStepCode
+            setSelectedDiterimaStep(next)
             setSelectedAdvanceAppIds(new Set())
+            if (next !== "MEDICAL") {
+              setMedicalHasilFilter("ALL")
+            }
           }}
         >
           <TabsList className="h-auto w-full justify-start overflow-x-auto flex-nowrap">
@@ -762,7 +873,11 @@ export function CohortDiterimaPanel({
         <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/30 p-3">
           <span className="text-sm text-muted-foreground">
             {selectedAdvanceAppIds.size > 0
-              ? `${selectedAdvanceAppIds.size} pelamar terpilih`
+              ? `${selectedAdvanceAppIds.size} pelamar terpilih${
+                  hiddenAdvanceSelectionCount > 0
+                    ? ` (${hiddenAdvanceSelectionCount} di luar halaman ini)`
+                    : ""
+                }`
               : "Pilih pelamar untuk dipindahkan"}
           </span>
           <div className="ml-auto flex flex-wrap gap-2">
@@ -841,7 +956,10 @@ export function CohortDiterimaPanel({
                 {selectedAppIds.size > 0 ? (
                   <span className="text-muted-foreground font-normal">
                     {" "}
-                    · {selectedAppIds.size} terpilih di halaman ini
+                    · {selectedAppIds.size} terpilih
+                    {hiddenAppSelectionCount > 0
+                      ? ` (${hiddenAppSelectionCount} di luar halaman ini)`
+                      : null}
                   </span>
                 ) : null}
               </p>
@@ -861,15 +979,37 @@ export function CohortDiterimaPanel({
         </Card>
       )}
 
-      <div className="relative max-w-md">
-        <IconSearch className="text-muted-foreground absolute left-3 top-1/2 size-4 -translate-y-1/2" />
-        <Input
-          placeholder="Cari nama, email, NIK, atau rujukan..."
-          value={stageSearch}
-          onChange={(e) => setStageSearch(e.target.value)}
-          className="h-9 pl-9 text-sm"
-          aria-label="Filter pelamar di tahap ini"
-        />
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+        <div className="relative max-w-md min-w-[min(100%,16rem)] flex-1">
+          <IconSearch className="text-muted-foreground absolute left-3 top-1/2 size-4 -translate-y-1/2" />
+          <Input
+            placeholder="Cari nama, email, NIK, atau rujukan..."
+            value={stageSearch}
+            onChange={(e) => setStageSearch(e.target.value)}
+            className="h-9 pl-9 text-sm"
+            aria-label="Filter pelamar di tahap ini"
+          />
+        </div>
+        {isMedicalStep ? (
+          <div className="flex w-full flex-col gap-1 sm:w-auto sm:min-w-[200px]">
+            <Label htmlFor="cohort-medical-hasil-filter" className="text-xs text-muted-foreground">
+              Hasil medical
+            </Label>
+            <Select
+              value={medicalHasilFilter}
+              onValueChange={(v) => setMedicalHasilFilter(v as "ALL" | "FIT" | "UNFIT")}
+            >
+              <SelectTrigger id="cohort-medical-hasil-filter" className="h-9 w-full sm:w-[200px]">
+                <SelectValue placeholder="Semua" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Semua</SelectItem>
+                <SelectItem value="FIT">FIT</SelectItem>
+                <SelectItem value="UNFIT">UNFIT</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
       </div>
 
       <p className="text-sm text-muted-foreground">
@@ -883,7 +1023,7 @@ export function CohortDiterimaPanel({
         ) : null}
       </p>
 
-      <div className="overflow-hidden rounded-lg border">
+      <div className={cn(COHORT_DITERIMA_TABLE_SHELL, isFetching && "opacity-90")}>
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -891,7 +1031,7 @@ export function CohortDiterimaPanel({
         ) : isMedicalStep ? (
           <Table>
             <TableHeader>
-              <TableRow>
+              <TableRow className={CD_HEADER_ROW}>
                 <TableHead className="w-[42px]">
                   <Checkbox
                     checked={allAdvanceChecked}
@@ -914,11 +1054,11 @@ export function CohortDiterimaPanel({
             <TableBody>
               {filteredApps.length ? (
                 filteredApps.map((app) => (
-                  <TableRow key={app.id} className="hover:bg-muted/50">
+                  <TableRow key={app.id} className={CD_BODY_ROW}>
                     <TableCell className="align-top">
                       <Checkbox
                         checked={selectedAdvanceAppIds.has(app.id)}
-                        onCheckedChange={() => toggleSelectAdvance(app.id)}
+                        onCheckedChange={() => toggleSelectAdvance(app.id, app)}
                         aria-label={`Pilih ${app.applicant_name}`}
                       />
                     </TableCell>
@@ -963,7 +1103,7 @@ export function CohortDiterimaPanel({
         ) : isFwcmsOrPsikologiStep ? (
           <Table>
             <TableHeader>
-              <TableRow>
+              <TableRow className={CD_HEADER_ROW}>
                 <TableHead className="w-[42px]">
                   <Checkbox
                     checked={allAdvanceChecked}
@@ -985,11 +1125,11 @@ export function CohortDiterimaPanel({
             <TableBody>
               {filteredApps.length ? (
                 filteredApps.map((app) => (
-                  <TableRow key={app.id} className="hover:bg-muted/50">
+                  <TableRow key={app.id} className={CD_BODY_ROW}>
                     <TableCell className="align-top">
                       <Checkbox
                         checked={selectedAdvanceAppIds.has(app.id)}
-                        onCheckedChange={() => toggleSelectAdvance(app.id)}
+                        onCheckedChange={() => toggleSelectAdvance(app.id, app)}
                         aria-label={`Pilih ${app.applicant_name}`}
                       />
                     </TableCell>
@@ -1034,7 +1174,7 @@ export function CohortDiterimaPanel({
         ) : isBuatIdPekerjaStep ? (
           <Table>
             <TableHeader>
-              <TableRow>
+              <TableRow className={CD_HEADER_ROW}>
                 <TableHead className="w-[42px]">
                   <Checkbox
                     checked={allAdvanceChecked}
@@ -1055,11 +1195,11 @@ export function CohortDiterimaPanel({
             <TableBody>
               {filteredApps.length ? (
                 filteredApps.map((app) => (
-                  <TableRow key={app.id} className="hover:bg-muted/50">
+                  <TableRow key={app.id} className={CD_BODY_ROW}>
                     <TableCell className="align-top">
                       <Checkbox
                         checked={selectedAdvanceAppIds.has(app.id)}
-                        onCheckedChange={() => toggleSelectAdvance(app.id)}
+                        onCheckedChange={() => toggleSelectAdvance(app.id, app)}
                       />
                     </TableCell>
                     <TableCell className="align-top">
@@ -1093,7 +1233,7 @@ export function CohortDiterimaPanel({
         ) : isBuatPasporStep ? (
           <Table>
             <TableHeader>
-              <TableRow>
+              <TableRow className={CD_HEADER_ROW}>
                 <TableHead className="w-[42px]">
                   <Checkbox
                     checked={allAdvanceChecked}
@@ -1115,11 +1255,11 @@ export function CohortDiterimaPanel({
             <TableBody>
               {filteredApps.length ? (
                 filteredApps.map((app) => (
-                  <TableRow key={app.id} className="hover:bg-muted/50">
+                  <TableRow key={app.id} className={CD_BODY_ROW}>
                     <TableCell className="align-top">
                       <Checkbox
                         checked={selectedAdvanceAppIds.has(app.id)}
-                        onCheckedChange={() => toggleSelectAdvance(app.id)}
+                        onCheckedChange={() => toggleSelectAdvance(app.id, app)}
                       />
                     </TableCell>
                     <TableCell className="align-top">
@@ -1156,7 +1296,7 @@ export function CohortDiterimaPanel({
         ) : (
           <Table>
             <TableHeader>
-              <TableRow>
+              <TableRow className={CD_HEADER_ROW}>
                 {showCheckboxCol && (
                   <TableHead className="w-10">
                     <Checkbox
@@ -1183,7 +1323,7 @@ export function CohortDiterimaPanel({
                 filteredApps.map((app) => {
                   const konfirmasi = cohortKonfirmasiDiterima(app)
                   return (
-                    <TableRow key={app.id} className="hover:bg-muted/50">
+                    <TableRow key={app.id} className={CD_BODY_ROW}>
                       {showCheckboxCol && (
                         <TableCell>
                           <Checkbox
@@ -1194,8 +1334,8 @@ export function CohortDiterimaPanel({
                             }
                             onCheckedChange={() =>
                               onDiterimaSubStep
-                                ? toggleSelectAdvance(app.id)
-                                : toggleSelectApplicantRow(app.id)
+                                ? toggleSelectAdvance(app.id, app)
+                                : toggleSelectApplicantRow(app.id, app)
                             }
                             aria-label={`Pilih ${app.applicant_name}`}
                           />
@@ -1289,7 +1429,7 @@ export function CohortDiterimaPanel({
               variant="outline"
               size="sm"
               className="h-7 cursor-pointer px-2"
-              disabled={safePage <= 1 || isLoading}
+              disabled={safePage <= 1 || isLoading || isFetching}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
             >
               Sebelumnya
@@ -1299,7 +1439,7 @@ export function CohortDiterimaPanel({
               variant="outline"
               size="sm"
               className="h-7 cursor-pointer px-2"
-              disabled={safePage >= pageCount || isLoading}
+              disabled={safePage >= pageCount || isLoading || isFetching}
               onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
             >
               Berikutnya

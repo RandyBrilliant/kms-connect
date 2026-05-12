@@ -54,10 +54,13 @@ import {
 } from "@/hooks/use-applicants-query"
 import { toast } from "@/lib/toast"
 import {
+  RELIGION_LABELS,
   VERIFICATION_STATUS_LABELS,
+  getGenderLabel,
+  getReligionLabel,
   getVerificationStatusLabel,
 } from "@/constants/applicant"
-import { formatDate } from "@/lib/formatters"
+import { calculateApplicantAgeYears, formatDate } from "@/lib/formatters"
 import { cn } from "@/lib/utils"
 import { isSubmittedStatus } from "@/lib/type-guards"
 import { VerificationModal } from "./verification-modal"
@@ -67,8 +70,13 @@ import { SearchableSelect } from "@/components/ui/searchable-select"
 import { type DateRange } from "react-day-picker"
 import { useReferrersQuery } from "@/hooks/use-referrers-query"
 import { format } from "date-fns"
-import type { ApplicantUser } from "@/types/applicant"
-import type { ApplicantsListParams, ApplicantVerificationStatus } from "@/types/applicant"
+import type {
+  ApplicantUser,
+  ApplicantsListParams,
+  ApplicantVerificationStatus,
+  Gender,
+  Religion,
+} from "@/types/applicant"
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
 
@@ -105,6 +113,9 @@ function VerificationStatusPill({ status }: { status: string }) {
 /** Server-side ordering field (DRF `ordering` query) without leading `-`. */
 const SORT_FIELD = {
   pelamar: "full_name",
+  jenisKelamin: "applicant_profile__gender",
+  umur: "applicant_profile__birth_date",
+  agama: "applicant_profile__religion",
   rujukan: "applicant_profile__referrer__full_name",
   skor: "applicant_profile__score",
   verifikasi: "applicant_profile__verification_status",
@@ -171,6 +182,7 @@ function applicantTableHeadClass(columnId: string) {
     columnId === "select" && "w-12",
     columnId === "actions" && "w-14",
     columnId === "skor" && "tabular-nums",
+    columnId === "umur" && "tabular-nums",
     columnId === "bergabung" && "tabular-nums"
   )
 }
@@ -181,6 +193,9 @@ function applicantTableCellClass(columnId: string) {
     columnId === "select" && "w-12",
     (columnId === "pelamar" || columnId === "rujukan") &&
       "max-w-[min(22rem,32vw)] whitespace-normal",
+    columnId === "jenis_kelamin" && "whitespace-nowrap",
+    columnId === "umur" && "tabular-nums",
+    columnId === "agama" && "max-w-[10rem] whitespace-normal",
     columnId === "skor" && "tabular-nums font-medium",
     columnId === "verifikasi" && "whitespace-normal",
     columnId === "bergabung" && "text-muted-foreground tabular-nums text-sm",
@@ -397,6 +412,10 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
         referrer: params.referrer,
         created_at_after: params.created_at_after,
         created_at_before: params.created_at_before,
+        gender: params.gender,
+        religion: params.religion,
+        age_min: params.age_min,
+        age_max: params.age_max,
         ordering: params.ordering,
       }
 
@@ -502,6 +521,68 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
           />
         ),
         cell: ({ row }) => <PelamarIdentityBlock applicant={row.original} />,
+      },
+      {
+        id: "jenis_kelamin",
+        accessorFn: (row) => row.applicant_profile?.gender ?? "",
+        header: () => (
+          <SortableColumnHead
+            field={SORT_FIELD.jenisKelamin}
+            label="Jenis kelamin"
+            ordering={params.ordering}
+            onSort={handleSortColumn}
+          />
+        ),
+        cell: ({ row }) => {
+          const g = row.original.applicant_profile?.gender
+          if (g !== "M" && g !== "F") {
+            return <span className="text-muted-foreground">—</span>
+          }
+          return <span>{getGenderLabel(g)}</span>
+        },
+      },
+      {
+        id: "umur",
+        accessorFn: (row) =>
+          calculateApplicantAgeYears(row.applicant_profile?.birth_date ?? null),
+        header: () => (
+          <SortableColumnHead
+            field={SORT_FIELD.umur}
+            label="Umur"
+            ordering={params.ordering}
+            onSort={handleSortColumn}
+          />
+        ),
+        cell: ({ row }) => {
+          const age = calculateApplicantAgeYears(
+            row.original.applicant_profile?.birth_date ?? null
+          )
+          if (age == null) {
+            return <span className="text-muted-foreground">—</span>
+          }
+          return <span>{age}</span>
+        },
+      },
+      {
+        id: "agama",
+        accessorFn: (row) => row.applicant_profile?.religion ?? "",
+        header: () => (
+          <SortableColumnHead
+            field={SORT_FIELD.agama}
+            label="Agama"
+            ordering={params.ordering}
+            onSort={handleSortColumn}
+          />
+        ),
+        cell: ({ row }) => {
+          const r = row.original.applicant_profile?.religion
+          if (!r) {
+            return <span className="text-muted-foreground">—</span>
+          }
+          return (
+            <span className="leading-snug">{getReligionLabel(r as Religion)}</span>
+          )
+        },
       },
       {
         id: "rujukan",
@@ -748,6 +829,102 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
               />
             </div>
           </div>
+
+          <div className="border-border/40 mt-3 grid grid-cols-1 gap-2 border-t pt-3 sm:grid-cols-2 xl:grid-cols-12 xl:gap-2">
+            <div className="min-w-0 xl:col-span-3">
+              <Select
+                value={params.gender ?? "all"}
+                onValueChange={(v) =>
+                  handleFilterChange(
+                    "gender",
+                    v === "all" ? undefined : (v as Gender)
+                  )
+                }
+              >
+                <SelectTrigger className={APPLICANT_FILTER_TRIGGER_CLASS}>
+                  <SelectValue placeholder="Jenis kelamin" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Semua jenis kelamin</SelectItem>
+                  <SelectItem value="M">Laki-laki</SelectItem>
+                  <SelectItem value="F">Perempuan</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="min-w-0 xl:col-span-3">
+              <Select
+                value={params.religion ?? "all"}
+                onValueChange={(v) =>
+                  handleFilterChange(
+                    "religion",
+                    v === "all" ? undefined : (v as Religion)
+                  )
+                }
+              >
+                <SelectTrigger className={APPLICANT_FILTER_TRIGGER_CLASS}>
+                  <SelectValue placeholder="Agama" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Semua agama</SelectItem>
+                  {Object.entries(RELIGION_LABELS).map(([val, label]) => (
+                    <SelectItem key={val} value={val}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="min-w-0 xl:col-span-3">
+              <Label htmlFor="age-min" className="sr-only">
+                Umur minimal
+              </Label>
+              <Input
+                id="age-min"
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={150}
+                placeholder="Umur min (tahun)"
+                value={params.age_min ?? ""}
+                onChange={(e) => {
+                  const raw = e.target.value
+                  if (raw === "") {
+                    handleFilterChange("age_min", undefined)
+                    return
+                  }
+                  const n = Number.parseInt(raw, 10)
+                  if (!Number.isFinite(n) || n < 0) return
+                  handleFilterChange("age_min", n)
+                }}
+                className="h-9 border-border/80 bg-background shadow-sm"
+              />
+            </div>
+            <div className="min-w-0 xl:col-span-3">
+              <Label htmlFor="age-max" className="sr-only">
+                Umur maksimal
+              </Label>
+              <Input
+                id="age-max"
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={150}
+                placeholder="Umur maks (tahun)"
+                value={params.age_max ?? ""}
+                onChange={(e) => {
+                  const raw = e.target.value
+                  if (raw === "") {
+                    handleFilterChange("age_max", undefined)
+                    return
+                  }
+                  const n = Number.parseInt(raw, 10)
+                  if (!Number.isFinite(n) || n < 0) return
+                  handleFilterChange("age_max", n)
+                }}
+                className="h-9 border-border/80 bg-background shadow-sm"
+              />
+            </div>
+          </div>
         </div>
       </section>
 
@@ -822,6 +999,7 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
             data.results.map((applicant) => {
               const isSelected = rowSelection[String(applicant.id)] || false
               const profile = applicant.applicant_profile
+              const ageYears = calculateApplicantAgeYears(profile?.birth_date ?? null)
               return (
                 <article
                   key={applicant.id}
@@ -861,6 +1039,34 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
                       </div>
 
                       <div className="grid grid-cols-2 gap-x-3 gap-y-2 border-t border-border/50 pt-3 text-sm">
+                        <div>
+                          <span className="text-muted-foreground text-xs font-medium">
+                            Jenis kelamin
+                          </span>
+                          <p className="mt-0.5">
+                            {profile?.gender === "M" || profile?.gender === "F"
+                              ? getGenderLabel(profile.gender)
+                              : "—"}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground text-xs font-medium">
+                            Umur
+                          </span>
+                          <p className="mt-0.5 tabular-nums">
+                            {ageYears != null ? ageYears : "—"}
+                          </p>
+                        </div>
+                        <div className="col-span-2 sm:col-span-1">
+                          <span className="text-muted-foreground text-xs font-medium">
+                            Agama
+                          </span>
+                          <p className="mt-0.5">
+                            {profile?.religion
+                              ? getReligionLabel(profile.religion as Religion)
+                              : "—"}
+                          </p>
+                        </div>
                         <div>
                           <span className="text-muted-foreground text-xs font-medium">
                             HP

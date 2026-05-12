@@ -338,6 +338,14 @@ export interface ApplicantsListParams {
   referrer?: number
   created_at_after?: string // Date string (YYYY-MM-DD) for filtering applicants who joined on or after this date
   created_at_before?: string // Date string (YYYY-MM-DD) for filtering applicants who joined on or before this date
+  /** Jenis kelamin (GET ?gender=M|F) */
+  gender?: Gender
+  /** Agama */
+  religion?: Religion
+  /** Umur minimal (tahun), server menyaring dari tanggal lahir */
+  age_min?: number
+  /** Umur maksimal (tahun) */
+  age_max?: number
   ordering?: string // e.g., "applicant_profile__score", "-applicant_profile__score", "applicant_profile__created_at", etc.
 }
 

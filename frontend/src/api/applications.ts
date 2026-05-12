@@ -25,6 +25,7 @@ function buildQueryString(params: ApplicationsListParams): string {
   if (params.search) search.set("search", params.search)
   if (params.status && params.status !== "ALL") search.set("status", params.status)
   if (params.diterima_step) search.set("diterima_step", params.diterima_step)
+  if (params.hasil_medical) search.set("hasil_medical", params.hasil_medical)
   if (params.job != null) search.set("job", String(params.job))
   if (params.applicant != null) search.set("applicant", String(params.applicant))
   if (params.batch != null) search.set("batch", String(params.batch))
