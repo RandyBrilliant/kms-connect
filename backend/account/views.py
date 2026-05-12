@@ -68,12 +68,15 @@ from .api_responses import (
     error_response,
     success_response,
 )
+from .pagination import StandardResultsSetPagination
 from .services.export import (
     EXPORT_SELECT_RELATED_APPLICANT_PROFILE_REGIONS,
     generate_applicants_excel,
 )
 from .services.biodata_pdf import generate_biodata_pdf
 from .services.inbond_pdf import generate_inbond_pdf
+from .services.pengantar_medical_pdf import generate_pengantar_medical_pdf
+from .services.pengantar_psikologi_pdf import generate_pengantar_psikologi_pdf
 from .services.notification_delivery import send_broadcast
 from .services.notification_dispatcher import dispatch
 from .services.notification_events import NotificationEvent
@@ -392,6 +395,7 @@ class ApplicantUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
         "applicant_profile__verification_status",
         "applicant_profile__created_at",
         "applicant_profile__score",
+        "applicant_profile__referrer__full_name",
     ]
     ordering = ["-applicant_profile__created_at"]
 
@@ -410,6 +414,7 @@ class ApplicantUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
                 "applicant_profile__user",
                 *EXPORT_SELECT_RELATED_APPLICANT_PROFILE_REGIONS,
             )
+            .prefetch_related("applicant_profile__inbound_transport_stage_costs")
         )
 
     def destroy(self, request, *args, **kwargs):
@@ -476,8 +481,9 @@ class ApplicantUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
         """
         POST /api/applicants/bulk-admin-process/
 
-        Bulk-update admin medical / pembayaran fields on ApplicantProfile for many pelamar.
-        Body: { "applicant_user_ids": [1,2], "tgl_medical": "2026-01-15", "hasil_medical": "FIT", ... }
+        Bulk-update admin process fields on ApplicantProfile for many pelamar.
+        Body: { "applicant_user_ids": [1,2], "tgl_medical": "...", "hasil_medical": "FIT",
+        "tgl_bayar_sml": "...", "tgl_fwcm_psikotes": "...", "tgl_bayar_psikotes": "...", ... }
         Only keys present in JSON are applied (omit a key to leave existing DB value unchanged).
         """
         serializer = BulkAdminProcessSerializer(data=request.data)
@@ -518,6 +524,10 @@ class ApplicantUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
             updates["hasil_medical"] = hm.upper() if hm else ""
         if "tgl_bayar_sml" in raw:
             updates["tgl_bayar_sml"] = serializer.validated_data.get("tgl_bayar_sml")
+        if "tgl_fwcm_psikotes" in raw:
+            updates["tgl_fwcm_psikotes"] = serializer.validated_data.get("tgl_fwcm_psikotes")
+        if "tgl_bayar_psikotes" in raw:
+            updates["tgl_bayar_psikotes"] = serializer.validated_data.get("tgl_bayar_psikotes")
         if not updates:
             return Response(
                 error_response(
@@ -1487,7 +1497,6 @@ class AdminReportView(APIView):
                 "total_accepted": queryset.filter(verification_status=ApplicantVerificationStatus.ACCEPTED).count(),
                 "total_rejected": queryset.filter(verification_status=ApplicantVerificationStatus.REJECTED).count(),
                 "total_submitted": queryset.filter(verification_status=ApplicantVerificationStatus.SUBMITTED).count(),
-                "total_draft": queryset.filter(verification_status=ApplicantVerificationStatus.DRAFT).count(),
                 "completion_rate": round(completion_rate, 2),
             },
             "by_status": by_status,
@@ -1571,7 +1580,10 @@ class AdminInbondPdfView(APIView):
                 "user",
                 "birth_place",
                 "district",
-            ).prefetch_related("job_applications__job__company"),
+            ).prefetch_related(
+                "job_applications__job__company",
+                "inbound_transport_stage_costs",
+            ),
             user__id=pk,
         )
         try:
@@ -1587,6 +1599,80 @@ class AdminInbondPdfView(APIView):
 
         safe_name = (applicant.user.full_name or "cpmi").replace(" ", "_")
         filename = f"InboundCost_{safe_name}.pdf"
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'inline; filename="{filename}"'
+        return response
+
+
+class AdminPsychologyReferralPdfView(APIView):
+    """
+    Surat Pengantar Tes Psikologi CPMI (overlay pada template JPG/PNG).
+    GET /api/applicants/<pk>/psychology-referral-pdf/
+    """
+
+    permission_classes = [IsBackofficeAdmin]
+
+    def get(self, request, pk):
+        applicant = get_object_or_404(
+            ApplicantProfile.objects.select_related(
+                "user",
+                "birth_place",
+                "district",
+            ).prefetch_related(
+                "job_applications__job__company",
+            ),
+            user__id=pk,
+        )
+        try:
+            pdf_bytes = generate_pengantar_psikologi_pdf(applicant)
+        except Exception as e:
+            return Response(
+                error_response(
+                    detail=f"Gagal membuat PDF: {str(e)}",
+                    code=ApiCode.INTERNAL_ERROR,
+                ),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        safe_name = (applicant.user.full_name or "cpmi").replace(" ", "_")
+        filename = f"Pengantar_Psikologi_{safe_name}.pdf"
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'inline; filename="{filename}"'
+        return response
+
+
+class AdminMedicalReferralPdfView(APIView):
+    """
+    Surat Pengantar Medical Check Up CPMI.
+    GET /api/applicants/<pk>/medical-referral-pdf/
+    """
+
+    permission_classes = [IsBackofficeAdmin]
+
+    def get(self, request, pk):
+        applicant = get_object_or_404(
+            ApplicantProfile.objects.select_related(
+                "user",
+                "birth_place",
+                "district",
+            ).prefetch_related(
+                "job_applications__job__company",
+            ),
+            user__id=pk,
+        )
+        try:
+            pdf_bytes = generate_pengantar_medical_pdf(applicant)
+        except Exception as e:
+            return Response(
+                error_response(
+                    detail=f"Gagal membuat PDF: {str(e)}",
+                    code=ApiCode.INTERNAL_ERROR,
+                ),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        safe_name = (applicant.user.full_name or "cpmi").replace(" ", "_")
+        filename = f"Pengantar_Medical_{safe_name}.pdf"
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
         response["Content-Disposition"] = f'inline; filename="{filename}"'
         return response
@@ -1707,8 +1793,9 @@ class BroadcastViewSet(viewsets.ModelViewSet):
     
     serializer_class = BroadcastSerializer
     permission_classes = [IsBackofficeAdmin]
-    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ["notification_type", "priority", "created_by"]
+    search_fields = ["title", "message"]
     ordering_fields = ["created_at", "sent_at", "total_recipients"]
     ordering = ["-created_at"]
 
@@ -1920,9 +2007,9 @@ class AccountDeletionRequestViewSet(viewsets.GenericViewSet):
     Admin CRUD + applicant self-service for account deletion requests.
 
     Admin endpoints (require IsMasterAdmin — operator Admin cannot access):
-      GET    /api/deletion-requests/          – list all requests (filterable by status)
+      GET    /api/deletion-requests/          – list (paginated; ?status=&search=&page=&page_size=)
       GET    /api/deletion-requests/<id>/     – retrieve one request
-      POST   /api/deletion-requests/<id>/approve/ – approve (triggers user deactivation)
+      POST   /api/deletion-requests/<id>/approve/ – approve (disables login; data retained)
       POST   /api/deletion-requests/<id>/reject/  – reject with notes
 
     Applicant self-service (require IsAuthenticated + IsApplicant):
@@ -1932,6 +2019,7 @@ class AccountDeletionRequestViewSet(viewsets.GenericViewSet):
     """
 
     serializer_class = AccountDeletionRequestSerializer
+    pagination_class = StandardResultsSetPagination
 
     def get_permissions(self):
         if self.action in ("my_request", "submit", "cancel"):
@@ -1941,7 +2029,7 @@ class AccountDeletionRequestViewSet(viewsets.GenericViewSet):
     # ------------------------------------------------------------------ admin
 
     def list(self, request):
-        """GET /api/deletion-requests/ — admin list, filterable by ?status=PENDING"""
+        """GET /api/deletion-requests/ — admin list, paginated; ?status= &search= """
         qs = (
             AccountDeletionRequest.objects
             .select_related("user", "reviewed_by")
@@ -1955,6 +2043,10 @@ class AccountDeletionRequestViewSet(viewsets.GenericViewSet):
             qs = qs.filter(
                 Q(user__email__icontains=search) | Q(user__full_name__icontains=search)
             )
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
         serializer = self.get_serializer(qs, many=True)
         return Response(success_response(data=serializer.data), status=status.HTTP_200_OK)
 
@@ -1967,7 +2059,7 @@ class AccountDeletionRequestViewSet(viewsets.GenericViewSet):
 
     @action(detail=True, methods=["post"], url_path="approve")
     def approve(self, request, pk=None):
-        """POST /api/deletion-requests/<id>/approve/ — admin approves → email user, then delete account."""
+        """POST /api/deletion-requests/<id>/approve/ — admin approves → email user, disable login (data retained)."""
         obj = get_object_or_404(AccountDeletionRequest, pk=pk)
         if obj.status != AccountDeletionRequest.DeletionStatus.PENDING:
             return Response(
@@ -1985,10 +2077,12 @@ class AccountDeletionRequestViewSet(viewsets.GenericViewSet):
         obj.admin_notes = admin_notes
         obj.save(update_fields=["status", "reviewed_by", "reviewed_at", "admin_notes"])
 
-        # Snapshot response before deleting user (CASCADE removes this request row).
-        payload_data = self.get_serializer(obj).data
         user = obj.user
-        # Email must run synchronously while the user row still exists (async Celery would run after delete).
+        user.is_active = False
+        user.save(update_fields=["is_active"])
+
+        payload_data = self.get_serializer(obj).data
+
         email_ctx = {
             "user_name": (user.full_name or "").strip() or user.email.split("@")[0],
             "admin_notes": admin_notes or "",
@@ -2004,8 +2098,6 @@ class AccountDeletionRequestViewSet(viewsets.GenericViewSet):
             logger.exception(
                 "Failed to queue account deletion approval email user_id=%s", user.pk
             )
-
-        user.delete()
 
         return Response(
             success_response(

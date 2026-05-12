@@ -51,6 +51,7 @@ function buildBroadcastsQueryString(params: BroadcastsListParams): string {
   const search = new URLSearchParams()
   if (params.page != null) search.set("page", String(params.page))
   if (params.page_size != null) search.set("page_size", String(params.page_size))
+  if (params.search) search.set("search", params.search)
   if (params.notification_type) search.set("notification_type", params.notification_type)
   if (params.priority) search.set("priority", params.priority)
   if (params.created_by != null) search.set("created_by", String(params.created_by))

@@ -39,11 +39,10 @@ function statusBadge(status: string) {
       return <Badge variant="destructive">Ditolak</Badge>
     case "SUBMITTED":
       return <Badge variant="outline">Dikirim</Badge>
-    case "DRAFT":
     default:
       return (
         <Badge variant="outline" className="text-muted-foreground">
-          Draf
+          {status || "-"}
         </Badge>
       )
   }

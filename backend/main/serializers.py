@@ -283,6 +283,8 @@ class JobApplicationSerializer(serializers.ModelSerializer):
     tgl_medical = serializers.SerializerMethodField(read_only=True)
     hasil_medical = serializers.SerializerMethodField(read_only=True)
     tgl_bayar_sml = serializers.SerializerMethodField(read_only=True)
+    tgl_fwcm_psikotes = serializers.SerializerMethodField(read_only=True)
+    tgl_bayar_psikotes = serializers.SerializerMethodField(read_only=True)
     no_id_sisko = serializers.SerializerMethodField(read_only=True)
     # Paspor snapshot (profil + berkas tipe "paspor") — tab DITERIMA / Buat Paspor.
     has_passport = serializers.SerializerMethodField(read_only=True)
@@ -342,6 +344,8 @@ class JobApplicationSerializer(serializers.ModelSerializer):
             "tgl_medical",
             "hasil_medical",
             "tgl_bayar_sml",
+            "tgl_fwcm_psikotes",
+            "tgl_bayar_psikotes",
             "no_id_sisko",
             "has_passport",
             "passport_number",
@@ -387,6 +391,8 @@ class JobApplicationSerializer(serializers.ModelSerializer):
             "tgl_medical",
             "hasil_medical",
             "tgl_bayar_sml",
+            "tgl_fwcm_psikotes",
+            "tgl_bayar_psikotes",
             "no_id_sisko",
             "has_passport",
             "passport_number",
@@ -420,6 +426,18 @@ class JobApplicationSerializer(serializers.ModelSerializer):
         if not p or p.tgl_bayar_sml is None:
             return None
         return p.tgl_bayar_sml
+
+    def get_tgl_fwcm_psikotes(self, obj):
+        p = self._applicant_profile_for_job_app(obj)
+        if not p or p.tgl_fwcm_psikotes is None:
+            return None
+        return p.tgl_fwcm_psikotes
+
+    def get_tgl_bayar_psikotes(self, obj):
+        p = self._applicant_profile_for_job_app(obj)
+        if not p or p.tgl_bayar_psikotes is None:
+            return None
+        return p.tgl_bayar_psikotes
 
     def get_no_id_sisko(self, obj) -> str:
         p = self._applicant_profile_for_job_app(obj)

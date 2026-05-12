@@ -13,17 +13,19 @@ export function AdminNewsListPage() {
 
   usePageTitle("Kelola Berita")
   return (
-    <div className="flex flex-col gap-4 px-6 py-6 md:px-8 md:py-8">
-      <BreadcrumbNav
-        items={[
-          { label: "Dashboard", href: basePath || "/" },
-          { label: "Berita" },
-        ]}
-      />
-      <h1 className="text-2xl font-bold">Kelola Berita</h1>
-      <p className="text-muted-foreground">
-        Daftar dan kelola berita yang tampil di halaman utama.
-      </p>
+    <div className="flex flex-col gap-4 px-4 py-4 sm:gap-6 sm:px-6 sm:py-6 md:px-8 md:py-8">
+      <div>
+        <BreadcrumbNav
+          items={[
+            { label: "Dashboard", href: basePath || "/" },
+            { label: "Berita" },
+          ]}
+        />
+        <h1 className="mt-2 text-xl font-bold sm:text-2xl">Kelola Berita</h1>
+        <p className="text-muted-foreground text-sm sm:text-base">
+          Daftar dan kelola berita yang tampil di halaman utama.
+        </p>
+      </div>
 
       <NewsTable basePath={BASE_PATH} />
     </div>

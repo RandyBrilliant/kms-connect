@@ -22,8 +22,6 @@ function formatDate(value: string | null | undefined) {
 
 function verificationStatusLabel(status: string) {
   switch (status) {
-    case "DRAFT":
-      return "Draf"
     case "SUBMITTED":
       return "Dikirim"
     case "ACCEPTED":
@@ -37,8 +35,6 @@ function verificationStatusLabel(status: string) {
 
 function verificationStatusVariant(status: string) {
   switch (status) {
-    case "DRAFT":
-      return "outline"
     case "SUBMITTED":
       return "secondary"
     case "ACCEPTED":

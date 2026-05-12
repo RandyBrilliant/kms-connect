@@ -93,7 +93,9 @@ class ApiMessage:
     # Account deletion
     DELETION_REQUEST_SUBMITTED = "Permintaan penghapusan akun berhasil diajukan. Admin akan meninjau dalam 7 hari kerja."
     DELETION_REQUEST_CANCELLED = "Permintaan penghapusan akun berhasil dibatalkan."
-    DELETION_REQUEST_APPROVED = "Permintaan penghapusan akun disetujui. Akun dan data terkait akan dihapus."
+    DELETION_REQUEST_APPROVED = (
+        "Permintaan penghapusan akun disetujui. Login pengguna dinonaktifkan; data tetap tersimpan untuk keperluan perusahaan."
+    )
     DELETION_REQUEST_REJECTED = "Permintaan penghapusan akun ditolak."
     DELETION_REQUEST_ALREADY_PENDING = "Anda sudah memiliki permintaan penghapusan akun yang sedang menunggu konfirmasi."
     DELETION_REQUEST_NOT_FOUND = "Permintaan penghapusan akun tidak ditemukan."

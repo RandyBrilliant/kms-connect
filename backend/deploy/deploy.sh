@@ -47,6 +47,8 @@ mkdir -p nginx/logs
 mkdir -p media
 mkdir -p staticfiles
 mkdir -p nginx/ssl
+mkdir -p /var/www/certbot
+chmod 755 /var/www/certbot 2>/dev/null || true
 # Ensure logs directory is writable by API container (runs as UID 1000)
 chmod 755 logs nginx/logs media staticfiles nginx/ssl 2>/dev/null || true
 chown -R 1000:1000 logs 2>/dev/null || true
@@ -173,6 +175,9 @@ echo ""
 echo "4. Setup SSL (after DNS is configured):"
 echo -e "   ${YELLOW}sudo ./deploy/ssl-setup.sh${NC}"
 echo ""
+echo "5. After SSL works, install twice-daily renew + nginx reload (one-time per server):"
+echo -e "   ${YELLOW}sudo ./deploy/install-ssl-auto-renewal.sh${NC}"
+echo ""
 
 # Health check
 echo -e "${BLUE}Performing health check...${NC}"
@@ -197,4 +202,15 @@ fi
 echo ""
 echo -e "${GREEN}Deployment successful! 🎉${NC}"
 echo ""
+
+# When running as root and TLS files exist, keep cron renewal in sync with this checkout path
+if [ "${EUID:-0}" -eq 0 ] && [ -f "$APP_DIR/nginx/ssl/data.kms-connect.com/fullchain.pem" ] && [ -f "$APP_DIR/deploy/install-ssl-auto-renewal.sh" ]; then
+    echo -e "${BLUE}TLS detected — refreshing auto-renewal cron (hook path)...${NC}"
+    if bash "$APP_DIR/deploy/install-ssl-auto-renewal.sh"; then
+        echo -e "${GREEN}✓ /etc/cron.d/kms-connect-certbot updated${NC}"
+    else
+        echo -e "${YELLOW}⚠ install-ssl-auto-renewal.sh failed; run manually: sudo ./deploy/install-ssl-auto-renewal.sh${NC}"
+    fi
+    echo ""
+fi
 

@@ -45,6 +45,15 @@ import { BreadcrumbNav } from "@/components/breadcrumb-nav"
 import { ApplicantAdminProcessDialog } from "@/components/applicants/applicant-admin-process-dialog"
 import { ApplicantDetailPreviewDialog } from "@/components/batches/applicant-detail-preview-dialog"
 import { ApplicationStatusBadge } from "@/components/applications/application-status-badge"
+import { BulkFwcmsPsikotesCard } from "@/components/applications/bulk-fwcms-psikotes-card"
+import { BulkMedicalSmlCard } from "@/components/applications/bulk-medical-sml-card"
+import {
+  formatDiterimaDate,
+  MedicalHasilPill,
+  PassportBerkasLink,
+  PassportDetailBlock,
+  PelamarTahapanSesiCell,
+} from "@/components/applications/diterima-shared-cells"
 import { DocumentCollectionProgressCell } from "@/components/applications/document-collection-progress-cell"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -67,14 +76,6 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Checkbox } from "@/components/ui/checkbox"
-import { DatePicker } from "@/components/ui/date-picker"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -120,6 +121,8 @@ import {
 // Helpers
 // ---------------------------------------------------------------------------
 
+const EMPTY_APPLICATION_RESULTS: JobApplication[] = []
+
 function formatDate(v: string | null | undefined) {
   if (!v) return "-"
   return format(new Date(v), "dd MMM yyyy", { locale: idLocale })
@@ -128,156 +131,6 @@ function formatDate(v: string | null | undefined) {
 function formatDateTime(v: string | null | undefined) {
   if (!v) return "-"
   return format(new Date(v), "dd MMM yyyy HH:mm", { locale: idLocale })
-}
-
-/** Hasil medical badge for DITERIMA / Medical table */
-function MedicalHasilPill({ value }: { value: string | null | undefined }) {
-  const v = (value || "").trim().toUpperCase()
-  if (!v) {
-    return <span className="text-muted-foreground text-xs">—</span>
-  }
-  if (v === "FIT") {
-    return (
-      <Badge variant="default" className="font-normal">
-        FIT
-      </Badge>
-    )
-  }
-  if (v === "UNFIT") {
-    return (
-      <Badge variant="destructive" className="font-normal">
-        UNFIT
-      </Badge>
-    )
-  }
-  return (
-    <Badge variant="secondary" className="max-w-[140px] truncate font-normal">
-      {value}
-    </Badge>
-  )
-}
-
-/** Pelamar name/email + batch link + tahapan diterima + sesi interview (muted). */
-function PelamarTahapanSesiCell({
-  app,
-  batchBase,
-  cohortBase,
-}: {
-  app: JobApplication
-  batchBase: string
-  cohortBase: string
-}) {
-  const navigate = useNavigate()
-  return (
-    <div className="flex min-w-0 flex-col gap-1">
-      <span className="font-medium leading-tight">{app.applicant_name}</span>
-      <span className="text-xs text-muted-foreground">{app.applicant_email}</span>
-      <div className="text-sm text-muted-foreground">
-        {app.batch ? (
-          <button
-            type="button"
-            className="inline-flex max-w-full items-center gap-1 text-left text-primary underline-offset-2 hover:underline cursor-pointer"
-            onClick={() => navigate(`${batchBase}/${app.batch}`)}
-          >
-            <span className="truncate">
-              {app.batch_tahap_label ?? app.batch_name ?? `Batch #${app.batch}`}
-            </span>
-            <IconExternalLink className="size-3 shrink-0" />
-          </button>
-        ) : (
-          <span>—</span>
-        )}
-      </div>
-      {app.diterima_current_step ? (
-        <p className="text-[11px] leading-snug text-muted-foreground">
-          Tahapan diterima:{" "}
-          <span className="text-foreground/90">
-            {DOCUMENT_COLLECTION_STEP_LABELS[app.diterima_current_step]}
-          </span>
-        </p>
-      ) : null}
-      <div className="text-[11px] leading-snug text-muted-foreground">
-        {app.interview_cohort != null ? (
-          <button
-            type="button"
-            className="inline-flex max-w-full items-start gap-1 text-left text-muted-foreground underline-offset-2 hover:text-foreground hover:underline cursor-pointer"
-            onClick={() => navigate(`${cohortBase}/${app.interview_cohort}`)}
-          >
-            <span className="break-words">
-              Sesi interview:{" "}
-              {app.interview_cohort_name ?? `Sesi #${app.interview_cohort}`}
-            </span>
-            <IconExternalLink className="mt-0.5 size-3 shrink-0 opacity-70" />
-          </button>
-        ) : (
-          <span>Sesi interview: —</span>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function PassportBerkasLink({ url }: { url: string | null | undefined }) {
-  const u = (url || "").trim()
-  if (!u) {
-    return <span className="text-muted-foreground text-xs">Belum ada berkas</span>
-  }
-  return (
-    <a
-      href={u}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-flex items-center gap-1 text-sm font-medium text-primary underline-offset-4 hover:underline"
-    >
-      Lihat file
-      <IconExternalLink className="size-3.5 shrink-0" />
-    </a>
-  )
-}
-
-/** Ringkasan field paspor dari halaman profil pelamar. */
-function PassportDetailBlock({ app }: { app: JobApplication }) {
-  const rows: { label: string; value: string }[] = []
-  if (app.has_passport != null) {
-    rows.push({
-      label: "Memiliki paspor",
-      value: app.has_passport ? "Ya" : "Tidak",
-    })
-  }
-  const num = (app.passport_number || "").trim()
-  if (num) rows.push({ label: "Nomor", value: num })
-  if (app.passport_issue_date) {
-    rows.push({
-      label: "Tgl. terbit",
-      value: formatDate(app.passport_issue_date),
-    })
-  }
-  if (app.passport_expiry_date) {
-    rows.push({
-      label: "Tgl. kadaluarsa",
-      value: formatDate(app.passport_expiry_date),
-    })
-  }
-  const place = (app.passport_issue_place || "").trim()
-  if (place) rows.push({ label: "Tempat terbit", value: place })
-
-  if (!rows.length) {
-    return (
-      <span className="text-xs text-muted-foreground">
-        Detail paspor belum diisi di profil
-      </span>
-    )
-  }
-  return (
-    <div className="flex max-w-[16rem] flex-col gap-1 text-xs">
-      {rows.map((r) => (
-        <div key={r.label} className="leading-snug">
-          <span className="text-muted-foreground">{r.label}: </span>
-          <span className="text-foreground">{r.value}</span>
-        </div>
-      ))}
-    </div>
-  )
 }
 
 const JOB_STATUS_MAP: Record<
@@ -832,7 +685,6 @@ function ApplicationsTab({
   status,
   batchBase,
   cohortBase,
-  lamaranBase,
   pelamarBase,
   enabled = true,
 }: {
@@ -840,7 +692,6 @@ function ApplicationsTab({
   status: ApplicationStatus
   batchBase: string
   cohortBase: string
-  lamaranBase: string
   pelamarBase: string
   enabled?: boolean
 }) {
@@ -868,6 +719,8 @@ function ApplicationsTab({
   const [bulkTglMedical, setBulkTglMedical] = useState<Date | undefined>(undefined)
   const [bulkHasilMedical, setBulkHasilMedical] = useState("")
   const [bulkTglBayarSml, setBulkTglBayarSml] = useState<Date | undefined>(undefined)
+  const [bulkTglFwcmPsikotes, setBulkTglFwcmPsikotes] = useState<Date | undefined>(undefined)
+  const [bulkTglBayarPsikotes, setBulkTglBayarPsikotes] = useState<Date | undefined>(undefined)
   const queryClient = useQueryClient()
 
   const { data, isLoading } = useQuery({
@@ -895,20 +748,14 @@ function ApplicationsTab({
   const pageCount = Math.max(1, Math.ceil(totalCount / APPLICATIONS_TAB_PAGE_SIZE))
   const currentPage = Math.min(page, pageCount)
 
-  const sortedApps = useMemo(
-    () =>
-      [...(data?.results ?? [])].sort((a, b) =>
-        (a.applicant_name || "").localeCompare(b.applicant_name || "", "id", {
-          sensitivity: "base",
-        })
-      ),
-    [data?.results]
-  )
-  const filteredApps = sortedApps
+  const filteredApps = data?.results ?? EMPTY_APPLICATION_RESULTS
   const showCohortCol = status !== "DITOLAK"
   const showDocCol = status === "DITERIMA" && selectedDiterimaStep !== "ALL"
   const isMedicalDiterimaStep =
     status === "DITERIMA" && selectedDiterimaStep === "MEDICAL"
+  const isFwcmsOrPsikologiDiterimaStep =
+    status === "DITERIMA" &&
+    (selectedDiterimaStep === "FWCMS" || selectedDiterimaStep === "PSIKOLOGI_TEST")
   const isBuatIdPekerjaDiterimaStep =
     status === "DITERIMA" && selectedDiterimaStep === "BUAT_ID_PEKERJA"
   const isBuatPasporDiterimaStep =
@@ -916,11 +763,13 @@ function ApplicationsTab({
   const showDocColEffective =
     showDocCol &&
     !isMedicalDiterimaStep &&
+    !isFwcmsOrPsikologiDiterimaStep &&
     !isBuatIdPekerjaDiterimaStep &&
     !isBuatPasporDiterimaStep
   const showCohortColEffective =
     showCohortCol &&
     !isMedicalDiterimaStep &&
+    !isFwcmsOrPsikologiDiterimaStep &&
     !isBuatIdPekerjaDiterimaStep &&
     !isBuatPasporDiterimaStep
   const showDiterimaStepFilter = status === "DITERIMA"
@@ -992,6 +841,8 @@ function ApplicationsTab({
   const showCheckboxCol = onDiterimaSubStep || enableAcceptedAnnouncement
   const emptyColSpan = isMedicalDiterimaStep
     ? (showCheckboxCol ? 1 : 0) + 6
+    : isFwcmsOrPsikologiDiterimaStep
+      ? (showCheckboxCol ? 1 : 0) + 5
     : isBuatIdPekerjaDiterimaStep
       ? (showCheckboxCol ? 1 : 0) + 4
       : isBuatPasporDiterimaStep
@@ -1084,6 +935,12 @@ function ApplicationsTab({
     }
   }
 
+  const onBulkAdminProcessError = (err: unknown) => {
+    const detail = (err as { response?: { data?: { detail?: string } } })?.response
+      ?.data?.detail
+    toast.error("Gagal memperbarui data", detail ?? "Coba lagi nanti.")
+  }
+
   const bulkMedicalMutation = useMutation({
     mutationFn: bulkAdminProcessApplicants,
     onSuccess: async (result) => {
@@ -1099,11 +956,24 @@ function ApplicationsTab({
       setBulkHasilMedical("")
       setBulkTglBayarSml(undefined)
     },
-    onError: (err: unknown) => {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response
-        ?.data?.detail
-      toast.error("Gagal memperbarui data", detail ?? "Coba lagi nanti.")
+    onError: onBulkAdminProcessError,
+  })
+
+  const bulkFwcmsMutation = useMutation({
+    mutationFn: bulkAdminProcessApplicants,
+    onSuccess: async (result) => {
+      await queryClient.invalidateQueries({
+        queryKey: ["applications", { job: jobId, status }],
+        exact: false,
+      })
+      toast.success(
+        "Data proses diperbarui",
+        `${result.updated_count} profil pelamar diperbarui.`
+      )
+      setBulkTglFwcmPsikotes(undefined)
+      setBulkTglBayarPsikotes(undefined)
     },
+    onError: onBulkAdminProcessError,
   })
 
   const handleBulkMedicalApply = () => {
@@ -1136,9 +1006,39 @@ function ApplicationsTab({
     bulkMedicalMutation.mutate(payload)
   }
 
+  const handleBulkFwcmsApply = () => {
+    const applicantIds = filteredApps
+      .filter((a) => selectedAdvanceAppIds.has(a.id) && a.applicant_user)
+      .map((a) => a.applicant_user as number)
+    if (!applicantIds.length) {
+      toast.error("Pilih pelamar", "Centang minimal satu pelamar di tabel.")
+      return
+    }
+    const payload: Parameters<typeof bulkAdminProcessApplicants>[0] = {
+      applicant_user_ids: applicantIds,
+    }
+    if (bulkTglFwcmPsikotes) {
+      payload.tgl_fwcm_psikotes = format(bulkTglFwcmPsikotes, "yyyy-MM-dd")
+    }
+    if (bulkTglBayarPsikotes) {
+      payload.tgl_bayar_psikotes = format(bulkTglBayarPsikotes, "yyyy-MM-dd")
+    }
+    if (Object.keys(payload).length <= 1) {
+      toast.error(
+        "Isi data",
+        "Pilih minimal satu dari tanggal FWCMS & psikotes atau tanggal bayar psikotes."
+      )
+      return
+    }
+    bulkFwcmsMutation.mutate(payload)
+  }
+
   const canApplyBulkMedical =
     selectedAdvanceAppIds.size > 0 &&
     !!(bulkTglMedical || bulkHasilMedical || bulkTglBayarSml)
+
+  const canApplyBulkFwcms =
+    selectedAdvanceAppIds.size > 0 && !!(bulkTglFwcmPsikotes || bulkTglBayarPsikotes)
 
   const sendAnnouncementMutation = useMutation({
     mutationFn: async () => {
@@ -1301,70 +1201,31 @@ function ApplicationsTab({
         )}
 
         {isMedicalDiterimaStep && (
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">
-                Pengisian data medical &amp; bayar SML
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Sama seperti pengumuman: centang pelamar di tabel, isi field yang ingin
-                diterapkan bersamaan untuk semua terpilih, lalu klik Terapkan. Field yang
-                tidak diisi di sini tidak mengubah nilai yang sudah tersimpan.
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="bulk-tgl-medical">Tgl. medical</Label>
-                  <DatePicker
-                    date={bulkTglMedical}
-                    onDateChange={(d) => setBulkTglMedical(d ?? undefined)}
-                    placeholder="Opsional"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="bulk-hasil-medical">Hasil medical</Label>
-                  <Select
-                    value={bulkHasilMedical || "__skip__"}
-                    onValueChange={(v) =>
-                      setBulkHasilMedical(v === "__skip__" ? "" : v)
-                    }
-                  >
-                    <SelectTrigger id="bulk-hasil-medical" className="w-full">
-                      <SelectValue placeholder="Opsional" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__skip__">— tidak ubah —</SelectItem>
-                      <SelectItem value="FIT">FIT</SelectItem>
-                      <SelectItem value="UNFIT">UNFIT</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="bulk-tgl-bayar-sml">Tgl. bayar SML</Label>
-                  <DatePicker
-                    date={bulkTglBayarSml}
-                    onDateChange={(d) => setBulkTglBayarSml(d ?? undefined)}
-                    placeholder="Opsional"
-                  />
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs text-muted-foreground">
-                  {selectedAdvanceAppIds.size} pelamar tercentang di tabel
-                </span>
-                <Button
-                  type="button"
-                  size="sm"
-                  className="cursor-pointer"
-                  disabled={!canApplyBulkMedical || bulkMedicalMutation.isPending}
-                  onClick={() => void handleBulkMedicalApply()}
-                >
-                  {bulkMedicalMutation.isPending ? "Memproses..." : "Terapkan ke terpilih"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+          <BulkMedicalSmlCard
+            bulkTglMedical={bulkTglMedical}
+            onBulkTglMedicalChange={setBulkTglMedical}
+            bulkHasilMedical={bulkHasilMedical}
+            onBulkHasilMedicalChange={setBulkHasilMedical}
+            bulkTglBayarSml={bulkTglBayarSml}
+            onBulkTglBayarSmlChange={setBulkTglBayarSml}
+            selectedCount={selectedAdvanceAppIds.size}
+            canApply={canApplyBulkMedical}
+            isPending={bulkMedicalMutation.isPending}
+            onApply={() => void handleBulkMedicalApply()}
+          />
+        )}
+
+        {isFwcmsOrPsikologiDiterimaStep && (
+          <BulkFwcmsPsikotesCard
+            bulkTglFwcmPsikotes={bulkTglFwcmPsikotes}
+            onBulkTglFwcmPsikotesChange={setBulkTglFwcmPsikotes}
+            bulkTglBayarPsikotes={bulkTglBayarPsikotes}
+            onBulkTglBayarPsikotesChange={setBulkTglBayarPsikotes}
+            selectedCount={selectedAdvanceAppIds.size}
+            canApply={canApplyBulkFwcms}
+            isPending={bulkFwcmsMutation.isPending}
+            onApply={() => void handleBulkFwcmsApply()}
+          />
         )}
 
         {enableAcceptedAnnouncement && (
@@ -1493,13 +1354,13 @@ function ApplicationsTab({
                         />
                       </TableCell>
                       <TableCell className="align-top text-sm whitespace-nowrap">
-                        {formatDate(app.tgl_medical ?? null)}
+                        {formatDiterimaDate(app.tgl_medical ?? null)}
                       </TableCell>
                       <TableCell className="align-top">
                         <MedicalHasilPill value={app.hasil_medical} />
                       </TableCell>
                       <TableCell className="align-top text-sm whitespace-nowrap">
-                        {formatDate(app.tgl_bayar_sml ?? null)}
+                        {formatDiterimaDate(app.tgl_bayar_sml ?? null)}
                       </TableCell>
                       <TableCell className="align-top text-sm">
                         <DocumentCollectionProgressCell
@@ -1530,11 +1391,117 @@ function ApplicationsTab({
                             variant="ghost"
                             size="icon"
                             className="size-8 shrink-0 cursor-pointer text-muted-foreground"
-                            title="Buka halaman lamaran"
-                            onClick={() => navigate(`${lamaranBase}/${app.id}`)}
+                            title="Kelola dokumen pelamar"
+                            disabled={!app.applicant_user}
+                            onClick={() => {
+                              if (!app.applicant_user) return
+                              navigate(`${pelamarBase}/${app.applicant_user}`)
+                            }}
                           >
-                            <IconExternalLink className="size-4" />
-                            <span className="sr-only">Buka halaman lamaran</span>
+                            <IconFileSpreadsheet className="size-4" />
+                            <span className="sr-only">Kelola dokumen pelamar</span>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="size-8 shrink-0 cursor-pointer text-muted-foreground"
+                            title="Edit data proses"
+                            disabled={!app.applicant_user}
+                            onClick={() => {
+                              if (!app.applicant_user) return
+                              setProcessUserId(app.applicant_user)
+                              setProcessUserLabel(app.applicant_name)
+                            }}
+                          >
+                            <IconClipboardList className="size-4" />
+                            <span className="sr-only">Edit data proses</span>
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell
+                      colSpan={emptyColSpan}
+                      className="h-20 text-center text-muted-foreground"
+                    >
+                      Tidak ada pelamar dengan status ini.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          ) : isFwcmsOrPsikologiDiterimaStep ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[42px]">
+                    <Checkbox
+                      checked={allAdvanceChecked}
+                      onCheckedChange={toggleSelectAllAdvance}
+                      aria-label="Pilih semua pelamar di tabel"
+                    />
+                  </TableHead>
+                  <TableHead className="min-w-[14rem]">
+                    Pelamar, tahapan &amp; sesi
+                  </TableHead>
+                  <TableHead className="whitespace-nowrap">Tgl. FWCMS &amp; Psikotes</TableHead>
+                  <TableHead className="whitespace-nowrap">Tgl. bayar psikotes</TableHead>
+                  <TableHead className="min-w-[11rem]">Konfirmasi Pelamar</TableHead>
+                  <TableHead className="sticky right-0 z-10 w-[180px] bg-background text-right">
+                    Aksi
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredApps.length ? (
+                  filteredApps.map((app) => (
+                    <TableRow key={app.id} className="hover:bg-muted/50">
+                      <TableCell className="align-top">
+                        <Checkbox
+                          checked={selectedAdvanceAppIds.has(app.id)}
+                          onCheckedChange={() => toggleSelectAdvance(app.id)}
+                          aria-label={`Pilih ${app.applicant_name}`}
+                        />
+                      </TableCell>
+                      <TableCell className="align-top min-w-0">
+                        <PelamarTahapanSesiCell
+                          app={app}
+                          batchBase={batchBase}
+                          cohortBase={cohortBase}
+                        />
+                      </TableCell>
+                      <TableCell className="align-top text-sm whitespace-nowrap">
+                        {formatDiterimaDate(app.tgl_fwcm_psikotes ?? null)}
+                      </TableCell>
+                      <TableCell className="align-top text-sm whitespace-nowrap">
+                        {formatDiterimaDate(app.tgl_bayar_psikotes ?? null)}
+                      </TableCell>
+                      <TableCell className="align-top text-sm">
+                        <DocumentCollectionProgressCell
+                          app={app}
+                          highlightStep={selectedDiterimaStep as DocumentCollectionStepCode}
+                        />
+                      </TableCell>
+                      <TableCell className="sticky right-0 bg-background text-right align-top">
+                        <div className="flex items-center justify-end gap-0.5">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="size-8 shrink-0 cursor-pointer text-muted-foreground"
+                            title="Lihat detail pelamar"
+                            disabled={!app.applicant_user}
+                            onClick={() => {
+                              if (!app.applicant_user) return
+                              setPreviewUserId(app.applicant_user)
+                              setPreviewUserLabel(app.applicant_name)
+                            }}
+                          >
+                            <IconEye className="size-4" />
+                            <span className="sr-only">Lihat detail pelamar</span>
                           </Button>
                           <Button
                             type="button"
@@ -1656,17 +1623,6 @@ function ApplicationsTab({
                             variant="ghost"
                             size="icon"
                             className="size-8 shrink-0 cursor-pointer text-muted-foreground"
-                            title="Buka halaman lamaran"
-                            onClick={() => navigate(`${lamaranBase}/${app.id}`)}
-                          >
-                            <IconExternalLink className="size-4" />
-                            <span className="sr-only">Buka halaman lamaran</span>
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="size-8 shrink-0 cursor-pointer text-muted-foreground"
                             title="Kelola dokumen pelamar"
                             disabled={!app.applicant_user}
                             onClick={() => {
@@ -1780,17 +1736,6 @@ function ApplicationsTab({
                           >
                             <IconEye className="size-4" />
                             <span className="sr-only">Lihat detail pelamar</span>
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="size-8 shrink-0 cursor-pointer text-muted-foreground"
-                            title="Buka halaman lamaran"
-                            onClick={() => navigate(`${lamaranBase}/${app.id}`)}
-                          >
-                            <IconExternalLink className="size-4" />
-                            <span className="sr-only">Buka halaman lamaran</span>
                           </Button>
                           <Button
                             type="button"
@@ -1982,17 +1927,6 @@ function ApplicationsTab({
                             variant="ghost"
                             size="icon"
                             className="size-8 shrink-0 cursor-pointer text-muted-foreground"
-                            title="Buka halaman lamaran"
-                            onClick={() => navigate(`${lamaranBase}/${app.id}`)}
-                          >
-                            <IconExternalLink className="size-4" />
-                            <span className="sr-only">Buka halaman lamaran</span>
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="size-8 shrink-0 cursor-pointer text-muted-foreground"
                             title="Kelola dokumen pelamar"
                             disabled={!app.applicant_user}
                             onClick={() => {
@@ -2168,7 +2102,6 @@ export function AdminJobDetailPage() {
   const jobsBase = `${basePath}/lowongan-kerja`
   const batchBase = `${basePath}/batch`
   const cohortBase = `${basePath}/sesi-interview`
-  const lamaranBase = `${basePath}/lamaran`
   const pelamarBase = `${basePath}/pelamar`
   const readOnlyJob = user ? isRestrictedAdmin(user.role as UserRole) : false
   const pathIsEdit = location.pathname.endsWith("/edit")
@@ -2408,7 +2341,6 @@ export function AdminJobDetailPage() {
               status={t.value}
               batchBase={batchBase}
               cohortBase={cohortBase}
-              lamaranBase={lamaranBase}
               pelamarBase={pelamarBase}
               enabled={activeTab === t.value}
             />

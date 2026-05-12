@@ -116,6 +116,7 @@ class ChatThreadSerializer(serializers.ModelSerializer):
 
     applicant_name = serializers.SerializerMethodField(read_only=True)
     job_title = serializers.SerializerMethodField(read_only=True)
+    interview_cohort_name = serializers.SerializerMethodField(read_only=True)
     application_status = serializers.SerializerMethodField(read_only=True)
     unread_count = serializers.SerializerMethodField(read_only=True)
     last_message = serializers.SerializerMethodField(read_only=True)
@@ -127,6 +128,7 @@ class ChatThreadSerializer(serializers.ModelSerializer):
             "application",
             "applicant_name",
             "job_title",
+            "interview_cohort_name",
             "application_status",
             "is_closed",
             "unread_count",
@@ -146,6 +148,14 @@ class ChatThreadSerializer(serializers.ModelSerializer):
     def get_job_title(self, obj) -> str:
         try:
             return obj.application.job.title
+        except Exception:
+            return ""
+
+    def get_interview_cohort_name(self, obj) -> str:
+        """Nama sesi interview (InterviewCohort), jika pelamar sudah ditempatkan."""
+        try:
+            cohort = obj.application.interview_cohort
+            return cohort.name if cohort else ""
         except Exception:
             return ""
 

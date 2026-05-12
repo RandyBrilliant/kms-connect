@@ -13,6 +13,7 @@ import { format } from "date-fns"
 import { id } from "date-fns/locale"
 import { Link } from "react-router-dom"
 
+import { StaffReferralLamaranProgress } from "@/components/staff/staff-referral-lamaran-progress"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -34,8 +35,6 @@ function formatDate(value: string | null | undefined) {
 
 function verificationStatusLabel(status: string) {
   switch (status) {
-    case "DRAFT":
-      return "Draf"
     case "SUBMITTED":
       return "Dikirim"
     case "ACCEPTED":
@@ -49,8 +48,6 @@ function verificationStatusLabel(status: string) {
 
 function verificationStatusVariant(status: string) {
   switch (status) {
-    case "DRAFT":
-      return "outline"
     case "SUBMITTED":
       return "secondary"
     case "ACCEPTED":
@@ -189,18 +186,7 @@ export function StaffLaporanPage() {
               <CardDescription>Breakdown lengkap status verifikasi pelamar rujukan</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 gap-6 @xl/main:grid-cols-4">
-                <div className="space-y-2">
-                  <p className="text-muted-foreground text-sm">Draf</p>
-                  <p className="text-3xl font-bold">
-                    {stats.verification_breakdown.DRAFT || 0}
-                  </p>
-                  <p className="text-muted-foreground text-xs">
-                    {stats.total_referred_applicants > 0
-                      ? ((stats.verification_breakdown.DRAFT || 0) / stats.total_referred_applicants * 100).toFixed(1)
-                      : "0.0"}% dari total
-                  </p>
-                </div>
+              <div className="grid grid-cols-1 gap-6 @xl/main:grid-cols-3">
                 <div className="space-y-2">
                   <p className="text-muted-foreground text-sm">Dikirim</p>
                   <p className="text-3xl font-bold text-amber-600">
@@ -269,6 +255,7 @@ export function StaffLaporanPage() {
                         <TableHead>NIK</TableHead>
                         <TableHead>No. Telepon</TableHead>
                         <TableHead>Status Verifikasi</TableHead>
+                        <TableHead className="min-w-[12rem]">Tahapan lamaran</TableHead>
                         <TableHead>Terdaftar</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -303,6 +290,11 @@ export function StaffLaporanPage() {
                                 </Badge>
                               )}
                               {!profile?.verification_status && <Badge variant="outline">-</Badge>}
+                            </TableCell>
+                            <TableCell className="align-top">
+                              <StaffReferralLamaranProgress
+                                applicationsSummary={applicant.applications_summary}
+                              />
                             </TableCell>
                             <TableCell>
                               <span className="text-sm">{formatDate(applicant.date_joined)}</span>
@@ -339,9 +331,6 @@ export function StaffLaporanPage() {
                   <ul className="text-muted-foreground mt-2 space-y-1 text-sm">
                     {stats.total_submitted > 0 && (
                       <li>• Pantau status verifikasi {stats.total_submitted} pelamar yang masih pending</li>
-                    )}
-                    {(stats.verification_breakdown.DRAFT || 0) > 0 && (
-                      <li>• Bantu {stats.verification_breakdown.DRAFT} pelamar untuk menyelesaikan profil mereka</li>
                     )}
                     {parseFloat(successRate) < 50 && stats.total_accepted > 0 && (
                       <li>• Tingkatkan kualitas rujukan untuk meningkatkan tingkat penerimaan</li>

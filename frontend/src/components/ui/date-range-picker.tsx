@@ -19,6 +19,8 @@ export interface DateRangePickerProps {
   fromYear?: number
   toYear?: number
   numberOfMonths?: number
+  /** Merged onto the trigger button (e.g. height, max-width in toolbars). */
+  className?: string
 }
 
 export function DateRangePicker({
@@ -29,6 +31,7 @@ export function DateRangePicker({
   fromYear = 2020,
   toYear = new Date().getFullYear(),
   numberOfMonths = 2,
+  className,
 }: DateRangePickerProps) {
   const [open, setOpen] = React.useState(false)
   const fromMonth = React.useMemo(() => new Date(fromYear, 0, 1), [fromYear])
@@ -49,8 +52,9 @@ export function DateRangePicker({
           variant="outline"
           disabled={disabled}
           className={cn(
-            "w-full justify-start text-left font-normal cursor-pointer px-2.5",
-            !dateRange?.from && !dateRange?.to && "text-muted-foreground"
+            "h-9 w-full min-w-0 justify-start text-left font-normal cursor-pointer px-2.5",
+            !dateRange?.from && !dateRange?.to && "text-muted-foreground",
+            className
           )}
         >
           <CalendarIcon className="mr-2 size-4 opacity-50" />

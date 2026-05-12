@@ -25,6 +25,8 @@ export interface ChatThread {
   application: number
   applicant_name: string
   job_title: string
+  /** Nama sesi interview (InterviewCohort), jika ada */
+  interview_cohort_name?: string
   application_status: string
   is_closed: boolean
   unread_count: number

@@ -206,9 +206,6 @@ export function CompanyApplicantsPage() {
                           {profile?.verification_status === "REJECTED" && (
                             <Badge variant="destructive">Ditolak</Badge>
                           )}
-                          {profile?.verification_status === "DRAFT" && (
-                            <Badge variant="outline">Draf</Badge>
-                          )}
                           {!profile?.verification_status && (
                             <Badge variant="outline">-</Badge>
                           )}

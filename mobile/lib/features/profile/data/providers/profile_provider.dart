@@ -180,6 +180,88 @@ final biodataPdfProvider =
   return BiodataPdfNotifier(ref.read(profileRepositoryProvider));
 });
 
+// ─── Psychology referral PDF (lamaran DITERIMA only) ────────────────────────
+
+class PsychologyReferralPdfState {
+  final bool isLoading;
+  final String? error;
+  const PsychologyReferralPdfState({this.isLoading = false, this.error});
+  PsychologyReferralPdfState copyWith({bool? isLoading, String? error}) {
+    return PsychologyReferralPdfState(
+      isLoading: isLoading ?? this.isLoading,
+      error: error,
+    );
+  }
+}
+
+class PsychologyReferralPdfNotifier
+    extends StateNotifier<PsychologyReferralPdfState> {
+  final ProfileRepository _repository;
+  PsychologyReferralPdfNotifier(this._repository)
+      : super(const PsychologyReferralPdfState());
+
+  Future<bool> open() async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      await _repository.downloadAndOpenPsychologyReferralPdf();
+      state = state.copyWith(isLoading: false);
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: e.toString().replaceAll('Exception: ', ''),
+      );
+      return false;
+    }
+  }
+}
+
+final psychologyReferralPdfProvider =
+    StateNotifierProvider<PsychologyReferralPdfNotifier, PsychologyReferralPdfState>(
+        (ref) {
+  return PsychologyReferralPdfNotifier(ref.read(profileRepositoryProvider));
+});
+
+// ─── Medical referral PDF (lamaran DITERIMA only) ───────────────────────────
+
+class MedicalReferralPdfState {
+  final bool isLoading;
+  final String? error;
+  const MedicalReferralPdfState({this.isLoading = false, this.error});
+  MedicalReferralPdfState copyWith({bool? isLoading, String? error}) {
+    return MedicalReferralPdfState(
+      isLoading: isLoading ?? this.isLoading,
+      error: error,
+    );
+  }
+}
+
+class MedicalReferralPdfNotifier extends StateNotifier<MedicalReferralPdfState> {
+  final ProfileRepository _repository;
+  MedicalReferralPdfNotifier(this._repository)
+      : super(const MedicalReferralPdfState());
+
+  Future<bool> open() async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      await _repository.downloadAndOpenMedicalReferralPdf();
+      state = state.copyWith(isLoading: false);
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: e.toString().replaceAll('Exception: ', ''),
+      );
+      return false;
+    }
+  }
+}
+
+final medicalReferralPdfProvider =
+    StateNotifierProvider<MedicalReferralPdfNotifier, MedicalReferralPdfState>((ref) {
+  return MedicalReferralPdfNotifier(ref.read(profileRepositoryProvider));
+});
+
 final profileNotifierProvider = StateNotifierProvider<ProfileNotifier, ProfileState>((ref) {
   return ProfileNotifier(ref.read(profileRepositoryProvider));
 });

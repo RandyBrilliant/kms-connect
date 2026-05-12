@@ -3,7 +3,18 @@
  * Uses TanStack Form to submit a partial ApplicantProfile update.
  */
 
+import type { ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { useForm } from "@tanstack/react-form"
+import type { LucideIcon } from "lucide-react"
+import {
+  BadgeCheck,
+  Brain,
+  Plane,
+  Receipt,
+  ShieldCheck,
+  Stethoscope,
+} from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -14,6 +25,14 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import { DatePicker } from "@/components/ui/date-picker"
 import {
   Select,
@@ -23,11 +42,59 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import type { ApplicantProfile } from "@/types/applicant"
+import { INBOUND_TRANSPORT_STAGES } from "@/lib/inbound-transport-stages"
 import { applicantProfileUpdateSchema } from "@/schemas/applicant"
 import { formatApiValidationErrors } from "@/lib/format-api-validation-errors"
+import { defaultDisnakerFromApplicantProfile } from "@/lib/applicant-disnaker-default"
 import { toast } from "@/lib/toast"
-import { format } from "date-fns"
+import { cn } from "@/lib/utils"
+import { format, parseISO } from "date-fns"
 import type { AxiosError } from "axios"
+
+function ProcessSectionCard({
+  icon: Icon,
+  title,
+  description,
+  compactLayout,
+  children,
+}: {
+  icon: LucideIcon
+  title: string
+  description: string
+  compactLayout?: boolean
+  children: ReactNode
+}) {
+  return (
+    <Card className="min-w-0 overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
+      <CardHeader
+        className={cn(
+          "border-b border-border/50 bg-muted/15 dark:bg-muted/10",
+          compactLayout ? "px-4 py-3.5" : "px-5 py-4"
+        )}
+      >
+        <div className="flex gap-3">
+          <div className="bg-primary/10 text-primary flex size-10 shrink-0 items-center justify-center rounded-xl shadow-sm">
+            <Icon className="size-5" strokeWidth={2} aria-hidden />
+          </div>
+          <div className="min-w-0 space-y-0.5">
+            <CardTitle className="text-base font-semibold tracking-tight">{title}</CardTitle>
+            <CardDescription className="text-muted-foreground text-xs leading-relaxed sm:text-sm">
+              {description}
+            </CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent
+        className={cn(
+          "min-w-0 space-y-4",
+          compactLayout ? "px-4 py-4" : "px-5 py-5"
+        )}
+      >
+        {children}
+      </CardContent>
+    </Card>
+  )
+}
 
 interface ApplicantAdminProcessTabProps {
   profile: ApplicantProfile
@@ -52,7 +119,6 @@ type AdminProcessFormValues = {
   biaya_ready_paspor: string
   pengembalian_biaya: string
   tgl_pengembalian: string
-  jlh_uang_transport: string
   bank: string
   no_rek: string
   tanggal_pengembalian: string
@@ -71,13 +137,16 @@ function toFormValues(p: ApplicantProfile): AdminProcessFormValues {
     tgl_bayar_bpjs_pra: p.tgl_bayar_bpjs_pra ?? "",
     tgl_bayar_bpjs_purna: p.tgl_bayar_bpjs_purna ?? "",
     no_id_sisko: p.no_id_sisko ?? "",
-    disnaker: p.disnaker ?? "",
+    disnaker: (() => {
+      const stored = (p.disnaker ?? "").trim()
+      if (stored) return stored.toUpperCase()
+      return defaultDisnakerFromApplicantProfile(p)
+    })(),
     no_sip: p.no_sip ?? "",
     no_jo: p.no_jo ?? "",
     biaya_ready_paspor: p.biaya_ready_paspor != null ? String(p.biaya_ready_paspor) : "",
     pengembalian_biaya: p.pengembalian_biaya != null ? String(p.pengembalian_biaya) : "",
     tgl_pengembalian: p.tgl_pengembalian ?? "",
-    jlh_uang_transport: p.jlh_uang_transport != null ? String(p.jlh_uang_transport) : "",
     bank: p.bank ?? "",
     no_rek: p.no_rek ?? "",
     tanggal_pengembalian: p.tanggal_pengembalian ?? "",
@@ -101,6 +170,46 @@ const grid3Compact =
 const grid2 =
   "grid gap-4 grid-cols-1 sm:grid-cols-2 [&>*]:min-w-0 [&>*]:max-w-full"
 
+type InboundStageCostFormRow = {
+  stage_code: string
+  label: string
+  amount: string
+  keterangan: string
+  /** ISO date (yyyy-MM-dd) from lamaran sub-tahapan; read-only, not submitted */
+  tanggal_proses: string | null
+}
+
+function formatTanggalProsesDisplay(iso: string | null | undefined): string {
+  if (!iso?.trim()) return "—"
+  try {
+    return format(parseISO(iso), "dd/MM/yyyy")
+  } catch {
+    return iso
+  }
+}
+
+function buildInboundStageCostRowsFromProfile(
+  p: ApplicantProfile
+): InboundStageCostFormRow[] {
+  const fromApi = p.inbound_transport_stage_costs
+  if (fromApi && fromApi.length > 0) {
+    return fromApi.map((r) => ({
+      stage_code: r.stage_code,
+      label: r.label,
+      amount: r.amount != null && !Number.isNaN(r.amount) ? String(r.amount) : "",
+      keterangan: r.keterangan ?? "",
+      tanggal_proses: r.tanggal_proses ?? null,
+    }))
+  }
+  return INBOUND_TRANSPORT_STAGES.map(([code, label]) => ({
+    stage_code: code,
+    label,
+    amount: "",
+    keterangan: "",
+    tanggal_proses: null,
+  }))
+}
+
 export function ApplicantAdminProcessTab({
   profile,
   onSubmit,
@@ -109,6 +218,37 @@ export function ApplicantAdminProcessTab({
 }: ApplicantAdminProcessTabProps) {
   const g3 = compactLayout ? grid3Compact : grid3
   const g2 = grid2
+
+  const [inboundStageRows, setInboundStageRows] = useState<InboundStageCostFormRow[]>(() =>
+    buildInboundStageCostRowsFromProfile(profile)
+  )
+
+  const updateInboundRow = useCallback(
+    (index: number, patch: Partial<InboundStageCostFormRow>) => {
+      setInboundStageRows((prev) => {
+        const next = [...prev]
+        const cur = next[index]
+        if (!cur) return prev
+        next[index] = { ...cur, ...patch }
+        return next
+      })
+    },
+    []
+  )
+
+  const inboundTransportTotalPreview = useMemo(() => {
+    let sum = 0
+    let any = false
+    for (const r of inboundStageRows) {
+      const n = toNumber(r.amount)
+      if (n != null) {
+        sum += n
+        any = true
+      }
+    }
+    return any ? sum : null
+  }, [inboundStageRows])
+
   const form = useForm({
     defaultValues: toFormValues(profile),
     onSubmit: async ({ value }) => {
@@ -122,19 +262,23 @@ export function ApplicantAdminProcessTab({
           tgl_bayar_bpjs_pra: value.tgl_bayar_bpjs_pra || null,
           tgl_bayar_bpjs_purna: value.tgl_bayar_bpjs_purna || null,
           no_id_sisko: value.no_id_sisko || "",
-          disnaker: value.disnaker || "",
+          disnaker: (value.disnaker ?? "").trim().toUpperCase(),
           no_sip: value.no_sip || "",
           no_jo: value.no_jo || "",
           biaya_ready_paspor: toNumber(value.biaya_ready_paspor),
           pengembalian_biaya: toNumber(value.pengembalian_biaya),
           tgl_pengembalian: value.tgl_pengembalian || null,
-          jlh_uang_transport: toNumber(value.jlh_uang_transport),
           bank: value.bank || "",
           no_rek: value.no_rek || "",
           tanggal_pengembalian: value.tanggal_pengembalian || null,
           tgl_kirim_bio_ke_mly: value.tgl_kirim_bio_ke_mly || null,
           tgl_calling_visa: value.tgl_calling_visa || null,
           no_calling_visa: value.no_calling_visa || "",
+          inbound_transport_stage_costs: inboundStageRows.map((r) => ({
+            stage_code: r.stage_code,
+            amount: toNumber(r.amount),
+            keterangan: (r.keterangan ?? "").trim(),
+          })),
         }
 
         const parsed = applicantProfileUpdateSchema.safeParse(candidate)
@@ -157,6 +301,15 @@ export function ApplicantAdminProcessTab({
       }
     },
   })
+
+  const inboundServerKey = JSON.stringify(
+    profile.inbound_transport_stage_costs ?? null
+  )
+
+  useEffect(() => {
+    setInboundStageRows(buildInboundStageCostRowsFromProfile(profile))
+    form.reset(toFormValues(profile))
+  }, [profile.id, profile.updated_at, inboundServerKey, form, profile])
 
   const renderDateField = (
     name: keyof AdminProcessFormValues,
@@ -192,123 +345,236 @@ export function ApplicantAdminProcessTab({
       }}
       className="flex min-w-0 flex-col gap-6"
     >
-      <Card className="min-w-0 overflow-hidden shadow-sm">
-        <CardHeader>
-          <CardTitle>Proses Medical &amp; Pembayaran</CardTitle>
-          <CardDescription>
-            Tahapan medical dan pembayaran terkait proses penempatan.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="min-w-0 space-y-6">
-          <FieldGroup>
-            <div className={g3}>
-              {renderDateField("tgl_medical", "Tgl. Medical", "Pilih tanggal medical")}
-              <form.Field name="hasil_medical">
-                {(field) => (
-                  <Field>
-                    <FieldLabel htmlFor={field.name}>Hasil Medical</FieldLabel>
-                    <Select
-                      value={field.state.value || "PENDING"}
-                      onValueChange={(v) => field.handleChange(v === "PENDING" ? "" : v)}
-                      disabled={isSubmitting}
-                    >
-                      <SelectTrigger id={field.name} className="cursor-pointer">
-                        <SelectValue placeholder="Pilih hasil medical" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="PENDING">Belum diisi</SelectItem>
-                        <SelectItem value="FIT">FIT</SelectItem>
-                        <SelectItem value="UNFIT">UNFIT</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FieldError errors={field.state.meta.errors as any} />
-                  </Field>
-                )}
-              </form.Field>
-              {renderDateField("tgl_bayar_sml", "Tgl. Bayar SML", "Pilih tanggal bayar SML")}
-            </div>
+      <ProcessSectionCard
+        icon={Stethoscope}
+        title="Medical"
+        description="Jadwal medical, hasil pemeriksaan, dan tanggal pembayaran medical."
+        compactLayout={compactLayout}
+      >
+        <FieldGroup>
+          <div className={g3}>
+            {renderDateField("tgl_medical", "Tgl. Medical", "Pilih tanggal medical")}
+            <form.Field name="hasil_medical">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>Hasil Medical</FieldLabel>
+                  <Select
+                    value={field.state.value || "PENDING"}
+                    onValueChange={(v) => field.handleChange(v === "PENDING" ? "" : v)}
+                    disabled={isSubmitting}
+                  >
+                    <SelectTrigger id={field.name} className="cursor-pointer">
+                      <SelectValue placeholder="Pilih hasil medical" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="PENDING">Belum diisi</SelectItem>
+                      <SelectItem value="FIT">FIT</SelectItem>
+                      <SelectItem value="UNFIT">UNFIT</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FieldError errors={field.state.meta.errors as any} />
+                </Field>
+              )}
+            </form.Field>
+            {renderDateField(
+              "tgl_bayar_sml",
+              "Tgl. Bayar Medical",
+              "Pilih tanggal pembayaran medical",
+            )}
+          </div>
+        </FieldGroup>
+      </ProcessSectionCard>
 
-            <div className={g3}>
-              {renderDateField("tgl_fwcm_psikotes", "Tgl. FWCMS & Psikotes", "Pilih tanggal FWCMS & psikotes")}
-              {renderDateField("tgl_bayar_psikotes", "Tgl. Bayar Psikotes", "Pilih tanggal bayar psikotes")}
-              {renderDateField("tgl_bayar_bpjs_pra", "Tgl. Bayar BPJS Pra", "Pilih tanggal bayar BPJS pra")}
-            </div>
+      <ProcessSectionCard
+        icon={Brain}
+        title="FWCMS & Psikotes"
+        description="Jadwal FWCMS/psikotes dan tanggal pembayaran psikotes."
+        compactLayout={compactLayout}
+      >
+        <FieldGroup>
+          <div className={g2}>
+            {renderDateField(
+              "tgl_fwcm_psikotes",
+              "Tgl. FWCMS & Psikotes",
+              "Pilih tanggal FWCMS & psikotes",
+            )}
+            {renderDateField(
+              "tgl_bayar_psikotes",
+              "Tgl. Bayar Psikotes",
+              "Pilih tanggal bayar psikotes",
+            )}
+          </div>
+        </FieldGroup>
+      </ProcessSectionCard>
 
-            <div className={g3}>
-              {renderDateField("tgl_bayar_bpjs_purna", "Tgl. Bayar BPJS Purna", "Pilih tanggal bayar BPJS purna")}
-              <form.Field name="no_id_sisko">
-                {(field) => (
-                  <Field>
-                    <FieldLabel htmlFor={field.name}>No. ID SISKO</FieldLabel>
-                    <Input
-                      id={field.name}
-                      value={field.state.value}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                      disabled={isSubmitting}
-                    />
-                    <FieldError errors={field.state.meta.errors as any} />
-                  </Field>
-                )}
-              </form.Field>
-              <form.Field name="disnaker">
-                {(field) => (
-                  <Field>
-                    <FieldLabel htmlFor={field.name}>Disnaker</FieldLabel>
-                    <Input
-                      id={field.name}
-                      value={field.state.value}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                      disabled={isSubmitting}
-                    />
-                    <FieldError errors={field.state.meta.errors as any} />
-                  </Field>
-                )}
-              </form.Field>
-            </div>
+      <ProcessSectionCard
+        icon={ShieldCheck}
+        title="BPJS Kesehatan"
+        description="Tanggal pembayaran iuran BPJS tahap pra dan purna penempatan."
+        compactLayout={compactLayout}
+      >
+        <FieldGroup>
+          <div className={g2}>
+            {renderDateField(
+              "tgl_bayar_bpjs_pra",
+              "Tgl. Bayar BPJS Pra",
+              "Pilih tanggal bayar BPJS pra",
+            )}
+            {renderDateField(
+              "tgl_bayar_bpjs_purna",
+              "Tgl. Bayar BPJS Purna",
+              "Pilih tanggal bayar BPJS purna",
+            )}
+          </div>
+        </FieldGroup>
+      </ProcessSectionCard>
 
-            <div className={g2}>
-              <form.Field name="no_sip">
-                {(field) => (
-                  <Field>
-                    <FieldLabel htmlFor={field.name}>No. SIP</FieldLabel>
-                    <Input
-                      id={field.name}
-                      value={field.state.value}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                      disabled={isSubmitting}
-                    />
-                    <FieldError errors={field.state.meta.errors as any} />
-                  </Field>
-                )}
-              </form.Field>
-              <form.Field name="no_jo">
-                {(field) => (
-                  <Field>
-                    <FieldLabel htmlFor={field.name}>No. JO</FieldLabel>
-                    <Input
-                      id={field.name}
-                      value={field.state.value}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                      disabled={isSubmitting}
-                    />
-                    <FieldError errors={field.state.meta.errors as any} />
-                  </Field>
-                )}
-              </form.Field>
-            </div>
-          </FieldGroup>
-        </CardContent>
-      </Card>
+      <ProcessSectionCard
+        icon={BadgeCheck}
+        title="SISKO, Disnaker, SIP & JO"
+        description="Nomor referensi administrasi penempatan (ID SISKO, Disnaker, SIP, dan JO)."
+        compactLayout={compactLayout}
+      >
+        <FieldGroup>
+          <div className={g2}>
+            <form.Field name="no_id_sisko">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>No. ID SISKO</FieldLabel>
+                  <Input
+                    id={field.name}
+                    value={field.state.value}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    disabled={isSubmitting}
+                  />
+                  <FieldError errors={field.state.meta.errors as any} />
+                </Field>
+              )}
+            </form.Field>
+            <form.Field name="disnaker">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>Disnaker</FieldLabel>
+                  <Input
+                    id={field.name}
+                    value={field.state.value}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    disabled={isSubmitting}
+                    autoComplete="off"
+                  />
+                  <FieldError errors={field.state.meta.errors as any} />
+                </Field>
+              )}
+            </form.Field>
+            <form.Field name="no_sip">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>No. SIP</FieldLabel>
+                  <Input
+                    id={field.name}
+                    value={field.state.value}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    disabled={isSubmitting}
+                  />
+                  <FieldError errors={field.state.meta.errors as any} />
+                </Field>
+              )}
+            </form.Field>
+            <form.Field name="no_jo">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>No. JO</FieldLabel>
+                  <Input
+                    id={field.name}
+                    value={field.state.value}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    disabled={isSubmitting}
+                  />
+                  <FieldError errors={field.state.meta.errors as any} />
+                </Field>
+              )}
+            </form.Field>
+          </div>
+        </FieldGroup>
+      </ProcessSectionCard>
 
-      <Card className="min-w-0 overflow-hidden shadow-sm">
-        <CardHeader>
-          <CardTitle>Biaya &amp; Pengembalian</CardTitle>
-          <CardDescription>
-            Ringkasan biaya, pengembalian, dan data rekening.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="min-w-0 space-y-6">
-          <FieldGroup>
+      <ProcessSectionCard
+        icon={Receipt}
+        title="Biaya & Pengembalian"
+        description="Biaya transport per sub-tahapan Diterima (PDF Inbound), ringkasan pengembalian, dan rekening."
+        compactLayout={compactLayout}
+      >
+        <FieldGroup>
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              Tgl. proses diambil otomatis dari sub-tahapan Diterima (konfirmasi pelamar
+              atau saat admin memajukan langkah). Total uang transport dihitung dari
+              jumlah per baris.
+            </p>
+            {inboundTransportTotalPreview != null && (
+              <p className="text-sm font-medium tabular-nums">
+                Total uang transport (pratinjau): Rp{" "}
+                {inboundTransportTotalPreview.toLocaleString("id-ID")}
+              </p>
+            )}
+            <div className="overflow-x-auto rounded-lg border border-border/60">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/30 hover:bg-muted/30">
+                    <TableHead className="whitespace-normal">Tahapan</TableHead>
+                    <TableHead className="w-[9.5rem] whitespace-normal">
+                      Tgl. proses
+                    </TableHead>
+                    <TableHead className="w-[8.5rem] whitespace-normal">
+                      Jumlah (Rp)
+                    </TableHead>
+                    <TableHead className="min-w-[10rem] whitespace-normal">
+                      Keterangan
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {inboundStageRows.map((row, index) => (
+                    <TableRow key={row.stage_code}>
+                      <TableCell className="align-top font-medium whitespace-normal">
+                        {row.label}
+                      </TableCell>
+                      <TableCell className="align-top text-muted-foreground tabular-nums">
+                        {formatTanggalProsesDisplay(row.tanggal_proses)}
+                      </TableCell>
+                      <TableCell className="align-top">
+                        <Input
+                          type="number"
+                          inputMode="numeric"
+                          className="h-9 tabular-nums"
+                          value={row.amount}
+                          onChange={(e) =>
+                            updateInboundRow(index, { amount: e.target.value })
+                          }
+                          disabled={isSubmitting}
+                          placeholder="0"
+                        />
+                      </TableCell>
+                      <TableCell className="align-top">
+                        <Input
+                          className="h-9"
+                          value={row.keterangan}
+                          onChange={(e) =>
+                            updateInboundRow(index, {
+                              keterangan: e.target.value,
+                            })
+                          }
+                          disabled={isSubmitting}
+                          placeholder="—"
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+
             <div className={g3}>
               <form.Field name="biaya_ready_paspor">
                 {(field) => (
@@ -346,22 +612,6 @@ export function ApplicantAdminProcessTab({
             </div>
 
             <div className={g3}>
-              <form.Field name="jlh_uang_transport">
-                {(field) => (
-                  <Field>
-                    <FieldLabel htmlFor={field.name}>Jlh Uang Transport (Rp)</FieldLabel>
-                    <Input
-                      id={field.name}
-                      type="number"
-                      value={field.state.value}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                      disabled={isSubmitting}
-                      placeholder="Contoh: 100000"
-                    />
-                    <FieldError errors={field.state.meta.errors as any} />
-                  </Field>
-                )}
-              </form.Field>
               <form.Field name="bank">
                 {(field) => (
                   <Field>
@@ -399,18 +649,15 @@ export function ApplicantAdminProcessTab({
               "Pilih tanggal pengembalian (transfer)",
             )}
           </FieldGroup>
-        </CardContent>
-      </Card>
+      </ProcessSectionCard>
 
-      <Card className="min-w-0 overflow-hidden shadow-sm">
-        <CardHeader>
-          <CardTitle>Calling Visa &amp; Keberangkatan</CardTitle>
-          <CardDescription>
-            Informasi pengiriman biodata dan calling visa.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="min-w-0 space-y-6">
-          <FieldGroup>
+      <ProcessSectionCard
+        icon={Plane}
+        title="Calling Visa & Keberangkatan"
+        description="Pengiriman biodata ke Malaysia dan data calling visa."
+        compactLayout={compactLayout}
+      >
+        <FieldGroup>
             <div className={g3}>
               {renderDateField(
                 "tgl_kirim_bio_ke_mly",
@@ -438,8 +685,7 @@ export function ApplicantAdminProcessTab({
               </form.Field>
             </div>
           </FieldGroup>
-        </CardContent>
-      </Card>
+      </ProcessSectionCard>
 
       <div className="flex gap-2">
         <Button type="submit" disabled={isSubmitting} className="cursor-pointer">

@@ -24,7 +24,6 @@ export const VERIFICATION_STATUS_LABELS: Record<
   ApplicantVerificationStatus,
   string
 > = {
-  DRAFT: "Draf",
   SUBMITTED: "Dikirim",
   ACCEPTED: "Diterima",
   REJECTED: "Ditolak",
@@ -34,7 +33,6 @@ export const VERIFICATION_STATUS_COLORS: Record<
   ApplicantVerificationStatus,
   "outline" | "secondary" | "default" | "destructive"
 > = {
-  DRAFT: "outline",
   SUBMITTED: "secondary",
   ACCEPTED: "default",
   REJECTED: "destructive",
@@ -44,7 +42,6 @@ export const VERIFICATION_STATUS_DESCRIPTIONS: Record<
   ApplicantVerificationStatus,
   string
 > = {
-  DRAFT: "Pelamar sedang mengisi data, belum mengirim untuk verifikasi",
   SUBMITTED: "Pelamar sudah mengirim data, menunggu review admin",
   ACCEPTED: "Data pelamar sudah diverifikasi dan diterima",
   REJECTED: "Data pelamar ditolak. Lihat catatan untuk detailnya",

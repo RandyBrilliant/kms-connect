@@ -1038,19 +1038,6 @@ function BatchStatusTab({
                         variant="ghost"
                         size="icon"
                         className="size-8 shrink-0 cursor-pointer text-muted-foreground"
-                        title="Buka halaman lamaran"
-                        onClick={() =>
-                          navigate(joinAdminPath(basePath, `/lamaran/${app.id}`))
-                        }
-                      >
-                        <IconExternalLink className="size-4" />
-                        <span className="sr-only">Buka halaman lamaran</span>
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="size-8 shrink-0 cursor-pointer text-muted-foreground"
                         title="Kelola dokumen pelamar"
                         disabled={!app.applicant_user}
                         onClick={() => {

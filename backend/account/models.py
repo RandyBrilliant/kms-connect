@@ -27,6 +27,10 @@ from .managers import (
     CustomUserManager,
 )
 from .document_specs import validate_document_file
+from .inbound_transport_stages import (
+    INBOUND_TRANSPORT_STAGE_CHOICES,
+    INBOUND_TRANSPORT_STAGE_CODE_MAX_LENGTH,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -64,11 +68,10 @@ class Gender(models.TextChoices):
 
 class ApplicantVerificationStatus(models.TextChoices):
     """
-    Status seleksi/verifikasi setelah pelamar mengirim data.
-    Admin memverifikasi biodata dan dokumen; status ditampilkan ke pelamar.
+    Status verifikasi profil oleh admin.
+    Profil baru default Dikirim; Diterima/Ditolak setelah verifikasi.
     """
 
-    DRAFT = "DRAFT", _("Draf")
     SUBMITTED = "SUBMITTED", _("Dikirim")
     ACCEPTED = "ACCEPTED", _("Diterima")
     REJECTED = "REJECTED", _("Ditolak")
@@ -910,14 +913,6 @@ class ApplicantProfile(models.Model):
         blank=True,
         help_text=_("Tanggal pengembalian biaya dilakukan."),
     )
-    jlh_uang_transport = models.DecimalField(
-        _("jumlah uang transport"),
-        max_digits=12,
-        decimal_places=2,
-        null=True,
-        blank=True,
-        help_text=_("Total uang transport (dalam Rupiah)."),
-    )
     bank = models.CharField(
         _("bank"),
         max_length=100,
@@ -961,7 +956,7 @@ class ApplicantProfile(models.Model):
         choices=ApplicantVerificationStatus.choices,
         default=ApplicantVerificationStatus.SUBMITTED,
         db_index=True,
-        help_text=_("Draf: mengisi data. Dikirim: menunggu admin. Diterima/Ditolak: setelah verifikasi."),
+        help_text=_("Dikirim: menunggu admin. Diterima/Ditolak: setelah verifikasi."),
     )
     submitted_at = models.DateTimeField(
         _("dikirim pada"),
@@ -1042,10 +1037,9 @@ class ApplicantProfile(models.Model):
                 | Q(passport_expiry_date__gt=models.F("passport_issue_date")),
                 name="passport_expiry_after_issue",
             ),
-            # Ensure submitted_at is set when status is SUBMITTED or later
             models.CheckConstraint(
-                condition=Q(verification_status="DRAFT") | Q(submitted_at__isnull=False),
-                name="submitted_at_required_after_draft",
+                condition=Q(submitted_at__isnull=False),
+                name="applicant_profile_submitted_at_required",
             ),
             # Ensure verified_at is set when status is ACCEPTED or REJECTED
             models.CheckConstraint(
@@ -1151,10 +1145,6 @@ class ApplicantProfile(models.Model):
 
     # ---- Verification status helpers (for display and API) ----
     @property
-    def is_draft(self) -> bool:
-        return self.verification_status == ApplicantVerificationStatus.DRAFT
-
-    @property
     def is_submitted(self) -> bool:
         return self.verification_status == ApplicantVerificationStatus.SUBMITTED
 
@@ -1179,33 +1169,34 @@ class ApplicantProfile(models.Model):
     
     def submit_for_verification(self):
         """
-        Submit profile for admin verification.
-        Changes status from DRAFT to SUBMITTED.
-        
-        Raises:
-            ValidationError: If not in DRAFT status or missing required data
+        Re-submit profile for admin verification after rejection, or no-op if already queued.
         """
-        if self.verification_status != ApplicantVerificationStatus.DRAFT:
-            raise ValidationError(_("Hanya profil dengan status Draf yang dapat dikirim."))
-        
-        # Check required fields
+        if self.verification_status == ApplicantVerificationStatus.ACCEPTED:
+            raise ValidationError(_("Profil yang sudah diterima tidak dapat dikirim ulang."))
+        if self.verification_status == ApplicantVerificationStatus.SUBMITTED:
+            if not self.submitted_at:
+                self.submitted_at = timezone.now()
+                self.save(update_fields=["submitted_at"])
+            return
+        if self.verification_status != ApplicantVerificationStatus.REJECTED:
+            raise ValidationError(_("Status profil tidak mendukung pengiriman ulang."))
+
         required_fields = {
-            'full_name': self.user.full_name,
-            'nik': self.nik,
-            'birth_date': self.birth_date,
-            'address': self.address,
+            "full_name": self.user.full_name,
+            "nik": self.nik,
+            "birth_date": self.birth_date,
+            "address": self.address,
         }
         missing = [name for name, value in required_fields.items() if not value]
         if missing:
             raise ValidationError(
-                _("Field wajib belum diisi: %(fields)s") % {
-                    'fields': ', '.join(missing)
-                }
+                _("Field wajib belum diisi: %(fields)s")
+                % {"fields": ", ".join(missing)}
             )
-        
+
         self.verification_status = ApplicantVerificationStatus.SUBMITTED
         self.submitted_at = timezone.now()
-        self.save(update_fields=['verification_status', 'submitted_at'])
+        self.save(update_fields=["verification_status", "submitted_at"])
     
     def approve(self, verified_by, notes=''):
         """
@@ -1336,7 +1327,25 @@ class ApplicantProfile(models.Model):
             return explain_readiness_score(self) or {}
         except Exception:
             return {}
-    
+
+    @property
+    def jlh_uang_transport(self):
+        """
+        Total inbound transport (Rp) from per–sub-tahapan rows; not stored in DB.
+        """
+        from decimal import Decimal
+
+        if not getattr(self, "pk", None):
+            return None
+
+        total = Decimal("0")
+        any_amount = False
+        for row in self.inbound_transport_stage_costs.all():
+            if row.amount is not None:
+                total += row.amount
+                any_amount = True
+        return total if any_amount else None
+
     @property
     def has_complete_documents(self):
         """Check if all required documents are uploaded and approved (cached)."""
@@ -1392,7 +1401,18 @@ class ApplicantProfile(models.Model):
                 self.family_district = self.family_village.district.regency
             except Exception:
                 pass
-        
+
+        # Disnaker: default from kabupaten/kota alamat KTP when still blank (uppercase).
+        if not (self.disnaker or "").strip():
+            try:
+                from account.services.disnaker_default import ktp_kabupaten_kota_upper
+
+                auto_disnaker = ktp_kabupaten_kota_upper(self)
+                if auto_disnaker:
+                    self.disnaker = auto_disnaker
+            except Exception:
+                pass
+
         # Keep score in sync; never let scoring failure block saving.
         try:
             self.score = calculate_readiness_score(self)
@@ -1409,6 +1429,60 @@ class ApplicantProfile(models.Model):
             generated = f"AP{year}{self.pk:06d}"
             ApplicantProfile.objects.filter(pk=self.pk).update(register_number=generated)
             self.register_number = generated
+
+
+class ApplicantInboundTransportStageCost(models.Model):
+    """
+    Biaya transportasi inbound per tahap yang memiliki pengembalian transport
+    (subset sub-tahapan Diterima; tanpa Masuk Berkas Asli).
+
+    Tanggal proses per tahap diambil dari ``JobApplication.diterima_step_confirmations``
+    (bukan disimpan di sini).
+    """
+
+    profile = models.ForeignKey(
+        ApplicantProfile,
+        on_delete=models.CASCADE,
+        related_name="inbound_transport_stage_costs",
+        verbose_name=_("profil pelamar"),
+    )
+    stage_code = models.CharField(
+        _("kode sub-tahapan"),
+        max_length=max(30, int(INBOUND_TRANSPORT_STAGE_CODE_MAX_LENGTH)),
+        choices=INBOUND_TRANSPORT_STAGE_CHOICES,
+        db_index=True,
+    )
+    amount = models.DecimalField(
+        _("jumlah (Rp)"),
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    keterangan = models.CharField(
+        _("keterangan"),
+        max_length=500,
+        blank=True,
+    )
+    created_at = models.DateTimeField(_("dibuat pada"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("diperbarui pada"), auto_now=True)
+
+    class Meta:
+        verbose_name = _("biaya transport inbound per tahap")
+        verbose_name_plural = _("biaya transport inbound per tahap")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["profile", "stage_code"],
+                name="uniq_applicant_inbound_transport_stage",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["profile", "stage_code"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.profile_id} {self.stage_code}"
+
 
 # ---------------------------------------------------------------------------
 # Pengalaman kerja (per pelamar, terstruktur)

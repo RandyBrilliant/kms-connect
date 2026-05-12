@@ -142,15 +142,23 @@ export const applicantProfileUpdateSchema = z.object({
   biaya_ready_paspor: z.number().nullable().optional(),
   pengembalian_biaya: z.number().nullable().optional(),
   tgl_pengembalian: z.string().nullable().optional(),
-  jlh_uang_transport: z.number().nullable().optional(),
   bank: z.string().optional(),
   no_rek: z.string().optional(),
   tanggal_pengembalian: z.string().nullable().optional(),
   tgl_kirim_bio_ke_mly: z.string().nullable().optional(),
   tgl_calling_visa: z.string().nullable().optional(),
   no_calling_visa: z.string().optional(),
+  inbound_transport_stage_costs: z
+    .array(
+      z.object({
+        stage_code: z.string(),
+        amount: z.number().nullable().optional(),
+        keterangan: z.string().optional(),
+      })
+    )
+    .optional(),
   verification_status: z
-    .enum(["DRAFT", "SUBMITTED", "ACCEPTED", "REJECTED"])
+    .enum(["SUBMITTED", "ACCEPTED", "REJECTED"])
     .optional(),
   verification_notes: z.string().optional(),
 })

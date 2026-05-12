@@ -142,9 +142,11 @@ bool _spouseSectionComplete(ApplicantProfile p) {
       _nonEmpty(p.spouseOccupation);
 }
 
-/// When true, the app should show the profile completion flow (draft only).
+/// When true, the app should show the profile completion flow (belum lengkap, belum final).
 bool shouldBlockForIncompleteProfile(ApplicantProfile? p) {
   if (p == null) return false;
-  if (p.verificationStatus != 'DRAFT') return false;
+  if (p.verificationStatus == 'ACCEPTED' || p.verificationStatus == 'REJECTED') {
+    return false;
+  }
   return !evaluateProfileCompletion(p).isFullyComplete;
 }

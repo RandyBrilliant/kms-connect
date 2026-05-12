@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# SSL Certificate Setup Script - KMS-Connect
-# Sets up Let's Encrypt SSL certificate for data.kms-connect.com
+# SSL Certificate Setup - KMS-Connect (data.kms-connect.com)
+# Uses HTTP-01 webroot so Nginx can keep port 80; avoids standalone / port bind failures.
 
 set -e
 
@@ -17,13 +17,19 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 APP_DIR="${APP_DIR:-$PROJECT_DIR}"
 
+cd "$APP_DIR" || exit 1
+COMPOSE_OPTS=(-f docker-compose.prod.yml)
+if [ -f "$APP_DIR/docker-compose.prod.block.yml" ]; then
+  COMPOSE_OPTS+=(-f docker-compose.prod.block.yml)
+fi
+
 echo -e "${BLUE}=========================================="
 echo "SSL Certificate Setup"
 echo "==========================================${NC}"
 echo ""
 
 # Check if running as root
-if [ "$EUID" -ne 0 ]; then 
+if [ "$EUID" -ne 0 ]; then
     echo -e "${RED}Please run as root or with sudo${NC}"
     exit 1
 fi
@@ -37,12 +43,11 @@ echo -e "${YELLOW}Email: ${EMAIL}${NC}"
 echo ""
 
 # Check if DNS is configured
-echo -e "${BLUE}[1/6] Checking DNS configuration...${NC}"
+echo -e "${BLUE}[1/7] Checking DNS configuration...${NC}"
 SERVER_IP=$(curl -s ifconfig.me || curl -s ipinfo.io/ip)
 if command -v dig &>/dev/null; then
     DNS_IP=$(dig +short $DOMAIN | tail -n1)
 else
-    # Fallback: use getent (no extra package) or host
     DNS_IP=$(getent ahosts "$DOMAIN" 2>/dev/null | awk '{print $1; exit}' || host -t A "$DOMAIN" 2>/dev/null | awk '/has address/ {print $NF; exit}')
 fi
 
@@ -64,59 +69,38 @@ fi
 
 # Check if services are running
 echo ""
-echo -e "${BLUE}[2/6] Checking if services are running...${NC}"
-if ! docker compose -f docker-compose.prod.yml ps | grep -q "Up"; then
+echo -e "${BLUE}[2/7] Checking if services are running...${NC}"
+if ! docker compose "${COMPOSE_OPTS[@]}" ps | grep -q "Up"; then
     echo -e "${RED}Error: Services are not running!${NC}"
     echo "Please run: sudo ./deploy/deploy.sh first"
     exit 1
 fi
 echo -e "${GREEN}✓ Services are running${NC}"
 
-# Ensure nginx is using HTTP-only config
+# ACME webroot on host; nginx must mount /var/www/certbot (see docker-compose.prod.yml)
 echo ""
-echo -e "${BLUE}[3/6] Ensuring Nginx is in HTTP mode...${NC}"
-cd "$APP_DIR"
-# Check current nginx config
-if grep -q "data.kms-connect.com.http-only.conf" docker-compose.prod.yml; then
-    echo -e "${GREEN}✓ Nginx is already in HTTP mode${NC}"
-else
-    echo -e "${YELLOW}⚠ Switching Nginx to HTTP mode...${NC}"
-    # This should already be set, but just in case
-    docker compose -f docker-compose.prod.yml restart nginx
-    sleep 3
-fi
-
-# Stop nginx container temporarily for certbot
-echo ""
-echo -e "${BLUE}[4/6] Temporarily stopping Nginx for certificate generation...${NC}"
-docker compose -f docker-compose.prod.yml stop nginx
-
-# Create directory for certbot webroot
+echo -e "${BLUE}[3/7] Preparing ACME webroot and reloading Nginx...${NC}"
 mkdir -p /var/www/certbot
+chmod 755 /var/www/certbot
+chmod +x "$APP_DIR/deploy/ssl-renew-deploy-hook.sh" 2>/dev/null || true
+docker compose "${COMPOSE_OPTS[@]}" up -d nginx
+sleep 3
+echo -e "${GREEN}✓ Nginx is up (must expose /.well-known/acme-challenge/ on port 80)${NC}"
 
-# Generate certificate
+# Issue / renew certificate (webroot — does not bind port 80 itself)
 echo ""
-echo -e "${BLUE}[5/6] Generating SSL certificate...${NC}"
-certbot certonly \
-    --standalone \
-    --preferred-challenges http \
-    -d "$DOMAIN" \
-    --email "$EMAIL" \
-    --agree-tos \
-    --non-interactive \
-    --keep-until-expiring || {
-    echo -e "${RED}Error: Certificate generation failed${NC}"
-    echo "Common issues:"
-    echo "  - DNS not pointing to this server"
-    echo "  - Port 80 not accessible"
-    echo "  - Too many certificate requests (Let's Encrypt rate limit)"
-    docker compose -f docker-compose.prod.yml start nginx
-    exit 1
-}
+echo -e "${BLUE}[4/7] Requesting certificate (Let's Encrypt webroot)...${NC}"
+CERTBOT_BASE=(certonly --webroot -w /var/www/certbot -d "$DOMAIN" --email "$EMAIL" --agree-tos --non-interactive)
+if [ "${FORCE_SSL_RENEWAL:-0}" = "1" ]; then
+    echo -e "${YELLOW}FORCE_SSL_RENEWAL=1 → --force-renewal${NC}"
+    certbot "${CERTBOT_BASE[@]}" --force-renewal
+else
+    certbot "${CERTBOT_BASE[@]}" --keep-until-expiring
+fi
 
 # Copy certificates to nginx directory
 echo ""
-echo -e "${BLUE}[6/6] Copying certificates...${NC}"
+echo -e "${BLUE}[5/7] Copying certificates...${NC}"
 mkdir -p "$APP_DIR/nginx/ssl/$DOMAIN"
 cp "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" "$APP_DIR/nginx/ssl/$DOMAIN/fullchain.pem"
 cp "/etc/letsencrypt/live/$DOMAIN/privkey.pem" "$APP_DIR/nginx/ssl/$DOMAIN/privkey.pem"
@@ -128,14 +112,10 @@ echo -e "${GREEN}✓ Certificates copied${NC}"
 
 # Update docker-compose.prod.yml to use SSL config
 echo ""
-echo -e "${BLUE}Updating Docker Compose configuration for SSL...${NC}"
-cd "$APP_DIR"
+echo -e "${BLUE}[6/7] Updating Docker Compose configuration for SSL...${NC}"
 
-# Switch to SSL config in docker-compose.prod.yml
-# First, comment out HTTP-only config
 sed -i 's|- ./nginx/data.kms-connect.com.http-only.conf:/etc/nginx/conf.d/data.kms-connect.com.conf:ro|# - ./nginx/data.kms-connect.com.http-only.conf:/etc/nginx/conf.d/data.kms-connect.com.conf:ro|g' docker-compose.prod.yml
 
-# Then, uncomment and add SSL config
 if ! grep -q "./nginx/data.kms-connect.com.conf:/etc/nginx/conf.d/data.kms-connect.com.conf:ro" docker-compose.prod.yml || \
    grep -q "# - ./nginx/data.kms-connect.com.conf" docker-compose.prod.yml; then
     sed -i 's|# - ./nginx/data.kms-connect.com.conf:/etc/nginx/conf.d/data.kms-connect.com.conf:ro|- ./nginx/data.kms-connect.com.conf:/etc/nginx/conf.d/data.kms-connect.com.conf:ro|g' docker-compose.prod.yml
@@ -144,7 +124,6 @@ if ! grep -q "./nginx/data.kms-connect.com.conf:/etc/nginx/conf.d/data.kms-conne
     fi
 fi
 
-# Uncomment SSL volume
 sed -i 's|# - ./nginx/ssl:/etc/nginx/ssl:ro|- ./nginx/ssl:/etc/nginx/ssl:ro|g' docker-compose.prod.yml
 if ! grep -q "./nginx/ssl:/etc/nginx/ssl:ro" docker-compose.prod.yml; then
     sed -i '/- .\/nginx\/data.kms-connect.com.conf/a\      - ./nginx/ssl:/etc/nginx/ssl:ro' docker-compose.prod.yml
@@ -152,40 +131,32 @@ fi
 
 echo -e "${GREEN}✓ Configuration updated${NC}"
 
-# Restart nginx with SSL
 echo ""
-echo -e "${BLUE}Starting Nginx with SSL...${NC}"
-docker compose -f docker-compose.prod.yml up -d nginx
+echo -e "${BLUE}[7/7] Starting Nginx with SSL...${NC}"
+docker compose "${COMPOSE_OPTS[@]}" up -d nginx
 sleep 5
 
-# Verify nginx configuration
-if docker compose -f docker-compose.prod.yml exec -T nginx nginx -t > /dev/null 2>&1; then
+if docker compose "${COMPOSE_OPTS[@]}" exec -T nginx nginx -t > /dev/null 2>&1; then
     echo -e "${GREEN}✓ Nginx configuration is valid${NC}"
 else
     echo -e "${RED}Error: Nginx configuration is invalid!${NC}"
-    docker compose -f docker-compose.prod.yml exec -T nginx nginx -t
+    docker compose "${COMPOSE_OPTS[@]}" exec -T nginx nginx -t
     exit 1
 fi
 
-# Verify nginx is running
-if docker compose -f docker-compose.prod.yml ps nginx | grep -q "Up"; then
+if docker compose "${COMPOSE_OPTS[@]}" ps nginx | grep -q "Up"; then
     echo -e "${GREEN}✓ Nginx started successfully${NC}"
 else
     echo -e "${RED}Error: Nginx failed to start${NC}"
-    docker compose -f docker-compose.prod.yml logs nginx | tail -20
+    docker compose "${COMPOSE_OPTS[@]}" logs nginx | tail -20
     exit 1
 fi
 
-# Setup auto-renewal
+# Auto-renewal: twice-daily cron + PEM copy + nginx reload (see install-ssl-auto-renewal.sh)
 echo ""
 echo -e "${BLUE}Setting up certificate auto-renewal...${NC}"
-# Create renewal script
-cat > /etc/cron.monthly/renew-ssl-cert <<EOF
-#!/bin/bash
-certbot renew --quiet --deploy-hook "cd $APP_DIR && cp /etc/letsencrypt/live/$DOMAIN/fullchain.pem nginx/ssl/$DOMAIN/fullchain.pem && cp /etc/letsencrypt/live/$DOMAIN/privkey.pem nginx/ssl/$DOMAIN/privkey.pem && cp /etc/letsencrypt/live/$DOMAIN/chain.pem nginx/ssl/$DOMAIN/chain.pem && docker compose -f docker-compose.prod.yml restart nginx"
-EOF
-chmod +x /etc/cron.monthly/renew-ssl-cert
-echo -e "${GREEN}✓ Auto-renewal configured${NC}"
+bash "$APP_DIR/deploy/install-ssl-auto-renewal.sh"
+echo -e "${GREEN}✓ Auto-renewal installed (see /etc/cron.d/kms-connect-certbot)${NC}"
 
 echo ""
 echo -e "${GREEN}=========================================="
@@ -200,12 +171,12 @@ echo ""
 echo -e "${GREEN}Your site is now available at: https://$DOMAIN${NC}"
 echo ""
 echo -e "${YELLOW}Important:${NC}"
-echo "  - Certificates will auto-renew monthly"
+echo "  - Auto-renewal: sudo ./deploy/install-ssl-auto-renewal.sh (re-run if you move this app directory)."
+echo "  - If /etc/letsencrypt/renewal still uses standalone, follow the WARNING from that script (webroot --force-renewal once)."
 echo "  - Update your .env file:"
 echo "    ${BLUE}SECURE_SSL_REDIRECT=1${NC}"
 echo "    ${BLUE}SESSION_COOKIE_SECURE=1${NC}"
 echo "    ${BLUE}CSRF_COOKIE_SECURE=1${NC}"
 echo ""
-echo -e "${GREEN}SSL setup complete! 🎉${NC}"
+echo -e "${GREEN}SSL setup complete!${NC}"
 echo ""
-

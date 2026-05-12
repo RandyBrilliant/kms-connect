@@ -17,19 +17,21 @@ export function AdminJobListPage() {
 
   usePageTitle("Kelola Lowongan Kerja")
   return (
-    <div className="flex flex-col gap-4 px-6 py-6 md:px-8 md:py-8">
-      <BreadcrumbNav
-        items={[
-          { label: "Dashboard", href: basePath || "/" },
-          { label: "Lowongan Kerja" },
-        ]}
-      />
-      <h1 className="text-2xl font-bold">Kelola Lowongan Kerja</h1>
-      <p className="text-muted-foreground">
-        {readOnly
-          ? "Daftar lowongan (lihat saja). Pengaturan master data hanya untuk Admin Utama."
-          : "Daftar dan kelola lowongan kerja yang dapat dilamar oleh pelamar."}
-      </p>
+    <div className="flex flex-col gap-4 px-4 py-4 sm:gap-6 sm:px-6 sm:py-6 md:px-8 md:py-8">
+      <div>
+        <BreadcrumbNav
+          items={[
+            { label: "Dashboard", href: basePath || "/" },
+            { label: "Lowongan Kerja" },
+          ]}
+        />
+        <h1 className="mt-2 text-xl font-bold sm:text-2xl">Kelola Lowongan Kerja</h1>
+        <p className="text-muted-foreground text-sm sm:text-base">
+          {readOnly
+            ? "Daftar lowongan (lihat saja). Pengaturan master data hanya untuk Admin Utama."
+            : "Daftar dan kelola lowongan kerja yang dapat dilamar oleh pelamar."}
+        </p>
+      </div>
 
       <JobTable basePath={jobsBase} readOnly={readOnly} />
     </div>

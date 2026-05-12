@@ -419,6 +419,13 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
         max_length=200,
     )
     score_breakdown = serializers.SerializerMethodField(read_only=True)
+    inbound_transport_stage_costs = serializers.ListField(
+        child=serializers.DictField(),
+        required=False,
+        write_only=True,
+    )
+    jlh_uang_transport = serializers.SerializerMethodField(read_only=True)
+    has_diterima_lamaran = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = ApplicantProfile
@@ -506,6 +513,7 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
             "tgl_kirim_bio_ke_mly",
             "tgl_calling_visa",
             "no_calling_visa",
+            "inbound_transport_stage_costs",
             "register_number",
             "shoe_size",
             "shirt_size",
@@ -518,10 +526,19 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
             "verification_notes",
             "score",
             "score_breakdown",
+            "has_diterima_lamaran",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "score", "score_breakdown", "register_number", "created_at", "updated_at"]
+        read_only_fields = [
+            "id",
+            "score",
+            "score_breakdown",
+            "register_number",
+            "has_diterima_lamaran",
+            "created_at",
+            "updated_at",
+        ]
 
     def get_heir_relationship_display(self, obj):
         if not obj.heir_relationship:
@@ -555,6 +572,8 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
             role=UserRole.STAFF
         )
         self.fields["verified_by"].queryset = backoffice_qs
+        if not self.context.get("is_own_profile"):
+            self.fields.pop("has_diterima_lamaran", None)
         if self.context.get("is_own_profile"):
             for f in (
                 "referrer",
@@ -578,7 +597,6 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
                 "biaya_ready_paspor",
                 "pengembalian_biaya",
                 "tgl_pengembalian",
-                "jlh_uang_transport",
                 "bank",
                 "no_rek",
                 "tanggal_pengembalian",
@@ -588,6 +606,21 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
             ):
                 if f in self.fields:
                     self.fields[f].read_only = True
+            self.fields.pop("inbound_transport_stage_costs", None)
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        if instance is not None and getattr(instance, "pk", None):
+            from .services.inbound_transport_costs import (
+                merged_inbound_transport_stage_costs_for_profile,
+            )
+
+            ret["inbound_transport_stage_costs"] = (
+                merged_inbound_transport_stage_costs_for_profile(instance)
+            )
+        else:
+            ret["inbound_transport_stage_costs"] = []
+        return ret
 
     @staticmethod
     def _build_region_hierarchy(province, district, village):
@@ -656,6 +689,26 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
             return None
         return getattr(obj, "score_breakdown", {}) or {}
 
+    def get_jlh_uang_transport(self, obj):
+        """Total Rp from inbound stage rows (not a DB column)."""
+        if not obj or not getattr(obj, "pk", None):
+            return None
+        v = getattr(obj, "jlh_uang_transport", None)
+        if v is None:
+            return None
+        return float(v)
+
+    def get_has_diterima_lamaran(self, obj):
+        """True if this applicant has at least one lamaran in status DITERIMA."""
+        if not obj or not getattr(obj, "pk", None):
+            return False
+        from main.models import ApplicationStatus, JobApplication
+
+        return JobApplication.objects.filter(
+            applicant_id=obj.pk,
+            status=ApplicationStatus.DITERIMA,
+        ).exists()
+
     def validate_contact_phone(self, value):
         return normalize_indonesian_phone(value) if value else value
 
@@ -704,6 +757,23 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Hasil medical harus FIT atau UNFIT.")
         return normalized
 
+    def validate_inbound_transport_stage_costs(self, value):
+        if not value:
+            return value
+        from account.inbound_transport_stages import INBOUND_TRANSPORT_STAGE_CODES
+
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Harus berupa array.")
+        for item in value:
+            if not isinstance(item, dict):
+                raise serializers.ValidationError("Setiap item harus berupa object.")
+            code = item.get("stage_code")
+            if code not in INBOUND_TRANSPORT_STAGE_CODES:
+                raise serializers.ValidationError(
+                    f"Kode stage_code tidak valid: {code!r}"
+                )
+        return value
+
     def update(self, instance, validated_data):
         """
         Update ApplicantProfile. full_name (source='user.full_name') arrives as
@@ -741,10 +811,18 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
         if "birth_place_text" in validated_data:
             validated_data["birth_place"] = None
 
+        inbound_payload = validated_data.pop("inbound_transport_stage_costs", None)
+
         # Update all remaining profile fields normally
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
+
+        if inbound_payload is not None:
+            from .services.inbound_transport_costs import upsert_inbound_transport_stage_costs
+
+            upsert_inbound_transport_stage_costs(instance, inbound_payload)
+
         return instance
 
 
@@ -767,13 +845,13 @@ _ADMIN_PROCESS_PROFILE_FIELDS = frozenset(
         "biaya_ready_paspor",
         "pengembalian_biaya",
         "tgl_pengembalian",
-        "jlh_uang_transport",
         "bank",
         "no_rek",
         "tanggal_pengembalian",
         "tgl_kirim_bio_ke_mly",
         "tgl_calling_visa",
         "no_calling_visa",
+        "inbound_transport_stage_costs",
     }
 )
 
@@ -792,6 +870,8 @@ class BulkAdminProcessSerializer(serializers.Serializer):
     tgl_medical = serializers.DateField(required=False, allow_null=True)
     hasil_medical = serializers.CharField(required=False, allow_blank=True, max_length=255)
     tgl_bayar_sml = serializers.DateField(required=False, allow_null=True)
+    tgl_fwcm_psikotes = serializers.DateField(required=False, allow_null=True)
+    tgl_bayar_psikotes = serializers.DateField(required=False, allow_null=True)
 
     def validate_applicant_user_ids(self, value):
         if len(value) != len(set(value)):
@@ -802,9 +882,16 @@ class BulkAdminProcessSerializer(serializers.Serializer):
         raw = self.initial_data
         if not isinstance(raw, dict):
             return attrs
-        if not any(k in raw for k in ("tgl_medical", "hasil_medical", "tgl_bayar_sml")):
+        allowed = (
+            "tgl_medical",
+            "hasil_medical",
+            "tgl_bayar_sml",
+            "tgl_fwcm_psikotes",
+            "tgl_bayar_psikotes",
+        )
+        if not any(k in raw for k in allowed):
             raise serializers.ValidationError(
-                "Minimal satu field tgl_medical, hasil_medical, atau tgl_bayar_sml wajib dikirim."
+                "Minimal satu field proses (medical, SML, FWCMS/psikotes, dll.) wajib dikirim."
             )
         return attrs
 
@@ -866,7 +953,8 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
         view_name = getattr(view, "__class__", type("V",(object,),{})).__name__
         is_staff_referral_view = view_name == "StaffReferredApplicantsViewSet"
         is_company_view = bool(view_name and view_name.startswith("Company"))
-        if not (is_staff_referral_view or is_company_view):
+        include_summary = bool(self.context.get("include_applications_summary"))
+        if not (is_staff_referral_view or is_company_view or include_summary):
             self.fields.pop("applications_summary", None)
 
     def validate_email(self, value):
@@ -941,13 +1029,15 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
         if profile is None:
             return []
 
-        from main.models import JobApplication, ApplicationStatus
+        from main.models import ApplicationStatus, JobApplication
+        from main.services import ApplicationService
+
+        step_labels = dict(ApplicationService.DOCUMENT_COLLECTION_STEP_ORDER)
 
         # Limit to a few most-recent applications to keep payload small.
         apps = (
-            JobApplication.objects
-            .filter(applicant=profile)
-            .select_related("job", "batch")
+            JobApplication.objects.filter(applicant=profile)
+            .select_related("job", "batch", "interview_cohort")
             .order_by("-applied_at")[:5]
         )
 
@@ -957,6 +1047,14 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
                 status_label = ApplicationStatus(app.status).label
             except Exception:
                 status_label = app.status
+            cohort = getattr(app, "interview_cohort", None)
+            interview_cohort_name = (
+                (getattr(cohort, "name", None) or "").strip() if cohort is not None else ""
+            )
+            diterima_code = getattr(app, "diterima_current_step", None) or None
+            diterima_sub_stage_label = None
+            if app.status == ApplicationStatus.DITERIMA and diterima_code:
+                diterima_sub_stage_label = step_labels.get(diterima_code, diterima_code)
             out.append(
                 {
                     "id": app.id,
@@ -966,6 +1064,12 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
                     "job_title": getattr(app.job, "title", "") or "",
                     "batch_id": app.batch_id,
                     "batch_name": getattr(app.batch, "name", "") if app.batch_id else "",
+                    "interview_cohort_id": app.interview_cohort_id,
+                    "interview_cohort_name": interview_cohort_name,
+                    "diterima_current_step": diterima_code
+                    if app.status == ApplicationStatus.DITERIMA
+                    else None,
+                    "diterima_sub_stage_label": diterima_sub_stage_label,
                 }
             )
         return out
@@ -1001,9 +1105,14 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
         user.save(update_fields=["password"])
         if profile_data:
             profile_data.pop("user", None)  # avoid duplicate with explicit user=user
+            inbound_c = profile_data.pop("inbound_transport_stage_costs", None)
             profile_data.setdefault("verification_status", ApplicantVerificationStatus.SUBMITTED)
             profile_data.setdefault("submitted_at", timezone.now())
-            ApplicantProfile.objects.create(user=user, **profile_data)
+            prof = ApplicantProfile.objects.create(user=user, **profile_data)
+            if inbound_c:
+                from .services.inbound_transport_costs import upsert_inbound_transport_stage_costs
+
+                upsert_inbound_transport_stage_costs(prof, inbound_c)
         else:
             ApplicantProfile.objects.create(
                 user=user,
@@ -1039,6 +1148,7 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
             profile = getattr(instance, "applicant_profile", None)
             if profile:
                 profile_keys = set(profile_data.keys())
+                inbound_c = profile_data.pop("inbound_transport_stage_costs", None)
                 skip_profile_full_clean = bool(profile_keys) and profile_keys.issubset(
                     _ADMIN_PROCESS_PROFILE_FIELDS
                 )
@@ -1083,9 +1193,23 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
                         )
                 profile.save()
                 req_user = getattr(self.context.get("request"), "user", None)
+                if inbound_c is not None:
+                    from .services.inbound_transport_costs import upsert_inbound_transport_stage_costs
+
+                    try:
+                        upsert_inbound_transport_stage_costs(profile, inbound_c)
+                    except ValueError as e:
+                        raise serializers.ValidationError(
+                            {"applicant_profile": {"inbound_transport_stage_costs": [str(e)]}}
+                        )
                 self._sync_medical_unfit_application(profile=profile, actor=req_user)
             else:
-                ApplicantProfile.objects.create(user=instance, **profile_data)
+                inbound_c = profile_data.pop("inbound_transport_stage_costs", None)
+                prof = ApplicantProfile.objects.create(user=instance, **profile_data)
+                if inbound_c:
+                    from .services.inbound_transport_costs import upsert_inbound_transport_stage_costs
+
+                    upsert_inbound_transport_stage_costs(prof, inbound_c)
         return instance
 
     def _sync_medical_unfit_application(self, *, profile: ApplicantProfile, actor: CustomUser | None) -> None:
@@ -1519,6 +1643,7 @@ class AccountDeletionRequestSerializer(serializers.ModelSerializer):
     user_email = serializers.EmailField(source="user.email", read_only=True)
     user_full_name = serializers.CharField(source="user.full_name", read_only=True)
     user_role = serializers.CharField(source="user.role", read_only=True)
+    user_is_active = serializers.BooleanField(source="user.is_active", read_only=True)
     reviewed_by_email = serializers.EmailField(source="reviewed_by.email", read_only=True, default=None)
 
     class Meta:
@@ -1529,6 +1654,7 @@ class AccountDeletionRequestSerializer(serializers.ModelSerializer):
             "user_email",
             "user_full_name",
             "user_role",
+            "user_is_active",
             "reason",
             "status",
             "requested_at",
@@ -1543,6 +1669,7 @@ class AccountDeletionRequestSerializer(serializers.ModelSerializer):
             "user_email",
             "user_full_name",
             "user_role",
+            "user_is_active",
             "status",
             "requested_at",
             "reviewed_at",

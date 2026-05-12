@@ -7,6 +7,7 @@ import { IconArrowLeft, IconUser, IconPhone, IconCalendar } from "@tabler/icons-
 import { format } from "date-fns"
 import { id } from "date-fns/locale"
 
+import { StaffReferralLamaranProgress } from "@/components/staff/staff-referral-lamaran-progress"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -21,8 +22,6 @@ function formatDate(value: string | null | undefined) {
 
 function verificationStatusLabel(status: string) {
   switch (status) {
-    case "DRAFT":
-      return "Draf"
     case "SUBMITTED":
       return "Dikirim"
     case "ACCEPTED":
@@ -36,8 +35,6 @@ function verificationStatusLabel(status: string) {
 
 function verificationStatusVariant(status: string) {
   switch (status) {
-    case "DRAFT":
-      return "outline"
     case "SUBMITTED":
       return "secondary"
     case "ACCEPTED":
@@ -167,6 +164,30 @@ export function StaffApplicantDetailPage() {
           <InfoRow label="Kota/Kabupaten" value={profile?.village_display?.regency} />
           <InfoRow label="Kecamatan" value={profile?.village_display?.district} />
           <InfoRow label="Kelurahan" value={profile?.village_display?.village} />
+        </CardContent>
+      </Card>
+
+      {/* Lamaran — tahapan untuk bantu admin */}
+      <Card className="@container/card">
+        <CardHeader>
+          <CardTitle>Progress lamaran</CardTitle>
+          <CardDescription>
+            Tahapan dan sub-tahapan proses di sistem (hingga 5 lamaran terbaru). Berguna untuk
+            menghubungi pelamar dan membantu pengumpulan data.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {applicant.applications_summary?.length ? (
+            <ul className="space-y-4">
+              {applicant.applications_summary.map((sum) => (
+                <li key={sum.id} className="border-b pb-4 last:border-0 last:pb-0">
+                  <StaffReferralLamaranProgress applicationsSummary={[sum]} />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-muted-foreground text-sm">Belum ada data lamaran.</p>
+          )}
         </CardContent>
       </Card>
 

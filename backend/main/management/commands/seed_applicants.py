@@ -2,7 +2,6 @@
 Seed random pelamar (CustomUser + ApplicantProfile) tanpa lamaran lowongan kerja.
 
 Distribusi status profil pelamar (verification_status):
-  - DRAFT
   - SUBMITTED
   - ACCEPTED
   - REJECTED
@@ -47,10 +46,9 @@ LAST_NAMES = [
 
 # Weighted verification_status distribution for ApplicantProfile
 PROFILE_STATUS_WEIGHTS = [
-    (ApplicantVerificationStatus.DRAFT, 20),
-    (ApplicantVerificationStatus.SUBMITTED, 40),
-    (ApplicantVerificationStatus.ACCEPTED, 25),
-    (ApplicantVerificationStatus.REJECTED, 15),
+    (ApplicantVerificationStatus.SUBMITTED, 45),
+    (ApplicantVerificationStatus.ACCEPTED, 35),
+    (ApplicantVerificationStatus.REJECTED, 20),
 ]
 
 # Expand into a weighted pool

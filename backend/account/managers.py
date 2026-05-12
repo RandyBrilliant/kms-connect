@@ -113,12 +113,6 @@ class ApplicantProfileQuerySet(models.QuerySet):
         return self.with_related().with_documents().with_work_experiences()
 
     # Status filters
-    def draft(self):
-        """Applicants in draft status."""
-        from .models import ApplicantVerificationStatus
-
-        return self.filter(verification_status=ApplicantVerificationStatus.DRAFT)
-
     def submitted(self):
         """Applicants submitted and waiting for review."""
         from .models import ApplicantVerificationStatus
@@ -203,9 +197,6 @@ class ApplicantProfileManager(models.Manager):
 
     def with_full_details(self):
         return self.get_queryset().with_full_details()
-
-    def draft(self):
-        return self.get_queryset().draft()
 
     def submitted(self):
         return self.get_queryset().submitted()

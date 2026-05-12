@@ -12,7 +12,6 @@ export interface ReportSummary {
   total_accepted: number
   total_rejected: number
   total_submitted: number
-  total_draft: number
   completion_rate: number // Percentage of applicants with all required documents
 }
 

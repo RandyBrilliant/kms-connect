@@ -23,6 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { StaffReferralLamaranProgress } from "@/components/staff/staff-referral-lamaran-progress"
 import { useStaffDashboardStatsQuery } from "@/hooks/use-staff-self-service-query"
 import { usePageTitle } from "@/hooks/use-page-title"
 
@@ -33,8 +34,6 @@ function formatDate(value: string | null | undefined) {
 
 function verificationStatusLabel(status: string) {
   switch (status) {
-    case "DRAFT":
-      return "Draf"
     case "SUBMITTED":
       return "Dikirim"
     case "ACCEPTED":
@@ -48,8 +47,6 @@ function verificationStatusLabel(status: string) {
 
 function verificationStatusVariant(status: string) {
   switch (status) {
-    case "DRAFT":
-      return "outline"
     case "SUBMITTED":
       return "secondary"
     case "ACCEPTED":
@@ -152,13 +149,7 @@ export function StaffDashboardHomePage() {
           <CardDescription>Ringkasan status verifikasi pelamar rujukan Anda</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 gap-4 @xl/main:grid-cols-4">
-            <div className="space-y-1">
-              <p className="text-muted-foreground text-sm">Draf</p>
-              <p className="text-2xl font-bold">
-                {stats.verification_breakdown.DRAFT || 0}
-              </p>
-            </div>
+          <div className="grid grid-cols-1 gap-4 @xl/main:grid-cols-3">
             <div className="space-y-1">
               <p className="text-muted-foreground text-sm">Dikirim</p>
               <p className="text-2xl font-bold">
@@ -205,6 +196,7 @@ export function StaffDashboardHomePage() {
                     <TableHead>Nama & Email</TableHead>
                     <TableHead>NIK</TableHead>
                     <TableHead>Status Verifikasi</TableHead>
+                    <TableHead className="min-w-[12rem]">Tahapan lamaran</TableHead>
                     <TableHead>Terdaftar</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -233,6 +225,11 @@ export function StaffDashboardHomePage() {
                             </Badge>
                           )}
                           {!profile?.verification_status && <Badge variant="outline">-</Badge>}
+                        </TableCell>
+                        <TableCell className="align-top">
+                          <StaffReferralLamaranProgress
+                            applicationsSummary={applicant.applications_summary}
+                          />
                         </TableCell>
                         <TableCell>
                           <span className="text-sm">{formatDate(applicant.date_joined)}</span>

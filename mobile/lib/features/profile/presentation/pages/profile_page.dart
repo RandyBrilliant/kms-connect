@@ -130,6 +130,32 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
     }
   }
 
+  Future<void> _handleViewPsychologyReferralPdf() async {
+    final ok = await ref.read(psychologyReferralPdfProvider.notifier).open();
+    if (!ok && mounted) {
+      final err =
+          ref.read(psychologyReferralPdfProvider).error ?? 'Gagal membuka PDF.';
+      CustomToast.show(
+        context,
+        message: err,
+        type: ToastType.error,
+      );
+    }
+  }
+
+  Future<void> _handleViewMedicalReferralPdf() async {
+    final ok = await ref.read(medicalReferralPdfProvider.notifier).open();
+    if (!ok && mounted) {
+      final err =
+          ref.read(medicalReferralPdfProvider).error ?? 'Gagal membuka PDF.';
+      CustomToast.show(
+        context,
+        message: err,
+        type: ToastType.error,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
@@ -138,6 +164,8 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
     final notifState = ref.watch(notificationProvider);
     final workExpState = ref.watch(workExperienceNotifierProvider);
     final pdfState = ref.watch(biodataPdfProvider);
+    final psychPdfState = ref.watch(psychologyReferralPdfProvider);
+    final medicalPdfState = ref.watch(medicalReferralPdfProvider);
 
     final profile = profileState.profile;
     final fullName = profile?.fullName?.isNotEmpty == true
@@ -186,6 +214,18 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                     0.15,
                     0.55,
                   ),
+
+                  if (profile?.inboundTransportStageCosts != null &&
+                      profile!.inboundTransportStageCosts!.isNotEmpty) ...[
+                    const SizedBox(height: 20),
+                    _animated(
+                      _InboundTransportCostsCard(
+                        rows: profile.inboundTransportStageCosts!,
+                      ),
+                      0.22,
+                      0.60,
+                    ),
+                  ],
 
                   const SizedBox(height: 28),
 
@@ -249,7 +289,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
 
                   const SizedBox(height: 20),
 
-                  // PDF Biodata — available for all applicants once profile exists
+                  // PDF Biodata (+ pengantar psikologi jika lamaran DITERIMA)
                   _animated(
                     _ProfessionalMenuSection(
                       title: 'Dokumen Saya',
@@ -262,6 +302,24 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                           onTap: _handleViewBiodataPdf,
                           isLoading: pdfState.isLoading,
                         ),
+                        if (profile?.hasDiterimaLamaran == true)
+                          _ProfessionalMenuItem(
+                            icon: Icons.psychology_outlined,
+                            color: const Color(0xFF0D9488),
+                            title: 'Surat pengantar tes psikologi',
+                            subtitle: 'PDF untuk klinik (tahap Diterima)',
+                            onTap: _handleViewPsychologyReferralPdf,
+                            isLoading: psychPdfState.isLoading,
+                          ),
+                        if (profile?.hasDiterimaLamaran == true)
+                          _ProfessionalMenuItem(
+                            icon: Icons.medical_services_outlined,
+                            color: const Color(0xFFDC2626),
+                            title: 'Surat pengantar medical',
+                            subtitle: 'PDF medical check up (tahap Diterima)',
+                            onTap: _handleViewMedicalReferralPdf,
+                            isLoading: medicalPdfState.isLoading,
+                          ),
                       ],
                     ),
                     0.50,
@@ -528,6 +586,7 @@ class _ProfessionalProfileHeader extends StatelessWidget {
     switch (status) {
       case 'ACCEPTED':
         return 'Terverifikasi';
+      case 'SUBMITTED':
       case 'PENDING':
         return 'Menunggu Verifikasi';
       case 'REJECTED':
@@ -1153,6 +1212,88 @@ class _ProfessionalNotificationToggle extends ConsumerWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _InboundTransportCostsCard extends StatelessWidget {
+  const _InboundTransportCostsCard({required this.rows});
+
+  final List<InboundTransportStageCostRow> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.divider.withValues(alpha: 0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Biaya transport (ringkas)',
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textDark,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Rincian per tahapan seleksi (inbound cost).',
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 12,
+              color: AppColors.textMedium,
+            ),
+          ),
+          const SizedBox(height: 12),
+          ...rows.map((r) {
+            final parts = <String>[];
+            if (r.amount != null) {
+              parts.add('Rp ${r.amount!.toStringAsFixed(0)}');
+            }
+            if (r.tanggalProses?.isNotEmpty == true) {
+              parts.add(r.tanggalProses!);
+            }
+            final sub = parts.join(' · ');
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    flex: 5,
+                    child: Text(
+                      r.label,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 6,
+                    child: Text(
+                      [
+                        if (sub.isNotEmpty) sub,
+                        if (r.keterangan.isNotEmpty) r.keterangan,
+                      ].join(' — '),
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 12,
+                        color: AppColors.textMedium,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
       ),
     );
   }

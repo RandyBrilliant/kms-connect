@@ -30,6 +30,8 @@ from .permissions import IsApplicant
 from .api_responses import success_response, error_response, ApiCode, ApiMessage
 from .document_specs import validate_document_file, compress_image_file, is_image_type
 from .services.biodata_pdf import generate_biodata_pdf
+from .services.pengantar_medical_pdf import generate_pengantar_medical_pdf
+from .services.pengantar_psikologi_pdf import generate_pengantar_psikologi_pdf
 
 
 class ApplicantSelfServiceMixin:
@@ -131,19 +133,28 @@ class ApplicantProfileSelfServiceViewSet(ApplicantSelfServiceMixin, viewsets.Mod
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Cek apakah sudah pernah submit
-        if profile.verification_status != ApplicantVerificationStatus.DRAFT:
+        from django.utils import timezone
+
+        if profile.verification_status == ApplicantVerificationStatus.ACCEPTED:
             return Response(
                 error_response(
-                    detail=f"Profil sudah dalam status: {profile.get_verification_status_display()}.",
+                    detail="Profil sudah diterima. Tidak perlu dikirim ulang.",
                     code=ApiCode.VALIDATION_ERROR,
                 ),
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Update status ke SUBMITTED
-        from django.utils import timezone
+        if profile.verification_status == ApplicantVerificationStatus.SUBMITTED:
+            serializer = self.get_serializer(instance=profile, context={"request": request})
+            return Response(
+                success_response(
+                    data=serializer.data,
+                    detail="Profil sudah dalam antrean verifikasi (Dikirim).",
+                ),
+                status=status.HTTP_200_OK,
+            )
 
+        # REJECTED → SUBMITTED (kirim ulang)
         profile.verification_status = ApplicantVerificationStatus.SUBMITTED
         profile.submitted_at = timezone.now()
         profile.save(update_fields=["verification_status", "submitted_at"])
@@ -152,7 +163,7 @@ class ApplicantProfileSelfServiceViewSet(ApplicantSelfServiceMixin, viewsets.Mod
         return Response(
             success_response(
                 data=serializer.data,
-                detail="Profil berhasil dikirim untuk verifikasi. Admin akan memverifikasi data Anda.",
+                detail="Profil berhasil dikirim ulang untuk verifikasi. Admin akan memverifikasi data Anda.",
             ),
             status=status.HTTP_200_OK,
         )
@@ -576,6 +587,124 @@ class ApplicantBiodataPdfView(APIView):
 
         safe_name = (profile.user.full_name or "biodata").replace(" ", "_")
         filename = f"Biodata_{safe_name}.pdf"
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+
+
+class ApplicantPsychologyReferralPdfView(APIView):
+    """
+    GET /api/applicants/me/psychology-referral-pdf/
+
+    Surat Pengantar Tes Psikologi — hanya jika ada lamaran berstatus Diterima.
+    """
+
+    permission_classes = [IsAuthenticated, IsApplicant]
+
+    def get(self, request):
+        from main.models import ApplicationStatus, JobApplication
+
+        try:
+            profile = ApplicantProfile.objects.select_related(
+                "user",
+                "birth_place",
+                "district",
+            ).prefetch_related(
+                "job_applications__job__company",
+            ).get(user=request.user)
+        except ApplicantProfile.DoesNotExist:
+            return Response(
+                error_response(
+                    detail="Profil pelamar tidak ditemukan.",
+                    code=ApiCode.NOT_FOUND,
+                ),
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if not JobApplication.objects.filter(
+            applicant=profile,
+            status=ApplicationStatus.DITERIMA,
+        ).exists():
+            return Response(
+                error_response(
+                    detail="Surat pengantar tes psikologi hanya tersedia saat Anda berada di tahap Diterima.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        try:
+            pdf_bytes = generate_pengantar_psikologi_pdf(profile)
+        except Exception as e:
+            return Response(
+                error_response(
+                    detail=f"Gagal membuat PDF: {str(e)}",
+                    code=ApiCode.INTERNAL_ERROR,
+                ),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        safe_name = (profile.user.full_name or "cpmi").replace(" ", "_")
+        filename = f"Pengantar_Psikologi_{safe_name}.pdf"
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+
+
+class ApplicantMedicalReferralPdfView(APIView):
+    """
+    GET /api/applicants/me/medical-referral-pdf/
+
+    Surat Pengantar Medical Check Up — hanya jika ada lamaran berstatus Diterima.
+    """
+
+    permission_classes = [IsAuthenticated, IsApplicant]
+
+    def get(self, request):
+        from main.models import ApplicationStatus, JobApplication
+
+        try:
+            profile = ApplicantProfile.objects.select_related(
+                "user",
+                "birth_place",
+                "district",
+            ).prefetch_related(
+                "job_applications__job__company",
+            ).get(user=request.user)
+        except ApplicantProfile.DoesNotExist:
+            return Response(
+                error_response(
+                    detail="Profil pelamar tidak ditemukan.",
+                    code=ApiCode.NOT_FOUND,
+                ),
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if not JobApplication.objects.filter(
+            applicant=profile,
+            status=ApplicationStatus.DITERIMA,
+        ).exists():
+            return Response(
+                error_response(
+                    detail="Surat pengantar medical hanya tersedia saat Anda berada di tahap Diterima.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        try:
+            pdf_bytes = generate_pengantar_medical_pdf(profile)
+        except Exception as e:
+            return Response(
+                error_response(
+                    detail=f"Gagal membuat PDF: {str(e)}",
+                    code=ApiCode.INTERNAL_ERROR,
+                ),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        safe_name = (profile.user.full_name or "cpmi").replace(" ", "_")
+        filename = f"Pengantar_Medical_{safe_name}.pdf"
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response

@@ -135,6 +135,8 @@ export interface JobApplication {
   tgl_medical?: string | null
   hasil_medical?: string | null
   tgl_bayar_sml?: string | null
+  tgl_fwcm_psikotes?: string | null
+  tgl_bayar_psikotes?: string | null
   /** No. ID SISKO / ID pekerja (admin ApplicantProfile). */
   no_id_sisko?: string | null
   /** Paspor — dari profil pelamar + URL berkas dokumen tipe Paspor jika ada. */

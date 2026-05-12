@@ -14,13 +14,15 @@ import {
 } from "@tanstack/react-table"
 import { useIsMobile } from "@/hooks/use-mobile"
 import {
-  IconCircleCheck,
-  IconCircleX,
+  IconArrowsSort,
+  IconChevronLeft,
+  IconChevronRight,
   IconEye,
+  IconLayoutRows,
   IconPlus,
   IconSearch,
-  IconUserCheck,
-  IconUserOff,
+  IconSortAscending,
+  IconSortDescending,
   IconChecks,
   IconX,
   IconDownload,
@@ -45,21 +47,18 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
 import {
   useApplicantsQuery,
-  useDeactivateApplicantMutation,
-  useActivateApplicantMutation,
   useBulkApproveApplicantsMutation,
   useBulkRejectApplicantsMutation,
 } from "@/hooks/use-applicants-query"
 import { toast } from "@/lib/toast"
-import { 
+import {
   VERIFICATION_STATUS_LABELS,
-  VERIFICATION_STATUS_COLORS,
   getVerificationStatusLabel,
 } from "@/constants/applicant"
 import { formatDate } from "@/lib/formatters"
+import { cn } from "@/lib/utils"
 import { isSubmittedStatus } from "@/lib/type-guards"
 import { VerificationModal } from "./verification-modal"
 import { exportApplicants } from "@/api/applicants"
@@ -72,6 +71,122 @@ import type { ApplicantUser } from "@/types/applicant"
 import type { ApplicantsListParams, ApplicantVerificationStatus } from "@/types/applicant"
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
+
+const APPLICANT_FILTER_TRIGGER_CLASS =
+  "h-9 w-full min-w-0 cursor-pointer shadow-none sm:min-h-0"
+
+/** Default list: bergabung terbaru dulu (matches backend `ApplicantUserViewSet.ordering`). */
+const DEFAULT_APPLICANT_LIST_ORDERING = "-applicant_profile__created_at"
+
+/** Warna pill status verifikasi: Dikirim / Diterima / Ditolak */
+function verificationStatusPillClass(status: string): string {
+  switch (status) {
+    case "SUBMITTED":
+      return "bg-amber-600 text-white dark:bg-amber-700"
+    case "ACCEPTED":
+      return "bg-emerald-600 text-white dark:bg-emerald-700"
+    case "REJECTED":
+      return "bg-red-600 text-white dark:bg-red-700"
+    default:
+      return "bg-muted text-muted-foreground"
+  }
+}
+
+function VerificationStatusPill({ status }: { status: string }) {
+  return (
+    <span
+      className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium shadow-sm ${verificationStatusPillClass(status)}`}
+    >
+      {getVerificationStatusLabel(status as ApplicantVerificationStatus)}
+    </span>
+  )
+}
+
+/** Server-side ordering field (DRF `ordering` query) without leading `-`. */
+const SORT_FIELD = {
+  pelamar: "full_name",
+  rujukan: "applicant_profile__referrer__full_name",
+  skor: "applicant_profile__score",
+  verifikasi: "applicant_profile__verification_status",
+  bergabung: "applicant_profile__created_at",
+} as const
+
+function SortableColumnHead({
+  field,
+  label,
+  ordering,
+  onSort,
+  className,
+}: {
+  field: string
+  label: string
+  ordering?: string
+  onSort: (field: string) => void
+  className?: string
+}) {
+  const asc = field
+  const desc = `-${field}`
+  const isAsc = ordering === asc
+  const isDesc = ordering === desc
+  const isActive = isAsc || isDesc
+
+  return (
+    <button
+      type="button"
+      className={cn(
+        "-mx-1 inline-flex max-w-full min-w-0 items-center gap-2 rounded-lg px-1.5 py-1 text-left text-sm font-semibold transition-colors",
+        "text-muted-foreground hover:bg-muted/80 hover:text-foreground",
+        isActive && "text-foreground",
+        className
+      )}
+      onClick={() => onSort(field)}
+      title={`Urutkan: ${label}`}
+      aria-sort={isAsc ? "ascending" : isDesc ? "descending" : "none"}
+    >
+      <span className="min-w-0 truncate">{label}</span>
+      <span
+        className={cn(
+          "flex size-7 shrink-0 items-center justify-center rounded-md border shadow-sm transition-colors",
+          isActive
+            ? "border-primary/30 bg-primary/10 text-primary"
+            : "border-border/50 bg-background/80 text-muted-foreground/80"
+        )}
+        aria-hidden
+      >
+        {isAsc ? (
+          <IconSortAscending className="size-3.5" stroke={2} />
+        ) : isDesc ? (
+          <IconSortDescending className="size-3.5" stroke={2} />
+        ) : (
+          <IconArrowsSort className="size-3.5 opacity-75" stroke={1.75} />
+        )}
+      </span>
+    </button>
+  )
+}
+
+function applicantTableHeadClass(columnId: string) {
+  return cn(
+    "h-11 border-border/50 px-3 py-2 text-left align-middle first:pl-4 last:pr-4 sm:first:pl-5 sm:last:pr-5",
+    columnId === "select" && "w-12",
+    columnId === "actions" && "w-14",
+    columnId === "skor" && "tabular-nums",
+    columnId === "bergabung" && "tabular-nums"
+  )
+}
+
+function applicantTableCellClass(columnId: string) {
+  return cn(
+    "border-border/40 px-3 py-2.5 align-middle first:pl-4 last:pr-4 sm:first:pl-5 sm:last:pr-5",
+    columnId === "select" && "w-12",
+    (columnId === "pelamar" || columnId === "rujukan") &&
+      "max-w-[min(22rem,32vw)] whitespace-normal",
+    columnId === "skor" && "tabular-nums font-medium",
+    columnId === "verifikasi" && "whitespace-normal",
+    columnId === "bergabung" && "text-muted-foreground tabular-nums text-sm",
+    columnId === "actions" && "w-14 text-right"
+  )
+}
 
 /** Kolom Rujukan: pakai display_name dari API (nama DB atau label dari email lokal), bukan kode. */
 function staffRujukanDisplayName(
@@ -149,7 +264,7 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
     page: 1,
     page_size: 20,
     search: "",
-    ordering: "-applicant_profile__created_at",
+    ordering: DEFAULT_APPLICANT_LIST_ORDERING,
   })
   const [searchInput, setSearchInput] = useState("")
   const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({})
@@ -181,8 +296,6 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
 
   const { data, isLoading, isError, error } = useApplicantsQuery(params)
   const { data: referrers = [], isPending: referrersLoading } = useReferrersQuery()
-  const deactivateMutation = useDeactivateApplicantMutation()
-  const activateMutation = useActivateApplicantMutation()
   const bulkApproveMutation = useBulkApproveApplicantsMutation()
   const bulkRejectMutation = useBulkRejectApplicantsMutation()
 
@@ -202,22 +315,34 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
     )
   }, [selectedApplicants])
 
-  const handleSearch = () => {
+  const handleSearch = useCallback(() => {
     setParams((p) => ({
       ...p,
       search: searchInput.trim() || undefined,
       page: 1,
     }))
-    setRowSelection({}) // Clear selection on search
-  }
+    setRowSelection({})
+  }, [searchInput])
 
-  const handleFilterChange = <K extends keyof ApplicantsListParams>(
-    key: K,
-    value: ApplicantsListParams[K]
-  ) => {
-    setParams((p) => ({ ...p, [key]: value, page: 1 }))
-    setRowSelection({}) // Clear selection on filter change
-  }
+  const handleFilterChange = useCallback(
+    <K extends keyof ApplicantsListParams>(key: K, value: ApplicantsListParams[K]) => {
+      setParams((p) => ({ ...p, [key]: value, page: 1 }))
+      setRowSelection({})
+    },
+    []
+  )
+
+  const referrerSelectItems = useMemo(
+    () =>
+      referrers.map((r) => {
+        const label = (r.full_name ?? "").trim() || r.email
+        return {
+          id: r.id,
+          name: r.referral_code ? `${label} · ${r.referral_code}` : label,
+        }
+      }),
+    [referrers]
+  )
 
   const handleDateRangeChange = useCallback((range: DateRange | undefined) => {
     setDateRange(range)
@@ -230,39 +355,22 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
     setRowSelection({}) // Clear selection on filter change
   }, [])
 
-  const handleSortChange = useCallback((value: string) => {
-    setParams((p) => ({ ...p, ordering: value === "default" ? undefined : value, page: 1 }))
-    setRowSelection({}) // Clear selection on sort change
+  const handleSortColumn = useCallback((field: string) => {
+    setParams((p) => {
+      const cur = p.ordering
+      const asc = field
+      const desc = `-${field}`
+      const next =
+        cur === asc ? desc : cur === desc ? asc : asc
+      return { ...p, ordering: next, page: 1 }
+    })
+    setRowSelection({})
   }, [])
 
   const handlePageChange = (page: number) => {
     setParams((p) => ({ ...p, page }))
     setRowSelection({}) // Clear selection on page change
   }
-
-  const handleActivate = useCallback(
-    async (applicant: ApplicantUser) => {
-      try {
-        await activateMutation.mutateAsync(applicant.id)
-        toast.success("Pelamar diaktifkan", "Akun berhasil diaktifkan kembali")
-      } catch {
-        toast.error("Gagal mengaktifkan", "Coba lagi nanti")
-      }
-    },
-    [activateMutation]
-  )
-
-  const handleDeactivate = useCallback(
-    async (applicant: ApplicantUser) => {
-      try {
-        await deactivateMutation.mutateAsync(applicant.id)
-        toast.success("Pelamar dinonaktifkan", "Akun berhasil dinonaktifkan")
-      } catch {
-        toast.error("Gagal menonaktifkan", "Coba lagi nanti")
-      }
-    },
-    [deactivateMutation]
-  )
 
   const handleBulkApprove = useCallback(() => {
     setVerificationAction("approve")
@@ -284,7 +392,6 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
       // Build export params (exclude pagination)
       const exportParams: Omit<ApplicantsListParams, "page" | "page_size"> = {
         search: params.search,
-        is_active: params.is_active,
         email_verified: params.email_verified,
         verification_status: params.verification_status,
         referrer: params.referrer,
@@ -386,59 +493,76 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
       {
         id: "pelamar",
         accessorKey: "applicant_profile.full_name",
-        header: "Pelamar",
+        header: () => (
+          <SortableColumnHead
+            field={SORT_FIELD.pelamar}
+            label="Pelamar"
+            ordering={params.ordering}
+            onSort={handleSortColumn}
+          />
+        ),
         cell: ({ row }) => <PelamarIdentityBlock applicant={row.original} />,
       },
       {
         id: "rujukan",
         accessorFn: (row) => staffRujukanDisplayName(row.applicant_profile),
-        header: "Rujukan",
+        header: () => (
+          <SortableColumnHead
+            field={SORT_FIELD.rujukan}
+            label="Rujukan"
+            ordering={params.ordering}
+            onSort={handleSortColumn}
+          />
+        ),
         cell: ({ row }) => <RujukanCell applicant={row.original} />,
       },
       {
+        id: "skor",
         accessorKey: "applicant_profile.score",
-        header: "Skor",
+        header: () => (
+          <SortableColumnHead
+            field={SORT_FIELD.skor}
+            label="Skor"
+            ordering={params.ordering}
+            onSort={handleSortColumn}
+          />
+        ),
         cell: ({ row }) => {
           const score = row.original.applicant_profile?.score
           if (score == null) {
-            return <span className="text-muted-foreground">-</span>
+            return <span className="text-muted-foreground">—</span>
           }
           return <span>{Math.round(score)}</span>
         },
       },
       {
+        id: "verifikasi",
         accessorKey: "applicant_profile.verification_status",
-        header: "Status Verifikasi",
+        header: () => (
+          <SortableColumnHead
+            field={SORT_FIELD.verifikasi}
+            label="Status Verifikasi"
+            ordering={params.ordering}
+            onSort={handleSortColumn}
+          />
+        ),
         cell: ({ row }) => {
           const status = row.original.applicant_profile?.verification_status
-          if (!status) return <span className="text-muted-foreground">-</span>
-          const color = VERIFICATION_STATUS_COLORS[status]
-          return (
-            <Badge variant={color}>
-              {getVerificationStatusLabel(status)}
-            </Badge>
-          )
+          if (!status) return <span className="text-muted-foreground">—</span>
+          return <VerificationStatusPill status={status} />
         },
       },
       {
-        accessorKey: "is_active",
-        header: "Status",
-        cell: ({ row }) =>
-          row.original.is_active ? (
-            <Badge variant="default" className="gap-1">
-              <IconCircleCheck className="size-3" />
-              Aktif
-            </Badge>
-          ) : (
-            <Badge variant="secondary" className="gap-1">
-              <IconCircleX className="size-3" />
-              Nonaktif
-            </Badge>
-          ),
-      },
-      {
+        id: "bergabung",
         accessorKey: "applicant_profile.created_at",
-        header: "Bergabung",
+        header: () => (
+          <SortableColumnHead
+            field={SORT_FIELD.bergabung}
+            label="Bergabung"
+            ordering={params.ordering}
+            onSort={handleSortColumn}
+          />
+        ),
         cell: ({ row }) =>
           formatDate(
             row.original.applicant_profile?.created_at ?? row.original.date_joined
@@ -450,46 +574,23 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
         cell: ({ row }) => {
           const applicant = row.original
           return (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center justify-end gap-1">
               <Button
-                variant="ghost"
+                variant="outline"
                 size="icon"
-                className="size-8 cursor-pointer"
+                className="size-8 cursor-pointer rounded-lg border-border/80 bg-background/80 shadow-sm hover:bg-muted/60"
                 onClick={() => navigate(`${basePath}/${applicant.id}`)}
                 title="Lihat Detail"
               >
                 <IconEye className="size-4" />
                 <span className="sr-only">Lihat Detail</span>
               </Button>
-              {applicant.is_active ? (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-8 cursor-pointer text-destructive hover:text-destructive"
-                  onClick={() => handleDeactivate(applicant)}
-                  title="Nonaktifkan"
-                >
-                  <IconUserOff className="size-4" />
-                  <span className="sr-only">Nonaktifkan</span>
-                </Button>
-              ) : (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-8 cursor-pointer"
-                  onClick={() => handleActivate(applicant)}
-                  title="Aktifkan"
-                >
-                  <IconUserCheck className="size-4" />
-                  <span className="sr-only">Aktifkan</span>
-                </Button>
-              )}
             </div>
           )
         },
       },
     ],
-    [basePath, navigate, handleActivate, handleDeactivate]
+    [basePath, navigate, params.ordering, handleSortColumn]
   )
 
   const table = useReactTable({
@@ -508,6 +609,16 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
 
   const pageCount = data ? Math.ceil(data.count / (params.page_size ?? 20)) : 0
   const currentPage = params.page ?? 1
+  const pageSize = params.page_size ?? 20
+  const paginationFooter =
+    data && data.count > 0
+      ? {
+          rangeStart: (currentPage - 1) * pageSize + 1,
+          rangeEnd: Math.min(currentPage * pageSize, data.count),
+          totalPages: pageCount || 1,
+          totalCount: data.count,
+        }
+      : null
 
   if (isError) {
     return (
@@ -521,151 +632,124 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Search and Filters */}
-      <div className="flex flex-col gap-3">
-        {/* Search Bar */}
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="relative flex-1">
-            <IconSearch className="text-muted-foreground absolute left-3 top-1/2 size-4 -translate-y-1/2" />
-            <Input
-              placeholder="Cari nama, email, NIK, HP, staff rujukan..."
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-              className="pl-9"
-            />
+      <section
+        aria-label="Pencarian dan filter pelamar"
+        className="overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm"
+      >
+        <div className="border-b bg-muted/30 px-4 py-3 sm:px-5 sm:py-3.5 dark:bg-muted/15">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-4">
+            <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:gap-2">
+              <div className="relative min-w-0 flex-1">
+                <IconSearch className="text-muted-foreground pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2" />
+                <Input
+                  type="search"
+                  enterKeyHint="search"
+                  autoComplete="off"
+                  placeholder="Cari nama, email, NIK, HP, staff rujukan…"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                  className="h-9 border-border/80 bg-background pl-9 shadow-sm focus-visible:ring-1"
+                />
+              </div>
+              <Button
+                type="button"
+                onClick={handleSearch}
+                variant="secondary"
+                className="h-9 shrink-0 cursor-pointer px-5 sm:w-auto"
+              >
+                Cari
+              </Button>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-end lg:shrink-0">
+              <Button
+                type="button"
+                onClick={handleExport}
+                variant="outline"
+                className="h-9 cursor-pointer border-border/80 bg-background shadow-sm sm:w-auto"
+                disabled={isExporting}
+              >
+                {isExporting ? (
+                  <>
+                    <div className="mr-2 size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    Mengekspor…
+                  </>
+                ) : (
+                  <>
+                    <IconDownload className="mr-2 size-4 shrink-0 opacity-70" />
+                    {isMobile ? "Ekspor" : "Ekspor Excel"}
+                  </>
+                )}
+              </Button>
+              <Button
+                asChild
+                className="h-9 cursor-pointer shadow-sm sm:w-auto"
+              >
+                <Link to={`${basePath}/new`} className="cursor-pointer">
+                  <IconPlus className="mr-2 size-4 shrink-0" />
+                  {isMobile ? "Tambah" : "Tambah Pelamar"}
+                </Link>
+              </Button>
+            </div>
           </div>
-          <Button
-            onClick={handleSearch}
-            variant="secondary"
-            className="cursor-pointer w-full sm:w-auto"
-          >
-            Cari
-          </Button>
         </div>
 
-        {/* Filters Row */}
-        <div className="flex flex-wrap items-center gap-2">
-          <Select
-            value={
-              params.verification_status === undefined
-                ? "all"
-                : params.verification_status
-            }
-            onValueChange={(v) =>
-              handleFilterChange(
-                "verification_status",
-                v === "all" ? undefined : (v as ApplicantVerificationStatus)
-              )
-            }
-          >
-            <SelectTrigger className="w-full sm:w-[140px] cursor-pointer">
-              <SelectValue placeholder="Verifikasi" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Semua status</SelectItem>
-              {Object.entries(VERIFICATION_STATUS_LABELS).map(([val, label]) => (
-                <SelectItem key={val} value={val}>
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <SearchableSelect
-            className="min-w-0 w-full sm:w-[min(100%,280px)] sm:max-w-[320px]"
-            items={referrers.map((r) => {
-              const label = (r.full_name ?? "").trim() || r.email
-              return {
-                id: r.id,
-                name: r.referral_code ? `${label} · ${r.referral_code}` : label,
-              }
-            })}
-            value={params.referrer ?? null}
-            onChange={(id) =>
-              handleFilterChange("referrer", id ?? undefined)
-            }
-            placeholder="Semua rujukan"
-            clearLabel="Semua rujukan"
-            loading={referrersLoading}
-            emptyMessage="Tidak ada staff"
-          />
-          <Select
-            value={
-              params.is_active === undefined
-                ? "all"
-                : String(params.is_active)
-            }
-            onValueChange={(v) =>
-              handleFilterChange(
-                "is_active",
-                v === "all" ? undefined : v === "true"
-              )
-            }
-          >
-            <SelectTrigger className="w-full sm:w-[130px] cursor-pointer">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Semua status</SelectItem>
-              <SelectItem value="true">Aktif</SelectItem>
-              <SelectItem value="false">Nonaktif</SelectItem>
-            </SelectContent>
-          </Select>
-          <DateRangePicker
-            dateRange={dateRange}
-            onDateRangeChange={handleDateRangeChange}
-            placeholder="Rentang tanggal bergabung"
-            fromYear={2020}
-            toYear={new Date().getFullYear()}
-            numberOfMonths={isMobile ? 1 : 2}
-          />
-          <Select
-            value={params.ordering || "default"}
-            onValueChange={handleSortChange}
-          >
-            <SelectTrigger className="w-full sm:w-[160px] cursor-pointer">
-              <SelectValue placeholder="Urutkan" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="default">Default (Terbaru)</SelectItem>
-              <SelectItem value="applicant_profile__score">Skor: Rendah ke Tinggi</SelectItem>
-              <SelectItem value="-applicant_profile__score">Skor: Tinggi ke Rendah</SelectItem>
-              <SelectItem value="applicant_profile__created_at">Bergabung: Lama ke Baru</SelectItem>
-              <SelectItem value="-applicant_profile__created_at">Bergabung: Baru ke Lama</SelectItem>
-              <SelectItem value="applicant_profile__user__full_name">Nama: A-Z</SelectItem>
-              <SelectItem value="-applicant_profile__user__full_name">Nama: Z-A</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="px-4 py-3 sm:px-5 sm:py-4">
+          <p className="text-muted-foreground sr-only">Filter daftar pelamar</p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-12 xl:gap-2">
+            <div className="min-w-0 sm:col-span-1 xl:col-span-4">
+              <Select
+                value={
+                  params.verification_status === undefined
+                    ? "all"
+                    : params.verification_status
+                }
+                onValueChange={(v) =>
+                  handleFilterChange(
+                    "verification_status",
+                    v === "all" ? undefined : (v as ApplicantVerificationStatus)
+                  )
+                }
+              >
+                <SelectTrigger className={APPLICANT_FILTER_TRIGGER_CLASS}>
+                  <SelectValue placeholder="Status verifikasi" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Semua verifikasi</SelectItem>
+                  {Object.entries(VERIFICATION_STATUS_LABELS).map(([val, label]) => (
+                    <SelectItem key={val} value={val}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="min-w-0 sm:col-span-1 xl:col-span-5">
+              <SearchableSelect
+                className="min-w-0 border-border/80 bg-background shadow-sm"
+                items={referrerSelectItems}
+                value={params.referrer ?? null}
+                onChange={(id) => handleFilterChange("referrer", id ?? undefined)}
+                placeholder="Staff rujukan"
+                clearLabel="Semua rujukan"
+                loading={referrersLoading}
+                emptyMessage="Tidak ada staff"
+              />
+            </div>
+            <div className="min-w-0 sm:col-span-2 xl:col-span-3">
+              <DateRangePicker
+                dateRange={dateRange}
+                onDateRangeChange={handleDateRangeChange}
+                placeholder="Tanggal bergabung"
+                fromYear={2020}
+                toYear={new Date().getFullYear()}
+                numberOfMonths={isMobile ? 1 : 2}
+                className="border-border/80 bg-background shadow-sm"
+              />
+            </div>
+          </div>
         </div>
-
-        {/* Action Buttons */}
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-          <Button
-            onClick={handleExport}
-            variant="outline"
-            className="cursor-pointer w-full sm:w-auto"
-            disabled={isExporting}
-          >
-            {isExporting ? (
-              <>
-                <div className="mr-2 size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                Mengekspor...
-              </>
-            ) : (
-              <>
-                <IconDownload className="mr-2 size-4" />
-                {isMobile ? "Ekspor" : "Ekspor Excel"}
-              </>
-            )}
-          </Button>
-          <Button asChild className="cursor-pointer w-full sm:w-auto">
-            <Link to={`${basePath}/new`} className="cursor-pointer">
-              <IconPlus className="mr-2 size-4" />
-              {isMobile ? "Tambah" : "Tambah Pelamar"}
-            </Link>
-          </Button>
-        </div>
-      </div>
+      </section>
 
       {/* Bulk Action Bar */}
       {selectedApplicants.length > 0 && (
@@ -731,7 +815,7 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
       {isMobile ? (
         <div className="flex flex-col gap-3">
           {isLoading ? (
-            <div className="flex items-center justify-center py-12">
+            <div className="flex min-h-[12rem] items-center justify-center rounded-xl border border-border/60 bg-muted/10 shadow-sm">
               <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
             </div>
           ) : data?.results && data.results.length > 0 ? (
@@ -739,15 +823,18 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
               const isSelected = rowSelection[String(applicant.id)] || false
               const profile = applicant.applicant_profile
               return (
-                <div
+                <article
                   key={applicant.id}
-                  className={`rounded-lg border p-4 ${
-                    isSelected ? "border-primary bg-primary/5" : ""
-                  }`}
+                  className={cn(
+                    "rounded-xl border border-border/60 bg-card p-4 shadow-sm transition-colors",
+                    isSelected
+                      ? "border-primary/40 bg-primary/[0.04] ring-2 ring-primary/20"
+                      : "hover:border-border hover:bg-muted/15"
+                  )}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 space-y-2">
-                      <div className="flex items-start gap-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1 space-y-3">
+                      <div className="flex items-start gap-2.5">
                         <Checkbox
                           checked={isSelected}
                           onCheckedChange={(value) =>
@@ -757,126 +844,106 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
                             }))
                           }
                           aria-label="Pilih pelamar"
-                          className="mt-1"
+                          className="mt-0.5"
                         />
-                        <div className="flex-1 min-w-0">
+                        <div className="min-w-0 flex-1">
                           <PelamarIdentityBlock applicant={applicant} />
                         </div>
                       </div>
 
-                      <div className="text-sm leading-relaxed">
-                        <span className="text-muted-foreground">Rujukan:</span>{" "}
-                        <span className="inline-block min-w-0 align-top">
-                          <RujukanBlock profile={profile} />
+                      <div className="border-border/50 text-sm leading-relaxed">
+                        <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                          Rujukan
                         </span>
+                        <div className="mt-0.5 inline-block min-w-0">
+                          <RujukanBlock profile={profile} />
+                        </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-2 border-t border-border/50 pt-3 text-sm">
                         <div>
-                          <span className="text-muted-foreground">HP:</span>{" "}
-                          <span>{profile?.contact_phone || "-"}</span>
+                          <span className="text-muted-foreground text-xs font-medium">
+                            HP
+                          </span>
+                          <p className="mt-0.5 tabular-nums">
+                            {profile?.contact_phone || "—"}
+                          </p>
                         </div>
                         {profile?.score != null && (
                           <div>
-                            <span className="text-muted-foreground">Skor:</span>{" "}
-                            <span>{Math.round(profile.score)}</span>
+                            <span className="text-muted-foreground text-xs font-medium">
+                              Skor
+                            </span>
+                            <p className="mt-0.5 font-medium tabular-nums">
+                              {Math.round(profile.score)}
+                            </p>
                           </div>
                         )}
-                        <div>
-                          <span className="text-muted-foreground">Bergabung:</span>{" "}
-                          <span className="text-xs">
+                        <div className="col-span-2 sm:col-span-1">
+                          <span className="text-muted-foreground text-xs font-medium">
+                            Bergabung
+                          </span>
+                          <p className="text-muted-foreground mt-0.5 text-xs tabular-nums">
                             {formatDate(
                               profile?.created_at ?? applicant.date_joined
                             )}
-                          </span>
+                          </p>
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-2">
-                        {profile?.verification_status && (
-                          <Badge
-                            variant={
-                              VERIFICATION_STATUS_COLORS[
-                                profile.verification_status
-                              ]
-                            }
-                          >
-                            {getVerificationStatusLabel(profile.verification_status)}
-                          </Badge>
-                        )}
-                        {applicant.is_active ? (
-                          <Badge variant="default" className="gap-1">
-                            <IconCircleCheck className="size-3" />
-                            Aktif
-                          </Badge>
-                        ) : (
-                          <Badge variant="secondary" className="gap-1">
-                            <IconCircleX className="size-3" />
-                            Nonaktif
-                          </Badge>
-                        )}
-                      </div>
+                      {profile?.verification_status ? (
+                        <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                          <VerificationStatusPill
+                            status={profile.verification_status}
+                          />
+                        </div>
+                      ) : null}
                     </div>
 
-                    <div className="flex flex-col gap-1">
+                    <div className="shrink-0">
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="icon"
-                        className="size-8 cursor-pointer"
+                        className="size-9 cursor-pointer rounded-lg border-border/80 bg-background/80 shadow-sm hover:bg-muted/60"
                         onClick={() => navigate(`${basePath}/${applicant.id}`)}
                         title="Lihat Detail"
                       >
                         <IconEye className="size-4" />
                         <span className="sr-only">Lihat Detail</span>
                       </Button>
-                      {applicant.is_active ? (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-8 cursor-pointer text-destructive hover:text-destructive"
-                          onClick={() => handleDeactivate(applicant)}
-                          title="Nonaktifkan"
-                        >
-                          <IconUserOff className="size-4" />
-                          <span className="sr-only">Nonaktifkan</span>
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-8 cursor-pointer"
-                          onClick={() => handleActivate(applicant)}
-                          title="Aktifkan"
-                        >
-                          <IconUserCheck className="size-4" />
-                          <span className="sr-only">Aktifkan</span>
-                        </Button>
-                      )}
                     </div>
                   </div>
-                </div>
+                </article>
               )
             })
           ) : (
-            <div className="rounded-lg border p-8 text-center">
-              <p className="text-muted-foreground">Tidak ada data pelamar.</p>
+            <div className="rounded-xl border border-border/60 border-dashed bg-muted/10 p-10 text-center shadow-sm">
+              <p className="text-muted-foreground text-sm">
+                Tidak ada data pelamar.
+              </p>
             </div>
           )}
         </div>
       ) : (
         /* Desktop Table View */
-        <div className="overflow-hidden rounded-lg border">
+        <div className="overflow-hidden rounded-xl border border-border/60 bg-card text-card-foreground shadow-sm">
           {isLoading ? (
-            <div className="flex items-center justify-center py-12">
+            <div className="flex min-h-[14rem] items-center justify-center">
               <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
             </div>
           ) : (
-            <Table>
+            <Table className="border-collapse">
               <TableHeader>
                 {table.getHeaderGroups().map((headerGroup) => (
-                  <TableRow key={headerGroup.id}>
+                  <TableRow
+                    key={headerGroup.id}
+                    className="border-border/60 bg-muted/35 hover:bg-muted/35"
+                  >
                     {headerGroup.headers.map((header) => (
-                      <TableHead key={header.id}>
+                      <TableHead
+                        key={header.id}
+                        className={applicantTableHeadClass(header.column.id)}
+                      >
                         {header.isPlaceholder
                           ? null
                           : flexRender(
@@ -891,9 +958,16 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
               <TableBody>
                 {table.getRowModel().rows?.length ? (
                   table.getRowModel().rows.map((row) => (
-                    <TableRow key={row.id}>
+                    <TableRow
+                      key={row.id}
+                      data-state={row.getIsSelected() ? "selected" : undefined}
+                      className="group border-border/40 transition-colors hover:bg-muted/40 data-[state=selected]:bg-primary/[0.06] data-[state=selected]:hover:bg-primary/[0.08]"
+                    >
                       {row.getVisibleCells().map((cell) => (
-                        <TableCell key={cell.id}>
+                        <TableCell
+                          key={cell.id}
+                          className={applicantTableCellClass(cell.column.id)}
+                        >
                           {flexRender(
                             cell.column.columnDef.cell,
                             cell.getContext()
@@ -903,10 +977,10 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
                     </TableRow>
                   ))
                 ) : (
-                  <TableRow>
+                  <TableRow className="hover:bg-transparent">
                     <TableCell
                       colSpan={columns.length}
-                      className="h-24 text-center"
+                      className="text-muted-foreground h-28 border-0 px-4 text-center text-sm"
                     >
                       Tidak ada data pelamar.
                     </TableCell>
@@ -918,64 +992,95 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
         </div>
       )}
 
-      {data && data.count > 0 && (
-        <div className="flex flex-col gap-4">
-          <div className="text-muted-foreground text-center text-sm sm:text-left">
-            Menampilkan {(currentPage - 1) * (params.page_size ?? 20) + 1} -{" "}
-            {Math.min(
-              currentPage * (params.page_size ?? 20),
-              data.count
-            )}{" "}
-            dari {data.count} pelamar
-          </div>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center justify-center gap-2 sm:justify-start">
-              <Label htmlFor="page-size" className="text-sm">
-                Per halaman
-              </Label>
-              <Select
-                value={String(params.page_size ?? 20)}
-                onValueChange={(v) =>
-                  handleFilterChange("page_size", Number(v))
-                }
-              >
-                <SelectTrigger id="page-size" className="w-20 cursor-pointer">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PAGE_SIZE_OPTIONS.map((n) => (
-                    <SelectItem key={n} value={String(n)}>
-                      {n}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+      {paginationFooter && (
+        <nav
+          aria-label="Paginasi daftar pelamar"
+          className="rounded-xl border border-border/60 bg-muted/15 px-4 py-3 shadow-sm sm:px-5 dark:bg-muted/10"
+        >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <div className="flex flex-col items-center gap-2 sm:flex-row sm:items-center sm:gap-6">
+              <p className="text-muted-foreground text-center text-sm tabular-nums sm:text-left">
+                Menampilkan{" "}
+                <span className="font-medium text-foreground">
+                  {paginationFooter.rangeStart}–{paginationFooter.rangeEnd}
+                </span>{" "}
+                dari{" "}
+                <span className="font-medium text-foreground">
+                  {paginationFooter.totalCount}
+                </span>{" "}
+                pelamar
+              </p>
+              <div className="flex items-center gap-2">
+                <Label
+                  htmlFor="page-size"
+                  className="text-muted-foreground flex shrink-0 items-center gap-1.5 text-xs font-medium whitespace-nowrap sm:text-sm"
+                >
+                  <IconLayoutRows className="size-3.5 opacity-70" aria-hidden />
+                  Per halaman
+                </Label>
+                <Select
+                  value={String(pageSize)}
+                  onValueChange={(v) =>
+                    handleFilterChange("page_size", Number(v))
+                  }
+                >
+                  <SelectTrigger
+                    id="page-size"
+                    className="h-9 w-[4.5rem] cursor-pointer border-border/80 bg-background shadow-sm"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PAGE_SIZE_OPTIONS.map((n) => (
+                      <SelectItem key={n} value={String(n)}>
+                        {n}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div className="flex items-center justify-center gap-2">
+
+            <div className="flex items-center justify-center gap-1 sm:justify-end">
               <Button
+                type="button"
                 variant="outline"
-                size="sm"
-                className="cursor-pointer"
+                size="icon"
+                className="size-9 shrink-0 cursor-pointer rounded-lg border-border/80 shadow-sm disabled:opacity-40"
                 onClick={() => handlePageChange(currentPage - 1)}
                 disabled={currentPage <= 1}
+                aria-label="Halaman sebelumnya"
+                title="Sebelumnya"
               >
-                Sebelumnya
+                <IconChevronLeft className="size-5" stroke={2} />
               </Button>
-              <span className="text-sm">
-                Halaman {currentPage} dari {pageCount || 1}
-              </span>
+              <div className="text-muted-foreground flex min-w-[5.5rem] items-center justify-center gap-1 px-2 text-sm tabular-nums">
+                <span className="sr-only">Halaman </span>
+                <span className="text-foreground font-semibold tabular-nums">
+                  {currentPage}
+                </span>
+                <span className="text-muted-foreground/80" aria-hidden>
+                  /
+                </span>
+                <span className="tabular-nums">
+                  {paginationFooter.totalPages}
+                </span>
+              </div>
               <Button
+                type="button"
                 variant="outline"
-                size="sm"
-                className="cursor-pointer"
+                size="icon"
+                className="size-9 shrink-0 cursor-pointer rounded-lg border-border/80 shadow-sm disabled:opacity-40"
                 onClick={() => handlePageChange(currentPage + 1)}
-                disabled={currentPage >= pageCount}
+                disabled={currentPage >= paginationFooter.totalPages}
+                aria-label="Halaman berikutnya"
+                title="Selanjutnya"
               >
-                Selanjutnya
+                <IconChevronRight className="size-5" stroke={2} />
               </Button>
             </div>
           </div>
-        </div>
+        </nav>
       )}
 
       {/* Verification Modal */}

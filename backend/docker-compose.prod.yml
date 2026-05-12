@@ -23,6 +23,8 @@ services:
       # HTTPS config with SSL certificates
       - ./nginx/data.kms-connect.com.conf:/etc/nginx/conf.d/data.kms-connect.com.conf:ro
       - ./nginx/ssl:/etc/nginx/ssl:ro
+      # Let's Encrypt HTTP-01: certbot writes here on the host; nginx serves /.well-known/acme-challenge/
+      - /var/www/certbot:/var/www/certbot:ro
       - media_volume:/app/media:ro
       - static_volume:/app/staticfiles:ro
       - ./logs/nginx:/var/log/nginx

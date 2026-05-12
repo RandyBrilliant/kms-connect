@@ -54,7 +54,12 @@ import {
   usePermanentDeleteApplicantMutation,
 } from "@/hooks/use-applicants-query"
 import { toast } from "@/lib/toast"
-import { viewBiodataPdf, viewInbondPdf } from "@/api/applicants"
+import {
+  viewBiodataPdf,
+  viewInbondPdf,
+  viewMedicalReferralPdf,
+  viewPsychologyReferralPdf,
+} from "@/api/applicants"
 import type {
   ApplicantUser,
   ApplicantVerificationStatus,
@@ -88,6 +93,8 @@ function ApplicantSidebar({
 
   const [isViewingPdf, setIsViewingPdf] = useState(false)
   const [isViewingInbond, setIsViewingInbond] = useState(false)
+  const [isViewingPsychReferral, setIsViewingPsychReferral] = useState(false)
+  const [isViewingMedicalReferral, setIsViewingMedicalReferral] = useState(false)
   const [sendSummaryDialogOpen, setSendSummaryDialogOpen] = useState(false)
 
   const handleViewBiodataPdf = async () => {
@@ -109,6 +116,28 @@ function ApplicantSidebar({
       toast.error("Gagal membuka PDF Inbond Cost", "Coba lagi nanti")
     } finally {
       setIsViewingInbond(false)
+    }
+  }
+
+  const handleViewPsychologyReferralPdf = async () => {
+    setIsViewingPsychReferral(true)
+    try {
+      await viewPsychologyReferralPdf(applicant.id)
+    } catch {
+      toast.error("Gagal membuka PDF pengantar psikologi", "Coba lagi nanti")
+    } finally {
+      setIsViewingPsychReferral(false)
+    }
+  }
+
+  const handleViewMedicalReferralPdf = async () => {
+    setIsViewingMedicalReferral(true)
+    try {
+      await viewMedicalReferralPdf(applicant.id)
+    } catch {
+      toast.error("Gagal membuka PDF pengantar medical", "Coba lagi nanti")
+    } finally {
+      setIsViewingMedicalReferral(false)
     }
   }
 
@@ -167,11 +196,16 @@ function ApplicantSidebar({
   }, [profile?.notes, applicant.id])
 
   const VERIFICATION_LABELS: Record<ApplicantVerificationStatus, string> = {
-    DRAFT: "Draf",
     SUBMITTED: "Dikirim",
     ACCEPTED: "Diterima",
     REJECTED: "Ditolak",
   }
+
+  const ADMIN_SETTABLE_STATUSES = [
+    "SUBMITTED",
+    "ACCEPTED",
+    "REJECTED",
+  ] as const satisfies readonly ApplicantVerificationStatus[]
 
   const handleStatusChange = async (value: ApplicantVerificationStatus) => {
     if (!profile || value === profile.verification_status) return
@@ -291,6 +325,39 @@ function ApplicantSidebar({
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
+              <div className="space-y-2 border-b pb-3">
+                <p className="text-xs font-medium text-foreground">Status Verifikasi</p>
+                <p className="text-xs text-muted-foreground">
+                  Dikirim = menunggu verifikasi. Diterima/Ditolak = hasil verifikasi.
+                </p>
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="text-muted-foreground text-xs">Status saat ini:</span>
+                  <Select
+                    value={profile.verification_status}
+                    onValueChange={(v) => handleStatusChange(v as ApplicantVerificationStatus)}
+                    disabled={updateMutation.isPending}
+                  >
+                    <SelectTrigger
+                      className="w-[180px] cursor-pointer"
+                      disabled={updateMutation.isPending}
+                    >
+                      <SelectValue>
+                        {updateMutation.isPending
+                          ? "Menyimpan..."
+                          : VERIFICATION_LABELS[profile.verification_status]}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ADMIN_SETTABLE_STATUSES.map((val) => (
+                        <SelectItem key={val} value={val}>
+                          {VERIFICATION_LABELS[val]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
               {missingProfileFields.length ? (
                 <div className="space-y-1">
                   <p className="text-xs font-medium text-foreground">
@@ -387,46 +454,6 @@ function ApplicantSidebar({
               >
                 {updateMutation.isPending ? "Menyimpan..." : "Simpan Keterangan"}
               </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Status verifikasi */}
-      {profile && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Status Verifikasi</CardTitle>
-            <CardDescription>
-              Ubah status verifikasi pelamar. Dikirim = menunggu verifikasi. Diterima/Ditolak = hasil verifikasi.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-3">
-              <span className="text-muted-foreground text-xs">Status saat ini:</span>
-              <Select
-                value={profile.verification_status}
-                onValueChange={(v) => handleStatusChange(v as ApplicantVerificationStatus)}
-                disabled={updateMutation.isPending}
-              >
-                <SelectTrigger
-                  className="w-[180px] cursor-pointer"
-                  disabled={updateMutation.isPending}
-                >
-                  <SelectValue>
-                    {updateMutation.isPending
-                      ? "Menyimpan..."
-                      : VERIFICATION_LABELS[profile.verification_status]}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(VERIFICATION_LABELS).map(([val, label]) => (
-                    <SelectItem key={val} value={val}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
           </CardContent>
         </Card>
@@ -660,7 +687,7 @@ function ApplicantSidebar({
       {/* Inbond Cost PDF */}
       <Card>
         <CardHeader>
-          <CardTitle>Inbound Cost PDF</CardTitle>
+          <CardTitle>Inbond Cost PDF</CardTitle>
           <CardDescription>
             Tanda terima pengembalian biaya transportasi CPMI.
           </CardDescription>
@@ -675,7 +702,53 @@ function ApplicantSidebar({
             disabled={isViewingInbond}
           >
             <IconFileTypePdf className="mr-2 size-4" />
-            {isViewingInbond ? "Memproses..." : "Lihat Inbound Cost PDF"}
+            {isViewingInbond ? "Memproses..." : "Lihat Inbond Cost PDF"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Surat Pengantar Tes Psikologi */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Pengantar tes psikologi</CardTitle>
+          <CardDescription>
+            Surat pengantar ke klinik untuk tes psikologi CPMI.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="cursor-pointer"
+            onClick={handleViewPsychologyReferralPdf}
+            disabled={isViewingPsychReferral}
+          >
+            <IconFileTypePdf className="mr-2 size-4" />
+            {isViewingPsychReferral ? "Memproses..." : "Lihat PDF pengantar psikologi"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Surat Pengantar Medical */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Pengantar medical check up</CardTitle>
+          <CardDescription>
+            Surat pengantar ke klinik untuk medical CPMI.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="cursor-pointer"
+            onClick={handleViewMedicalReferralPdf}
+            disabled={isViewingMedicalReferral}
+          >
+            <IconFileTypePdf className="mr-2 size-4" />
+            {isViewingMedicalReferral ? "Memproses..." : "Lihat PDF pengantar medical"}
           </Button>
         </CardContent>
       </Card>
@@ -803,7 +876,6 @@ export function AdminPelamarDetailPage() {
 
   const profile = applicant.applicant_profile
   const displayName = profile?.full_name || applicant.email
-  const score = profile?.score
 
   return (
     <div className="w-full px-6 py-6 md:px-8 md:py-8">
@@ -821,11 +893,6 @@ export function AdminPelamarDetailPage() {
             {applicant.email}
             {profile?.nik && ` • NIK: ${profile.nik}`}
           </p>
-          {typeof score === "number" && (
-            <p className="text-sm text-muted-foreground">
-              Skor kesiapan: {Math.round(score)} / 100
-            </p>
-          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {canPermanentDelete && (

@@ -14,17 +14,19 @@ export function AdminBroadcastListPage() {
   usePageTitle("Kelola Broadcast")
 
   return (
-    <div className="flex flex-col gap-4 px-6 py-6 md:px-8 md:py-8">
-      <BreadcrumbNav
-        items={[
-          { label: "Dashboard", href: basePath || "/" },
-          { label: "Broadcast" },
-        ]}
-      />
-      <h1 className="text-2xl font-bold">Kelola Broadcast</h1>
-      <p className="text-muted-foreground">
-        Kirim notifikasi massal ke pengguna terpilih
-      </p>
+    <div className="flex flex-col gap-4 px-4 py-4 sm:gap-6 sm:px-6 sm:py-6 md:px-8 md:py-8">
+      <div>
+        <BreadcrumbNav
+          items={[
+            { label: "Dashboard", href: basePath || "/" },
+            { label: "Broadcast" },
+          ]}
+        />
+        <h1 className="mt-2 text-xl font-bold sm:text-2xl">Kelola Broadcast</h1>
+        <p className="text-muted-foreground text-sm sm:text-base">
+          Kirim notifikasi massal ke pengguna terpilih
+        </p>
+      </div>
 
       <BroadcastTable basePath={BASE_PATH} />
     </div>

@@ -5,7 +5,6 @@
  */
 
 export type ApplicantVerificationStatus =
-  | "DRAFT"
   | "SUBMITTED"
   | "ACCEPTED"
   | "REJECTED"
@@ -83,6 +82,16 @@ export interface ApplicantReferrerDisplay {
   display_name?: string
   email: string
   referral_code: string | null
+}
+
+/** Biaya transport inbound per sub-tahapan Diterima (API merged list). */
+export interface InboundTransportStageCostRow {
+  stage_code: string
+  label: string
+  amount: number | null
+  keterangan: string
+  /** From lamaran ``diterima_step_confirmations`` (read-only). */
+  tanggal_proses: string | null
 }
 
 export interface ApplicantProfile {
@@ -170,6 +179,7 @@ export interface ApplicantProfile {
   biaya_ready_paspor: number | null
   pengembalian_biaya: number | null
   tgl_pengembalian: string | null
+  /** Sum of inbound per-stage amounts; read-only from API (not a stored column). */
   jlh_uang_transport: number | null
   bank: string
   no_rek: string
@@ -177,6 +187,10 @@ export interface ApplicantProfile {
   tgl_kirim_bio_ke_mly: string | null
   tgl_calling_visa: string | null
   no_calling_visa: string
+  /** Biaya transport per tahapan (inbound); optional until first admin save. */
+  inbound_transport_stage_costs?: InboundTransportStageCostRow[]
+  /** Own-profile GET only: ada lamaran berstatus Diterima (mobile). */
+  has_diterima_lamaran?: boolean
   shoe_size: string
   shirt_size: string
   photo: string | null
@@ -197,6 +211,21 @@ export interface ApplicantProfile {
   has_complete_documents?: boolean
 }
 
+/** Ringkasan lamaran untuk staff/company (backend `applications_summary`). */
+export interface StaffReferralApplicationSummary {
+  id: number
+  status: string
+  status_label: string
+  job_id: number
+  job_title: string
+  batch_id: number | null
+  batch_name: string
+  interview_cohort_id?: number | null
+  interview_cohort_name?: string
+  diterima_current_step?: string | null
+  diterima_sub_stage_label?: string | null
+}
+
 export interface ApplicantUser {
   id: number
   email: string
@@ -211,6 +240,8 @@ export interface ApplicantUser {
   /** Apple Sign-In subject; absent or null if not linked */
   apple_id?: string | null
   applicant_profile: ApplicantProfile
+  /** Staff/company: ringkasan lamaran terbaru (lihat backend ApplicantUserSerializer). */
+  applications_summary?: StaffReferralApplicationSummary[]
 }
 
 export interface ApplicantUserCreateInput {

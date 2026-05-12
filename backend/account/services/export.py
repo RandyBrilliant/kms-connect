@@ -166,7 +166,6 @@ def _get_nested_value(obj: Any, path: str, default: str = "-") -> str:
 def _format_verification_status(status: str | None) -> str:
     """Format verification status for display."""
     status_map = {
-        "DRAFT": "Draft",
         "SUBMITTED": "Dikirim",
         "ACCEPTED": "Diterima",
         "REJECTED": "Ditolak",

@@ -101,6 +101,8 @@ export async function bulkAdminProcessApplicants(input: {
   tgl_medical?: string | null
   hasil_medical?: string
   tgl_bayar_sml?: string | null
+  tgl_fwcm_psikotes?: string | null
+  tgl_bayar_psikotes?: string | null
 }): Promise<{ updated_count: number }> {
   const { data } = await api.post<ApiSuccessResponse<{ updated_count: number }>>(
     "/api/applicants/bulk-admin-process/",
@@ -379,6 +381,44 @@ export async function viewBiodataPdf(applicantId: number): Promise<void> {
 export async function viewInbondPdf(applicantId: number): Promise<void> {
   const response = await api.get(
     `/api/applicants/${applicantId}/inbond-pdf/`,
+    { responseType: "blob" }
+  )
+  const blob = new Blob([response.data as BlobPart], { type: "application/pdf" })
+  const url = URL.createObjectURL(blob)
+  const tab = window.open(url, "_blank")
+  if (tab) {
+    tab.addEventListener("load", () => URL.revokeObjectURL(url), { once: true })
+  } else {
+    setTimeout(() => URL.revokeObjectURL(url), 10_000)
+  }
+}
+
+/**
+ * GET /api/applicants/:id/psychology-referral-pdf/
+ * Surat Pengantar Tes Psikologi CPMI (admin).
+ */
+export async function viewPsychologyReferralPdf(applicantId: number): Promise<void> {
+  const response = await api.get(
+    `/api/applicants/${applicantId}/psychology-referral-pdf/`,
+    { responseType: "blob" }
+  )
+  const blob = new Blob([response.data as BlobPart], { type: "application/pdf" })
+  const url = URL.createObjectURL(blob)
+  const tab = window.open(url, "_blank")
+  if (tab) {
+    tab.addEventListener("load", () => URL.revokeObjectURL(url), { once: true })
+  } else {
+    setTimeout(() => URL.revokeObjectURL(url), 10_000)
+  }
+}
+
+/**
+ * GET /api/applicants/:id/medical-referral-pdf/
+ * Surat Pengantar Medical Check Up (admin).
+ */
+export async function viewMedicalReferralPdf(applicantId: number): Promise<void> {
+  const response = await api.get(
+    `/api/applicants/${applicantId}/medical-referral-pdf/`,
     { responseType: "blob" }
   )
   const blob = new Blob([response.data as BlobPart], { type: "application/pdf" })

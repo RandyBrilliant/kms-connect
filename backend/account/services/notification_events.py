@@ -31,7 +31,7 @@ class NotificationEvent(str, Enum):
 
     # ---- Account ----
     PASSWORD_CHANGED = "account.password_changed"
-    ACCOUNT_DELETION_APPROVED = "account.deletion_approved"   # → Applicant (email before account removed)
+    ACCOUNT_DELETION_APPROVED = "account.deletion_approved"   # → Applicant (login disabled; records may be retained)
     ACCOUNT_DELETION_REJECTED = "account.deletion_rejected" # → Applicant
 
     # ---- Profile verification ----
@@ -327,8 +327,11 @@ def _tmpl_account_deletion_approved(ctx: dict) -> tuple[str, str]:
     name = ctx.get("user_name", "Anda")
     notes = ctx.get("admin_notes", "")
     body = (
-        f"Halo {name}, permintaan penghapusan akun Anda telah disetujui. "
-        "Akun Anda dan data terkait akan dihapus dari sistem sesuai kebijakan kami."
+        f"Halo {name}, permintaan penghapusan akun Anda telah disetujui dan diproses. "
+        "Akun Anda telah ditutup dari layanan aktif: akses login dinonaktifkan dan Anda tidak dapat lagi "
+        "menggunakan aplikasi dengan akun ini. Pemrosesan penghapusan dari layanan telah dilaksanakan "
+        "sesuai permintaan Anda. Informasi tertentu dapat disimpan sebagaimana diizinkan undang-undang "
+        "untuk keperluan operasional dan kepatuhan."
     )
     if notes:
         body += f" Catatan dari admin: {notes}"

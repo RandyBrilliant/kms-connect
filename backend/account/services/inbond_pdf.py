@@ -24,7 +24,9 @@ This endpoint is admin-only.
 
 import io
 import os
+import struct
 from datetime import date
+from decimal import Decimal
 
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
@@ -75,13 +77,32 @@ _F_PERUSAHAAN = _frac(0.365, 0.379)   # "Perusahaan yang dituju"
 
 # TABLE — "Tanggal Proses" column  (x ≈ 0.500, rows start at y ≈ 0.530)
 # Each data row is approximately 0.0295 of page height apart.
-_FX_TGL   = 0.500   # x for date values in the table
-_FY_ROW_1 = 0.530   # y_top_frac for row 1 (Medical)
-_ROW_STEP = 0.0295  # vertical step per row
+_FX_TGL = 0.370   # x for date values in the table
+_FX_RP = 0.510    # "Jumlah uang dikembalikan" column (approx.)
+_FX_KET = 0.77   # Keterangan column (approx.)
+_FY_ROW_1 = 0.460   # y_top_frac for row 1 (Medical)
+_ROW_STEP = 0.025  # vertical step per row
+
+# Printed form: rows 1–7 = proses utama; 8–9 kosong di template; TOTAL di bawah.
+INBOUND_PDF_ROW_SPECS: list[tuple[int, tuple[str, ...]]] = [
+    (1, ("MEDICAL",)),
+    (2, ("BUAT_ID_PEKERJA",)),
+    (3, ("BUAT_PASPOR",)),
+    (4, ("FWCMS", "PSIKOLOGI_TEST")),
+    (5, ("PAP_BP3MI",)),
+    (6, ("PDO_KILANG",)),
+    (7, ("PERSIAPAN_KEBERANGKATAN",)),
+]
+
+
+def _tbl_xy(x_frac: float, row: int) -> tuple:
+    """(x, y) for a column at PDF table row (1-indexed)."""
+    return _frac(x_frac, _FY_ROW_1 + (row - 1) * _ROW_STEP)
+
 
 def _tbl_tgl(row: int) -> tuple:
     """Return (x, y) for the 'Tanggal Proses' cell of table row (1-indexed)."""
-    return _frac(_FX_TGL, _FY_ROW_1 + (row - 1) * _ROW_STEP)
+    return _tbl_xy(_FX_TGL, row)
 
 # SIGNATURE SECTION
 _F_SIG_TTD   = _frac(0.260, 0.895)   # "Tanda Tangan :" blank
@@ -104,6 +125,53 @@ def _str(value, fallback: str = "") -> str:
         return fallback
     s = str(value).strip()
     return s if s else fallback
+
+
+def _fmt_rp_id(amount) -> str:
+    """Indonesian-style thousands with dot separator."""
+    if amount is None:
+        return ""
+    try:
+        d = amount if isinstance(amount, Decimal) else Decimal(str(amount))
+        v = int(d.quantize(Decimal("1")))
+        return f"Rp{v:,}".replace(",", ".")
+    except Exception:
+        return ""
+
+
+def _inbound_rows_by_code(profile) -> dict:
+    out = {}
+    for row in profile.inbound_transport_stage_costs.all():
+        out[row.stage_code] = row
+    return out
+
+
+def _merged_transport_cells(
+    by_code: dict,
+    stage_codes: tuple[str, ...],
+    dates_by_code: dict,
+) -> tuple[str, str, str]:
+    """Return (tanggal_display, rp_display, keterangan) for one printed table row."""
+    total = Decimal("0")
+    have_amount = False
+    tgls: list[str] = []
+    kets: list[str] = []
+    for code in stage_codes:
+        r = by_code.get(code)
+        if r:
+            if r.amount is not None:
+                total += r.amount
+                have_amount = True
+            k = (r.keterangan or "").strip()
+            if k:
+                kets.append(k)
+        d = dates_by_code.get(code)
+        if d:
+            tgls.append(_fmt_date(d))
+    tgl_s = " / ".join(tgls) if tgls else ""
+    rp_s = _fmt_rp_id(total) if have_amount else ""
+    ket_s = " — ".join(kets) if kets else ""
+    return tgl_s, rp_s, ket_s
 
 
 def _draw_debug_grid(c: canvas.Canvas, fields: dict):
@@ -180,10 +248,19 @@ def generate_inbond_pdf(profile) -> bytes:
     except Exception:
         pass
 
-    # Process dates from admin-only model fields
-    # tgl_medical = _fmt_date(profile.tgl_medical)
-    # tgl_fwcm    = _fmt_date(profile.tgl_fwcm_psikotes)
     tgl_kembali = _fmt_date(getattr(profile, "tanggal_pengembalian", None))
+
+    from account.services.inbound_transport_costs import (
+        step_confirmation_dates_by_stage_for_profile,
+    )
+
+    dates_by_stage = step_confirmation_dates_by_stage_for_profile(profile)
+
+    by_stage = _inbound_rows_by_code(profile)
+    grand_total = sum(
+        (r.amount for r in by_stage.values() if r.amount is not None),
+        start=Decimal("0"),
+    )
 
     # ── 3. Draw helper ────────────────────────────────────────────────────
     c.setFont(FONT_NAME, FONT_SIZE)
@@ -208,14 +285,22 @@ def generate_inbond_pdf(profile) -> bytes:
     draw(_F_BANK,       bank,       max_w=right - _F_BANK[0])
     draw(_F_PERUSAHAAN, perusahaan, max_w=right - _F_PERUSAHAAN[0])
 
-    # ── 5. Table — Tanggal Proses column ─────────────────────────────────
-    # Rows 1-9 match the pre-printed process names; only fill where we have dates.
-    # table_dates = {
-    #     1: tgl_medical,   # Medical
-    #     4: tgl_fwcm,      # FWCMS & Tes Psikologi
-    # }
-    # for row, tgl in table_dates.items():
-    #     draw(_tbl_tgl(row), tgl)
+    # ── 5. Table — Tanggal Proses, Jumlah (Rp), Keterangan ───────────────
+    for pdf_row, stage_codes in INBOUND_PDF_ROW_SPECS:
+        tgl_s, rp_s, ket_s = _merged_transport_cells(
+            by_stage, stage_codes, dates_by_stage
+        )
+        y_key = _FY_ROW_1 + (pdf_row - 1) * _ROW_STEP
+        max_w_rp = (_FX_RIGHT - _FX_RP) * PAGE_W
+        max_w_ket = (_FX_RIGHT - _FX_KET) * PAGE_W
+        draw(_frac(_FX_TGL, y_key), tgl_s, max_w=(_FX_RIGHT - _FX_TGL) * PAGE_W)
+        draw(_frac(_FX_RP, y_key), rp_s, max_w=max_w_rp)
+        draw(_frac(_FX_KET, y_key), ket_s, max_w=max_w_ket)
+
+    # Total row (pre-printed on template below row 9)
+    total_rp = _fmt_rp_id(grand_total) if grand_total != 0 else ""
+    _FY_TOTAL = _FY_ROW_1 + 8.75 * _ROW_STEP
+    draw(_frac(_FX_RP, _FY_TOTAL), total_rp, max_w=(_FX_RIGHT - _FX_RP) * PAGE_W)
 
     # ── 6. Signature section ──────────────────────────────────────────────
     draw(_F_SIG_NAMA, full_name,  max_w=right * 0.5)
@@ -231,15 +316,7 @@ def generate_inbond_pdf(profile) -> bytes:
             "no_rek":     _F_NO_REK,
             "bank":       _F_BANK,
             "perusahaan": _F_PERUSAHAAN,
-            # "tgl_row1":   _tbl_tgl(1),
-            # "tgl_row2":   _tbl_tgl(2),
-            # "tgl_row3":   _tbl_tgl(3),
-            # "tgl_row4":   _tbl_tgl(4),
-            # "tgl_row5":   _tbl_tgl(5),
-            # "tgl_row6":   _tbl_tgl(6),
-            # "tgl_row7":   _tbl_tgl(7),
-            # "tgl_row8":   _tbl_tgl(8),
-            # "tgl_row9":   _tbl_tgl(9),
+            "rp_row4":    _frac(_FX_RP, _FY_ROW_1 + 3 * _ROW_STEP),
             "sig_nama":   _F_SIG_NAMA,
             "sig_tgl":    _F_SIG_TGL,
         })

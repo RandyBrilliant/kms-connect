@@ -9,7 +9,11 @@ from rest_framework.routers import DefaultRouter
 
 from . import views
 from . import applicant_self_service_views
-from .applicant_self_service_views import ApplicantBiodataPdfView
+from .applicant_self_service_views import (
+    ApplicantBiodataPdfView,
+    ApplicantMedicalReferralPdfView,
+    ApplicantPsychologyReferralPdfView,
+)
 
 app_name = "account"
 
@@ -119,6 +123,16 @@ applicant_self_service_paths = [
         ApplicantBiodataPdfView.as_view(),
         name="applicant-me-biodata-pdf",
     ),
+    path(
+        "applicants/me/psychology-referral-pdf/",
+        ApplicantPsychologyReferralPdfView.as_view(),
+        name="applicant-me-psychology-referral-pdf",
+    ),
+    path(
+        "applicants/me/medical-referral-pdf/",
+        ApplicantMedicalReferralPdfView.as_view(),
+        name="applicant-me-medical-referral-pdf",
+    ),
 ]
 
 # Admin dashboard (applicants overview)
@@ -156,6 +170,16 @@ report_paths = [
         "applicants/<int:pk>/inbond-pdf/",
         views.AdminInbondPdfView.as_view(),
         name="applicant-inbond-pdf",
+    ),
+    path(
+        "applicants/<int:pk>/psychology-referral-pdf/",
+        views.AdminPsychologyReferralPdfView.as_view(),
+        name="applicant-psychology-referral-pdf",
+    ),
+    path(
+        "applicants/<int:pk>/medical-referral-pdf/",
+        views.AdminMedicalReferralPdfView.as_view(),
+        name="applicant-medical-referral-pdf",
     ),
 ]
 

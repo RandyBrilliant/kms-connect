@@ -381,7 +381,6 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
             .filter(
                 user__is_active=True,
                 verification_status__in=[
-                    ApplicantVerificationStatus.DRAFT,
                     ApplicantVerificationStatus.SUBMITTED,
                     ApplicantVerificationStatus.ACCEPTED,
                 ],
@@ -2339,7 +2338,7 @@ class StaffDashboardStatsView(APIView):
         recent_applicants_data = ApplicantUserSerializer(
             recent_applicants,
             many=True,
-            context={"request": request}
+            context={"request": request, "include_applications_summary": True},
         ).data
 
         data = {

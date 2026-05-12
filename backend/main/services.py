@@ -2,7 +2,7 @@
 Service layer untuk LamaranBatch dan JobApplication.
 
 Mengandung seluruh business logic lamaran kerja:
-  - Eligibility checks: verification_status in (DRAFT/SUBMITTED/ACCEPTED) + no active lamaran.
+  - Eligibility checks: verification_status in (SUBMITTED/ACCEPTED) + no active lamaran.
   - Group assignment: admin menambah banyak pelamar ke satu batch sekaligus.
   - FSM transitions: siapa boleh pindah ke status apa.
   - Applicant confirmation: pelamar mengkonfirmasi kehadiran pra-seleksi/interview.
@@ -57,7 +57,6 @@ TRANSITIONS: dict[tuple[str, str], list[str]] = {
 
 _ACTIVE_STATUSES = frozenset(JobApplication.ACTIVE_STATUSES)
 _ELIGIBLE_VERIFICATION_STATUSES = frozenset({
-    ApplicantVerificationStatus.DRAFT,
     ApplicantVerificationStatus.SUBMITTED,
     ApplicantVerificationStatus.ACCEPTED,
 })
@@ -159,7 +158,7 @@ class ApplicationService:
         Single applicant full eligibility check for batch assignment.
 
         Three conditions must all pass:
-          1. verification_status in (DRAFT, SUBMITTED, ACCEPTED)
+          1. verification_status in (SUBMITTED, ACCEPTED)
           2. No active application in any job
           3. Re-apply is allowed for terminal statuses
         """
@@ -171,7 +170,7 @@ class ApplicationService:
                 reason=(
                     f"Status verifikasi pelamar adalah "
                     f"'{applicant_profile.get_verification_status_display()}', "
-                    f"harus Draf, Dikirim, atau Diterima untuk bisa diikutsertakan."
+                    f"harus Dikirim atau Diterima untuk bisa diikutsertakan."
                 ),
             )
 
@@ -674,9 +673,27 @@ class ApplicationService:
                 "Gunakan aksi 'Pindahkan ke Berangkat' untuk melanjutkan."
             )
 
+        step_confirmations = (
+            dict(application.diterima_step_confirmations)
+            if isinstance(application.diterima_step_confirmations, dict)
+            else {}
+        )
+        # Same JSON as pelamar confirmations: stamp the sub-step being completed
+        # when admin advances, so downstream (inbound PDF / biaya) has tanggal
+        # even without mobile confirm. Pelamar confirm keeps existing timestamp.
+        if current not in step_confirmations:
+            step_confirmations[current] = timezone.now().isoformat()
+        application.diterima_step_confirmations = step_confirmations
+
         next_step = step_order[current_idx + 1]
         application.diterima_current_step = next_step
-        application.save(update_fields=["diterima_current_step", "updated_at"])
+        application.save(
+            update_fields=[
+                "diterima_current_step",
+                "diterima_step_confirmations",
+                "updated_at",
+            ],
+        )
         return application
 
     @classmethod

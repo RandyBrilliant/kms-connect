@@ -63,6 +63,7 @@ class ChatThreadViewSet(viewsets.ReadOnlyModelViewSet):
         "application__applicant__user__full_name",
         "application__applicant__user__email",
         "application__job__title",
+        "application__interview_cohort__name",
     ]
     ordering_fields = ["updated_at", "created_at"]
     ordering = ["-updated_at"]
@@ -73,6 +74,7 @@ class ChatThreadViewSet(viewsets.ReadOnlyModelViewSet):
             .select_related(
                 "application__applicant__user",
                 "application__job",
+                "application__interview_cohort",
                 "application__reviewed_by",
                 "application__assigned_by",
             )

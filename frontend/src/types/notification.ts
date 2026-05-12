@@ -81,6 +81,7 @@ export interface NotificationsListParams {
 export interface BroadcastsListParams {
   page?: number
   page_size?: number
+  search?: string
   notification_type?: NotificationType
   priority?: NotificationPriority
   created_by?: number

@@ -14,6 +14,7 @@
  */
 
 import { api } from "@/lib/api"
+import type { PaginatedResponse } from "@/types/admin"
 import type {
   AccountDeletionRequest,
   DeletionRequestSubmitInput,
@@ -23,6 +24,8 @@ import type {
 
 function buildQs(params: DeletionRequestsListParams): string {
   const search = new URLSearchParams()
+  if (params.page != null) search.set("page", String(params.page))
+  if (params.page_size != null) search.set("page_size", String(params.page_size))
   if (params.status) search.set("status", params.status)
   if (params.search) search.set("search", params.search)
   const qs = search.toString()
@@ -33,14 +36,14 @@ function buildQs(params: DeletionRequestsListParams): string {
 // Admin
 // ---------------------------------------------------------------------------
 
-/** GET /api/deletion-requests/ */
+/** GET /api/deletion-requests/ — paginated list (DRF format) */
 export async function getDeletionRequests(
   params: DeletionRequestsListParams = {}
-): Promise<AccountDeletionRequest[]> {
-  const { data } = await api.get<{ data: AccountDeletionRequest[] }>(
+): Promise<PaginatedResponse<AccountDeletionRequest>> {
+  const { data } = await api.get<PaginatedResponse<AccountDeletionRequest>>(
     `/api/deletion-requests/${buildQs(params)}`
   )
-  return data.data
+  return data
 }
 
 /** GET /api/deletion-requests/<id>/ */

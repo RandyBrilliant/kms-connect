@@ -112,7 +112,6 @@ const FILTER_PRESETS = [
  * Status label mapping (Indonesian)
  */
 const STATUS_LABELS: Record<string, string> = {
-  DRAFT: "Draf",
   SUBMITTED: "Dikirim",
   ACCEPTED: "Diterima",
   REJECTED: "Ditolak",

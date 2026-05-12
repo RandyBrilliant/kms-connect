@@ -53,7 +53,7 @@ export function isVerificationStatus(
 ): value is ApplicantVerificationStatus {
   return (
     typeof value === "string" &&
-    ["DRAFT", "SUBMITTED", "ACCEPTED", "REJECTED"].includes(value)
+    ["SUBMITTED", "ACCEPTED", "REJECTED"].includes(value)
   )
 }
 
@@ -190,15 +190,6 @@ export function isApplicantDocument(obj: unknown): obj is ApplicantDocument {
 // ============================================================================
 
 /**
- * Check if applicant is in draft status
- */
-export function isDraftStatus(
-  status: ApplicantVerificationStatus | string
-): boolean {
-  return status === "DRAFT"
-}
-
-/**
  * Check if applicant is submitted (pending review)
  */
 export function isSubmittedStatus(
@@ -226,12 +217,12 @@ export function isRejectedStatus(
 }
 
 /**
- * Check if status can be edited (DRAFT or REJECTED)
+ * Check if status can be edited (Dikirim or Ditolak — bukan Diterima)
  */
 export function isEditableStatus(
   status: ApplicantVerificationStatus | string
 ): boolean {
-  return status === "DRAFT" || status === "REJECTED"
+  return status === "SUBMITTED" || status === "REJECTED"
 }
 
 /**
@@ -284,7 +275,7 @@ export function hasValidPassport(profile: ApplicantProfile): boolean {
  * Check if applicant can submit for verification
  */
 export function canSubmitForVerification(profile: ApplicantProfile): boolean {
-  // Must be in DRAFT or REJECTED status
+  // Must be in Dikirim or Ditolak status
   if (!isEditableStatus(profile.verification_status)) {
     return false
   }

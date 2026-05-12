@@ -10,6 +10,7 @@ export interface AccountDeletionRequest {
   user_email: string
   user_full_name: string
   user_role: string
+  user_is_active: boolean
   reason: string
   status: DeletionRequestStatus
   requested_at: string
@@ -30,4 +31,6 @@ export interface DeletionRequestReviewInput {
 export interface DeletionRequestsListParams {
   status?: DeletionRequestStatus
   search?: string
+  page?: number
+  page_size?: number
 }

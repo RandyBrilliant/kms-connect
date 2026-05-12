@@ -18,6 +18,37 @@ class RegionRef {
   int get hashCode => id.hashCode;
 }
 
+/// Biaya transport inbound per sub-tahapan Diterima (diisi admin; PDF Inbound).
+class InboundTransportStageCostRow {
+  final String stageCode;
+  final String label;
+  final double? amount;
+  final String keterangan;
+  final String? tanggalProses;
+
+  const InboundTransportStageCostRow({
+    required this.stageCode,
+    required this.label,
+    this.amount,
+    this.keterangan = '',
+    this.tanggalProses,
+  });
+
+  factory InboundTransportStageCostRow.fromJson(Map<String, dynamic> json) {
+    return InboundTransportStageCostRow(
+      stageCode: json['stage_code'] as String? ?? '',
+      label: json['label'] as String? ?? '',
+      amount: json['amount'] == null
+          ? null
+          : (json['amount'] is num)
+          ? (json['amount'] as num).toDouble()
+          : double.tryParse(json['amount'].toString()),
+      keterangan: json['keterangan'] as String? ?? '',
+      tanggalProses: json['tanggal_proses'] as String?,
+    );
+  }
+}
+
 class ApplicantProfile {
   final int id;
   final String? fullName;
@@ -25,14 +56,15 @@ class ApplicantProfile {
   // Birth (free text, UPPERCASE in API; legacy FK no longer used)
   final String? birthPlaceText;
   final DateTime? birthDate;
-  final String? gender;       // 'M' or 'F'
+  final String? gender; // 'M' or 'F'
 
   // KTP address – cascading hierarchy
   final String? address;
   final String? postalCode;
   final int? provinceId;
   final String? provinceName;
-  final int? districtId;      // = Kabupaten/Kota (Regency FK named 'district' on backend)
+  final int?
+  districtId; // = Kabupaten/Kota (Regency FK named 'district' on backend)
   final String? districtName;
   final int? villageId;
   final String? villageName;
@@ -100,6 +132,12 @@ class ApplicantProfile {
   // Photo & notes
   final String? photo;
   final String? notes;
+
+  /// Biaya transport per sub-tahapan Diterima (admin; optional on API).
+  final List<InboundTransportStageCostRow>? inboundTransportStageCosts;
+
+  /// GET profil sendiri: ada lamaran berstatus DITERIMA (surat pengantar psikologi).
+  final bool hasDiterimaLamaran;
 
   // Verification
   final String verificationStatus;
@@ -175,6 +213,8 @@ class ApplicantProfile {
     this.heirContactPhone,
     this.photo,
     this.notes,
+    this.inboundTransportStageCosts,
+    this.hasDiterimaLamaran = false,
     required this.verificationStatus,
     this.score,
     this.submittedAt,
@@ -209,13 +249,20 @@ class ApplicantProfile {
     final vd = json['village_display'] as Map<String, dynamic>?;
     final fvd = json['family_village_display'] as Map<String, dynamic>?;
     final rd = json['referrer_display'] as Map<String, dynamic>?;
+    final inboundRaw = json['inbound_transport_stage_costs'] as List<dynamic>?;
+    final inboundCosts = inboundRaw
+        ?.map(
+          (e) => InboundTransportStageCostRow.fromJson(
+            Map<String, dynamic>.from(e as Map),
+          ),
+        )
+        .toList();
 
     return ApplicantProfile(
       id: _parseId(json['id'])!,
       fullName: _str(json['full_name']),
       birthPlaceText:
-          _str(json['birth_place_text']) ??
-          _str(json['birth_place_display']),
+          _str(json['birth_place_text']) ?? _str(json['birth_place_display']),
       birthDate: ApiDateTime.parse(json['birth_date']),
       gender: _str(json['gender']),
       address: _str(json['address']),
@@ -263,11 +310,14 @@ class ApplicantProfile {
       familyAddress: _str(json['family_address']),
       familyPostalCode: _str(json['family_postal_code']),
       familyProvinceId: _idFromField(json['family_province']),
-      familyProvinceName: _str(fvd?['province']) ?? _nameFromField(json['family_province']),
+      familyProvinceName:
+          _str(fvd?['province']) ?? _nameFromField(json['family_province']),
       familyDistrictId: _idFromField(json['family_district']),
-      familyDistrictName: _str(fvd?['regency']) ?? _nameFromField(json['family_district']),
+      familyDistrictName:
+          _str(fvd?['regency']) ?? _nameFromField(json['family_district']),
       familyVillageId: _idFromField(json['family_village']),
-      familyVillageName: _str(fvd?['village']) ?? _nameFromField(json['family_village']),
+      familyVillageName:
+          _str(fvd?['village']) ?? _nameFromField(json['family_village']),
       fatherPhone: _str(json['father_phone']),
       motherPhone: _str(json['mother_phone']),
       referrerId: _parseId(json['referrer']),
@@ -278,63 +328,67 @@ class ApplicantProfile {
       heirContactPhone: _str(json['heir_contact_phone']),
       photo: _str(json['photo']),
       notes: _str(json['notes']),
-      verificationStatus: _str(json['verification_status']) ?? 'DRAFT',
+      inboundTransportStageCosts: inboundCosts,
+      hasDiterimaLamaran: json['has_diterima_lamaran'] == true,
+      verificationStatus: _str(json['verification_status']) ?? 'SUBMITTED',
       score: json['score'] != null ? (json['score'] as num).toDouble() : null,
       submittedAt: ApiDateTime.parse(json['submitted_at']),
       verifiedAt: ApiDateTime.parse(json['verified_at']),
-      createdAt:
-          ApiDateTime.parseRequired(json['created_at'], fieldName: 'created_at'),
-      updatedAt:
-          ApiDateTime.parseRequired(json['updated_at'], fieldName: 'updated_at'),
+      createdAt: ApiDateTime.parseRequired(
+        json['created_at'],
+        fieldName: 'created_at',
+      ),
+      updatedAt: ApiDateTime.parseRequired(
+        json['updated_at'],
+        fieldName: 'updated_at',
+      ),
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'full_name': fullName,
-        if (birthPlaceText != null && birthPlaceText!.trim().isNotEmpty)
-          'birth_place_text': birthPlaceText!.trim(),
-        'birth_date': birthDate?.toIso8601String(),
-        'gender': gender,
-        'address': address,
-        'postal_code': postalCode,
-        'province': provinceId,
-        'district': districtId,
-        'village': villageId,
-        'contact_phone': contactPhone,
-        'nik': nik,
-        'sibling_count': siblingCount,
-        'birth_order': birthOrder,
-        'father_name': fatherName,
-        'father_age': fatherAge,
-        'father_occupation': fatherOccupation,
-        'father_almarhum': fatherAlmarhum,
-        'mother_name': motherName,
-        'mother_age': motherAge,
-        'mother_occupation': motherOccupation,
-        'mother_almarhum': motherAlmarhum,
-        'spouse_name': spouseName,
-        'spouse_age': spouseAge,
-        'spouse_occupation': spouseOccupation,
-        'spouse_almarhum': spouseAlmarhum,
-        'family_address': familyAddress,
-        'family_postal_code': familyPostalCode,
-        'family_province': familyProvinceId,
-        'family_district': familyDistrictId,
-        'family_village': familyVillageId,
-        'father_phone': fatherPhone,
-        'mother_phone': motherPhone,
-        'heir_name': heirName,
-        'heir_relationship': heirRelationship,
-        'heir_contact_phone': heirContactPhone,
-        'verification_status': verificationStatus,
-        'score': score,
-      };
+    'id': id,
+    'full_name': fullName,
+    if (birthPlaceText != null && birthPlaceText!.trim().isNotEmpty)
+      'birth_place_text': birthPlaceText!.trim(),
+    'birth_date': birthDate?.toIso8601String(),
+    'gender': gender,
+    'address': address,
+    'postal_code': postalCode,
+    'province': provinceId,
+    'district': districtId,
+    'village': villageId,
+    'contact_phone': contactPhone,
+    'nik': nik,
+    'sibling_count': siblingCount,
+    'birth_order': birthOrder,
+    'father_name': fatherName,
+    'father_age': fatherAge,
+    'father_occupation': fatherOccupation,
+    'father_almarhum': fatherAlmarhum,
+    'mother_name': motherName,
+    'mother_age': motherAge,
+    'mother_occupation': motherOccupation,
+    'mother_almarhum': motherAlmarhum,
+    'spouse_name': spouseName,
+    'spouse_age': spouseAge,
+    'spouse_occupation': spouseOccupation,
+    'spouse_almarhum': spouseAlmarhum,
+    'family_address': familyAddress,
+    'family_postal_code': familyPostalCode,
+    'family_province': familyProvinceId,
+    'family_district': familyDistrictId,
+    'family_village': familyVillageId,
+    'father_phone': fatherPhone,
+    'mother_phone': motherPhone,
+    'heir_name': heirName,
+    'heir_relationship': heirRelationship,
+    'heir_contact_phone': heirContactPhone,
+    'verification_status': verificationStatus,
+    'score': score,
+  };
 
   String get verificationStatusDisplay {
     switch (verificationStatus) {
-      case 'DRAFT':
-        return 'Draf';
       case 'SUBMITTED':
         return 'Menunggu Verifikasi';
       case 'ACCEPTED':
@@ -347,7 +401,7 @@ class ApplicantProfile {
   }
 
   bool get canSubmit =>
-      verificationStatus == 'DRAFT' &&
+      verificationStatus == 'REJECTED' &&
       nik != null &&
       nik!.isNotEmpty &&
       fullName != null &&

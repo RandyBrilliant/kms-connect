@@ -82,20 +82,47 @@ export function ChatThreadList({ basePath, activeThreadId }: ChatThreadListProps
                       isActive && "bg-muted"
                     )}
                   >
-                    <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                    <div className="flex-1 min-w-0 flex flex-col gap-1">
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-medium text-sm truncate">
-                          {thread.applicant_name ?? `Lamaran #${thread.application}`}
+                          {thread.applicant_name?.trim() ||
+                            `Pelamar · Lamaran #${thread.application}`}
                         </span>
                         {lastMsg && (
-                          <time className="text-[10px] text-muted-foreground shrink-0">
+                          <time className="text-[10px] text-muted-foreground shrink-0 tabular-nums">
                             {format(new Date(lastMsg.sent_at), "HH:mm", {
                               locale: id,
                             })}
                           </time>
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground truncate">
+                      {(thread.job_title?.trim() ||
+                        thread.interview_cohort_name?.trim()) && (
+                        <div className="flex flex-col gap-0.5 text-[11px] leading-snug text-muted-foreground">
+                          {thread.job_title?.trim() ? (
+                            <p className="truncate" title={thread.job_title}>
+                              <span className="text-muted-foreground/80">
+                                Lowongan:{" "}
+                              </span>
+                              <span className="font-medium text-foreground/90">
+                                {thread.job_title}
+                              </span>
+                            </p>
+                          ) : null}
+                          {thread.interview_cohort_name?.trim() ? (
+                            <p
+                              className="truncate"
+                              title={thread.interview_cohort_name}
+                            >
+                              <span className="text-muted-foreground/80">
+                                Sesi interview:{" "}
+                              </span>
+                              <span>{thread.interview_cohort_name}</span>
+                            </p>
+                          ) : null}
+                        </div>
+                      )}
+                      <p className="text-xs text-muted-foreground truncate pt-0.5">
                         {lastMsg ? lastMsg.body : "Belum ada pesan"}
                       </p>
                     </div>

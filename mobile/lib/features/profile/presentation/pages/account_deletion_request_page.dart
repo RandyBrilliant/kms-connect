@@ -629,8 +629,8 @@ class _AccountDeletionRequestPageState
         ),
       'APPROVED' => (
           'Permintaan Disetujui',
-          'Permintaan penghapusan akun Anda telah disetujui. Akun Anda akan '
-              'dihapus dalam waktu dekat.',
+          'Permintaan penghapusan akun Anda telah disetujui dan diproses. '
+              'Akses login Anda telah dinonaktifkan; Anda tidak dapat lagi menggunakan akun ini.',
           const Color(0xFFD1FAE5),
           const Color(0xFF065F46),
         ),

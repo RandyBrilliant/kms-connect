@@ -10,7 +10,6 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
-import type { QueryClient } from "@tanstack/react-query"
 import { useMutation, useQuery, useQueries, useQueryClient } from "@tanstack/react-query"
 import { format } from "date-fns"
 import { id as idLocale } from "date-fns/locale"
@@ -80,9 +79,9 @@ import {
 import { ApplicationStatusBadge } from "@/components/applications/application-status-badge"
 import { ApplicantAdminProcessDialog } from "@/components/applicants/applicant-admin-process-dialog"
 import { ApplicantDetailPreviewDialog } from "@/components/batches/applicant-detail-preview-dialog"
-import { DocumentCollectionProgressCell } from "@/components/applications/document-collection-progress-cell"
 import { TransitionApplicationDialog } from "@/components/applications/transition-application-dialog"
 import { CohortSelectField } from "@/components/interview-cohorts/cohort-select-field"
+import { CohortDiterimaPanel } from "@/components/interview-cohorts/cohort-diterima-panel"
 
 import {
   exportCohortExcel,
@@ -97,7 +96,6 @@ import {
   bulkTransitionApplications,
   getApplications,
 } from "@/api/applications"
-import { createBroadcast, sendBroadcast } from "@/api/notifications"
 import {
   APPLICATION_STATUS_LABELS,
   type ApplicationStatus,
@@ -106,6 +104,7 @@ import {
 import type { InterviewCohortAnnouncement } from "@/types/interview-cohort"
 
 import { joinAdminPath, useAdminDashboard } from "@/contexts/admin-dashboard-context"
+import { invalidateCohortDashboardCaches } from "@/lib/invalidate-cohort-caches"
 import { goBackOrDefault } from "@/lib/back-navigation"
 import { toast } from "@/lib/toast"
 import { usePageTitle } from "@/hooks/use-page-title"
@@ -113,32 +112,6 @@ import { usePageTitle } from "@/hooks/use-page-title"
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/**
- * After cohort applicant changes, refresh sesi tables, batch tahapan on the job,
- * and any admin application lists (job detail tabs use ["applications", { job, status }]).
- */
-function invalidateCohortDashboardCaches(
-  qc: QueryClient,
-  opts: {
-    cohortId: number
-    jobId: number
-    /** e.g. move-applicants target cohort */
-    extraCohortIds?: number[]
-  }
-) {
-  const cohortIds = new Set([
-    opts.cohortId,
-    ...(opts.extraCohortIds ?? []).filter((id) => id > 0),
-  ])
-  void qc.invalidateQueries({ queryKey: ["applications"] })
-  for (const cid of cohortIds) {
-    void qc.invalidateQueries({ queryKey: ["cohort-applications", cid] })
-    void qc.invalidateQueries({ queryKey: ["interview-cohort", cid] })
-  }
-  void qc.invalidateQueries({ queryKey: ["interview-cohorts"] })
-  void qc.invalidateQueries({ queryKey: ["batches", { job: opts.jobId }] })
-}
 
 function formatDate(value: string | null | undefined) {
   if (!value) return "-"
@@ -409,19 +382,31 @@ function CohortStatusTab({
   cohortId,
   jobId,
   batchBase,
-  lamaranBase,
   pelamarBase,
+  cohortBase,
   status,
   apps,
 }: {
   cohortId: number
   jobId: number
   batchBase: string
-  lamaranBase: string
   pelamarBase: string
+  cohortBase: string
   status: ApplicationStatus
   apps: JobApplication[]
 }) {
+  if (status === "DITERIMA") {
+    return (
+      <CohortDiterimaPanel
+        cohortId={cohortId}
+        jobId={jobId}
+        batchBase={batchBase}
+        pelamarBase={pelamarBase}
+        cohortBase={cohortBase}
+      />
+    )
+  }
+
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const [note, setNote] = useState("")
@@ -441,14 +426,10 @@ function CohortStatusTab({
   const [processUserLabel, setProcessUserLabel] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
   const [stageSearch, setStageSearch] = useState("")
-  const [announcementTitle, setAnnouncementTitle] = useState("")
-  const [announcementBody, setAnnouncementBody] = useState("")
-  const [confirmAnnouncementOpen, setConfirmAnnouncementOpen] = useState(false)
 
   const nextStatus = NEXT_FORWARD[status]
   const canReject = CAN_REJECT_FROM.includes(status)
   const needsPlacementDate = nextStatus === "SELESAI"
-  const enableAcceptedAnnouncement = status === "DITERIMA"
 
   const eligibleCount = apps.filter((a) => a.status === status).length
   const sortedApps = useMemo(
@@ -464,29 +445,6 @@ function CohortStatusTab({
     () => sortedApps.filter((a) => applicationMatchesStageSearch(a, stageSearch)),
     [sortedApps, stageSearch]
   )
-  const selectedRecipientIds = useMemo(() => {
-    if (!enableAcceptedAnnouncement) return []
-    const ids = new Set<number>()
-    for (const app of apps) {
-      if (!selected.has(app.id)) continue
-      if (typeof app.applicant_user === "number") ids.add(app.applicant_user)
-    }
-    return Array.from(ids)
-  }, [apps, selected, enableAcceptedAnnouncement])
-  const selectedRecipientNames = useMemo(() => {
-    if (!enableAcceptedAnnouncement) return []
-    const names: string[] = []
-    for (const app of apps) {
-      if (!selected.has(app.id)) continue
-      if (typeof app.applicant_user !== "number") continue
-      names.push(app.applicant_name)
-    }
-    return names
-  }, [apps, selected, enableAcceptedAnnouncement])
-  const canSendAcceptedAnnouncement =
-    selectedRecipientIds.length > 0 &&
-    announcementTitle.trim().length > 0 &&
-    announcementBody.trim().length > 0
   const pageCount = Math.max(1, Math.ceil(filteredApps.length / COHORT_TAB_PAGE_SIZE))
   const safePage = Math.min(currentPage, pageCount)
   const pageStart = (safePage - 1) * COHORT_TAB_PAGE_SIZE
@@ -611,110 +569,9 @@ function CohortStatusTab({
   }
 
   const showMoveColumn = apps.length > 0
-  const showDocProgressCol = status === "DITERIMA"
-  const sendAnnouncementMutation = useMutation({
-    mutationFn: async () => {
-      const created = await createBroadcast({
-        title: announcementTitle.trim(),
-        message: announcementBody.trim(),
-        notification_type: "BROADCAST",
-        priority: "NORMAL",
-        recipient_config: {
-          selection_type: "users",
-          user_ids: selectedRecipientIds,
-        },
-        send_email: false,
-        send_in_app: true,
-        send_push: true,
-      })
-      return sendBroadcast(created.id)
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["broadcasts"] })
-      toast.success(
-        "Pengumuman dikirim",
-        `Pengumuman dikirim ke ${selectedRecipientIds.length} pelamar terpilih.`
-      )
-      setConfirmAnnouncementOpen(false)
-      setAnnouncementTitle("")
-      setAnnouncementBody("")
-      setSelected(new Set())
-    },
-    onError: (e: unknown) => {
-      const ax = e as { response?: { data?: { detail?: string } } }
-      toast.error(
-        "Gagal mengirim pengumuman",
-        ax.response?.data?.detail ?? "Coba lagi nanti."
-      )
-    },
-  })
 
   return (
     <div className="flex flex-col gap-4">
-      {enableAcceptedAnnouncement && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Pengumuman Tahap Diterima</CardTitle>
-            <CardDescription>
-              Gunakan centang pada tabel untuk memilih penerima, lalu kirim pengumuman
-              hanya ke pelamar yang dipilih.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="space-y-1.5 md:col-span-2">
-                <Label htmlFor="cohort-accepted-announcement-title">Judul</Label>
-                <Input
-                  id="cohort-accepted-announcement-title"
-                  value={announcementTitle}
-                  onChange={(e) => setAnnouncementTitle(e.target.value)}
-                  placeholder="Contoh: Pengumpulan dokumen tahap diterima"
-                  maxLength={200}
-                />
-              </div>
-              <div className="space-y-1.5 md:col-span-2">
-                <Label htmlFor="cohort-accepted-announcement-body">Isi pengumuman</Label>
-                <Textarea
-                  id="cohort-accepted-announcement-body"
-                  value={announcementBody}
-                  onChange={(e) => setAnnouncementBody(e.target.value)}
-                  rows={4}
-                  maxLength={3000}
-                  placeholder="Tulis isi pengumuman untuk pelamar terpilih..."
-                />
-              </div>
-            </div>
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <span className="text-xs text-muted-foreground">
-                {selectedRecipientIds.length} pelamar terpilih
-              </span>
-              <Button
-                type="button"
-                size="sm"
-                className="cursor-pointer"
-                disabled={
-                  !canSendAcceptedAnnouncement || sendAnnouncementMutation.isPending
-                }
-                onClick={() => setConfirmAnnouncementOpen(true)}
-              >
-                {sendAnnouncementMutation.isPending ? "Mengirim..." : "Kirim Pengumuman"}
-              </Button>
-            </div>
-            {selectedRecipientNames.length > 0 && (
-              <div className="rounded-md border bg-muted/30 p-3">
-                <p className="mb-1 text-xs font-medium text-foreground">Preview penerima:</p>
-                <p className="text-xs text-muted-foreground">
-                  {selectedRecipientNames.slice(0, 8).join(", ")}
-                  {selectedRecipientNames.length > 8
-                    ? `, dan ${selectedRecipientNames.length - 8} pelamar lainnya`
-                    : ""}
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
       {showMoveColumn && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 p-3">
           <Button
@@ -930,16 +787,11 @@ function CohortStatusTab({
               <TableHead className="whitespace-nowrap">
                 {status === "INTERVIEW"
                   ? "Konfirmasi kehadiran"
-                  : status === "DITERIMA"
-                    ? "Konfirmasi dokumen"
-                    : status === "CADANGAN"
-                      ? "Konfirmasi interview"
-                      : "Konfirmasi"}
+                  : status === "CADANGAN"
+                    ? "Konfirmasi interview"
+                    : "Konfirmasi"}
               </TableHead>
               <TableHead className="whitespace-nowrap">Tanggal konfirmasi</TableHead>
-              {showDocProgressCol && (
-                <TableHead className="min-w-[11rem]">Pengumpulan Dokumen</TableHead>
-              )}
               <TableHead className="text-right sticky right-0 bg-background z-10">
                 Aksi
               </TableHead>
@@ -1019,14 +871,6 @@ function CohortStatusTab({
                       ? "—"
                       : formatDate(konfirmasi.waktuIso)}
                   </TableCell>
-                  {showDocProgressCol && (
-                    <TableCell
-                      className="text-sm align-top"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <DocumentCollectionProgressCell app={app} />
-                    </TableCell>
-                  )}
                   <TableCell
                     className="text-right sticky right-0 bg-background"
                     onClick={(e) => e.stopPropagation()}
@@ -1056,17 +900,6 @@ function CohortStatusTab({
                       >
                         <IconEye className="size-4" />
                         <span className="sr-only">Lihat detail pelamar</span>
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="size-8 shrink-0 cursor-pointer text-muted-foreground"
-                        title="Buka halaman lamaran"
-                        onClick={() => navigate(`${lamaranBase}/${app.id}`)}
-                      >
-                        <IconExternalLink className="size-4" />
-                        <span className="sr-only">Buka halaman lamaran</span>
                       </Button>
                       <Button
                         type="button"
@@ -1107,15 +940,7 @@ function CohortStatusTab({
             ) : (
               <TableRow>
                 <TableCell
-                  colSpan={
-                    showMoveColumn
-                      ? showDocProgressCol
-                        ? 9
-                        : 8
-                      : showDocProgressCol
-                        ? 8
-                        : 7
-                  }
+                  colSpan={showMoveColumn ? 8 : 7}
                   className="h-20 text-center text-muted-foreground"
                 >
                   Tidak ada pelamar di tahap ini.
@@ -1217,53 +1042,6 @@ function CohortStatusTab({
               onClick={() => confirmTarget && runBulk(confirmTarget)}
             >
               {isSubmitting ? "Memproses..." : "Konfirmasi"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={confirmAnnouncementOpen}
-        onOpenChange={setConfirmAnnouncementOpen}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Kirim pengumuman ke pelamar terpilih?</DialogTitle>
-            <DialogDescription>
-              Pengumuman akan dikirim ke{" "}
-              <span className="font-medium text-foreground">
-                {selectedRecipientIds.length}
-              </span>{" "}
-              pelamar pada tahap Diterima di sesi ini.
-            </DialogDescription>
-          </DialogHeader>
-          {selectedRecipientNames.length > 0 && (
-            <p className="text-xs text-muted-foreground">
-              {selectedRecipientNames.slice(0, 10).join(", ")}
-              {selectedRecipientNames.length > 10
-                ? `, dan ${selectedRecipientNames.length - 10} lainnya`
-                : ""}
-            </p>
-          )}
-          <DialogFooter>
-            <Button
-              variant="outline"
-              className="cursor-pointer"
-              disabled={sendAnnouncementMutation.isPending}
-              onClick={() => setConfirmAnnouncementOpen(false)}
-            >
-              Batal
-            </Button>
-            <Button
-              className="cursor-pointer"
-              disabled={
-                !canSendAcceptedAnnouncement || sendAnnouncementMutation.isPending
-              }
-              onClick={() => sendAnnouncementMutation.mutate()}
-            >
-              {sendAnnouncementMutation.isPending
-                ? "Mengirim..."
-                : "Ya, Kirim Pengumuman"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1426,15 +1204,18 @@ export function AdminInterviewCohortDetailPage() {
   const applicationsQuery = useQuery({
     queryKey: ["cohort-applications", cohortId, activeStatusTab],
     queryFn: () => getAllApplicationsByCohortAndStatus(cohortId, activeStatusTab),
-    enabled: Number.isFinite(cohortId) && cohortId > 0,
+    enabled:
+      Number.isFinite(cohortId) &&
+      cohortId > 0 &&
+      activeStatusTab !== "DITERIMA",
   })
 
   usePageTitle(cohortQuery.data ? cohortQuery.data.name : "Detail Sesi Interview")
 
-  const activeTabApps = useMemo(
-    () => applicationsQuery.data ?? [],
-    [applicationsQuery.data]
-  )
+  const activeTabApps = useMemo(() => {
+    if (activeStatusTab === "DITERIMA") return []
+    return applicationsQuery.data ?? []
+  }, [activeStatusTab, applicationsQuery.data])
   const statusCountQueries = useQueries({
     queries: COHORT_STATUS_TABS.map((t) => ({
       queryKey: ["applications", "count", { interview_cohort: cohortId, status: t.value }],
@@ -1503,7 +1284,10 @@ export function AdminInterviewCohortDetailPage() {
     onError: () => toast.error("Gagal memperbarui status sesi."),
   })
 
-  if (cohortQuery.isLoading || applicationsQuery.isLoading) {
+  if (
+    cohortQuery.isLoading ||
+    (activeStatusTab !== "DITERIMA" && applicationsQuery.isLoading)
+  ) {
     return (
       <div className="flex items-center justify-center py-24">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -1530,8 +1314,8 @@ export function AdminInterviewCohortDetailPage() {
   const cohort = cohortQuery.data
   const jobsBase = joinAdminPath(basePath, "/lowongan-kerja")
   const batchBase = joinAdminPath(basePath, "/batch")
-  const lamaranBase = joinAdminPath(basePath, "/lamaran")
   const pelamarBase = joinAdminPath(basePath, "/pelamar")
+  const cohortBase = joinAdminPath(basePath, "/sesi-interview")
 
   return (
     <div className="flex flex-col gap-6 px-6 py-6 md:px-8 md:py-8">
@@ -1729,8 +1513,8 @@ export function AdminInterviewCohortDetailPage() {
               cohortId={cohort.id}
               jobId={cohort.job}
               batchBase={batchBase}
-              lamaranBase={lamaranBase}
               pelamarBase={pelamarBase}
+              cohortBase={cohortBase}
               status={t.value}
               apps={appsByStatus[t.value]}
             />

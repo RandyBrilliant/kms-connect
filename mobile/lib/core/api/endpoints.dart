@@ -45,6 +45,10 @@ class ApiEndpoints {
   static const String changePassword =
       '$baseUrl/applicants/me/change-password/';
   static const String myBiodataPdf = '$baseUrl/applicants/me/biodata-pdf/';
+  static const String myPsychologyReferralPdf =
+      '$baseUrl/applicants/me/psychology-referral-pdf/';
+  static const String myMedicalReferralPdf =
+      '$baseUrl/applicants/me/medical-referral-pdf/';
 
   // Account Deletion
   static const String myDeletionRequest = '$baseUrl/deletion-requests/my/';

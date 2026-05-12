@@ -27,6 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { StaffReferralLamaranProgress } from "@/components/staff/staff-referral-lamaran-progress"
 import { useStaffReferredApplicantsQuery } from "@/hooks/use-staff-self-service-query"
 import { usePageTitle } from "@/hooks/use-page-title"
 
@@ -37,8 +38,6 @@ function formatDate(value: string | null | undefined) {
 
 function verificationStatusLabel(status: string) {
   switch (status) {
-    case "DRAFT":
-      return "Draf"
     case "SUBMITTED":
       return "Dikirim"
     case "ACCEPTED":
@@ -52,8 +51,6 @@ function verificationStatusLabel(status: string) {
 
 function verificationStatusVariant(status: string) {
   switch (status) {
-    case "DRAFT":
-      return "outline"
     case "SUBMITTED":
       return "secondary"
     case "ACCEPTED":
@@ -125,7 +122,6 @@ export function StaffReferredApplicantsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Semua Status</SelectItem>
-                <SelectItem value="DRAFT">Draf</SelectItem>
                 <SelectItem value="SUBMITTED">Dikirim</SelectItem>
                 <SelectItem value="ACCEPTED">Diterima</SelectItem>
                 <SelectItem value="REJECTED">Ditolak</SelectItem>
@@ -160,7 +156,7 @@ export function StaffReferredApplicantsPage() {
                   <TableBody>
                     {data.results.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center">
+                        <TableCell colSpan={7} className="text-center">
                           <p className="text-muted-foreground text-sm">
                             Tidak ada pelamar ditemukan.
                           </p>
@@ -195,31 +191,10 @@ export function StaffReferredApplicantsPage() {
                               )}
                               {!profile?.verification_status && <Badge variant="outline">-</Badge>}
                             </TableCell>
-                            <TableCell>
-                              {Array.isArray((applicant as any).applications_summary) &&
-                              (applicant as any).applications_summary.length > 0 ? (
-                                (() => {
-                                  const appSum = (applicant as any).applications_summary[0]
-                                  const jobTitle = appSum.job_title as string | undefined
-                                  const batchName = appSum.batch_name as string | undefined
-                                  const statusLabel = appSum.status_label as string | undefined
-                                  return (
-                                    <div className="flex flex-col text-xs">
-                                      <span className="font-medium">
-                                        {statusLabel || appSum.status || "-"}
-                                      </span>
-                                      <span className="text-muted-foreground">
-                                        {jobTitle || "Tanpa lowongan"}
-                                        {batchName ? ` · ${batchName}` : ""}
-                                      </span>
-                                    </div>
-                                  )
-                                })()
-                              ) : (
-                                <span className="text-xs text-muted-foreground">
-                                  Belum ada lamaran
-                                </span>
-                              )}
+                            <TableCell className="align-top">
+                              <StaffReferralLamaranProgress
+                                applicationsSummary={applicant.applications_summary}
+                              />
                             </TableCell>
                             <TableCell>
                               <span className="text-sm">{formatDate(applicant.date_joined)}</span>

@@ -205,6 +205,49 @@ class ProfileRepository {
     }
   }
 
+  /// Surat Pengantar Tes Psikologi — same flow as biodata PDF (requires DITERIMA lamaran).
+  Future<void> downloadAndOpenPsychologyReferralPdf() async {
+    final response = await _apiClient.dio.get<List<int>>(
+      ApiEndpoints.myPsychologyReferralPdf,
+      options: Options(responseType: ResponseType.bytes),
+    );
+
+    final bytes = response.data;
+    if (bytes == null || bytes.isEmpty) {
+      throw Exception('Server mengembalikan file kosong.');
+    }
+
+    final tmpDir = await getTemporaryDirectory();
+    final file = File('${tmpDir.path}/pengantar_psikologi_cpmi.pdf');
+    await file.writeAsBytes(bytes, flush: true);
+
+    final result = await OpenFilex.open(file.path, type: 'application/pdf');
+    if (result.type != ResultType.done) {
+      throw Exception('Tidak dapat membuka PDF: ${result.message}');
+    }
+  }
+
+  Future<void> downloadAndOpenMedicalReferralPdf() async {
+    final response = await _apiClient.dio.get<List<int>>(
+      ApiEndpoints.myMedicalReferralPdf,
+      options: Options(responseType: ResponseType.bytes),
+    );
+
+    final bytes = response.data;
+    if (bytes == null || bytes.isEmpty) {
+      throw Exception('Server mengembalikan file kosong.');
+    }
+
+    final tmpDir = await getTemporaryDirectory();
+    final file = File('${tmpDir.path}/pengantar_medical_cpmi.pdf');
+    await file.writeAsBytes(bytes, flush: true);
+
+    final result = await OpenFilex.open(file.path, type: 'application/pdf');
+    if (result.type != ResultType.done) {
+      throw Exception('Tidak dapat membuka PDF: ${result.message}');
+    }
+  }
+
   /// Get the current user's deletion request (if any)
   Future<AccountDeletionRequest?> getMyDeletionRequest() async {
     try {
