@@ -458,6 +458,7 @@ class ApplicantUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
         - email_verified: filter by email verification status
         - applicant_profile__verification_status: filter by verification status
         - referrer: filter by staff/admin referrer user id (same as list)
+        - referrer_isnull=true: pelamar tanpa staff rujukan (daftar mandiri)
         - ordering: sort order (default: -applicant_profile__created_at)
         
         Returns Excel file (.xlsx) with all matching applicants.
