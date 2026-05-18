@@ -339,7 +339,7 @@ class ProfileRepository {
         final key = e.key.toString();
         final v = e.value;
         if (v is List && v.isNotEmpty) {
-          return '$key: ${v.first}';
+          return v.first.toString();
         }
         if (v is Map) {
           final nested = _firstValidationMessage(v);
@@ -353,7 +353,50 @@ class ProfileRepository {
     return null;
   }
 
+  /// User-facing message for profile save/load failures (toast / inline error).
+  static String userFacingMessage(Object error, {String fallback = 'Gagal menyimpan profil'}) {
+    if (error is DioException) {
+      final msg = error.message?.trim();
+      if (msg != null &&
+          msg.isNotEmpty &&
+          !msg.toLowerCase().contains('dioexception')) {
+        return msg;
+      }
+      final data = error.response?.data;
+      if (data is Map) {
+        final raw = Map<String, dynamic>.from(data);
+        final specific = _firstValidationMessage(raw['errors']);
+        if (specific != null && specific.isNotEmpty) return specific;
+        final detail = raw['detail'] as String?;
+        if (detail != null &&
+            detail.isNotEmpty &&
+            detail.toLowerCase() != 'validation error') {
+          return detail;
+        }
+      }
+      final code = error.response?.statusCode;
+      if (code != null && code >= 500) {
+        return 'Gagal menyimpan profil. Periksa kembali data paspor dan field wajib lainnya.';
+      }
+    }
+    final raw = error.toString();
+    if (raw.contains('passport_expiry_after_issue') ||
+        raw.contains('passport_expiry_date')) {
+      return 'Tanggal berakhir paspor harus setelah tanggal terbit paspor.';
+    }
+    return fallback;
+  }
+
   DioException _handleError(DioException error) {
+    final message = userFacingMessage(error, fallback: error.message ?? 'Terjadi kesalahan');
+    if (message != error.message) {
+      return DioException(
+        requestOptions: error.requestOptions,
+        response: error.response,
+        type: error.type,
+        message: message,
+      );
+    }
     if (error.response != null) {
       final data = error.response!.data;
       if (data is Map) {

@@ -4,8 +4,10 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../config/colors.dart';
+import '../../../../core/widgets/custom_toast.dart';
 import '../../../../core/widgets/professional/professional_button.dart';
 import '../../../../core/widgets/professional/professional_gradient_background.dart';
+import '../../../auth/data/providers/auth_provider.dart';
 import '../../data/providers/profile_provider.dart';
 import '../../domain/profile_completion.dart';
 
@@ -61,6 +63,8 @@ class ProfileCompletePage extends ConsumerStatefulWidget {
 }
 
 class _ProfileCompletePageState extends ConsumerState<ProfileCompletePage> {
+  bool _isSendingVerification = false;
+
   @override
   void initState() {
     super.initState();
@@ -69,15 +73,47 @@ class _ProfileCompletePageState extends ConsumerState<ProfileCompletePage> {
     });
   }
 
+  Future<void> _proceedToEmailVerification() async {
+    final email = ref.read(authStateProvider).user?.email;
+    if (email == null) return;
+
+    setState(() => _isSendingVerification = true);
+    final ok = await ref
+        .read(authStateProvider.notifier)
+        .resendVerificationEmail(email);
+    if (!mounted) return;
+    setState(() => _isSendingVerification = false);
+
+    if (!ok) {
+      CustomToast.show(
+        context,
+        message: 'Gagal mengirim kode verifikasi. Silakan coba lagi.',
+        type: ToastType.error,
+      );
+      return;
+    }
+
+    CustomToast.show(
+      context,
+      message: 'Kode verifikasi telah dikirim ke email Anda.',
+      type: ToastType.success,
+    );
+    context.go('/email-verification?email=${Uri.encodeComponent(email)}');
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final profileState = ref.watch(profileNotifierProvider);
+    final authUser = ref.watch(authStateProvider).user;
 
     ref.listen<ProfileState>(profileNotifierProvider, (prev, next) {
       final p = next.profile;
       if (p == null) return;
-      if (!shouldBlockForIncompleteProfile(p) && mounted) {
+      if (shouldBlockForIncompleteProfile(p)) return;
+      if (!mounted) return;
+      final verified = ref.read(authStateProvider).user?.emailVerified ?? false;
+      if (verified) {
         context.go('/home');
       }
     });
@@ -85,6 +121,8 @@ class _ProfileCompletePageState extends ConsumerState<ProfileCompletePage> {
     final profile = profileState.profile;
     final report =
         profile != null ? evaluateProfileCompletion(profile) : null;
+    final profileComplete = report?.isFullyComplete ?? false;
+    final needsEmailVerification = authUser != null && !authUser.emailVerified;
 
     return Scaffold(
       body: ProfessionalGradientBackground(
@@ -102,7 +140,9 @@ class _ProfileCompletePageState extends ConsumerState<ProfileCompletePage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Lengkapi profil Anda',
+                            profileComplete && needsEmailVerification
+                                ? 'Profil lengkap'
+                                : 'Lengkapi profil Anda',
                             style: GoogleFonts.plusJakartaSans(
                               fontSize: 26,
                               fontWeight: FontWeight.w800,
@@ -112,8 +152,10 @@ class _ProfileCompletePageState extends ConsumerState<ProfileCompletePage> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Isi seluruh bagian biodata di halaman edit profil. '
-                            'Progress di bawah membantu melihat bagian yang masih kurang.',
+                            profileComplete && needsEmailVerification
+                                ? 'Biodata sudah lengkap. Lanjutkan ke verifikasi email untuk mengaktifkan akun.'
+                                : 'Isi seluruh bagian biodata di halaman edit profil. '
+                                    'Progress di bawah membantu melihat bagian yang masih kurang.',
                             style: GoogleFonts.plusJakartaSans(
                               fontSize: 14,
                               fontWeight: FontWeight.w500,
@@ -207,30 +249,40 @@ class _ProfileCompletePageState extends ConsumerState<ProfileCompletePage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          ProfessionalButton(
-                            label: 'Buka edit profil',
-                            icon: Icons.edit_note_rounded,
-                            onPressed: () async {
-                              await context.push('/profile/edit');
-                              if (!mounted) return;
-                              await ref
-                                  .read(profileNotifierProvider.notifier)
-                                  .loadProfile(force: true);
-                            },
-                          ),
-                          const SizedBox(height: 12),
-                          TextButton(
-                            onPressed: () => context.go('/home'),
-                            child: Text(
-                              'Lewati dulu (ke beranda)',
-                              style: GoogleFonts.plusJakartaSans(
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                                decoration: TextDecoration.underline,
-                                decorationColor: Colors.white,
-                              ),
+                          if (!profileComplete)
+                            ProfessionalButton(
+                              label: 'Buka edit profil',
+                              icon: Icons.edit_note_rounded,
+                              onPressed: () async {
+                                await context.push('/profile/edit');
+                                if (!mounted) return;
+                                await ref
+                                    .read(profileNotifierProvider.notifier)
+                                    .loadProfile(force: true);
+                              },
                             ),
-                          ),
+                          if (profileComplete && needsEmailVerification) ...[
+                            ProfessionalButton(
+                              label: 'Lanjut ke verifikasi email',
+                              icon: Icons.mark_email_read_outlined,
+                              isLoading: _isSendingVerification,
+                              onPressed: _isSendingVerification
+                                  ? null
+                                  : _proceedToEmailVerification,
+                            ),
+                            const SizedBox(height: 12),
+                            ProfessionalOutlinedButton(
+                              label: 'Periksa profil',
+                              icon: Icons.edit_note_rounded,
+                              onPressed: () async {
+                                await context.push('/profile/edit');
+                                if (!mounted) return;
+                                await ref
+                                    .read(profileNotifierProvider.notifier)
+                                    .loadProfile(force: true);
+                              },
+                            ),
+                          ],
                         ],
                       ),
                     ),

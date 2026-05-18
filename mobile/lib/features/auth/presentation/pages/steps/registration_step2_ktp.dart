@@ -20,11 +20,13 @@ import '../../../../../core/widgets/ktp_gallery_crop_screen.dart';
 import '../../../../../core/widgets/professional_text_field.dart';
 import '../../../../../core/widgets/professional_dropdown_field.dart';
 import '../../../../../core/widgets/professional/professional_button.dart';
+import '../../../data/providers/auth_provider.dart';
 import '../../../domain/models/ktp_data.dart';
+import '../../../../notifications/data/services/notification_service.dart';
+import '../../../../profile/data/providers/profile_provider.dart';
 import '../../providers/registration_provider.dart';
 
-/// Step 2 of registration: upload KTP photo; OCR fills **NIK only**,
-/// user enters nama, tempat/tanggal lahir manually, then submit.
+/// Step 2 of registration: upload KTP photo and enter identity fields manually.
 ///
 /// Performance note: [ProfessionalTextField] derives styles from [Theme].
 class RegistrationStep2Ktp extends ConsumerStatefulWidget {
@@ -149,7 +151,8 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
       setState(() => _isPickingImage = false);
       _clearFields();
       ref.read(registrationProvider.notifier).setKtpImage(persistentFile);
-      await _runOcr();
+      // OCR disabled — user fills all fields manually.
+      // await _runOcr();
     } on PlatformException catch (e) {
       if (!mounted) return;
       CustomToast.show(context,
@@ -229,32 +232,32 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
     }
   }
 
-  //  OCR 
-
-  Future<void> _runOcr() async {
-    try {
-      await ref.read(registrationProvider.notifier).processOcr();
-      if (!mounted) return;
-      final data = ref.read(registrationProvider).ktpData;
-      if (data != null && data.hasData) {
-        _populateFields(data);
-        CustomToast.show(context,
-            message:
-                'NIK terisi dari foto KTP. Isi nama, tempat lahir, dan tanggal lahir sesuai KTP.',
-            type: ToastType.success);
-      } else {
-        CustomToast.show(context,
-            message:
-                'OCR selesai, tapi tidak ada data terdeteksi. Silakan isi manual.',
-            type: ToastType.info);
-      }
-    } catch (e) {
-      if (!mounted) return;
-      CustomToast.show(context,
-          message: 'Gagal memproses OCR: ${_extractMessage(e)}',
-          type: ToastType.error);
-    }
-  }
+  // OCR disabled for registration — re-enable by uncommenting _runOcr() after upload.
+  //
+  // Future<void> _runOcr() async {
+  //   try {
+  //     await ref.read(registrationProvider.notifier).processOcr();
+  //     if (!mounted) return;
+  //     final data = ref.read(registrationProvider).ktpData;
+  //     if (data != null && data.hasData) {
+  //       _populateFields(data);
+  //       CustomToast.show(context,
+  //           message:
+  //               'NIK terisi dari foto KTP. Isi nama, tempat lahir, dan tanggal lahir sesuai KTP.',
+  //           type: ToastType.success);
+  //     } else {
+  //       CustomToast.show(context,
+  //           message:
+  //               'OCR selesai, tapi tidak ada data terdeteksi. Silakan isi manual.',
+  //           type: ToastType.info);
+  //     }
+  //   } catch (e) {
+  //     if (!mounted) return;
+  //     CustomToast.show(context,
+  //         message: 'Gagal memproses OCR: ${_extractMessage(e)}',
+  //         type: ToastType.error);
+  //   }
+  // }
 
   void _populateFields(KtpData data) {
     setState(() {
@@ -436,23 +439,27 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
           dataDeclarationConfirmed: _dataDeclarationChecked,
         );
 
-    final email = ref.read(registrationProvider).email;
-
     try {
       setState(() => _isRegistering = true);
 
-      await ref
+      final authResponse = await ref
           .read(registrationProvider.notifier)
           .completeRegistration();
 
       if (!mounted) return;
 
+      ref
+          .read(authStateProvider.notifier)
+          .setAuthenticatedUser(authResponse.user);
+      NotificationService().registerToken();
+      await ref
+          .read(profileNotifierProvider.notifier)
+          .loadProfile(force: true);
+
       ref.read(registrationProvider.notifier).reset();
 
-      // Email registration — do NOT set authenticated user yet.
-      // Auth tokens are stored; the user must verify email first.
-      if (mounted && email != null) {
-        context.go('/email-verification?email=${Uri.encodeComponent(email)}');
+      if (mounted) {
+        context.go('/profile/complete');
       }
     } catch (e) {
       if (!mounted) return;
@@ -467,7 +474,7 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
 
   @override
   Widget build(BuildContext context) {
-    // Registration wizard state (OCR + credentials).
+    // Registration wizard state.
     final state = ref.watch(registrationProvider);
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
@@ -511,12 +518,6 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
             onTap: _isPickingImage ? null : _showImageSourceSheet,
           ),
 
-          //  OCR progress banner 
-          if (state.isProcessing && !_isRegistering) ...[
-            const SizedBox(height: 12),
-            _OcrProgressBanner(),
-          ],
-
           const SizedBox(height: 24),
 
           // Data fields section
@@ -531,7 +532,7 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Hanya NIK yang diisi otomatis dari foto; lengkapi nama, tempat lahir, dan tanggal lahir sesuai KTP.',
+            'Lengkapi NIK, nama, tempat lahir, dan tanggal lahir sesuai KTP.',
             style: GoogleFonts.plusJakartaSans(
               fontSize: 14,
               fontWeight: FontWeight.w500,
@@ -819,37 +820,6 @@ class _KtpPlaceholder extends StatelessWidget {
   }
 }
 
-//  OCR progress banner 
-
-class _OcrProgressBanner extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: cs.tertiaryContainer,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 18,
-            height: 18,
-            child: CircularProgressIndicator(
-                strokeWidth: 2, color: cs.onTertiaryContainer),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            'Memindai NIK dari foto KTP...',
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: cs.onTertiaryContainer,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+// OCR progress banner — kept for when OCR is re-enabled.
+//
+// class _OcrProgressBanner extends StatelessWidget { ... }

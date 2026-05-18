@@ -150,16 +150,8 @@ class CookieTokenObtainPairView(APIView):
         data = serializer.validated_data
         user = serializer.user
 
-        # Block login for users who have not verified their email.
-        if not user.email_verified:
-            return Response(
-                error_response(
-                    detail=ApiMessage.EMAIL_NOT_VERIFIED,
-                    code=ApiCode.EMAIL_NOT_VERIFIED,
-                    status_code=status.HTTP_403_FORBIDDEN,
-                ),
-                status=status.HTTP_403_FORBIDDEN,
-            )
+        # Allow login before email verification so applicants can resume
+        # profile completion; mobile gates home until profile + OTP are done.
 
         access = data["access"]
         refresh = data["refresh"]

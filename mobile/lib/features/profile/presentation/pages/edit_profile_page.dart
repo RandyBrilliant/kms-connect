@@ -538,22 +538,63 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     return _missingRequiredFields.contains(fieldLabel) ? 'Wajib diisi' : null;
   }
 
+  String? _passportDateValidationMessage() {
+    if (_hasPassport != true) return null;
+    final issue = _pickedPassportIssueDate;
+    final expiry = _pickedPassportExpiryDate;
+    if (issue == null || expiry == null) return null;
+    if (!expiry.isAfter(issue)) {
+      return 'Tanggal berakhir paspor harus setelah tanggal terbit paspor.';
+    }
+    return null;
+  }
+
+  String? _passportExpiryValidator(String? _) {
+    final passportErr = _passportDateValidationMessage();
+    if (passportErr != null) return passportErr;
+    if (_missingRequiredFields.contains('Tanggal Berakhir Paspor') &&
+        _pickedPassportExpiryDate == null) {
+      return 'Wajib diisi';
+    }
+    return null;
+  }
+
   Future<void> _handleSave() async {
-    if (!(_formKey.currentState?.validate() ?? false)) return;
+    // Collect all missing fields first so every control can show an error,
+    // then run Form.validate() (phones, formats). Previously validate() ran
+    // first and stopped at the first phone error, so other fields never highlighted.
     final missing = _collectMissingRequiredFields();
-    if (missing.isNotEmpty) {
+    setState(() {
+      _missingRequiredFields
+        ..clear()
+        ..addAll(missing);
+    });
+
+    final passportDateError = _passportDateValidationMessage();
+    if (passportDateError != null) {
       setState(() {
-        _missingRequiredFields
-          ..clear()
-          ..addAll(missing);
+        _missingRequiredFields.add('Tanggal Berakhir Paspor');
       });
-      CustomToast.show(
-        context,
-        message: 'Lengkapi field wajib: ${missing.first}',
-        type: ToastType.error,
-      );
+    }
+
+    final formValid = _formKey.currentState?.validate() ?? false;
+
+    if (passportDateError != null) {
+      CustomToast.show(context, message: passportDateError, type: ToastType.error);
       return;
     }
+
+    if (missing.isNotEmpty || !formValid) {
+      if (missing.isNotEmpty) {
+        CustomToast.show(
+          context,
+          message: 'Lengkapi field wajib: ${missing.first}',
+          type: ToastType.error,
+        );
+      }
+      return;
+    }
+
     if (_missingRequiredFields.isNotEmpty) {
       setState(_missingRequiredFields.clear);
     }
@@ -924,6 +965,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     hint: 'Sesuai KTP',
                                     prefixIcon: Icons.location_city_outlined,
                                     upperCase: true,
+                                    requiredLabel: 'Tempat Lahir',
+                                    missingRequiredFields: _missingRequiredFields,
                                   ),
                                   const SizedBox(height: 14),
                                   M3TextField(
@@ -933,6 +976,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     prefixIcon: Icons.calendar_today_outlined,
                                     readOnly: true,
                                     onTap: _pickDate,
+                                    requiredLabel: 'Tanggal Lahir',
+                                    requiredDate: _pickedDate,
+                                    missingRequiredFields: _missingRequiredFields,
                                   ),
                                   const SizedBox(height: 14),
                                   _GenderSelector(
@@ -948,7 +994,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     controller: _phone,
                                     label: 'Nomor Telepon',
                                     hint: '812xxxxxxxx',
-                                    validator: validatePhoneNumber,
+                                    requiredLabel: 'Nomor Telepon',
+                                    missingRequiredFields: _missingRequiredFields,
                                   ),
                                   const SizedBox(height: 14),
                                   _DropdownField<String>(
@@ -1022,6 +1069,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     hint: 'Contoh: Teknik Mesin',
                                     prefixIcon: Icons.menu_book_outlined,
                                     upperCase: true,
+                                    requiredLabel: 'Jurusan',
+                                    missingRequiredFields: _missingRequiredFields,
                                   ),
                                   const SizedBox(height: 14),
                                   Row(
@@ -1037,6 +1086,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                             FilteringTextInputFormatter
                                                 .digitsOnly,
                                           ],
+                                          requiredLabel: 'Tinggi (cm)',
+                                          missingRequiredFields:
+                                              _missingRequiredFields,
                                         ),
                                       ),
                                       const SizedBox(width: 14),
@@ -1052,6 +1104,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                             FilteringTextInputFormatter
                                                 .digitsOnly,
                                           ],
+                                          requiredLabel: 'Berat (kg)',
+                                          missingRequiredFields:
+                                              _missingRequiredFields,
                                         ),
                                       ),
                                     ],
@@ -1103,6 +1158,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                             FilteringTextInputFormatter
                                                 .digitsOnly,
                                           ],
+                                          requiredLabel: 'Ukuran Sepatu',
+                                          missingRequiredFields:
+                                              _missingRequiredFields,
                                         ),
                                       ),
                                       const SizedBox(width: 14),
@@ -1145,6 +1203,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     prefixIcon: Icons.edit_road_outlined,
                                     maxLines: 2,
                                     upperCase: true,
+                                    requiredLabel: 'Alamat Lengkap',
+                                    missingRequiredFields: _missingRequiredFields,
                                   ),
                                   const SizedBox(height: 14),
                                   M3TextField(
@@ -1157,6 +1217,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     inputFormatters: [
                                       FilteringTextInputFormatter.digitsOnly,
                                     ],
+                                    requiredLabel: 'Kode Pos',
+                                    missingRequiredFields: _missingRequiredFields,
                                   ),
                                   const SizedBox(height: 14),
                                   // Province
@@ -1331,6 +1393,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     hint: 'Nomor KK',
                                     prefixIcon: Icons.credit_card_outlined,
                                     keyboardType: TextInputType.number,
+                                    requiredLabel: 'Nomor Kartu Keluarga',
+                                    missingRequiredFields: _missingRequiredFields,
                                   ),
                                   const SizedBox(height: 14),
                                   M3TextField(
@@ -1339,6 +1403,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     hint: 'Nomor ijazah terakhir',
                                     prefixIcon: Icons.school_outlined,
                                     upperCase: true,
+                                    requiredLabel: 'Nomor Ijazah',
+                                    missingRequiredFields: _missingRequiredFields,
                                   ),
                                   const SizedBox(height: 14),
                                   M3TextField(
@@ -1348,6 +1414,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     prefixIcon:
                                         Icons.health_and_safety_outlined,
                                     keyboardType: TextInputType.number,
+                                    requiredLabel: 'Nomor BPJS / KIS',
+                                    missingRequiredFields: _missingRequiredFields,
                                   ),
                                 ],
                               ),
@@ -1383,6 +1451,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                       prefixIcon:
                                           Icons.confirmation_number_outlined,
                                       upperCase: true,
+                                      requiredLabel: 'Nomor Paspor',
+                                      missingRequiredFields:
+                                          _missingRequiredFields,
                                     ),
                                     const SizedBox(height: 14),
                                     M3TextField(
@@ -1391,6 +1462,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                       hint: 'Contoh: Jakarta',
                                       prefixIcon: Icons.location_on_outlined,
                                       upperCase: true,
+                                      requiredLabel: 'Tempat Terbit Paspor',
+                                      missingRequiredFields:
+                                          _missingRequiredFields,
                                     ),
                                     const SizedBox(height: 14),
                                     M3TextField(
@@ -1399,6 +1473,10 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                       hint: 'Pilih tanggal',
                                       prefixIcon: Icons.calendar_today_outlined,
                                       readOnly: true,
+                                      requiredLabel: 'Tanggal Terbit Paspor',
+                                      requiredDate: _pickedPassportIssueDate,
+                                      missingRequiredFields:
+                                          _missingRequiredFields,
                                       onTap: () => _pickGenericDate(
                                         current: _pickedPassportIssueDate,
                                         firstDate: DateTime(2000),
@@ -1420,6 +1498,11 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                       hint: 'Pilih tanggal',
                                       prefixIcon: Icons.event_outlined,
                                       readOnly: true,
+                                      requiredLabel: 'Tanggal Berakhir Paspor',
+                                      requiredDate: _pickedPassportExpiryDate,
+                                      missingRequiredFields:
+                                          _missingRequiredFields,
+                                      validator: _passportExpiryValidator,
                                       onTap: () => _pickGenericDate(
                                         current: _pickedPassportExpiryDate,
                                         firstDate: DateTime.now(),
@@ -1460,6 +1543,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                             FilteringTextInputFormatter
                                                 .digitsOnly,
                                           ],
+                                          requiredLabel: 'Jumlah Saudara',
+                                          missingRequiredFields:
+                                              _missingRequiredFields,
                                         ),
                                       ),
                                       const SizedBox(width: 14),
@@ -1475,6 +1561,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                             FilteringTextInputFormatter
                                                 .digitsOnly,
                                           ],
+                                          requiredLabel: 'Anak ke-',
+                                          missingRequiredFields:
+                                              _missingRequiredFields,
                                         ),
                                       ),
                                     ],
@@ -1505,6 +1594,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     hint: 'Nama lengkap',
                                     prefixIcon: Icons.person_outline_rounded,
                                     upperCase: true,
+                                    requiredLabel: 'Nama Ayah',
+                                    missingRequiredFields: _missingRequiredFields,
                                   ),
                                   const SizedBox(height: 14),
                                   M3TextField(
@@ -1513,6 +1604,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     hint: 'Pilih tanggal',
                                     prefixIcon: Icons.calendar_today_outlined,
                                     readOnly: true,
+                                    requiredLabel: 'Tanggal Lahir Ayah',
+                                    requiredDate: _pickedFatherBirthDate,
+                                    missingRequiredFields: _missingRequiredFields,
                                     onTap: () => _pickFamilyMemberDate(
                                       controller: _fatherBirthDateCtrl,
                                       current: _pickedFatherBirthDate,
@@ -1528,15 +1622,17 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     hint: 'Contoh: Wiraswasta',
                                     prefixIcon: Icons.work_outline_rounded,
                                     upperCase: true,
+                                    requiredLabel: 'Pekerjaan Ayah',
+                                    missingRequiredFields: _missingRequiredFields,
                                   ),
                                   const SizedBox(height: 14),
                                   PhoneInputField(
                                     controller: _fatherPhone,
                                     label: 'No. Telepon Ayah',
                                     hint: '812xxxxxxxx',
-                                    validator: (v) => _fatherAlmarhum
-                                        ? null
-                                        : validatePhoneNumber(v),
+                                    requiredLabel: 'No. Telepon Ayah',
+                                    missingRequiredFields: _missingRequiredFields,
+                                    skipRequired: _fatherAlmarhum,
                                   ),
                                   const SizedBox(height: 18),
                                   _SubLabel('Ibu'),
@@ -1564,6 +1660,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     hint: 'Nama lengkap',
                                     prefixIcon: Icons.person_outline_rounded,
                                     upperCase: true,
+                                    requiredLabel: 'Nama Ibu',
+                                    missingRequiredFields: _missingRequiredFields,
                                   ),
                                   const SizedBox(height: 14),
                                   M3TextField(
@@ -1572,6 +1670,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     hint: 'Pilih tanggal',
                                     prefixIcon: Icons.calendar_today_outlined,
                                     readOnly: true,
+                                    requiredLabel: 'Tanggal Lahir Ibu',
+                                    requiredDate: _pickedMotherBirthDate,
+                                    missingRequiredFields: _missingRequiredFields,
                                     onTap: () => _pickFamilyMemberDate(
                                       controller: _motherBirthDateCtrl,
                                       current: _pickedMotherBirthDate,
@@ -1587,15 +1688,17 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     hint: 'Contoh: Ibu Rumah Tangga',
                                     prefixIcon: Icons.work_outline_rounded,
                                     upperCase: true,
+                                    requiredLabel: 'Pekerjaan Ibu',
+                                    missingRequiredFields: _missingRequiredFields,
                                   ),
                                   const SizedBox(height: 14),
                                   PhoneInputField(
                                     controller: _motherPhone,
                                     label: 'No. Telepon Ibu',
                                     hint: '812xxxxxxxx',
-                                    validator: (v) => _motherAlmarhum
-                                        ? null
-                                        : validatePhoneNumber(v),
+                                    requiredLabel: 'No. Telepon Ibu',
+                                    missingRequiredFields: _missingRequiredFields,
+                                    skipRequired: _motherAlmarhum,
                                   ),
                                   const SizedBox(height: 14),
                                   M3TextField(
@@ -1605,6 +1708,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     prefixIcon: Icons.home_outlined,
                                     maxLines: 2,
                                     upperCase: true,
+                                    requiredLabel: 'Alamat Orang Tua / Keluarga',
+                                    missingRequiredFields: _missingRequiredFields,
                                   ),
                                   const SizedBox(height: 14),
                                   M3TextField(
@@ -1617,6 +1722,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     inputFormatters: [
                                       FilteringTextInputFormatter.digitsOnly,
                                     ],
+                                    requiredLabel: 'Kode Pos Orang Tua / Keluarga',
+                                    missingRequiredFields: _missingRequiredFields,
                                   ),
                                   const SizedBox(height: 14),
                                   // ── Family address region pickers ──
@@ -1853,6 +1960,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     hint: 'Nama lengkap',
                                     prefixIcon: Icons.person_outline_rounded,
                                     upperCase: true,
+                                    requiredLabel: 'Nama Ahli Waris',
+                                    missingRequiredFields: _missingRequiredFields,
                                   ),
                                   const SizedBox(height: 14),
                                   _HeirRelationshipSelector(
@@ -1868,7 +1977,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                     controller: _heirContactPhone,
                                     label: 'No. Telepon Ahli Waris',
                                     hint: '812xxxxxxxx',
-                                    validator: validatePhoneNumber,
+                                    requiredLabel: 'No. Telepon Ahli Waris',
+                                    missingRequiredFields: _missingRequiredFields,
                                   ),
                                 ],
                               ),
@@ -1962,6 +2072,9 @@ class M3TextField extends StatelessWidget {
     this.maxLines = 1,
     this.inputFormatters,
     this.validator,
+    this.requiredLabel,
+    this.missingRequiredFields = const {},
+    this.requiredDate,
   });
 
   final TextEditingController controller;
@@ -1977,6 +2090,24 @@ class M3TextField extends StatelessWidget {
   final int maxLines;
   final List<TextInputFormatter>? inputFormatters;
   final String? Function(String?)? validator;
+  /// Label key from [_collectMissingRequiredFields] for inline required errors.
+  final String? requiredLabel;
+  final Set<String> missingRequiredFields;
+  /// When set, empty check uses this instead of controller text (date pickers).
+  final DateTime? requiredDate;
+
+  String? Function(String?)? get _effectiveValidator {
+    if (validator != null) return validator;
+    if (requiredLabel == null) return null;
+    return (value) {
+      if (!missingRequiredFields.contains(requiredLabel)) return null;
+      if (requiredDate != null) {
+        return requiredDate == null ? 'Wajib diisi' : null;
+      }
+      if ((value ?? '').trim().isEmpty) return 'Wajib diisi';
+      return null;
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1993,7 +2124,7 @@ class M3TextField extends StatelessWidget {
       textInputAction: textInputAction,
       maxLines: maxLines,
       inputFormatters: inputFormatters,
-      validator: validator,
+      validator: _effectiveValidator,
     );
   }
 }
@@ -2006,12 +2137,33 @@ class PhoneInputField extends StatelessWidget {
     required this.label,
     required this.hint,
     this.validator,
+    this.requiredLabel,
+    this.missingRequiredFields = const {},
+    this.skipRequired = false,
   });
 
   final TextEditingController controller;
   final String label;
   final String hint;
   final String? Function(String?)? validator;
+  final String? requiredLabel;
+  final Set<String> missingRequiredFields;
+  final bool skipRequired;
+
+  String? Function(String?)? get _effectiveValidator {
+    if (skipRequired) return validator;
+    final requiredKey = requiredLabel ?? label;
+    return (value) {
+      if (!skipRequired &&
+          missingRequiredFields.contains(requiredKey) &&
+          ProfessionalPhoneField.normalizeIndonesiaNumber(value ?? '').isEmpty) {
+        return 'Wajib diisi';
+      }
+      if (validator != null) return validator!(value);
+      if ((value ?? '').trim().isNotEmpty) return validatePhoneNumber(value);
+      return null;
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2020,7 +2172,7 @@ class PhoneInputField extends StatelessWidget {
       label: label,
       hintText: hint,
       textInputAction: TextInputAction.next,
-      validator: validator,
+      validator: _effectiveValidator,
     );
   }
 }

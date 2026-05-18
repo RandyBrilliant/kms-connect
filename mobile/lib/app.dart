@@ -17,7 +17,6 @@ import 'features/home/presentation/pages/home_page.dart';
 import 'features/profile/presentation/pages/profile_page.dart';
 import 'features/profile/presentation/pages/profile_complete_page.dart';
 import 'features/profile/presentation/pages/edit_profile_page.dart';
-import 'features/profile/domain/profile_completion.dart';
 import 'features/profile/presentation/pages/work_experiences_page.dart';
 import 'features/profile/presentation/pages/change_password_page.dart';
 import 'features/profile/presentation/pages/account_deletion_request_page.dart';
@@ -38,6 +37,7 @@ import 'features/auth/data/providers/auth_provider.dart';
 import 'features/profile/data/providers/profile_provider.dart';
 import 'features/documents/data/providers/document_provider.dart';
 import 'config/strings.dart';
+import 'core/navigation/onboarding_resolver.dart';
 import 'core/navigation/root_scaffold_messenger.dart';
 
 /// A [ChangeNotifier] that bridges Riverpod [AuthState] changes to GoRouter's
@@ -99,70 +99,13 @@ final routerProvider = Provider<GoRouter>((ref) {
     initialLocation: '/splash',
     refreshListenable: authNotifier,
     redirect: (context, state) {
-      final loc = state.matchedLocation;
-
-      // Splash handles its own auth-aware navigation — never redirect away.
-      if (loc == '/splash') return null;
-
-      // Read current auth state at redirect-evaluation time.
       final authState = ref.read(authStateProvider);
-      final isAuthenticated = authState.isAuthenticated;
-
-      // Pre-auth routes: login, register, email verification, and password reset.
-      final isPreAuthRoute = loc == '/login' ||
-                            loc == '/register' || 
-                            loc.startsWith('/email-verification') ||
-                            loc == '/forgot-password' ||
-                            loc.startsWith('/reset-password');
-
-      if (!isAuthenticated) {
-        // Unauthenticated users can only access pre-auth routes.
-        return isPreAuthRoute ? null : '/login';
-      }
-
-      // Social-complete is a post-auth onboarding route — allow it.
-      if (loc == '/social-complete') return null;
-
-      // Authenticated but email not verified — must verify before accessing app.
-      final emailVerified = authState.user?.emailVerified ?? true;
-      if (!emailVerified) {
-        final userEmail = Uri.encodeComponent(authState.user!.email);
-        return loc.startsWith('/email-verification')
-            ? null
-            : '/email-verification?email=$userEmail';
-      }
-
-      // Applicant biodata: redirect incomplete draft profiles to the checklist.
-      final user = authState.user;
-      final isApplicant = (user?.role.toUpperCase() == 'APPLICANT');
-      if (isApplicant) {
-        final ps = ref.read(profileNotifierProvider);
-        if (ps.isLoading && ps.profile == null) {
-          return null;
-        }
-        if (ps.error != null && ps.profile == null) {
-          return null;
-        }
-        final p = ps.profile;
-        if (p != null &&
-            !shouldBlockForIncompleteProfile(p) &&
-            loc == '/profile/complete') {
-          return '/home';
-        }
-        if (shouldBlockForIncompleteProfile(p)) {
-          const exempt = {'/profile/complete', '/profile/edit'};
-          if (!exempt.contains(loc)) {
-            return '/profile/complete';
-          }
-        }
-      }
-
-      // Authenticated & complete — send away from pre-auth routes.
-      if (isPreAuthRoute) {
-        return '/home';
-      }
-
-      return null;
+      final profileState = ref.read(profileNotifierProvider);
+      return resolveOnboardingRedirect(
+        currentLocation: state.matchedLocation,
+        authState: authState,
+        profileState: profileState,
+      );
     },
     routes: [
       GoRoute(

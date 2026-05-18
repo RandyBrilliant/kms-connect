@@ -354,7 +354,7 @@ class ProfileNotifier extends StateNotifier<ProfileState> {
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        error: e.toString().replaceAll('DioException: ', ''),
+        error: ProfileRepository.userFacingMessage(e),
       );
       return false;
     }

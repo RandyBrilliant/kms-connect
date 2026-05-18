@@ -164,16 +164,15 @@ class _LoginPageNewState extends ConsumerState<LoginPageNew>
     if (!mounted) return;
 
     if (success) {
+      // GoRouter redirect resolves profile checklist → email OTP → home.
       context.go('/home');
-    } else {
+    } else if (ref.read(authStateProvider).error != null) {
       _passwordCtrl.clear();
-      final authState = ref.read(authStateProvider);
-      if (authState.errorCode == 'email_not_verified') {
-        final email = Uri.encodeComponent(_emailCtrl.text.trim());
-        context.go('/email-verification?email=$email');
-      } else if (authState.error != null) {
-        CustomToast.show(context, message: authState.error!, type: ToastType.error);
-      }
+      CustomToast.show(
+        context,
+        message: ref.read(authStateProvider).error!,
+        type: ToastType.error,
+      );
     }
   }
 

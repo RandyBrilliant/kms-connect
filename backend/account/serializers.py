@@ -741,6 +741,25 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
                         "referral_code_input": "Staff rujukan hanya dapat diatur oleh petugas atau admin.",
                     }
                 )
+
+        # Passport dates (supports partial PATCH — merge with existing instance).
+        instance = getattr(self, "instance", None)
+        issue = attrs.get(
+            "passport_issue_date",
+            getattr(instance, "passport_issue_date", None) if instance else None,
+        )
+        expiry = attrs.get(
+            "passport_expiry_date",
+            getattr(instance, "passport_expiry_date", None) if instance else None,
+        )
+        if issue and expiry and expiry <= issue:
+            raise serializers.ValidationError(
+                {
+                    "passport_expiry_date": (
+                        "Tanggal berakhir paspor harus setelah tanggal terbit paspor."
+                    ),
+                }
+            )
         return attrs
 
     def validate_nik(self, value):

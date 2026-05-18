@@ -130,28 +130,25 @@ class RegistrationNotifier extends StateNotifier<RegistrationState> {
     state = state.copyWith(ktpData: data);
   }
 
-  /// Process OCR for KTP image
+  /// OCR disabled during registration — re-enable when product requests it.
   Future<void> processOcr() async {
-    if (state.ktpImage == null) {
-      state = state.copyWith(error: 'Belum ada gambar KTP');
-      return;
-    }
-
-    state = state.copyWith(isProcessing: true, error: null);
-
-    try {
-      final ktpData = await _authRepository.ocrPreview(state.ktpImage!);
-      state = state.copyWith(
-        ktpData: ktpData,
-        isProcessing: false,
-      );
-    } catch (e) {
-      state = state.copyWith(
-        isProcessing: false,
-        error: e.toString(),
-      );
-      rethrow;
-    }
+    state = state.copyWith(
+      isProcessing: false,
+      error: 'OCR tidak tersedia. Isi data KTP secara manual.',
+    );
+    throw UnsupportedError('OCR disabled');
+    // if (state.ktpImage == null) {
+    //   state = state.copyWith(error: 'Belum ada gambar KTP');
+    //   return;
+    // }
+    // state = state.copyWith(isProcessing: true, error: null);
+    // try {
+    //   final ktpData = await _authRepository.ocrPreview(state.ktpImage!);
+    //   state = state.copyWith(ktpData: ktpData, isProcessing: false);
+    // } catch (e) {
+    //   state = state.copyWith(isProcessing: false, error: e.toString());
+    //   rethrow;
+    // }
   }
 
   /// Complete registration with all data. Returns the [AuthResponse] so the

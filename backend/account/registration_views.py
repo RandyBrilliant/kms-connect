@@ -283,13 +283,14 @@ class ApplicantRegistrationView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Kirim email verifikasi dengan 6-digit kode (async via Celery task)
-        try:
-            from .email_utils import send_verification_email
-            _logo_url = getattr(django_settings, "LOGO_URL", "") or ""
-            send_verification_email(user, logo_url=_logo_url)
-        except Exception:
-            pass  # Jangan gagalkan registrasi jika email gagal dikirim
+        # OTP email is sent after the applicant completes biodata on mobile
+        # (POST /api/auth/resend-verification-email/), not at signup.
+        # try:
+        #     from .email_utils import send_verification_email
+        #     _logo_url = getattr(django_settings, "LOGO_URL", "") or ""
+        #     send_verification_email(user, logo_url=_logo_url)
+        # except Exception:
+        #     pass
 
         # Generate JWT tokens — mobile clients get longer-lived refresh tokens
         try:
