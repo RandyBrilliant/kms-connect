@@ -13,6 +13,8 @@ const kCvTemplateAssetPath = 'assets/documents/cv_template.pdf';
 const kIjinKeluargaTemplateAssetPath = 'assets/documents/ijin_keluarga_template.pdf';
 const kSuratStatusPerkawinanTemplateAssetPath =
     'assets/documents/surat_keterangan_status_perkawinan_template.doc';
+const kBuktiPenyerahanDokumenAssetPath =
+    'assets/documents/bukti_penyerahan_dokumen.pdf';
 
 Future<void> _openBundledAsset(
   BuildContext context, {
@@ -85,5 +87,15 @@ Future<void> openSuratStatusPerkawinanTemplateDoc(BuildContext context) {
     assetPath: kSuratStatusPerkawinanTemplateAssetPath,
     tempBaseName: 'template_status_perkawinan',
     mimeType: 'application/msword',
+  );
+}
+
+/// Bukti penyerahan dokumen — formulir PDF untuk diunduh dari profil.
+Future<void> openBuktiPenyerahanDokumenPdf(BuildContext context) {
+  return _openBundledAsset(
+    context,
+    assetPath: kBuktiPenyerahanDokumenAssetPath,
+    tempBaseName: 'bukti_penyerahan_dokumen',
+    mimeType: 'application/pdf',
   );
 }

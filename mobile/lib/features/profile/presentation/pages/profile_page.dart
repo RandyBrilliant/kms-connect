@@ -9,6 +9,7 @@ import '../../../../config/colors.dart';
 import '../../../../core/widgets/custom_toast.dart';
 import '../../../auth/data/providers/auth_provider.dart';
 import '../../../documents/data/providers/document_provider.dart';
+import '../../../documents/utils/bundled_document_templates.dart';
 import '../../../home/presentation/widgets/bottom_nav_bar.dart';
 import '../../../notifications/data/providers/notification_provider.dart';
 import '../../../notifications/data/providers/notification_settings_provider.dart';
@@ -301,6 +302,13 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                           subtitle: 'Lihat biodata dalam format PDF',
                           onTap: _handleViewBiodataPdf,
                           isLoading: pdfState.isLoading,
+                        ),
+                        _ProfessionalMenuItem(
+                          icon: Icons.assignment_outlined,
+                          color: const Color(0xFF2563EB),
+                          title: 'Bukti Penyerahan Dokumen',
+                          subtitle: 'Unduh formulir bukti penyerahan dokumen',
+                          onTap: () => openBuktiPenyerahanDokumenPdf(context),
                         ),
                         if (profile?.hasDiterimaLamaran == true)
                           _ProfessionalMenuItem(
