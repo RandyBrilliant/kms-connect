@@ -441,8 +441,8 @@ def _tmpl_application_cadangan(ctx: dict) -> tuple[str, str]:
     company_str = f" di {company}" if company else ""
     return (
         "Anda Masuk Daftar Cadangan",
-        f"Anda telah lulus tahap Interview untuk posisi «{job_title}»{company_str} "
-        "dan ditempatkan sebagai pelamar cadangan. "
+        f"Hasil interview Anda untuk posisi «{job_title}»{company_str} "
+        "adalah masuk daftar cadangan. "
         "Anda akan diprioritaskan jika slot utama tersedia. Pantau terus status lamaran Anda.",
     )
 

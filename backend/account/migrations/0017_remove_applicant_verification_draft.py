@@ -23,13 +23,19 @@ def noop_reverse(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
+    # RunPython UPDATEs must commit before ALTER TABLE on the same table (PostgreSQL).
+    atomic = False
 
     dependencies = [
         ("account", "0016_applicantprofile_birth_place_text"),
     ]
 
     operations = [
-        migrations.RunPython(forwards_migrate_applicant_verification, noop_reverse),
+        migrations.RunPython(
+            forwards_migrate_applicant_verification,
+            noop_reverse,
+            atomic=False,
+        ),
         migrations.RemoveConstraint(
             model_name="applicantprofile",
             name="submitted_at_required_after_draft",
