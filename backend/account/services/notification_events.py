@@ -42,6 +42,7 @@ class NotificationEvent(str, Enum):
 
     # ---- Job application status ----
     APPLICATION_ASSIGNED = "application.assigned"   # → Applicant (PRA_SELEKSI initial)
+    APPLICATION_PRA_SELEKSI_PASSED = "application.pra_seleksi_passed"  # → Applicant
     APPLICATION_INTERVIEW = "application.interview" # → Applicant
     APPLICATION_CADANGAN = "application.cadangan"   # → Applicant (CADANGAN reserve)
     APPLICATION_ACCEPTED = "application.accepted"   # → Applicant (DITERIMA)
@@ -167,6 +168,14 @@ _EVENT_CONFIG: dict[NotificationEvent, EventConfig] = {
     # Job application statuses
     NotificationEvent.APPLICATION_ASSIGNED: EventConfig(
         notification_type=NotificationType.INFO,
+        priority=NotificationPriority.HIGH,
+        send_email=True,
+        send_push=True,
+        email_pref_field="email_application_updates",
+        push_pref_field="push_application_updates",
+    ),
+    NotificationEvent.APPLICATION_PRA_SELEKSI_PASSED: EventConfig(
+        notification_type=NotificationType.SUCCESS,
         priority=NotificationPriority.HIGH,
         send_email=True,
         send_push=True,
@@ -418,6 +427,22 @@ def _tmpl_application_assigned(ctx: dict) -> tuple[str, str]:
         f"Anda telah ditambahkan ke lamaran untuk posisi «{job_title}»{batch_str}. "
         "Tahap selanjutnya: Pra-Seleksi. Pantau terus perkembangan di aplikasi.",
     )
+
+
+@_t(NotificationEvent.APPLICATION_PRA_SELEKSI_PASSED)
+def _tmpl_application_pra_seleksi_passed(ctx: dict) -> tuple[str, str]:
+    job_title = ctx.get("job_title", "lowongan")
+    batch_name = ctx.get("batch_name", "")
+    batch_str = f" ({batch_name})" if batch_name else ""
+    notes = ctx.get("notes", "")
+    body = (
+        f"Selamat! Anda dinyatakan lulus tahap Pra-Seleksi untuk posisi "
+        f"«{job_title}»{batch_str}. Tim kami akan menginformasikan jadwal "
+        "interview berikutnya."
+    )
+    if notes:
+        body += f" Catatan: {notes}."
+    return ("Lulus Pra-Seleksi", body)
 
 
 @_t(NotificationEvent.APPLICATION_INTERVIEW)

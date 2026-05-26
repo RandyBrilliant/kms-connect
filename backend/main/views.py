@@ -55,6 +55,7 @@ from .serializers import (
     ApplicationAttendanceConfirmSerializer,
     ApplicationDocumentStepConfirmSerializer,
     BatchAdvanceToCohortSerializer,
+    MarkPraSeleksiPassedSerializer,
     BulkApplicationTransitionSerializer,
     ApplicationTransitionSerializer,
     BatchAnnouncementCreateSerializer,
@@ -249,7 +250,10 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
                 _annotated_applicant_count=Count("applications", distinct=True),
                 _annotated_pra_seleksi_count=Count(
                     "applications",
-                    filter=Q(applications__status=ApplicationStatus.PRA_SELEKSI),
+                    filter=Q(
+                        applications__status=ApplicationStatus.PRA_SELEKSI,
+                        applications__pra_seleksi_passed__isnull=True,
+                    ),
                     distinct=True,
                 ),
                 _annotated_advanced_count=Count(
@@ -277,6 +281,14 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
                 _annotated_confirmed_pra_seleksi_count=Count(
                     "applications",
                     filter=Q(applications__pra_seleksi_confirmed_at__isnull=False),
+                    distinct=True,
+                ),
+                _annotated_passed_pra_seleksi_count=Count(
+                    "applications",
+                    filter=Q(
+                        applications__status=ApplicationStatus.PRA_SELEKSI,
+                        applications__pra_seleksi_passed=True,
+                    ),
                     distinct=True,
                 ),
                 _annotated_confirmed_interview_count=Count(
@@ -730,6 +742,58 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
                     f"{len(updated_ids)} pelamar berhasil dipindah ke sesi interview "
                     f"'{cohort.name}'."
                 ),
+            )
+        )
+
+    @action(detail=True, methods=["post"], url_path="mark-pra-seleksi-passed")
+    def mark_pra_seleksi_passed(self, request, pk=None):
+        """
+        POST /api/batches/{id}/mark-pra-seleksi-passed/
+        Body: {
+          "application_ids": [<id>, ...] (optional),
+          "note": "..."
+        }
+
+        Tandai pelamar sebagai diterima pada tahap pra-seleksi (sub-status).
+        Status lamaran tetap PRA_SELEKSI sampai dipindahkan ke interview.
+        """
+        batch = self._get_batch_for_action(pk)
+        serializer = MarkPraSeleksiPassedSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                error_response(
+                    detail=_first_serializer_error_detail(serializer.errors) or "Data tidak valid.",
+                    code=ApiCode.VALIDATION_ERROR,
+                    errors=serializer.errors,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        ids = serializer.validated_data.get("application_ids")
+        note = serializer.validated_data.get("note", "")
+
+        qs = batch.applications.filter(status=ApplicationStatus.PRA_SELEKSI)
+        if ids:
+            qs = qs.filter(pk__in=ids)
+        else:
+            qs = qs.filter(pra_seleksi_passed__isnull=True)
+        applications = list(qs)
+
+        updated, failed = ApplicationService.bulk_mark_pra_seleksi_passed(
+            applications=applications,
+            actor=request.user,
+            note=note,
+        )
+
+        return Response(
+            success_response(
+                data={
+                    "updated_count": len(updated),
+                    "failed_count": len(failed),
+                    "updated_ids": [a.pk for a in updated],
+                    "failed": failed,
+                },
+                detail=f"{len(updated)} pelamar ditandai diterima pra-seleksi.",
             )
         )
 
@@ -1513,6 +1577,22 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
             )
         return raw
 
+    def _parse_pra_seleksi_passed_param(self, request) -> bool | None:
+        """
+        Optional query param `pra_seleksi_passed` — filter PRA_SELEKSI sub-status.
+        true: only marked passed; false: belum dinilai (null).
+        """
+        raw = (request.query_params.get("pra_seleksi_passed") or "").strip().lower()
+        if not raw:
+            return None
+        if raw in ("true", "1", "yes"):
+            return True
+        if raw in ("false", "0", "no"):
+            return False
+        raise ValueError(
+            "Parameter pra_seleksi_passed tidak valid. Gunakan true atau false."
+        )
+
     def _filter_queryset_by_diterima_step(self, queryset, step_code: str):
         """
         Filter queryset to applicants currently at *step_code* within the
@@ -1528,6 +1608,7 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
         try:
             diterima_step = self._parse_diterima_step_param(request)
             hasil_medical = self._parse_hasil_medical_param(request)
+            pra_seleksi_passed = self._parse_pra_seleksi_passed_param(request)
         except ValueError as e:
             return Response(
                 error_response(detail=str(e), code=ApiCode.VALIDATION_ERROR),
@@ -1539,6 +1620,16 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
             queryset = self._filter_queryset_by_diterima_step(queryset, diterima_step)
         if hasil_medical:
             queryset = queryset.filter(applicant__hasil_medical__iexact=hasil_medical)
+        if pra_seleksi_passed is True:
+            queryset = queryset.filter(
+                status=ApplicationStatus.PRA_SELEKSI,
+                pra_seleksi_passed=True,
+            )
+        elif pra_seleksi_passed is False:
+            queryset = queryset.filter(
+                status=ApplicationStatus.PRA_SELEKSI,
+                pra_seleksi_passed__isnull=True,
+            )
 
         page = self.paginate_queryset(queryset)
         if page is not None:
@@ -1579,6 +1670,7 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
         try:
             diterima_step = self._parse_diterima_step_param(request)
             hasil_medical = self._parse_hasil_medical_param(request)
+            pra_seleksi_passed = self._parse_pra_seleksi_passed_param(request)
         except ValueError as e:
             return Response(
                 error_response(detail=str(e), code=ApiCode.VALIDATION_ERROR),
@@ -1588,6 +1680,16 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
             applications = self._filter_queryset_by_diterima_step(applications, diterima_step)
         if hasil_medical:
             applications = applications.filter(applicant__hasil_medical__iexact=hasil_medical)
+        if pra_seleksi_passed is True:
+            applications = applications.filter(
+                status=ApplicationStatus.PRA_SELEKSI,
+                pra_seleksi_passed=True,
+            )
+        elif pra_seleksi_passed is False:
+            applications = applications.filter(
+                status=ApplicationStatus.PRA_SELEKSI,
+                pra_seleksi_passed__isnull=True,
+            )
 
         applicant_user_ids = applications.values_list(
             "applicant__user_id", flat=True

@@ -48,6 +48,8 @@ export interface LamaranBatch {
   advanced_count: number
   rejected_count: number
   confirmed_pra_seleksi_count: number
+  /** Still PRA_SELEKSI but marked diterima (ready for interview routing). */
+  passed_pra_seleksi_count: number
   confirmed_interview_count: number
   diterima_count: number
   pengumpulan_dokumen_confirmed_count: number

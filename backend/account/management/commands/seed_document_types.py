@@ -21,19 +21,20 @@ DOCUMENT_NAMES = {
     "pas-foto":                      ("Pas Foto",                         True,  6,  "JPG/PNG, maks. 500 KB.", INITIAL),
     "cv":                            ("Daftar Riwayat Hidup (CV)",        False, 7,  "Contoh format tersedia di aplikasi. PDF, maks. 2 MB.", INITIAL),
     "sertifikat-keterampilan":        ("Sertifikat Keterampilan",           False, 8,  "Jika ada. PDF, maks. 2 MB.", INITIAL),
+    "bukti-penyerahan-dokumen":       ("Bukti Penyerahan Dokumen",          False, 9,  "Template PDF tersedia di aplikasi. PDF, maks. 2 MB.", INITIAL),
     # ── POST_INTERVIEW ───────────────────────────────────────────────────────
-    "ijin-keluarga":                  ("Surat Izin Keluarga (Form Biru)",   True,  9,  "Template PDF tersedia di aplikasi. PDF, maks. 2 MB.", POST),
-    "surat-keterangan-pemberi-ijin":  ("Surat Keterangan Pemberi Izin",     True,  10, "PDF, maks. 2 MB.", POST),
-    "ktp-orangtua-wali":              ("KTP Orangtua / Wali",               True,  11, "JPG/PNG, maks. 500 KB.", POST),
-    "surat-kesehatan":                ("Surat Kesehatan",                   True,  12, "PDF, maks. 2 MB.", POST),
-    "surat-keterangan-status-perkawinan": ("Surat Keterangan Status Perkawinan", True, 13, "Template Word tersedia di aplikasi; unggah sebagai PDF. PDF, maks. 2 MB.", POST),
-    "buku-nikah":                     ("Buku Nikah",                        False, 14, "Bagi yang sudah menikah. JPG/PNG, maks. 500 KB.", POST),
-    "perjanjian-penempatan":          ("Perjanjian Penempatan",             True,  15, "PDF, maks. 2 MB.", POST),
+    "ijin-keluarga":                  ("Surat Izin Keluarga (Form Biru)",   True,  10, "Template PDF tersedia di aplikasi. PDF, maks. 2 MB.", POST),
+    "surat-keterangan-pemberi-ijin":  ("Surat Keterangan Pemberi Izin",     True,  11, "PDF, maks. 2 MB.", POST),
+    "ktp-orangtua-wali":              ("KTP Orangtua / Wali",               True,  12, "JPG/PNG, maks. 500 KB.", POST),
+    "surat-kesehatan":                ("Surat Kesehatan",                   True,  13, "PDF, maks. 2 MB.", POST),
+    "surat-keterangan-status-perkawinan": ("Surat Keterangan Status Perkawinan", True, 14, "Template Word tersedia di aplikasi; unggah sebagai PDF. PDF, maks. 2 MB.", POST),
+    "buku-nikah":                     ("Buku Nikah",                        False, 15, "Bagi yang sudah menikah. JPG/PNG, maks. 500 KB.", POST),
+    "perjanjian-penempatan":          ("Perjanjian Penempatan",             True,  16, "PDF, maks. 2 MB.", POST),
 }
 
 
 class Command(BaseCommand):
-    help = "Buat/update tipe dokumen TKI (8 INITIAL + 7 POST_INTERVIEW)."
+    help = "Buat/update tipe dokumen TKI (9 INITIAL + 7 POST_INTERVIEW)."
 
     def handle(self, *args, **options):
         for code in DOCUMENT_SPECS:
@@ -57,5 +58,5 @@ class Command(BaseCommand):
         cache.delete('document_types_all')
         cache.delete('document_types_required')
         cache.delete('document_types_public_list')
-        self.stdout.write(self.style.SUCCESS("Done. 15 document types ready. Caches cleared."))
+        self.stdout.write(self.style.SUCCESS("Done. 16 document types ready. Caches cleared."))
 

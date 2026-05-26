@@ -9,7 +9,6 @@ import '../../../../config/colors.dart';
 import '../../../../core/widgets/custom_toast.dart';
 import '../../../auth/data/providers/auth_provider.dart';
 import '../../../documents/data/providers/document_provider.dart';
-import '../../../documents/utils/bundled_document_templates.dart';
 import '../../../home/presentation/widgets/bottom_nav_bar.dart';
 import '../../../notifications/data/providers/notification_provider.dart';
 import '../../../notifications/data/providers/notification_settings_provider.dart';
@@ -117,6 +116,24 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
     if (confirmed != true || !mounted) return;
     await ref.read(authStateProvider.notifier).logout();
     if (mounted) context.go('/login');
+  }
+
+  Future<void> _openBuktiPenyerahanUpload() async {
+    try {
+      final types = await ref.read(documentTypesProvider.future);
+      if (!mounted) return;
+      final match = types
+          .where((t) => t.code == 'bukti-penyerahan-dokumen')
+          .firstOrNull;
+      if (match != null) {
+        context.push('/documents/upload?type=${match.id}');
+      } else {
+        context.push('/documents');
+      }
+    } catch (_) {
+      if (!mounted) return;
+      context.push('/documents');
+    }
   }
 
   Future<void> _handleViewBiodataPdf() async {
@@ -307,8 +324,9 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                           icon: Icons.assignment_outlined,
                           color: const Color(0xFF2563EB),
                           title: 'Bukti Penyerahan Dokumen',
-                          subtitle: 'Unduh formulir bukti penyerahan dokumen',
-                          onTap: () => openBuktiPenyerahanDokumenPdf(context),
+                          subtitle:
+                              'Unduh template, lengkapi, lalu unggah PDF',
+                          onTap: _openBuktiPenyerahanUpload,
                         ),
                         if (profile?.hasDiterimaLamaran == true)
                           _ProfessionalMenuItem(

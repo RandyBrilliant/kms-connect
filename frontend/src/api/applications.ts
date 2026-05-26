@@ -31,6 +31,8 @@ function buildQueryString(params: ApplicationsListParams): string {
   if (params.batch != null) search.set("batch", String(params.batch))
   if (params.interview_cohort != null)
     search.set("interview_cohort", String(params.interview_cohort))
+  if (params.pra_seleksi_passed === true) search.set("pra_seleksi_passed", "true")
+  if (params.pra_seleksi_passed === false) search.set("pra_seleksi_passed", "false")
   if (params.ordering) search.set("ordering", params.ordering)
   const qs = search.toString()
   return qs ? `?${qs}` : ""

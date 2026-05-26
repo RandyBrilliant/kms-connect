@@ -322,6 +322,8 @@ class JobApplicationSerializer(serializers.ModelSerializer):
             "interview_location",
             "interview_notes",
             "pra_seleksi_confirmed_at",
+            "pra_seleksi_passed",
+            "pra_seleksi_passed_at",
             "interview_confirmed_at",
             "applied_at",
             "placement_end_date",
@@ -373,6 +375,8 @@ class JobApplicationSerializer(serializers.ModelSerializer):
             "interview_cohort_name",
             "cooldown_eligible_date",
             "pra_seleksi_confirmed_at",
+            "pra_seleksi_passed",
+            "pra_seleksi_passed_at",
             "interview_confirmed_at",
             "pra_seleksi_notes",
             "interview_notes",
@@ -865,6 +869,7 @@ class LamaranBatchSerializer(serializers.ModelSerializer):
     rejected_count = serializers.SerializerMethodField(read_only=True)
     advanced_count = serializers.SerializerMethodField(read_only=True)
     confirmed_pra_seleksi_count = serializers.SerializerMethodField(read_only=True)
+    passed_pra_seleksi_count = serializers.SerializerMethodField(read_only=True)
     confirmed_interview_count = serializers.SerializerMethodField(read_only=True)
     diterima_count = serializers.SerializerMethodField(read_only=True)
     pengumpulan_dokumen_confirmed_count = serializers.SerializerMethodField(read_only=True)
@@ -895,6 +900,7 @@ class LamaranBatchSerializer(serializers.ModelSerializer):
             "advanced_count",
             "rejected_count",
             "confirmed_pra_seleksi_count",
+            "passed_pra_seleksi_count",
             "confirmed_interview_count",
             "diterima_count",
             "pengumpulan_dokumen_confirmed_count",
@@ -915,6 +921,7 @@ class LamaranBatchSerializer(serializers.ModelSerializer):
             "advanced_count",
             "rejected_count",
             "confirmed_pra_seleksi_count",
+            "passed_pra_seleksi_count",
             "confirmed_interview_count",
             "diterima_count",
             "pengumpulan_dokumen_confirmed_count",
@@ -942,6 +949,15 @@ class LamaranBatchSerializer(serializers.ModelSerializer):
             return int(annotated)
         return int(getattr(obj, "confirmed_pra_seleksi_count", 0))
 
+    def get_passed_pra_seleksi_count(self, obj) -> int:
+        annotated = getattr(obj, "_annotated_passed_pra_seleksi_count", None)
+        if annotated is not None:
+            return int(annotated)
+        return obj.applications.filter(
+            status=ApplicationStatus.PRA_SELEKSI,
+            pra_seleksi_passed=True,
+        ).count()
+
     def get_confirmed_interview_count(self, obj) -> int:
         annotated = getattr(obj, "_annotated_confirmed_interview_count", None)
         if annotated is not None:
@@ -952,7 +968,10 @@ class LamaranBatchSerializer(serializers.ModelSerializer):
         annotated = getattr(obj, "_annotated_pra_seleksi_count", None)
         if annotated is not None:
             return int(annotated)
-        return obj.applications.filter(status=ApplicationStatus.PRA_SELEKSI).count()
+        return obj.applications.filter(
+            status=ApplicationStatus.PRA_SELEKSI,
+            pra_seleksi_passed__isnull=True,
+        ).count()
 
     def get_advanced_count(self, obj) -> int:
         """Pelamar yang sudah lanjut ke tahap interview atau berikutnya."""
@@ -1480,6 +1499,29 @@ class CohortBulkTransitionSerializer(serializers.Serializer):
     )
     note = serializers.CharField(required=False, allow_blank=True, max_length=500)
     placement_end_date = serializers.DateField(required=False, allow_null=True)
+
+
+class MarkPraSeleksiPassedSerializer(serializers.Serializer):
+    """Input for marking applicants as passed pra-seleksi (sub-status)."""
+
+    application_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        required=False,
+        allow_empty=False,
+        help_text=(
+            "Subset opsional (default: semua PRA_SELEKSI di batch yang belum ditandai). "
+            "Maks. 500."
+        ),
+    )
+    note = serializers.CharField(required=False, allow_blank=True, max_length=500)
+
+    def validate_application_ids(self, value):
+        if value is None:
+            return value
+        deduped = list(dict.fromkeys(value))
+        if len(deduped) > 500:
+            raise serializers.ValidationError("Maksimal 500 lamaran per permintaan.")
+        return deduped
 
 
 class BatchAdvanceToCohortSerializer(serializers.Serializer):

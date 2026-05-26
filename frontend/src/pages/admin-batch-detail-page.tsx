@@ -19,6 +19,7 @@ import {
   IconArrowsRightLeft,
   IconBell,
   IconCalendar,
+  IconCheck,
   IconChevronRight,
   IconClipboardList,
   IconChevronDown,
@@ -102,6 +103,7 @@ import {
   previewBatchAnnouncementRecipients,
   exportBatchExcel,
   advanceBatchToInterview,
+  markBatchPraSeleksiPassed,
   moveApplicationsToBatch,
 } from "@/api/batches"
 import {
@@ -111,6 +113,7 @@ import {
 import {
   APPLICATION_STATUS_LABELS,
   type ApplicationStatus,
+  type BatchApplicantTab,
   type JobApplication,
 } from "@/types/job-applications"
 import type {
@@ -364,35 +367,88 @@ function applicationMatchesStageSearch(app: JobApplication, q: string): boolean 
   return hay.includes(needle)
 }
 
-const STATUS_TABS: { value: ApplicationStatus; label: string }[] = [
+const BATCH_APPLICANT_TABS: { value: BatchApplicantTab; label: string }[] = [
   { value: "PRA_SELEKSI", label: "Pra-Seleksi" },
-  { value: "INTERVIEW",   label: "Interview" },
-  { value: "DITERIMA",    label: "Diterima" },
-  { value: "BERANGKAT",   label: "Berangkat" },
-  { value: "SELESAI",     label: "Selesai" },
-  { value: "DITOLAK",     label: "Ditolak" },
+  { value: "PRA_SELEKSI_PASSED", label: "Diterima Pra-Seleksi" },
+  { value: "INTERVIEW", label: "Interview" },
+  { value: "DITERIMA", label: "Diterima" },
+  { value: "BERANGKAT", label: "Berangkat" },
+  { value: "SELESAI", label: "Selesai" },
+  { value: "DITOLAK", label: "Ditolak" },
 ]
 
-async function getAllApplicationsByBatchAndStatus(
+async function getAllApplicationsByBatchTab(
   batchId: number,
-  status: ApplicationStatus
+  tab: BatchApplicantTab
 ): Promise<JobApplication[]> {
   const pageSize = 100
   let page = 1
   const all: JobApplication[] = []
   while (true) {
-    const data = await getApplications({
-      batch: batchId,
-      status,
-      page,
-      page_size: pageSize,
-      ordering: "applicant_name",
-    })
+    const params =
+      tab === "PRA_SELEKSI_PASSED"
+        ? {
+            batch: batchId,
+            status: "PRA_SELEKSI" as const,
+            pra_seleksi_passed: true,
+            page,
+            page_size: pageSize,
+            ordering: "applicant_name",
+          }
+        : tab === "PRA_SELEKSI"
+          ? {
+              batch: batchId,
+              status: "PRA_SELEKSI" as const,
+              pra_seleksi_passed: false,
+              page,
+              page_size: pageSize,
+              ordering: "applicant_name",
+            }
+          : {
+              batch: batchId,
+              status: tab,
+              page,
+              page_size: pageSize,
+              ordering: "applicant_name",
+            }
+    const data = await getApplications(params)
     all.push(...data.results)
     if (!data.next) break
     page += 1
   }
   return all
+}
+
+function applicationCountQueryKey(batchId: number, tab: BatchApplicantTab) {
+  if (tab === "PRA_SELEKSI_PASSED") {
+    return ["applications", "count", { batch: batchId, praPassed: true }] as const
+  }
+  if (tab === "PRA_SELEKSI") {
+    return ["applications", "count", { batch: batchId, status: tab, praPassed: false }] as const
+  }
+  return ["applications", "count", { batch: batchId, status: tab }] as const
+}
+
+async function fetchApplicationCountForTab(
+  batchId: number,
+  tab: BatchApplicantTab
+): Promise<number> {
+  const base =
+    tab === "PRA_SELEKSI_PASSED"
+      ? {
+          batch: batchId,
+          status: "PRA_SELEKSI" as const,
+          pra_seleksi_passed: true,
+        }
+      : tab === "PRA_SELEKSI"
+        ? {
+            batch: batchId,
+            status: "PRA_SELEKSI" as const,
+            pra_seleksi_passed: false,
+          }
+        : { batch: batchId, status: tab }
+  const res = await getApplications({ ...base, page: 1, page_size: 1 })
+  return res.count
 }
 
 // ---------------------------------------------------------------------------
@@ -402,14 +458,16 @@ async function getAllApplicationsByBatchAndStatus(
 function BatchStatusTab({
   batchId,
   jobId,
-  status,
+  tab,
   apps,
 }: {
   batchId: number
   jobId: number
-  status: ApplicationStatus
+  tab: BatchApplicantTab
   apps: JobApplication[]
 }) {
+  const status: ApplicationStatus =
+    tab === "PRA_SELEKSI_PASSED" ? "PRA_SELEKSI" : tab
   const navigate = useNavigate()
   const { basePath } = useAdminDashboard()
   const queryClient = useQueryClient()
@@ -428,8 +486,15 @@ function BatchStatusTab({
   const [moveTargetBatchId, setMoveTargetBatchId] = useState<number | null>(null)
   const [moveNote, setMoveNote] = useState("")
 
-  const nextStatus = NEXT_FORWARD[status]
-  const canReject = CAN_REJECT.includes(status)
+  const isPassedPraSeleksiTab = tab === "PRA_SELEKSI_PASSED"
+  const isPendingPraSeleksiTab = tab === "PRA_SELEKSI"
+  const nextStatus = isPassedPraSeleksiTab
+    ? "INTERVIEW"
+    : isPendingPraSeleksiTab
+      ? undefined
+      : NEXT_FORWARD[status]
+  const canReject = isPendingPraSeleksiTab && CAN_REJECT.includes(status)
+  const canMarkPassed = isPendingPraSeleksiTab
   const isManagedByCohort =
     status === "INTERVIEW" ||
     status === "DITERIMA" ||
@@ -491,6 +556,37 @@ function BatchStatusTab({
    * are handled separately via `runAdvanceToCohort` because they require a
    * cohort to route survivors into.
    */
+  const runMarkPassedSelected = async () => {
+    const ids = Array.from(selected)
+    if (!ids.length) return
+    setLoading(true)
+    try {
+      const result = await markBatchPraSeleksiPassed(batchId, {
+        application_ids: ids,
+        note: note.trim() || undefined,
+      })
+      await queryClient.invalidateQueries({ queryKey: ["applications"] })
+      await queryClient.invalidateQueries({ queryKey: ["batch", batchId] })
+      await queryClient.invalidateQueries({ queryKey: ["batches", { job: jobId }] })
+      setSelected(new Set())
+      setNote("")
+      if (result.updated_count > 0) {
+        toast.success(
+          `${result.updated_count} pelamar ditandai diterima pra-seleksi.`
+        )
+      }
+      if (result.failed_count > 0) {
+        toast.error(`${result.failed_count} pelamar gagal ditandai.`)
+      }
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })
+        ?.response?.data?.detail
+      toast.error("Gagal menandai diterima pra-seleksi.", detail ?? "Coba lagi.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const runRejectSelected = async () => {
     const ids = Array.from(selected)
     if (!ids.length) return
@@ -625,7 +721,8 @@ function BatchStatusTab({
     }
   }
 
-  const showCheckboxCol = apps.length > 0 && !!(nextStatus || canReject)
+  const showCheckboxCol =
+    apps.length > 0 && !!(nextStatus || canReject || canMarkPassed)
   const showDocProgressCol = status === "DITERIMA"
   const showCohortCol = isManagedByCohort
   const tableColSpan =
@@ -667,7 +764,7 @@ function BatchStatusTab({
       )}
 
       {/* Action bar — only shown for PRA_SELEKSI / DITOLAK on this page */}
-      {filteredApps.length > 0 && (nextStatus || canReject) && (
+      {filteredApps.length > 0 && (nextStatus || canReject || canMarkPassed) && (
         <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-muted/30 p-3">
           <div className="flex flex-col gap-1 flex-1 min-w-[160px]">
             <Label className="text-xs">
@@ -706,7 +803,19 @@ function BatchStatusTab({
               Pindahkan ke Sesi Interview
             </Button>
           )}
-          {status === "PRA_SELEKSI" && (
+          {canMarkPassed && (
+            <Button
+              size="sm"
+              variant="secondary"
+              className="cursor-pointer"
+              disabled={selected.size === 0 || loading}
+              onClick={() => void runMarkPassedSelected()}
+            >
+              <IconCheck className="mr-1 size-4" />
+              Tandai Diterima Pra-Seleksi
+            </Button>
+          )}
+          {isPendingPraSeleksiTab && (
             <Button
               size="sm"
               variant="outline"
@@ -1200,8 +1309,8 @@ export function AdminBatchDetailPage() {
   const [annoSelectedStatuses, setAnnoSelectedStatuses] = useState<ApplicationStatus[]>([])
   const [annoPreviewCount, setAnnoPreviewCount] = useState<number | null>(null)
   const [isExporting, setIsExporting] = useState(false)
-  const [activeStatusTab, setActiveStatusTab] =
-    useState<ApplicationStatus>("PRA_SELEKSI")
+  const [activeApplicantTab, setActiveApplicantTab] =
+    useState<BatchApplicantTab>("PRA_SELEKSI")
 
   useEffect(() => {
     setAnnoPreviewCount(null)
@@ -1226,33 +1335,25 @@ export function AdminBatchDetailPage() {
   })
 
   const activeTabAppsQuery = useQuery({
-    queryKey: ["applications", { batch: batchId, status: activeStatusTab, page_size: 100 }],
-    queryFn: () => getAllApplicationsByBatchAndStatus(batchId, activeStatusTab),
+    queryKey: ["applications", { batch: batchId, tab: activeApplicantTab, page_size: 100 }],
+    queryFn: () => getAllApplicationsByBatchTab(batchId, activeApplicantTab),
     enabled: !!batch,
   })
 
   const activeTabApps = activeTabAppsQuery.data ?? []
   const statusCountQueries = useQueries({
-    queries: STATUS_TABS.map((t) => ({
-      queryKey: ["applications", "count", { batch: batchId, status: t.value }],
-      queryFn: async () => {
-        const res = await getApplications({
-          batch: batchId,
-          status: t.value,
-          page: 1,
-          page_size: 1,
-        })
-        return res.count
-      },
+    queries: BATCH_APPLICANT_TABS.map((t) => ({
+      queryKey: applicationCountQueryKey(batchId, t.value),
+      queryFn: () => fetchApplicationCountForTab(batchId, t.value),
       enabled: !!batch,
       staleTime: 30_000,
     })),
   })
   const statusCounts = useMemo(
     () =>
-      STATUS_TABS.reduce(
+      BATCH_APPLICANT_TABS.reduce(
         (acc, t, idx) => ({ ...acc, [t.value]: statusCountQueries[idx]?.data ?? 0 }),
-        {} as Record<ApplicationStatus, number>
+        {} as Record<BatchApplicantTab, number>
       ),
     [statusCountQueries]
   )
@@ -1319,16 +1420,16 @@ export function AdminBatchDetailPage() {
   })
 
   // Group by status for tabs
-  const appsByStatus = useMemo(
+  const appsByTab = useMemo(
     () =>
-      STATUS_TABS.reduce(
+      BATCH_APPLICANT_TABS.reduce(
         (acc, t) => ({
           ...acc,
-          [t.value]: t.value === activeStatusTab ? activeTabApps : [],
+          [t.value]: t.value === activeApplicantTab ? activeTabApps : [],
         }),
-        {} as Record<ApplicationStatus, JobApplication[]>
+        {} as Record<BatchApplicantTab, JobApplication[]>
       ),
-    [activeStatusTab, activeTabApps]
+    [activeApplicantTab, activeTabApps]
   )
 
   usePageTitle(batch ? `Batch: ${batch.name}` : "Detail Batch")
@@ -1450,22 +1551,35 @@ export function AdminBatchDetailPage() {
             <DropdownMenuContent align="end" className="min-w-[240px]">
               <DropdownMenuItem
                 className="cursor-pointer flex-col items-start gap-0"
-                disabled={statusCounts[activeStatusTab] === 0}
-                onClick={() => handleExportExcel([activeStatusTab])}
+                disabled={statusCounts[activeApplicantTab] === 0}
+                onClick={() =>
+                  handleExportExcel(
+                    activeApplicantTab === "PRA_SELEKSI_PASSED" ||
+                      activeApplicantTab === "PRA_SELEKSI"
+                      ? ["PRA_SELEKSI"]
+                      : [activeApplicantTab]
+                  )
+                }
               >
                 <span className="font-medium">Tahapan tab saat ini</span>
                 <span className="text-muted-foreground text-xs font-normal">
-                  {APPLICATION_STATUS_LABELS[activeStatusTab]} (
-                  {statusCounts[activeStatusTab]} pelamar)
+                  {BATCH_APPLICANT_TABS.find((t) => t.value === activeApplicantTab)?.label} (
+                  {statusCounts[activeApplicantTab]} pelamar)
                 </span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              {STATUS_TABS.map((t) => (
+              {BATCH_APPLICANT_TABS.map((t) => (
                 <DropdownMenuItem
                   key={t.value}
                   className="cursor-pointer justify-between gap-4"
                   disabled={statusCounts[t.value] === 0}
-                  onClick={() => handleExportExcel([t.value])}
+                  onClick={() =>
+                    handleExportExcel(
+                      t.value === "PRA_SELEKSI_PASSED" || t.value === "PRA_SELEKSI"
+                        ? ["PRA_SELEKSI"]
+                        : [t.value]
+                    )
+                  }
                 >
                   <span>{t.label}</span>
                   <span className="text-muted-foreground tabular-nums text-xs">
@@ -1509,7 +1623,7 @@ export function AdminBatchDetailPage() {
               <IconUsers className="size-5 text-muted-foreground" />
               <div>
                 <p className="text-2xl font-bold">{batch.pra_seleksi_count}</p>
-                <p className="text-xs text-muted-foreground">Masih di Pra-Seleksi</p>
+                <p className="text-xs text-muted-foreground">Belum dinilai</p>
               </div>
             </div>
           </CardContent>
@@ -1528,10 +1642,10 @@ export function AdminBatchDetailPage() {
         <Card>
           <CardContent className="pt-4 pb-4">
             <div className="flex items-center gap-3">
-              <IconCalendar className="size-5 text-muted-foreground" />
+              <IconCheck className="size-5 text-emerald-600" />
               <div>
-                <p className="text-2xl font-bold">{batch.confirmed_pra_seleksi_count}</p>
-                <p className="text-xs text-muted-foreground">Konfirmasi Pra-Seleksi</p>
+                <p className="text-2xl font-bold">{batch.passed_pra_seleksi_count ?? 0}</p>
+                <p className="text-xs text-muted-foreground">Diterima Pra-Seleksi</p>
               </div>
             </div>
           </CardContent>
@@ -1602,7 +1716,10 @@ export function AdminBatchDetailPage() {
               </RadioGroup>
               {annoRecipientMode === "statuses" && (
                 <div className="ml-1 flex flex-col gap-2 border-l pl-4">
-                  {STATUS_TABS.map((t) => (
+                  {BATCH_APPLICANT_TABS.filter(
+                    (t): t is { value: ApplicationStatus; label: string } =>
+                      t.value !== "PRA_SELEKSI_PASSED"
+                  ).map((t) => (
                     <div key={t.value} className="flex items-center space-x-2">
                       <Checkbox
                         id={`anno-rec-${t.value}`}
@@ -1704,11 +1821,11 @@ export function AdminBatchDetailPage() {
 
       {/* Status tabs — replace flat table + bulk transition */}
       <Tabs
-        value={activeStatusTab}
-        onValueChange={(v) => setActiveStatusTab(v as ApplicationStatus)}
+        value={activeApplicantTab}
+        onValueChange={(v) => setActiveApplicantTab(v as BatchApplicantTab)}
       >
         <TabsList className="h-auto flex-wrap gap-1">
-          {STATUS_TABS.map((t) => (
+          {BATCH_APPLICANT_TABS.map((t) => (
             <TabsTrigger key={t.value} value={t.value}>
               {t.label}
               {statusCounts[t.value] > 0 && (
@@ -1719,13 +1836,13 @@ export function AdminBatchDetailPage() {
             </TabsTrigger>
           ))}
         </TabsList>
-        {STATUS_TABS.map((t) => (
+        {BATCH_APPLICANT_TABS.map((t) => (
           <TabsContent key={t.value} value={t.value} className="mt-4">
             <BatchStatusTab
               batchId={batchId}
               jobId={batch.job}
-              status={t.value}
-              apps={appsByStatus[t.value]}
+              tab={t.value}
+              apps={appsByTab[t.value]}
             />
           </TabsContent>
         ))}

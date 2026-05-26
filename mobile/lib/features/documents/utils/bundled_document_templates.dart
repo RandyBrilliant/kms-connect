@@ -8,7 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../../core/widgets/custom_toast.dart';
 
 /// Asset paths — keep in sync with `pubspec.yaml` `assets/documents/` and
-/// `seed_document_types` codes (`cv`, `ijin-keluarga`, `surat-keterangan-status-perkawinan`).
+/// `seed_document_types` codes (`cv`, `bukti-penyerahan-dokumen`, `ijin-keluarga`, …).
 const kCvTemplateAssetPath = 'assets/documents/cv_template.pdf';
 const kIjinKeluargaTemplateAssetPath = 'assets/documents/ijin_keluarga_template.pdf';
 const kSuratStatusPerkawinanTemplateAssetPath =
@@ -90,7 +90,7 @@ Future<void> openSuratStatusPerkawinanTemplateDoc(BuildContext context) {
   );
 }
 
-/// Bukti penyerahan dokumen — formulir PDF untuk diunduh dari profil.
+/// Bukti penyerahan dokumen — formulir PDF (unduh, isi, unggah).
 Future<void> openBuktiPenyerahanDokumenPdf(BuildContext context) {
   return _openBundledAsset(
     context,

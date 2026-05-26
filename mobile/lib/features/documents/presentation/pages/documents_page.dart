@@ -14,7 +14,7 @@ import '../../utils/bundled_document_templates.dart';
 
 /// Matches backend `account.document_specs` / `seed_document_types` (PHASE_INITIAL).
 const _kDocPhaseInitialSubtitle =
-    'Saat pendaftaran: KTP, ijazah, kartu keluarga, BPJS, paspor, foto TKI; CV dan sertifikat (opsional).';
+    'Saat pendaftaran: KTP, ijazah, kartu keluarga, BPJS, paspor, foto TKI; CV, bukti penyerahan, dan sertifikat (opsional).';
 
 /// Matches PHASE_POST_INTERVIEW in the same seed/specs.
 const _kDocPhasePostSubtitle =
@@ -764,6 +764,33 @@ class _ChecklistCard extends StatelessWidget {
                         ),
                         label: Text(
                           'Lihat contoh template CV',
+                          style: tt.labelLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.primaryDarkGreen,
+                          ),
+                        ),
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          foregroundColor: AppColors.primaryDarkGreen,
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (item.type.code == 'bukti-penyerahan-dokumen') ...[
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: () =>
+                            openBuktiPenyerahanDokumenPdf(context),
+                        icon: Icon(
+                          Icons.picture_as_pdf_outlined,
+                          size: 18,
+                          color: AppColors.primaryDarkGreen,
+                        ),
+                        label: Text(
+                          'Unduh template bukti penyerahan (PDF)',
                           style: tt.labelLarge?.copyWith(
                             fontWeight: FontWeight.w700,
                             color: AppColors.primaryDarkGreen,

@@ -96,6 +96,9 @@ class JobApplication {
   /// Additional instructions for interview (from cohort, legacy batch fallback).
   final String? interviewNotes;
   final DateTime? praSeleksiConfirmedAt;
+  /// Admin marked passed pra-seleksi (sub-status; still PRA_SELEKSI until interview).
+  final bool? praSeleksiPassed;
+  final DateTime? praSeleksiPassedAt;
   final DateTime? interviewConfirmedAt;
   final DateTime appliedAt;
   final DateTime? placementEndDate;
@@ -141,6 +144,8 @@ class JobApplication {
     this.interviewLocation,
     this.interviewNotes,
     this.praSeleksiConfirmedAt,
+    this.praSeleksiPassed,
+    this.praSeleksiPassedAt,
     this.interviewConfirmedAt,
     required this.appliedAt,
     this.placementEndDate,
@@ -239,6 +244,8 @@ class JobApplication {
       interviewLocation: json['interview_location']?.toString(),
       interviewNotes: json['interview_notes']?.toString(),
       praSeleksiConfirmedAt: ApiDateTime.parse(json['pra_seleksi_confirmed_at']),
+      praSeleksiPassed: json['pra_seleksi_passed'] as bool?,
+      praSeleksiPassedAt: ApiDateTime.parse(json['pra_seleksi_passed_at']),
       interviewConfirmedAt: ApiDateTime.parse(json['interview_confirmed_at']),
       appliedAt: ApiDateTime.parseRequired(
         json['applied_at'],
@@ -272,6 +279,7 @@ class JobApplication {
   String get statusDisplay {
     switch (status) {
       case 'PRA_SELEKSI':
+        if (praSeleksiPassed == true) return 'Diterima Pra-Seleksi';
         return 'Pra-Seleksi';
       case 'INTERVIEW':
         return 'Interview';

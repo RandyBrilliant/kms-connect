@@ -547,6 +547,20 @@ class _InfoCard extends StatelessWidget {
                     : 'Belum dikonfirmasi',
               ),
             ],
+            if (application.status == 'PRA_SELEKSI') ...[
+              const Divider(height: 20),
+              _InfoRow(
+                icon: application.praSeleksiPassed == true
+                    ? Icons.verified_outlined
+                    : Icons.hourglass_empty_rounded,
+                label: 'Hasil Pra-Seleksi',
+                value: application.praSeleksiPassed == true
+                    ? (application.praSeleksiPassedAt != null
+                        ? 'Diterima — ${fmtDt.format(application.praSeleksiPassedAt!)}'
+                        : 'Diterima — menunggu jadwal interview')
+                    : 'Menunggu penilaian admin',
+              ),
+            ],
             // Interview confirmation
             if (application.status == 'INTERVIEW' ||
                 application.interviewConfirmedAt != null) ...[

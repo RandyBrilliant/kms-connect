@@ -36,6 +36,7 @@ class UploadDocumentPage extends ConsumerStatefulWidget {
 const _pdfDocCodes = {
   'cv',
   'sertifikat-keterampilan',
+  'bukti-penyerahan-dokumen',
   'ijin-keluarga',
   'surat-keterangan-pemberi-ijin',
   'surat-kesehatan',
@@ -482,6 +483,18 @@ class _UploadDocumentPageState extends ConsumerState<UploadDocumentPage> {
                                       'Buka template resmi untuk diisi, lalu unggah sebagai PDF di bawah.',
                                   usePdfIcon: true,
                                   onOpen: () => openCvTemplatePdf(context),
+                                ),
+                                const SizedBox(height: 12),
+                              ],
+                              if (_selectedType?.code ==
+                                  'bukti-penyerahan-dokumen') ...[
+                                _BundledTemplateBanner(
+                                  title: 'Template Bukti Penyerahan Dokumen',
+                                  subtitle:
+                                      'Buka formulir PDF ini, lengkapi sesuai petunjuk, lalu unggah PDF di bawah.',
+                                  usePdfIcon: true,
+                                  onOpen: () =>
+                                      openBuktiPenyerahanDokumenPdf(context),
                                 ),
                                 const SizedBox(height: 12),
                               ],

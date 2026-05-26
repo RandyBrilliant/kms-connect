@@ -89,6 +89,9 @@ export interface JobApplication {
   interview_location?: string
   interview_notes?: string
   pra_seleksi_confirmed_at: string | null
+  /** Sub-status: admin marked passed pra-seleksi (still status PRA_SELEKSI until interview). */
+  pra_seleksi_passed?: boolean | null
+  pra_seleksi_passed_at?: string | null
   interview_confirmed_at: string | null
   applied_at: string
   placement_end_date: string | null
@@ -203,8 +206,13 @@ export interface ApplicationsListParams {
   applicant?: number
   batch?: number
   interview_cohort?: number
+  /** Filter PRA_SELEKSI sub-status: true = diterima pra-seleksi, false = belum dinilai. */
+  pra_seleksi_passed?: boolean
   ordering?: string
 }
+
+/** Batch detail tabs — includes virtual tab for passed pra-seleksi pool. */
+export type BatchApplicantTab = ApplicationStatus | "PRA_SELEKSI_PASSED"
 
 /** POST /api/applications/ — admin assigns an applicant to a job */
 export interface AssignApplicationInput {

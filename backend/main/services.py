@@ -749,6 +749,16 @@ class ApplicationService:
         # ── Cohort routing rules (PRA_SELEKSI → INTERVIEW) ───────────────
         # When moving to INTERVIEW we must know which cohort owns the
         # applicant from this point on. Same job constraint is enforced.
+        if (
+            application.status == ApplicationStatus.PRA_SELEKSI
+            and new_status == ApplicationStatus.INTERVIEW
+            and not application.pra_seleksi_passed
+        ):
+            raise TransitionError(
+                "Tandai pelamar sebagai diterima pra-seleksi terlebih dahulu "
+                "sebelum memindahkan ke interview."
+            )
+
         if new_status == ApplicationStatus.INTERVIEW:
             if interview_cohort is None:
                 raise TransitionError(
@@ -867,11 +877,25 @@ class ApplicationService:
         # Apps still in PRA_SELEKSI are the only valid source from a batch.
         apps = list(
             batch.applications.filter(status=ApplicationStatus.PRA_SELEKSI)
-            .select_related("applicant__user")
+            .select_related("applicant__user", "job", "batch", "interview_cohort")
         )
 
         if not apps:
             return []
+
+        # INTERVIEW: per-app transition (pra_seleksi_passed gate + notifications).
+        if new_status == ApplicationStatus.INTERVIEW:
+            updated: list[JobApplication] = []
+            for app in apps:
+                cls.transition(
+                    application=app,
+                    new_status=ApplicationStatus.INTERVIEW,
+                    actor=actor,
+                    note=note,
+                    interview_cohort=interview_cohort,
+                )
+                updated.append(app)
+            return updated
 
         now = timezone.now()
         update_kwargs: dict = {
@@ -879,8 +903,6 @@ class ApplicationService:
             "reviewed_by": actor,
             "reviewed_at": now,
         }
-        if new_status == ApplicationStatus.INTERVIEW and interview_cohort is not None:
-            update_kwargs["interview_cohort"] = interview_cohort
 
         old_statuses = {app.pk: app.status for app in apps}
 
@@ -900,8 +922,6 @@ class ApplicationService:
         # Reflect new state on in-memory objects so callers see updated rows.
         for app in apps:
             app.status = new_status
-            if new_status == ApplicationStatus.INTERVIEW:
-                app.interview_cohort = interview_cohort
 
         return apps
 
@@ -1093,12 +1113,127 @@ class ApplicationService:
 
         JobApplication.objects.filter(pk__in=ids).update(
             batch=target_batch,
+            pra_seleksi_passed=None,
+            pra_seleksi_passed_at=None,
+            pra_seleksi_passed_by=None,
             updated_at=timezone.now(),
         )
         for app in applications:
             app.batch = target_batch
+            app.pra_seleksi_passed = None
+            app.pra_seleksi_passed_at = None
+            app.pra_seleksi_passed_by = None
 
         return applications
+
+    @classmethod
+    @transaction.atomic
+    def mark_pra_seleksi_passed(
+        cls,
+        application: JobApplication,
+        actor: "CustomUser",
+        note: str = "",
+    ) -> JobApplication:
+        """
+        Admin marks applicant as passed pra-seleksi (sub-status).
+        Status stays PRA_SELEKSI until advanced to INTERVIEW.
+        """
+        actor_role = (
+            "admin"
+            if (actor.role in _ADMIN_ROLES or actor.is_superuser)
+            else "applicant"
+        )
+        if actor_role != "admin":
+            raise TransitionError(
+                "Hanya admin/staff yang dapat menandai hasil pra-seleksi."
+            )
+        if application.status != ApplicationStatus.PRA_SELEKSI:
+            raise TransitionError(
+                "Hanya pelamar di tahap Pra-Seleksi yang dapat ditandai diterima."
+            )
+        if application.pra_seleksi_passed:
+            return application
+
+        now = timezone.now()
+        application.pra_seleksi_passed = True
+        application.pra_seleksi_passed_at = now
+        application.pra_seleksi_passed_by = actor
+        application.reviewed_by = actor
+        application.reviewed_at = now
+        application.save(
+            update_fields=[
+                "pra_seleksi_passed",
+                "pra_seleksi_passed_at",
+                "pra_seleksi_passed_by",
+                "reviewed_by",
+                "reviewed_at",
+                "updated_at",
+            ]
+        )
+
+        history_note = note.strip() or "Diterima pada tahap pra-seleksi."
+        ApplicationStatusHistory.objects.create(
+            application=application,
+            from_status=application.status,
+            to_status=application.status,
+            changed_by=actor,
+            note=history_note,
+        )
+
+        cls._notify_pra_seleksi_passed(application, note=history_note)
+        return application
+
+    @classmethod
+    def _notify_pra_seleksi_passed(
+        cls,
+        application: JobApplication,
+        *,
+        note: str = "",
+    ) -> None:
+        from account.services.notification_dispatcher import (
+            build_application_context,
+            dispatch,
+        )
+        from account.services.notification_events import NotificationEvent
+
+        try:
+            user = application.applicant.user
+        except Exception:
+            return
+        if not user or not user.is_active:
+            return
+
+        ctx = build_application_context(application)
+        ctx["user_name"] = user.full_name or user.email
+        if note:
+            ctx["notes"] = note
+
+        dispatch(
+            event=NotificationEvent.APPLICATION_PRA_SELEKSI_PASSED,
+            user=user,
+            context=ctx,
+            action_url=f"/lamaran/{application.pk}",
+            action_label="Lihat Detail",
+            deduplicate=False,
+        )
+
+    @classmethod
+    @transaction.atomic
+    def bulk_mark_pra_seleksi_passed(
+        cls,
+        applications: list[JobApplication],
+        actor: "CustomUser",
+        note: str = "",
+    ) -> tuple[list[JobApplication], list[dict]]:
+        """Mark many applications as passed pra-seleksi. Returns (updated, failed)."""
+        updated: list[JobApplication] = []
+        failed: list[dict] = []
+        for app in applications:
+            try:
+                updated.append(cls.mark_pra_seleksi_passed(app, actor, note=note))
+            except TransitionError as e:
+                failed.append({"application_id": app.pk, "reason": str(e)})
+        return updated, failed
 
     @classmethod
     @transaction.atomic

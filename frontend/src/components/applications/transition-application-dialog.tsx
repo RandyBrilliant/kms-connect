@@ -110,7 +110,14 @@ export function TransitionApplicationDialog({
   const [open, setOpen] = useState(false)
   const transitionMutation = useTransitionApplicationMutation(application.id)
 
-  const allowedStatuses = ADMIN_TRANSITIONS[application.status] ?? []
+  const allowedStatuses = (ADMIN_TRANSITIONS[application.status] ?? []).filter(
+    (target) =>
+      !(
+        application.status === "PRA_SELEKSI" &&
+        target === "INTERVIEW" &&
+        application.pra_seleksi_passed !== true
+      )
+  )
 
   const form = useForm({
     defaultValues: {

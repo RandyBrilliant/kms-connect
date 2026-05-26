@@ -168,6 +168,7 @@ const DOWNSTREAM_STATUS_TABS: { value: ApplicationStatus; label: string }[] = [
   { value: "DITOLAK", label: "Ditolak" },
 ]
 const MASTER_TAHAPAN_PAGE_SIZE = 20
+const APPLICATIONS_TAB_PAGE_SIZE = 20
 
 /** Matches pelamar / admin list tables: card shell + dense header/body cells */
 const JOB_DETAIL_TABLE_SHELL =
@@ -327,6 +328,142 @@ function EditTab({
 }
 
 // ---------------------------------------------------------------------------
+// Sub-component: Diterima pra-seleksi (job-wide pool ready for interview)
+// ---------------------------------------------------------------------------
+
+function JobPraSeleksiPassedTab({
+  jobId,
+  batchBase,
+  pelamarBase,
+  enabled = true,
+}: {
+  jobId: number
+  batchBase: string
+  pelamarBase: string
+  enabled?: boolean
+}) {
+  const navigate = useNavigate()
+  const [page, setPage] = useState(1)
+
+  const { data, isLoading, isFetching } = useQuery({
+    queryKey: ["applications", { job: jobId, praPassed: true, page }],
+    queryFn: () =>
+      getApplications({
+        job: jobId,
+        status: "PRA_SELEKSI",
+        pra_seleksi_passed: true,
+        page,
+        page_size: APPLICATIONS_TAB_PAGE_SIZE,
+        ordering: "applicant_name",
+      }),
+    enabled,
+    placeholderData: keepPreviousData,
+  })
+
+  const apps = data?.results ?? []
+  const totalCount = data?.count ?? 0
+  const pageCount = Math.max(1, Math.ceil(totalCount / APPLICATIONS_TAB_PAGE_SIZE))
+  const currentPage = Math.min(page, pageCount)
+
+  useEffect(() => {
+    setPage((p) => Math.min(p, pageCount))
+  }, [pageCount])
+
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-sm text-muted-foreground">
+        {totalCount} pelamar ditandai diterima pra-seleksi dan siap dipindahkan ke
+        sesi interview. Kelola per batch dari halaman detail tahapan.
+      </p>
+      <div className={JOB_DETAIL_TABLE_SHELL}>
+        {isLoading && !data ? (
+          <div className="flex min-h-[14rem] items-center justify-center">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          </div>
+        ) : (
+          <Table className="border-collapse">
+            <TableHeader>
+              <TableRow className={JD_HEADER_ROW}>
+                <TableHead className={jdTh()}>Pelamar</TableHead>
+                <TableHead className={jdTh()}>Tahapan</TableHead>
+                <TableHead className={jdTh()}>Diterima pada</TableHead>
+                <TableHead className={jdTh("w-[60px]")} />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {apps.length ? (
+                apps.map((app) => (
+                  <TableRow key={app.id} className={JD_BODY_ROW}>
+                    <TableCell className={jdTd()}>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-medium">{app.applicant_name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {app.applicant_nik || app.applicant_email}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className={jdTd()}>
+                      {app.batch ? (
+                        <button
+                          type="button"
+                          className="text-primary text-sm underline-offset-2 hover:underline cursor-pointer"
+                          onClick={() => navigate(`${batchBase}/${app.batch}`)}
+                        >
+                          {app.batch_tahap_label || app.batch_name || `Batch #${app.batch}`}
+                        </button>
+                      ) : (
+                        "—"
+                      )}
+                    </TableCell>
+                    <TableCell className={jdTd("text-sm text-muted-foreground")}>
+                      {app.pra_seleksi_passed_at
+                        ? formatDate(app.pra_seleksi_passed_at)
+                        : "—"}
+                    </TableCell>
+                    <TableCell className={jdTd()}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 cursor-pointer"
+                        onClick={() =>
+                          navigate(`${pelamarBase}/${app.applicant_user ?? app.applicant}`)
+                        }
+                        title="Lihat pelamar"
+                      >
+                        <IconEye className="size-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell
+                    colSpan={4}
+                    className={jdTd("h-24 text-center text-muted-foreground")}
+                  >
+                    Belum ada pelamar yang ditandai diterima pra-seleksi.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        )}
+      </div>
+      <JobDetailPagination
+        pageSize={APPLICATIONS_TAB_PAGE_SIZE}
+        currentPage={currentPage}
+        pageCount={pageCount}
+        totalCount={totalCount}
+        isFetching={isFetching}
+        itemLabel="pelamar"
+        onPrev={() => setPage((p) => Math.max(1, p - 1))}
+        onNext={() => setPage((p) => p + 1)}
+      />
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Sub-component: Pra-Seleksi (batches/tahapan) tab
 // ---------------------------------------------------------------------------
 
@@ -334,15 +471,18 @@ function PraSeleksiTab({
   jobId,
   jobsBase,
   batchBase,
+  pelamarBase,
   enabled = true,
 }: {
   jobId: number
   jobsBase: string
   batchBase: string
+  pelamarBase: string
   enabled?: boolean
 }) {
   const navigate = useNavigate()
   const [page, setPage] = useState(1)
+  const [innerTab, setInnerTab] = useState<"tahapan" | "passed">("tahapan")
 
   const { data, isLoading, isFetching } = useQuery({
     queryKey: ["batches", { job: jobId, page, mode: "job-detail-master" }],
@@ -367,7 +507,26 @@ function PraSeleksiTab({
   }, [pageCount])
 
   return (
-    <div className="flex flex-col gap-4">
+    <Tabs
+      value={innerTab}
+      onValueChange={(v) => setInnerTab(v as "tahapan" | "passed")}
+      className="flex flex-col gap-4"
+    >
+      <TabsList>
+        <TabsTrigger value="tahapan">Tahapan Pra-Seleksi</TabsTrigger>
+        <TabsTrigger value="passed">Diterima Pra-Seleksi</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="passed" className="mt-0">
+        <JobPraSeleksiPassedTab
+          jobId={jobId}
+          batchBase={batchBase}
+          pelamarBase={pelamarBase}
+          enabled={enabled && innerTab === "passed"}
+        />
+      </TabsContent>
+
+      <TabsContent value="tahapan" className="mt-0 flex flex-col gap-4">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <p className="text-sm text-muted-foreground">
           {totalCount} tahapan pra-seleksi.{" "}
@@ -405,6 +564,7 @@ function PraSeleksiTab({
                 <TableHead className={jdTh()}>Nama Tahapan</TableHead>
                 <TableHead className={jdTh("text-center")}>Total</TableHead>
                 <TableHead className={jdTh("text-center")}>Pra-Seleksi</TableHead>
+                <TableHead className={jdTh("text-center")}>Diterima</TableHead>
                 <TableHead className={jdTh("text-center")}>Lanjut Interview</TableHead>
                 <TableHead className={jdTh("text-center")}>Ditolak</TableHead>
                 <TableHead className={jdTh()}>Jadwal</TableHead>
@@ -446,6 +606,14 @@ function PraSeleksiTab({
                     <TableCell className={jdTd("text-center tabular-nums")}>
                       <Badge variant="secondary" className="font-mono">
                         {batch.pra_seleksi_count}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className={jdTd("text-center tabular-nums")}>
+                      <Badge
+                        variant="outline"
+                        className="font-mono border-emerald-500/40 text-emerald-700 dark:text-emerald-400"
+                      >
+                        {batch.passed_pra_seleksi_count ?? 0}
                       </Badge>
                     </TableCell>
                     <TableCell className={jdTd("text-center tabular-nums")}>
@@ -495,7 +663,7 @@ function PraSeleksiTab({
               ) : (
                 <TableRow className="hover:bg-transparent">
                   <TableCell
-                    colSpan={8}
+                    colSpan={9}
                     className={jdTd("h-24 text-center text-muted-foreground")}
                   >
                     Belum ada tahapan pra-seleksi untuk lowongan ini.{" "}
@@ -524,7 +692,8 @@ function PraSeleksiTab({
         onPrev={() => setPage((p) => Math.max(1, p - 1))}
         onNext={() => setPage((p) => p + 1)}
       />
-    </div>
+      </TabsContent>
+    </Tabs>
   )
 }
 
@@ -743,8 +912,6 @@ function InterviewCohortsTab({
 // ---------------------------------------------------------------------------
 // Sub-component: Applications per status (downstream stages only)
 // ---------------------------------------------------------------------------
-
-const APPLICATIONS_TAB_PAGE_SIZE = 20
 
 function ApplicationsTab({
   jobId,
@@ -2377,6 +2544,7 @@ export function AdminJobDetailPage() {
             jobId={jobId}
             jobsBase={jobsBase}
             batchBase={batchBase}
+            pelamarBase={pelamarBase}
             enabled={activeTab === "pra_seleksi"}
           />
         </TabsContent>

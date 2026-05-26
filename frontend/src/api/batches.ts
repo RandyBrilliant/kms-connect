@@ -332,6 +332,33 @@ export async function moveApplicationsToBatch(
   return data.data
 }
 
+export interface MarkPraSeleksiPassedInput {
+  application_ids?: number[]
+  note?: string
+}
+
+export interface MarkPraSeleksiPassedResponse {
+  updated_count: number
+  failed_count: number
+  updated_ids: number[]
+  failed: Array<{ application_id: number; reason: string }>
+}
+
+/**
+ * POST /api/batches/{id}/mark-pra-seleksi-passed/
+ * Mark selected (or all pending) PRA_SELEKSI applicants as passed sub-status.
+ */
+export async function markBatchPraSeleksiPassed(
+  batchId: number,
+  input: MarkPraSeleksiPassedInput = {}
+): Promise<MarkPraSeleksiPassedResponse> {
+  const { data } = await api.post<{ data: MarkPraSeleksiPassedResponse }>(
+    `/api/batches/${batchId}/mark-pra-seleksi-passed/`,
+    input
+  )
+  return data.data
+}
+
 // ---------------------------------------------------------------------------
 // Announcements (batch-level broadcast for PRA_SELEKSI / INTERVIEW stages)
 // ---------------------------------------------------------------------------

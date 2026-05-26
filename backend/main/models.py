@@ -720,6 +720,31 @@ class JobApplication(models.Model):
             "Null berarti belum dikonfirmasi."
         ),
     )
+    pra_seleksi_passed = models.BooleanField(
+        _("lulus pra-seleksi"),
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=_(
+            "Sub-status pra-seleksi: null = belum dinilai admin, True = diterima "
+            "(siap dipindahkan ke interview). Jika ditolak, status lamaran "
+            "berubah ke DITOLAK — field ini tidak dipakai."
+        ),
+    )
+    pra_seleksi_passed_at = models.DateTimeField(
+        _("diterima pra-seleksi pada"),
+        null=True,
+        blank=True,
+        help_text=_("Waktu admin menandai pelamar diterima pada tahap pra-seleksi."),
+    )
+    pra_seleksi_passed_by = models.ForeignKey(
+        "account.CustomUser",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="pra_seleksi_passed_applications",
+        verbose_name=_("diterima pra-seleksi oleh"),
+    )
     interview_confirmed_at = models.DateTimeField(
         _("konfirmasi interview pada"),
         null=True,
