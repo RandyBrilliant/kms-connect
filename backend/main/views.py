@@ -56,6 +56,7 @@ from .serializers import (
     ApplicationDocumentStepConfirmSerializer,
     BatchAdvanceToCohortSerializer,
     MarkPraSeleksiPassedSerializer,
+    TransferPraSeleksiToInterviewSerializer,
     BulkApplicationTransitionSerializer,
     ApplicationTransitionSerializer,
     BatchAnnouncementCreateSerializer,
@@ -271,6 +272,11 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
                 _annotated_rejected_count=Count(
                     "applications",
                     filter=Q(applications__status=ApplicationStatus.DITOLAK),
+                    distinct=True,
+                ),
+                _annotated_transferred_count=Count(
+                    "applications",
+                    filter=Q(applications__status=ApplicationStatus.TRANSFERRED),
                     distinct=True,
                 ),
                 _annotated_diterima_count=Count(
@@ -794,6 +800,84 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
                     "failed": failed,
                 },
                 detail=f"{len(updated)} pelamar ditandai diterima pra-seleksi.",
+            )
+        )
+
+    @action(detail=True, methods=["post"], url_path="transfer-to-interview")
+    def transfer_to_interview(self, request, pk=None):
+        """
+        POST /api/batches/{id}/transfer-to-interview/
+        Body: {
+          "target_job": <id>,
+          "interview_cohort": <id>,
+          "application_ids": [<id>, ...],
+          "note": "..."
+        }
+
+        Tutup pra-seleksi di lowongan ini (TRANSFERRED) dan buka lamaran INTERVIEW
+        di lowongan + sesi interview yang dipilih.
+        """
+        batch = self._get_batch_for_action(pk)
+        serializer = TransferPraSeleksiToInterviewSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                error_response(
+                    detail=_first_serializer_error_detail(serializer.errors) or "Data tidak valid.",
+                    code=ApiCode.VALIDATION_ERROR,
+                    errors=serializer.errors,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        target_job = serializer.validated_data["target_job"]
+        cohort = serializer.validated_data["interview_cohort"]
+        ids = serializer.validated_data.get("application_ids") or []
+        note = serializer.validated_data.get("note", "")
+
+        if not ids:
+            return Response(
+                error_response(
+                    detail="application_ids wajib diisi (pilih minimal satu pelamar).",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        applications = list(
+            batch.applications.filter(
+                status=ApplicationStatus.PRA_SELEKSI,
+                pk__in=ids,
+            )
+        )
+
+        results, failed = ApplicationService.bulk_transfer_pra_seleksi_to_interview(
+            applications=applications,
+            target_job=target_job,
+            interview_cohort=cohort,
+            actor=request.user,
+            note=note,
+        )
+
+        return Response(
+            success_response(
+                data={
+                    "transferred_count": len(results),
+                    "failed_count": len(failed),
+                    "transferred": [
+                        {
+                            "source_application_id": src.pk,
+                            "new_application_id": new.pk,
+                        }
+                        for src, new in results
+                    ],
+                    "failed": failed,
+                    "target_job": target_job.pk,
+                    "interview_cohort": cohort.pk,
+                },
+                detail=(
+                    f"{len(results)} pelamar dipindahkan ke interview lowongan "
+                    f"«{target_job.title}»."
+                ),
             )
         )
 

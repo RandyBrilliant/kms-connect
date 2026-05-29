@@ -69,6 +69,7 @@ class JobApplication {
     'BERANGKAT',
     'SELESAI',
     'DITOLAK',
+    'TRANSFERRED',
   ];
 
   final int id;
@@ -99,6 +100,10 @@ class JobApplication {
   /// Admin marked passed pra-seleksi (sub-status; still PRA_SELEKSI until interview).
   final bool? praSeleksiPassed;
   final DateTime? praSeleksiPassedAt;
+  final int? transferredFrom;
+  final int? transferredTo;
+  final DateTime? transferredAt;
+  final String? transferNote;
   final DateTime? interviewConfirmedAt;
   final DateTime appliedAt;
   final DateTime? placementEndDate;
@@ -146,6 +151,10 @@ class JobApplication {
     this.praSeleksiConfirmedAt,
     this.praSeleksiPassed,
     this.praSeleksiPassedAt,
+    this.transferredFrom,
+    this.transferredTo,
+    this.transferredAt,
+    this.transferNote,
     this.interviewConfirmedAt,
     required this.appliedAt,
     this.placementEndDate,
@@ -246,6 +255,10 @@ class JobApplication {
       praSeleksiConfirmedAt: ApiDateTime.parse(json['pra_seleksi_confirmed_at']),
       praSeleksiPassed: json['pra_seleksi_passed'] as bool?,
       praSeleksiPassedAt: ApiDateTime.parse(json['pra_seleksi_passed_at']),
+      transferredFrom: _safeIntOrNull(json['transferred_from']),
+      transferredTo: _safeIntOrNull(json['transferred_to']),
+      transferredAt: ApiDateTime.parse(json['transferred_at']),
+      transferNote: json['transfer_note']?.toString(),
       interviewConfirmedAt: ApiDateTime.parse(json['interview_confirmed_at']),
       appliedAt: ApiDateTime.parseRequired(
         json['applied_at'],
@@ -289,6 +302,8 @@ class JobApplication {
         return 'Diterima';
       case 'DITOLAK':
         return 'Ditolak';
+      case 'TRANSFERRED':
+        return 'Dipindah ke Lowongan Lain';
       case 'BERANGKAT':
         return 'Berangkat';
       case 'SELESAI':
@@ -312,6 +327,8 @@ class JobApplication {
         return const Color(0xFF6C757D); // secondary / grey
       case 'DITOLAK':
         return const Color(0xFFDC3545); // error / red
+      case 'TRANSFERRED':
+        return const Color(0xFF6C757D); // muted — closed, moved elsewhere
       default:
         return const Color(0xFF666666);
     }

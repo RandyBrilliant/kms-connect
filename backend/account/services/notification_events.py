@@ -47,6 +47,7 @@ class NotificationEvent(str, Enum):
     APPLICATION_CADANGAN = "application.cadangan"   # → Applicant (CADANGAN reserve)
     APPLICATION_ACCEPTED = "application.accepted"   # → Applicant (DITERIMA)
     APPLICATION_REJECTED = "application.rejected"   # → Applicant
+    APPLICATION_TRANSFERRED = "application.transferred"  # → Applicant (lintas lowongan)
     APPLICATION_DEPARTED = "application.departed"   # → Applicant (BERANGKAT)
     APPLICATION_COMPLETED = "application.completed" # → Applicant (SELESAI)
 
@@ -208,6 +209,14 @@ _EVENT_CONFIG: dict[NotificationEvent, EventConfig] = {
     ),
     NotificationEvent.APPLICATION_REJECTED: EventConfig(
         notification_type=NotificationType.ERROR,
+        priority=NotificationPriority.HIGH,
+        send_email=True,
+        send_push=True,
+        email_pref_field="email_application_updates",
+        push_pref_field="push_application_updates",
+    ),
+    NotificationEvent.APPLICATION_TRANSFERRED: EventConfig(
+        notification_type=NotificationType.INFO,
         priority=NotificationPriority.HIGH,
         send_email=True,
         send_push=True,
@@ -482,6 +491,21 @@ def _tmpl_application_accepted(ctx: dict) -> tuple[str, str]:
         f"Selamat! Lamaran Anda untuk posisi «{job_title}»{company_str} telah DITERIMA. "
         "Tim kami akan segera menghubungi Anda mengenai langkah berikutnya.",
     )
+
+
+@_t(NotificationEvent.APPLICATION_TRANSFERRED)
+def _tmpl_application_transferred(ctx: dict) -> tuple[str, str]:
+    job_title = ctx.get("job_title", "lowongan")
+    target = ctx.get("target_job_title", "lowongan lain")
+    notes = ctx.get("notes", "")
+    body = (
+        f"Lamaran Anda untuk posisi «{job_title}» telah dipindahkan ke lowongan "
+        f"«{target}» dan melanjutkan ke tahap Interview."
+    )
+    if notes:
+        body += f" Catatan: {notes}."
+    body += " Buka aplikasi untuk detail jadwal interview."
+    return ("Lamaran Dipindah ke Lowongan Lain", body)
 
 
 @_t(NotificationEvent.APPLICATION_REJECTED)

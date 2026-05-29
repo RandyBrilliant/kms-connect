@@ -394,6 +394,8 @@ class _ApplicationDetailPageState extends ConsumerState<ApplicationDetailPage>
         return 'Selesai';
       case 'DITOLAK':
         return 'Ditolak';
+      case 'TRANSFERRED':
+        return 'Dipindah ke Lowongan Lain';
       default:
         return status;
     }
@@ -560,6 +562,30 @@ class _InfoCard extends StatelessWidget {
                         : 'Diterima — menunggu jadwal interview')
                     : 'Menunggu penilaian admin',
               ),
+            ],
+            if (application.status == 'TRANSFERRED' ||
+                application.transferredTo != null ||
+                application.transferredFrom != null) ...[
+              const Divider(height: 20),
+              if (application.status == 'TRANSFERRED' &&
+                  application.transferredTo != null)
+                _InfoRow(
+                  icon: Icons.open_in_new_rounded,
+                  label: 'Lamaran lanjutan',
+                  value: 'Lamaran #${application.transferredTo} (interview lowongan lain)',
+                ),
+              if (application.transferredFrom != null)
+                _InfoRow(
+                  icon: Icons.history_rounded,
+                  label: 'Asal lamaran',
+                  value: 'Dari lamaran #${application.transferredFrom}',
+                ),
+              if (application.transferNote != null &&
+                  application.transferNote!.trim().isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: _ScheduleNotesBlock(text: application.transferNote!),
+                ),
             ],
             // Interview confirmation
             if (application.status == 'INTERVIEW' ||
@@ -952,6 +978,8 @@ class _AttendanceStageSection extends StatelessWidget {
         return 'Selesai';
       case 'DITOLAK':
         return 'Ditolak';
+      case 'TRANSFERRED':
+        return 'Dipindah ke Lowongan Lain';
       default:
         return status;
     }

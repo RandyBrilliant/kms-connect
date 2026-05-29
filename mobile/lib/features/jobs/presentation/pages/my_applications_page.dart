@@ -19,6 +19,7 @@ const _kStatuses = <(String, String)>[
   ('CADANGAN', 'Cadangan'),
   ('DITERIMA', 'Diterima'),
   ('DITOLAK', 'Ditolak'),
+  ('TRANSFERRED', 'Dipindah'),
   ('BERANGKAT', 'Berangkat'),
   ('SELESAI', 'Selesai'),
 ];

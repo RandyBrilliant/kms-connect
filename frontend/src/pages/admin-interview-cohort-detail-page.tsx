@@ -1266,6 +1266,7 @@ export function AdminInterviewCohortDetailPage() {
       CADANGAN: [],
       DITERIMA: [],
       DITOLAK: [],
+      TRANSFERRED: [],
       BERANGKAT: [],
       SELESAI: [],
     }

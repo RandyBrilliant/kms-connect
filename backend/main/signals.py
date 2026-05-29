@@ -93,6 +93,7 @@ def notify_on_application_status_change(
         ApplicationStatus.CADANGAN:    NotificationEvent.APPLICATION_CADANGAN,
         ApplicationStatus.DITERIMA:    NotificationEvent.APPLICATION_ACCEPTED,
         ApplicationStatus.DITOLAK:     NotificationEvent.APPLICATION_REJECTED,
+        # TRANSFERRED: notified in ApplicationService.transfer_pra_seleksi_to_interview
         ApplicationStatus.BERANGKAT:   NotificationEvent.APPLICATION_DEPARTED,
         ApplicationStatus.SELESAI:     NotificationEvent.APPLICATION_COMPLETED,
     }

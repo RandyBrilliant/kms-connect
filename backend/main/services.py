@@ -1237,6 +1237,182 @@ class ApplicationService:
 
     @classmethod
     @transaction.atomic
+    def transfer_pra_seleksi_to_interview(
+        cls,
+        application: JobApplication,
+        target_job: LowonganKerja,
+        interview_cohort: InterviewCohort,
+        actor: "CustomUser",
+        note: str = "",
+    ) -> tuple[JobApplication, JobApplication]:
+        """
+        Close pra-seleksi on the source lowongan (TRANSFERRED) and open a new
+        lamaran on another lowongan directly at INTERVIEW + cohort.
+
+        Konfirmasi hadir / pra_seleksi_passed are not required.
+        """
+        actor_role = (
+            "admin"
+            if (actor.role in _ADMIN_ROLES or actor.is_superuser)
+            else "applicant"
+        )
+        if actor_role != "admin":
+            raise TransitionError(
+                "Hanya admin/staff yang dapat memindahkan pelamar ke lowongan lain."
+            )
+
+        if application.status != ApplicationStatus.PRA_SELEKSI:
+            raise TransitionError(
+                "Hanya pelamar di tahap Pra-Seleksi yang dapat dipindahkan ke "
+                "interview lowongan lain."
+            )
+        if application.transferred_to_id:
+            raise TransitionError("Lamaran ini sudah pernah dipindahkan ke lowongan lain.")
+        if target_job.pk == application.job_id:
+            raise TransitionError(
+                "Lowongan tujuan harus berbeda dari lowongan saat ini. "
+                "Gunakan aksi pindah sesi interview pada lowongan yang sama."
+            )
+        if interview_cohort.job_id != target_job.pk:
+            raise TransitionError(
+                "Sesi interview yang dipilih bukan untuk lowongan tujuan."
+            )
+        if not interview_cohort.is_active:
+            raise TransitionError("Sesi interview yang dipilih sudah ditandai non-aktif.")
+
+        now = timezone.now()
+        transfer_note = (note or "").strip() or (
+            f"Dipindahkan ke lowongan «{target_job.title}» — sesi «{interview_cohort.name}»."
+        )
+
+        old_status = application.status
+        application.status = ApplicationStatus.TRANSFERRED
+        application.reviewed_by = actor
+        application.reviewed_at = now
+        application.transferred_at = now
+        application.transferred_by = actor
+        application.transfer_note = transfer_note
+        application.save(
+            update_fields=[
+                "status",
+                "reviewed_by",
+                "reviewed_at",
+                "transferred_at",
+                "transferred_by",
+                "transfer_note",
+                "updated_at",
+            ]
+        )
+
+        ApplicationStatusHistory.objects.create(
+            application=application,
+            from_status=old_status,
+            to_status=ApplicationStatus.TRANSFERRED,
+            changed_by=actor,
+            note=transfer_note,
+        )
+
+        new_app = JobApplication.objects.create(
+            applicant=application.applicant,
+            job=target_job,
+            batch=None,
+            interview_cohort=interview_cohort,
+            status=ApplicationStatus.INTERVIEW,
+            assigned_by=actor,
+            reviewed_by=actor,
+            reviewed_at=now,
+            applied_at=now,
+            transferred_from=application,
+            transferred_at=now,
+            transferred_by=actor,
+            transfer_note=transfer_note,
+        )
+
+        application.transferred_to = new_app
+        application.save(update_fields=["transferred_to", "updated_at"])
+
+        ApplicationStatusHistory.objects.create(
+            application=new_app,
+            from_status="",
+            to_status=ApplicationStatus.INTERVIEW,
+            changed_by=actor,
+            note=(
+                f"Lamaran dibuat dari transfer pra-seleksi lamaran #{application.pk} "
+                f"({application.job.title})."
+            ),
+        )
+
+        cls._notify_transferred_to_interview(
+            source=application,
+            new_application=new_app,
+            note=transfer_note,
+        )
+
+        return application, new_app
+
+    @classmethod
+    def _notify_transferred_to_interview(
+        cls,
+        *,
+        source: JobApplication,
+        new_application: JobApplication,
+        note: str,
+    ) -> None:
+        from account.services.notification_dispatcher import (
+            build_application_context,
+            dispatch,
+        )
+        from account.services.notification_events import NotificationEvent
+
+        try:
+            user = source.applicant.user
+        except Exception:
+            return
+        if not user or not user.is_active:
+            return
+
+        src_ctx = build_application_context(source)
+        src_ctx["user_name"] = user.full_name or user.email
+        src_ctx["target_job_title"] = new_application.job.title
+        src_ctx["notes"] = note
+        dispatch(
+            event=NotificationEvent.APPLICATION_TRANSFERRED,
+            user=user,
+            context=src_ctx,
+            action_url=f"/lamaran/{new_application.pk}",
+            action_label="Lihat Lamaran Baru",
+            deduplicate=False,
+        )
+
+    @classmethod
+    @transaction.atomic
+    def bulk_transfer_pra_seleksi_to_interview(
+        cls,
+        applications: list[JobApplication],
+        target_job: LowonganKerja,
+        interview_cohort: InterviewCohort,
+        actor: "CustomUser",
+        note: str = "",
+    ) -> tuple[list[tuple[JobApplication, JobApplication]], list[dict]]:
+        """Returns ([(source, new), ...], failed)."""
+        results: list[tuple[JobApplication, JobApplication]] = []
+        failed: list[dict] = []
+        for app in applications:
+            try:
+                pair = cls.transfer_pra_seleksi_to_interview(
+                    application=app,
+                    target_job=target_job,
+                    interview_cohort=interview_cohort,
+                    actor=actor,
+                    note=note,
+                )
+                results.append(pair)
+            except TransitionError as e:
+                failed.append({"application_id": app.pk, "reason": str(e)})
+        return results, failed
+
+    @classmethod
+    @transaction.atomic
     def move_applications_to_cohort(
         cls,
         applications: list[JobApplication],

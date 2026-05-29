@@ -20,6 +20,7 @@ export type ApplicationStatus =
   | "CADANGAN"
   | "DITERIMA"
   | "DITOLAK"
+  | "TRANSFERRED"
   | "BERANGKAT"
   | "SELESAI"
 
@@ -34,6 +35,7 @@ export const ACTIVE_APPLICATION_STATUSES: ApplicationStatus[] = [
 
 export const TERMINAL_APPLICATION_STATUSES: ApplicationStatus[] = [
   "DITOLAK",
+  "TRANSFERRED",
   "SELESAI",
 ]
 
@@ -92,6 +94,11 @@ export interface JobApplication {
   /** Sub-status: admin marked passed pra-seleksi (still status PRA_SELEKSI until interview). */
   pra_seleksi_passed?: boolean | null
   pra_seleksi_passed_at?: string | null
+  /** Set when closed as TRANSFERRED or opened from another lowongan. */
+  transferred_from?: number | null
+  transferred_to?: number | null
+  transferred_at?: string | null
+  transfer_note?: string
   interview_confirmed_at: string | null
   applied_at: string
   placement_end_date: string | null
@@ -258,6 +265,7 @@ export const APPLICATION_STATUS_LABELS: Record<ApplicationStatus, string> = {
   CADANGAN: "Cadangan",
   DITERIMA: "Diterima",
   DITOLAK: "Ditolak",
+  TRANSFERRED: "Dipindah ke Lowongan Lain",
   BERANGKAT: "Berangkat",
   SELESAI: "Selesai",
 }
@@ -272,6 +280,7 @@ export const APPLICATION_STATUS_VARIANTS: Record<
   CADANGAN: "outline",
   DITERIMA: "default",
   DITOLAK: "destructive",
+  TRANSFERRED: "outline",
   BERANGKAT: "default",
   SELESAI: "outline",
 }

@@ -332,6 +332,7 @@ class ApplicationStatus(models.TextChoices):
       PRA_SELEKSI → INTERVIEW → DITERIMA → BERANGKAT → SELESAI
       INTERVIEW → CADANGAN → DITERIMA | DITOLAK  (jalur cadangan)
       PRA_SELEKSI | INTERVIEW | CADANGAN | DITERIMA → DITOLAK  (terminal negatif)
+    PRA_SELEKSI → TRANSFERRED  (terminal: dipindah ke lowongan lain)
 
     CADANGAN: Pelamar lulus interview namun ditempatkan sebagai cadangan.
     Dapat dipromosikan ke DITERIMA jika slot utama mundur.
@@ -345,6 +346,7 @@ class ApplicationStatus(models.TextChoices):
     CADANGAN    = "CADANGAN",    _("Tahap Cadangan")   # reserve: menunggu slot
     DITERIMA    = "DITERIMA",    _("Tahap Diterima")
     DITOLAK     = "DITOLAK",     _("Tahap Ditolak")    # terminal: negatif
+    TRANSFERRED = "TRANSFERRED", _("Tahap Dipindah")   # terminal: ke lowongan lain
     BERANGKAT   = "BERANGKAT",   _("Tahap Berangkat")
     SELESAI     = "SELESAI",     _("Tahap Selesai")    # terminal: positif — cooldown 2 thn
 
@@ -643,6 +645,7 @@ class JobApplication(models.Model):
     # Terminal statuses — no further transitions possible.
     TERMINAL_STATUSES = [
         ApplicationStatus.DITOLAK,
+        ApplicationStatus.TRANSFERRED,
         ApplicationStatus.SELESAI,
     ]
 
@@ -744,6 +747,42 @@ class JobApplication(models.Model):
         blank=True,
         related_name="pra_seleksi_passed_applications",
         verbose_name=_("diterima pra-seleksi oleh"),
+    )
+    transferred_from = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="transferred_successors",
+        verbose_name=_("dipindah dari lamaran"),
+        help_text=_("Lamaran sumber jika record ini dibuat dari transfer lintas lowongan."),
+    )
+    transferred_to = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="transferred_predecessors",
+        verbose_name=_("dipindah ke lamaran"),
+        help_text=_("Lamaran pengganti jika pelamar dipindah ke lowongan lain."),
+    )
+    transferred_at = models.DateTimeField(
+        _("dipindah pada"),
+        null=True,
+        blank=True,
+    )
+    transferred_by = models.ForeignKey(
+        "account.CustomUser",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="application_transfers_made",
+        verbose_name=_("dipindah oleh"),
+    )
+    transfer_note = models.TextField(
+        _("catatan transfer"),
+        blank=True,
+        help_text=_("Alasan atau keterangan admin saat memindahkan ke lowongan lain."),
     )
     interview_confirmed_at = models.DateTimeField(
         _("konfirmasi interview pada"),

@@ -92,8 +92,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DatePicker } from "@/components/ui/date-picker"
+import { useJobsForQuickAssignQuery } from "@/hooks/use-jobs-query"
 
 import {
   getBatch,
@@ -105,6 +113,7 @@ import {
   advanceBatchToInterview,
   markBatchPraSeleksiPassed,
   moveApplicationsToBatch,
+  transferBatchToInterview,
 } from "@/api/batches"
 import {
   bulkTransitionApplications,
@@ -375,6 +384,7 @@ const BATCH_APPLICANT_TABS: { value: BatchApplicantTab; label: string }[] = [
   { value: "BERANGKAT", label: "Berangkat" },
   { value: "SELESAI", label: "Selesai" },
   { value: "DITOLAK", label: "Ditolak" },
+  { value: "TRANSFERRED", label: "Dipindah" },
 ]
 
 async function getAllApplicationsByBatchTab(
@@ -485,9 +495,26 @@ function BatchStatusTab({
   const [moveDialogOpen, setMoveDialogOpen] = useState(false)
   const [moveTargetBatchId, setMoveTargetBatchId] = useState<number | null>(null)
   const [moveNote, setMoveNote] = useState("")
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false)
+  const [transferTargetJobId, setTransferTargetJobId] = useState<number | null>(null)
+  const [transferCohortId, setTransferCohortId] = useState<number | null>(null)
+  const [transferNote, setTransferNote] = useState("")
+
+  const { data: jobsForTransfer } = useJobsForQuickAssignQuery(
+    transferDialogOpen
+  )
+  const transferJobOptions = useMemo(() => {
+    const list = jobsForTransfer?.results ?? []
+    return list.filter((j) => j.id !== jobId)
+  }, [jobsForTransfer, jobId])
+
+  useEffect(() => {
+    setTransferCohortId(null)
+  }, [transferTargetJobId])
 
   const isPassedPraSeleksiTab = tab === "PRA_SELEKSI_PASSED"
   const isPendingPraSeleksiTab = tab === "PRA_SELEKSI"
+  const canCrossJobTransfer = isPendingPraSeleksiTab || isPassedPraSeleksiTab
   const nextStatus = isPassedPraSeleksiTab
     ? "INTERVIEW"
     : isPendingPraSeleksiTab
@@ -721,8 +748,68 @@ function BatchStatusTab({
     }
   }
 
+  const runTransferToOtherJob = async () => {
+    const ids = Array.from(selected)
+    if (!ids.length) return
+    if (transferTargetJobId == null) {
+      toast.error("Pilih lowongan tujuan terlebih dahulu.")
+      return
+    }
+    if (transferCohortId == null) {
+      toast.error("Pilih sesi interview pada lowongan tujuan.")
+      return
+    }
+    setLoading(true)
+    try {
+      const result = await transferBatchToInterview(batchId, {
+        target_job: transferTargetJobId,
+        interview_cohort: transferCohortId,
+        application_ids: ids,
+        note: transferNote.trim() || note.trim() || undefined,
+      })
+      await queryClient.invalidateQueries({ queryKey: ["applications"] })
+      await queryClient.invalidateQueries({ queryKey: ["batch", batchId] })
+      await queryClient.invalidateQueries({ queryKey: ["batches", { job: jobId }] })
+      await queryClient.invalidateQueries({
+        queryKey: ["interview-cohort", transferCohortId],
+      })
+      await queryClient.invalidateQueries({ queryKey: ["interview-cohorts"] })
+      await queryClient.invalidateQueries({
+        queryKey: ["cohort-applications", transferCohortId],
+      })
+      await queryClient.invalidateQueries({
+        queryKey: ["batches", { job: transferTargetJobId }],
+      })
+      setSelected(new Set())
+      setNote("")
+      setTransferNote("")
+      setTransferTargetJobId(null)
+      setTransferCohortId(null)
+      setTransferDialogOpen(false)
+
+      if (result.transferred_count > 0) {
+        toast.success(
+          `${result.transferred_count} pelamar dipindahkan ke interview lowongan lain.`
+        )
+      }
+      if (result.failed_count > 0) {
+        const topReason = result.failed[0]?.reason
+        toast.error(
+          `${result.failed_count} pelamar gagal dipindahkan.`,
+          topReason ?? "Cek status terbaru lalu coba lagi."
+        )
+      }
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })
+        ?.response?.data?.detail
+      toast.error("Gagal memindahkan ke lowongan lain.", detail ?? "Coba lagi.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const showCheckboxCol =
-    apps.length > 0 && !!(nextStatus || canReject || canMarkPassed)
+    apps.length > 0 && !!(nextStatus || canReject || canMarkPassed || canCrossJobTransfer)
   const showDocProgressCol = status === "DITERIMA"
   const showCohortCol = isManagedByCohort
   const tableColSpan =
@@ -764,7 +851,8 @@ function BatchStatusTab({
       )}
 
       {/* Action bar — only shown for PRA_SELEKSI / DITOLAK on this page */}
-      {filteredApps.length > 0 && (nextStatus || canReject || canMarkPassed) && (
+      {filteredApps.length > 0 &&
+        (nextStatus || canReject || canMarkPassed || canCrossJobTransfer) && (
         <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-muted/30 p-3">
           <div className="flex flex-col gap-1 flex-1 min-w-[160px]">
             <Label className="text-xs">
@@ -828,6 +916,19 @@ function BatchStatusTab({
               Pindah ke Tahapan Lain
             </Button>
           )}
+          {canCrossJobTransfer && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="cursor-pointer"
+              disabled={selected.size === 0 || loading}
+              onClick={() => setTransferDialogOpen(true)}
+              title="Tutup pra-seleksi di lowongan ini dan buka interview di lowongan lain"
+            >
+              <IconExternalLink className="mr-1 size-4" />
+              Interview Lowongan Lain
+            </Button>
+          )}
           {canReject && (
             <Button
               size="sm"
@@ -886,6 +987,105 @@ function BatchStatusTab({
               className="cursor-pointer"
               disabled={loading || advanceCohortId == null || selected.size === 0}
               onClick={() => void runAdvanceToCohort()}
+            >
+              {loading ? "Memproses..." : "Pindahkan"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cross-job transfer → INTERVIEW on another lowongan */}
+      <Dialog
+        open={transferDialogOpen}
+        onOpenChange={(open) => {
+          setTransferDialogOpen(open)
+          if (!open) {
+            setTransferTargetJobId(null)
+            setTransferCohortId(null)
+            setTransferNote("")
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Interview di Lowongan Lain</DialogTitle>
+            <DialogDescription>
+              Lamaran pra-seleksi di lowongan ini akan ditutup sebagai{" "}
+              <span className="font-medium">Dipindah</span>. Sistem membuat
+              lamaran baru berstatus Interview pada lowongan dan sesi yang Anda
+              pilih. Konfirmasi hadir atau sub-status diterima pra-seleksi tidak
+              wajib.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
+              <span className="font-medium">{selected.size}</span> pelamar akan
+              dipindahkan.
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>
+                Lowongan tujuan <span className="text-destructive">*</span>
+              </Label>
+              <Select
+                value={transferTargetJobId != null ? String(transferTargetJobId) : ""}
+                onValueChange={(v) =>
+                  setTransferTargetJobId(v ? Number(v) : null)
+                }
+              >
+                <SelectTrigger className="cursor-pointer">
+                  <SelectValue placeholder="Pilih lowongan..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {transferJobOptions.map((j) => (
+                    <SelectItem key={j.id} value={String(j.id)} className="cursor-pointer">
+                      {j.title}
+                      {j.company_name ? ` — ${j.company_name}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {transferTargetJobId != null ? (
+              <CohortSelectField
+                jobId={transferTargetJobId}
+                value={transferCohortId}
+                onChange={setTransferCohortId}
+                required
+                helperText="Sesi interview pada lowongan tujuan."
+              />
+            ) : null}
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">
+                Catatan <span className="text-muted-foreground">(opsional)</span>
+              </Label>
+              <Input
+                placeholder="Catatan transfer..."
+                value={transferNote}
+                onChange={(e) => setTransferNote(e.target.value)}
+                className="h-8 text-sm"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              className="cursor-pointer"
+              disabled={loading}
+              onClick={() => setTransferDialogOpen(false)}
+            >
+              Batal
+            </Button>
+            <Button
+              type="button"
+              className="cursor-pointer"
+              disabled={
+                loading ||
+                selected.size === 0 ||
+                transferTargetJobId == null ||
+                transferCohortId == null
+              }
+              onClick={() => void runTransferToOtherJob()}
             >
               {loading ? "Memproses..." : "Pindahkan"}
             </Button>

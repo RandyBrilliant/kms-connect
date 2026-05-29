@@ -324,6 +324,10 @@ class JobApplicationSerializer(serializers.ModelSerializer):
             "pra_seleksi_confirmed_at",
             "pra_seleksi_passed",
             "pra_seleksi_passed_at",
+            "transferred_from",
+            "transferred_to",
+            "transferred_at",
+            "transfer_note",
             "interview_confirmed_at",
             "applied_at",
             "placement_end_date",
@@ -377,6 +381,10 @@ class JobApplicationSerializer(serializers.ModelSerializer):
             "pra_seleksi_confirmed_at",
             "pra_seleksi_passed",
             "pra_seleksi_passed_at",
+            "transferred_from",
+            "transferred_to",
+            "transferred_at",
+            "transfer_note",
             "interview_confirmed_at",
             "pra_seleksi_notes",
             "interview_notes",
@@ -870,6 +878,7 @@ class LamaranBatchSerializer(serializers.ModelSerializer):
     advanced_count = serializers.SerializerMethodField(read_only=True)
     confirmed_pra_seleksi_count = serializers.SerializerMethodField(read_only=True)
     passed_pra_seleksi_count = serializers.SerializerMethodField(read_only=True)
+    transferred_count = serializers.SerializerMethodField(read_only=True)
     confirmed_interview_count = serializers.SerializerMethodField(read_only=True)
     diterima_count = serializers.SerializerMethodField(read_only=True)
     pengumpulan_dokumen_confirmed_count = serializers.SerializerMethodField(read_only=True)
@@ -901,6 +910,7 @@ class LamaranBatchSerializer(serializers.ModelSerializer):
             "rejected_count",
             "confirmed_pra_seleksi_count",
             "passed_pra_seleksi_count",
+            "transferred_count",
             "confirmed_interview_count",
             "diterima_count",
             "pengumpulan_dokumen_confirmed_count",
@@ -922,6 +932,7 @@ class LamaranBatchSerializer(serializers.ModelSerializer):
             "rejected_count",
             "confirmed_pra_seleksi_count",
             "passed_pra_seleksi_count",
+            "transferred_count",
             "confirmed_interview_count",
             "diterima_count",
             "pengumpulan_dokumen_confirmed_count",
@@ -990,6 +1001,12 @@ class LamaranBatchSerializer(serializers.ModelSerializer):
         if annotated is not None:
             return int(annotated)
         return obj.applications.filter(status=ApplicationStatus.DITOLAK).count()
+
+    def get_transferred_count(self, obj) -> int:
+        annotated = getattr(obj, "_annotated_transferred_count", None)
+        if annotated is not None:
+            return int(annotated)
+        return obj.applications.filter(status=ApplicationStatus.TRANSFERRED).count()
 
     def get_diterima_count(self, obj) -> int:
         annotated = getattr(obj, "_annotated_diterima_count", None)
@@ -1512,6 +1529,37 @@ class MarkPraSeleksiPassedSerializer(serializers.Serializer):
             "Subset opsional (default: semua PRA_SELEKSI di batch yang belum ditandai). "
             "Maks. 500."
         ),
+    )
+    note = serializers.CharField(required=False, allow_blank=True, max_length=500)
+
+    def validate_application_ids(self, value):
+        if value is None:
+            return value
+        deduped = list(dict.fromkeys(value))
+        if len(deduped) > 500:
+            raise serializers.ValidationError("Maksimal 500 lamaran per permintaan.")
+        return deduped
+
+
+class TransferPraSeleksiToInterviewSerializer(serializers.Serializer):
+    """
+    POST /api/batches/{id}/transfer-to-interview/
+    Tutup lamaran pra-seleksi (TRANSFERRED) dan buka INTERVIEW di lowongan lain.
+    """
+
+    target_job = serializers.PrimaryKeyRelatedField(
+        queryset=LowonganKerja.objects.all(),
+        help_text="Lowongan tujuan (harus berbeda dari lowongan lamaran sumber).",
+    )
+    interview_cohort = serializers.PrimaryKeyRelatedField(
+        queryset=InterviewCohort.objects.filter(is_active=True),
+        help_text="Sesi interview pada lowongan tujuan.",
+    )
+    application_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        required=False,
+        allow_empty=False,
+        help_text="Subset pelamar PRA_SELEKSI di batch (default: tidak dipakai — wajib kirim IDs).",
     )
     note = serializers.CharField(required=False, allow_blank=True, max_length=500)
 

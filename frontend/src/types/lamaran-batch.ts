@@ -50,6 +50,8 @@ export interface LamaranBatch {
   confirmed_pra_seleksi_count: number
   /** Still PRA_SELEKSI but marked diterima (ready for interview routing). */
   passed_pra_seleksi_count: number
+  /** Closed as TRANSFERRED (moved to another job's interview). */
+  transferred_count: number
   confirmed_interview_count: number
   diterima_count: number
   pengumpulan_dokumen_confirmed_count: number

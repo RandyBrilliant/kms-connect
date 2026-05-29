@@ -359,6 +359,40 @@ export async function markBatchPraSeleksiPassed(
   return data.data
 }
 
+export interface TransferPraSeleksiToInterviewInput {
+  target_job: number
+  interview_cohort: number
+  application_ids: number[]
+  note?: string
+}
+
+export interface TransferPraSeleksiToInterviewResponse {
+  transferred_count: number
+  failed_count: number
+  transferred: Array<{
+    source_application_id: number
+    new_application_id: number
+  }>
+  failed: Array<{ application_id: number; reason: string }>
+  target_job: number
+  interview_cohort: number
+}
+
+/**
+ * POST /api/batches/{id}/transfer-to-interview/
+ * Close pra-seleksi here (TRANSFERRED) and open INTERVIEW on another job + cohort.
+ */
+export async function transferBatchToInterview(
+  batchId: number,
+  input: TransferPraSeleksiToInterviewInput
+): Promise<TransferPraSeleksiToInterviewResponse> {
+  const { data } = await api.post<{ data: TransferPraSeleksiToInterviewResponse }>(
+    `/api/batches/${batchId}/transfer-to-interview/`,
+    input
+  )
+  return data.data
+}
+
 // ---------------------------------------------------------------------------
 // Announcements (batch-level broadcast for PRA_SELEKSI / INTERVIEW stages)
 // ---------------------------------------------------------------------------

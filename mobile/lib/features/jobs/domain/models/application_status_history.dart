@@ -58,6 +58,8 @@ class ApplicationStatusHistory {
         return 'Diterima';
       case 'DITOLAK':
         return 'Ditolak';
+      case 'TRANSFERRED':
+        return 'Dipindah ke Lowongan Lain';
       case 'BERANGKAT':
         return 'Berangkat';
       case 'SELESAI':
