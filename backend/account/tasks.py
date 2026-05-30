@@ -123,8 +123,8 @@ def optimize_document_image(self, document_id: int):
 @shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=5)
 def send_email_async(self, to_email: str, subject: str, body: str, html_message: str = None):
     """
-    Kirim email di background via Django (Mailgun API bila MAILGUN_API_KEY diset).
-    Rate-limited to prevent Mailgun API errors.
+    Kirim email di background via Django (Resend API bila RESEND_API_KEY diset).
+    Rate-limited to prevent Resend API errors.
     """
     from .services.email_service import send_email
     from .services.rate_limiter import RateLimitExceeded
@@ -147,7 +147,7 @@ def send_verification_email_task(self, user_id: int, logo_url: str = "", verific
     """
     Kirim email verifikasi dengan 6-digit kode ke user.
     verification_code: 6-digit kode verifikasi.
-    Rate-limited to prevent Mailgun API errors.
+    Rate-limited to prevent Resend API errors.
     """
     from .models import CustomUser
     from .email_utils import render_email, COMPANY_NAME
@@ -189,7 +189,7 @@ def send_verification_email_task(self, user_id: int, logo_url: str = "", verific
 def send_password_reset_email_task(self, user_id: int, logo_url: str = ""):
     """
     Kirim email reset password ke user. Dipanggil oleh admin (send-password-reset).
-    Rate-limited to prevent Mailgun API errors.
+    Rate-limited to prevent Resend API errors.
     """
     from .models import CustomUser
     from .email_utils import render_email, make_password_reset_link, COMPANY_NAME
@@ -230,7 +230,7 @@ def send_notification_email_task(self, notification_id: int):
     """
     Kirim email untuk notifikasi.
     Dipanggil saat membuat notifikasi dengan send_email=True.
-    Rate-limited to prevent Mailgun API errors.
+    Rate-limited to prevent Resend API errors.
     """
     from django.utils import timezone
     from .models import Notification
@@ -345,7 +345,7 @@ def send_event_email_task(
 
     Uses per-event HTML templates when available, falls back to the generic
     notification_email.html template.
-    Rate-limited to prevent Mailgun API errors.
+    Rate-limited to prevent Resend API errors.
 
     Template lookup order:
       1. account/emails/events/<event_snake>.html  (per-event template)
@@ -425,7 +425,7 @@ def send_admin_daily_digest(self):
     - Number of new applicants registered today
 
     Scheduled via CELERY_BEAT_SCHEDULE (see backend/settings.py).
-    Rate-limited to prevent Mailgun API errors.
+    Rate-limited to prevent Resend API errors.
     """
     from django.conf import settings
     from django.utils import timezone

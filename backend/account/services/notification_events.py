@@ -244,7 +244,7 @@ _EVENT_CONFIG: dict[NotificationEvent, EventConfig] = {
     NotificationEvent.JOB_DEADLINE_APPROACHING: EventConfig(
         notification_type=NotificationType.WARNING,
         priority=NotificationPriority.NORMAL,
-        # Email reminders disabled to reduce Mailgun risk/spam volume.
+        # Email reminders disabled to reduce email volume / spam risk.
         send_email=False,
         send_push=True,
         email_pref_field="email_job_deadline_reminder",
@@ -263,7 +263,7 @@ _EVENT_CONFIG: dict[NotificationEvent, EventConfig] = {
     NotificationEvent.BATCH_DEPARTURE_UPCOMING_7D: EventConfig(
         notification_type=NotificationType.INFO,
         priority=NotificationPriority.HIGH,
-        # Email reminders disabled to reduce Mailgun risk/spam volume.
+        # Email reminders disabled to reduce email volume / spam risk.
         send_email=False,
         send_push=True,
         email_pref_field="email_batch_departure_reminder",
@@ -272,7 +272,7 @@ _EVENT_CONFIG: dict[NotificationEvent, EventConfig] = {
     NotificationEvent.BATCH_DEPARTURE_UPCOMING_1D: EventConfig(
         notification_type=NotificationType.WARNING,
         priority=NotificationPriority.URGENT,
-        # Email reminders disabled to reduce Mailgun risk/spam volume.
+        # Email reminders disabled to reduce email volume / spam risk.
         send_email=False,
         send_push=True,
         email_pref_field="email_batch_departure_reminder",

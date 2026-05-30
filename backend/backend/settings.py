@@ -354,26 +354,21 @@ if GOOGLE_APPLICATION_CREDENTIALS:
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = GOOGLE_APPLICATION_CREDENTIALS
 
 # -----------------------------------------------------------------------------
-# Email (Mailgun API – bukan SMTP)
+# Email (Resend API via django-anymail – bukan SMTP)
 # -----------------------------------------------------------------------------
-MAILGUN_API_KEY = _env("MAILGUN_API_KEY", "")
-MAILGUN_SENDER_DOMAIN = _env("MAILGUN_SENDER_DOMAIN", "")  # domain pengirim, mis. mg.yourdomain.com
+RESEND_API_KEY = _env("RESEND_API_KEY", "")
 DEFAULT_FROM_EMAIL = _env("DEFAULT_FROM_EMAIL", "noreply@localhost")
 
-if MAILGUN_API_KEY:
-    EMAIL_BACKEND = "anymail.backends.mailgun.EmailBackend"
-    ANYMAIL = {"MAILGUN_API_KEY": MAILGUN_API_KEY}
-    if MAILGUN_SENDER_DOMAIN:
-        ANYMAIL["MAILGUN_SENDER_DOMAIN"] = MAILGUN_SENDER_DOMAIN
-    if _env("MAILGUN_API_URL"):  # EU: https://api.eu.mailgun.net/v3
-        ANYMAIL["MAILGUN_API_URL"] = _env("MAILGUN_API_URL")
+if RESEND_API_KEY:
+    EMAIL_BACKEND = "anymail.backends.resend.EmailBackend"
+    ANYMAIL = {"RESEND_API_KEY": RESEND_API_KEY}
 else:
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
-# Email rate limiting (to prevent Mailgun API rate limit errors)
-# Mailgun Foundation plan: ~100-300/minute, we use 60/minute as safe default
-EMAIL_RATE_LIMIT = int(_env("EMAIL_RATE_LIMIT", "60"))  # Max emails per window
-EMAIL_RATE_LIMIT_WINDOW = int(_env("EMAIL_RATE_LIMIT_WINDOW", "60"))  # Window in seconds
+# Email rate limiting (Resend default: 5 API requests/second per team)
+# Default 4 req/sec leaves headroom; increase via support if Resend raises your limit
+EMAIL_RATE_LIMIT = int(_env("EMAIL_RATE_LIMIT", "4"))  # Max emails per window
+EMAIL_RATE_LIMIT_WINDOW = int(_env("EMAIL_RATE_LIMIT_WINDOW", "1"))  # Window in seconds
 
 # -----------------------------------------------------------------------------
 # Celery (background tasks: email, OCR, export, push)

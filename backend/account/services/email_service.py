@@ -1,8 +1,8 @@
 """
-Rate-limited email service for Mailgun.
+Rate-limited email service for Resend.
 
 This module provides a centralized email sending function that automatically
-applies rate limiting to prevent Mailgun API rate limit errors.
+applies rate limiting to prevent Resend API rate limit errors.
 
 Usage:
     from account.services.email_service import send_email
@@ -29,9 +29,9 @@ from .rate_limiter import RateLimitExceeded, get_limiter
 
 logger = logging.getLogger(__name__)
 
-# Default rate limit settings
-DEFAULT_RATE_LIMIT = 60  # emails per window
-DEFAULT_RATE_LIMIT_WINDOW = 60  # seconds
+# Default rate limit settings (aligned with Resend: 5 req/sec)
+DEFAULT_RATE_LIMIT = 4  # emails per window
+DEFAULT_RATE_LIMIT_WINDOW = 1  # seconds
 
 
 def get_email_rate_limit() -> int:
@@ -57,7 +57,7 @@ def send_email(
     Send an email with automatic rate limiting.
 
     This is the recommended way to send emails in the application. It ensures
-    that Mailgun API rate limits are respected across all Celery workers.
+    that Resend API rate limits are respected across all Celery workers.
 
     Args:
         to: Recipient email address(es)
@@ -87,7 +87,7 @@ def send_email(
 
     # Apply rate limiting (unless bypassed)
     if not bypass_rate_limit:
-        limiter = get_limiter("mailgun", limit=rate_limit, period=rate_window)
+        limiter = get_limiter("resend", limit=rate_limit, period=rate_window)
 
         if not limiter.acquire(block=False):
             status = limiter.get_status()
@@ -95,7 +95,7 @@ def send_email(
                 f"Email rate limit hit: {status['current_count']}/{status['limit']} emails sent. "
                 f"Retry after {status['reset_in']:.1f}s. Recipients: {recipient_list}"
             )
-            raise RateLimitExceeded("mailgun", retry_after=status["reset_in"])
+            raise RateLimitExceeded("resend", retry_after=status["reset_in"])
 
     # Send the email
     try:
@@ -168,5 +168,5 @@ def get_rate_limit_status() -> dict:
     """
     rate_limit = get_email_rate_limit()
     rate_window = get_email_rate_limit_window()
-    limiter = get_limiter("mailgun", limit=rate_limit, period=rate_window)
+    limiter = get_limiter("resend", limit=rate_limit, period=rate_window)
     return limiter.get_status()

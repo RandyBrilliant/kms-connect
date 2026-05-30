@@ -76,7 +76,7 @@ export function PrivacyPolicyPage() {
               <strong>Amazon S3 / DigitalOcean Spaces</strong> — untuk penyimpanan dokumen yang Anda unggah.
             </li>
             <li>
-              <strong>Mailgun</strong> — untuk pengiriman email transaksional (verifikasi, notifikasi).
+              <strong>Resend</strong> — untuk pengiriman email transaksional (verifikasi, notifikasi).
             </li>
           </ul>
         </Section>

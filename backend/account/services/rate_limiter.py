@@ -1,5 +1,5 @@
 """
-Redis-based Token Bucket Rate Limiter for Mailgun API calls.
+Redis-based Token Bucket Rate Limiter for Resend API calls.
 
 This module provides a rate limiter that works across multiple Celery workers
 by using Redis as a shared state store.
@@ -7,16 +7,16 @@ by using Redis as a shared state store.
 Usage:
     from .rate_limiter import rate_limit, RateLimitExceeded
 
-    @rate_limit("mailgun", limit=60, period=60)
+    @rate_limit("resend", limit=4, period=1)
     def send_email(...):
         ...
 
 Or manually:
-    limiter = RateLimiter("mailgun", limit=60, period=60)
+    limiter = RateLimiter("resend", limit=4, period=1)
     if limiter.acquire():
         send_email(...)
     else:
-        raise RateLimitExceeded("mailgun")
+        raise RateLimitExceeded("resend")
 """
 
 import logging
@@ -46,7 +46,7 @@ class RateLimiter:
     per `period` seconds.
 
     Args:
-        key: Unique identifier for this rate limiter (e.g., "mailgun")
+        key: Unique identifier for this rate limiter (e.g., "resend")
         limit: Maximum number of operations allowed per period
         period: Time window in seconds (default: 60)
     """
@@ -198,7 +198,7 @@ def rate_limit(
         RateLimitExceeded: When rate limit is exceeded and not blocking
 
     Example:
-        @rate_limit("mailgun", limit=60, period=60)
+        @rate_limit("resend", limit=4, period=1)
         def send_email(to, subject, body):
             ...
     """
