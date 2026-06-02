@@ -31,12 +31,17 @@ export function ChatThreadList({ basePath, activeThreadId }: ChatThreadListProps
     page,
     page_size: 30,
     search: search.trim() || undefined,
+    ordering: "-last_message_at",
   })
 
   const navigate = useNavigate()
+  const threads = (data?.results ?? []).filter((thread) => thread.last_message)
+  const totalPages = data ? Math.max(1, Math.ceil(data.count / 30)) : 1
+  const hasPrev = Boolean(data?.previous) && page > 1
+  const hasNext = Boolean(data?.next) && page < totalPages
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       {/* Search */}
       <div className="relative p-3 border-b">
         <IconSearch className="absolute left-6 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
@@ -51,12 +56,12 @@ export function ChatThreadList({ basePath, activeThreadId }: ChatThreadListProps
         />
       </div>
 
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 min-h-0 overflow-hidden">
         {isLoading ? (
           <div className="flex justify-center py-8">
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
           </div>
-        ) : !data?.results?.length ? (
+        ) : !threads.length ? (
           <div className="flex flex-col items-center gap-2 py-12 text-center px-4">
             <IconMessage className="size-10 text-muted-foreground/40" />
             <p className="text-sm text-muted-foreground">
@@ -65,7 +70,7 @@ export function ChatThreadList({ basePath, activeThreadId }: ChatThreadListProps
           </div>
         ) : (
           <ul className="divide-y">
-            {data.results.map((thread) => {
+            {threads.map((thread) => {
               const isActive = thread.id === activeThreadId
               const lastMsg = thread.last_message
               return (
@@ -140,26 +145,26 @@ export function ChatThreadList({ basePath, activeThreadId }: ChatThreadListProps
       </ScrollArea>
 
       {/* Pagination controls (simple prev/next) */}
-      {data && data.count > 30 && (
+      {data && totalPages > 1 && (
         <div className="flex items-center justify-between px-4 py-2 border-t">
           <Button
             variant="ghost"
             size="sm"
             className="cursor-pointer text-xs"
             onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page <= 1}
+            disabled={!hasPrev}
           >
             Sebelumnya
           </Button>
           <span className="text-xs text-muted-foreground">
-            Hal. {page} / {Math.ceil(data.count / 30)}
+            Hal. {page} / {totalPages}
           </span>
           <Button
             variant="ghost"
             size="sm"
             className="cursor-pointer text-xs"
             onClick={() => setPage((p) => p + 1)}
-            disabled={page >= Math.ceil(data.count / 30)}
+            disabled={!hasNext}
           >
             Selanjutnya
           </Button>

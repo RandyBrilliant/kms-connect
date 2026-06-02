@@ -16,7 +16,7 @@ Applicant endpoints (IsApplicant):
 """
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
-from django.db.models import Count, Q
+from django.db.models import Count, Max, Q
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -65,12 +65,13 @@ class ChatThreadViewSet(viewsets.ReadOnlyModelViewSet):
         "application__job__title",
         "application__interview_cohort__name",
     ]
-    ordering_fields = ["updated_at", "created_at"]
-    ordering = ["-updated_at"]
+    ordering_fields = ["updated_at", "created_at", "last_message_at"]
+    ordering = ["-last_message_at", "-updated_at"]
 
     def get_queryset(self):
         return (
             ChatThread.objects
+            .annotate(last_message_at=Max("messages__sent_at"))
             .select_related(
                 "application__applicant__user",
                 "application__job",
@@ -80,6 +81,22 @@ class ChatThreadViewSet(viewsets.ReadOnlyModelViewSet):
             )
             .prefetch_related("messages__sender")
         )
+
+    def list(self, request, *args, **kwargs):
+        """
+        Thread inbox list should only show conversations that already have
+        at least one message.
+        """
+        queryset = self.filter_queryset(self.get_queryset())
+        queryset = queryset.filter(messages__isnull=False).distinct()
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
 
     @action(detail=False, methods=["get"], url_path="unread-summary")
     def unread_summary(self, request):
