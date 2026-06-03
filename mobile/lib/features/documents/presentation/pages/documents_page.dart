@@ -14,11 +14,14 @@ import '../../utils/bundled_document_templates.dart';
 
 /// Matches backend `account.document_specs` / `seed_document_types` (PHASE_INITIAL).
 const _kDocPhaseInitialSubtitle =
-    'Saat pendaftaran: KTP, ijazah, kartu keluarga, BPJS, paspor, foto TKI; CV, bukti penyerahan, dan sertifikat (opsional).';
+    'Saat pendaftaran: KTP, ijazah, kartu keluarga, BPJS, paspor, foto TKI; CV dan sertifikat (opsional).';
 
 /// Matches PHASE_POST_INTERVIEW in the same seed/specs.
 const _kDocPhasePostSubtitle =
     'Setelah lulus wawancara: surat izin keluarga, surat kesehatan, perjanjian penempatan, buku nikah (opsional), dll.';
+
+const _kDocPhaseInterviewSubtitle =
+    'Saat tahap interview: bukti penyerahan dokumen (unduh template, isi, unggah PDF).';
 
 class DocumentsPage extends ConsumerWidget {
   const DocumentsPage({super.key});
@@ -117,6 +120,12 @@ class DocumentsPage extends ConsumerWidget {
                     final postInterview = items
                         .where((i) => i.type.isPostInterviewPhase)
                         .toList();
+                    final interviewStage = postInterview
+                        .where((i) => i.type.code == 'bukti-penyerahan-dokumen')
+                        .toList();
+                    final postAfterInterview = postInterview
+                        .where((i) => i.type.code != 'bukti-penyerahan-dokumen')
+                        .toList();
                     final otherPhase = items
                         .where(
                           (i) =>
@@ -149,7 +158,14 @@ class DocumentsPage extends ConsumerWidget {
                           ..._buildPhaseSection(
                             context,
                             ref,
-                            postInterview,
+                            interviewStage,
+                            'Tahap interview',
+                            _kDocPhaseInterviewSubtitle,
+                          ),
+                          ..._buildPhaseSection(
+                            context,
+                            ref,
+                            postAfterInterview,
                             'Setelah wawancara',
                             _kDocPhasePostSubtitle,
                           ),

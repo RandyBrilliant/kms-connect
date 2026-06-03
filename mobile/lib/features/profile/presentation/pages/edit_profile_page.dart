@@ -538,6 +538,18 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     return _missingRequiredFields.contains(fieldLabel) ? 'Wajib diisi' : null;
   }
 
+  /// Earliest selectable passport expiry (must be after issue date when known).
+  DateTime get _passportExpiryFirstDate {
+    final issue = _pickedPassportIssueDate;
+    if (issue != null) {
+      return issue.add(const Duration(days: 1));
+    }
+    return DateTime(2000);
+  }
+
+  DateTime get _passportExpiryLastDate =>
+      DateTime(DateTime.now().year + 20);
+
   String? _passportDateValidationMessage() {
     if (_hasPassport != true) return null;
     final issue = _pickedPassportIssueDate;
@@ -1505,10 +1517,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                       validator: _passportExpiryValidator,
                                       onTap: () => _pickGenericDate(
                                         current: _pickedPassportExpiryDate,
-                                        firstDate: DateTime.now(),
-                                        lastDate: DateTime(
-                                          DateTime.now().year + 20,
-                                        ),
+                                        firstDate: _passportExpiryFirstDate,
+                                        lastDate: _passportExpiryLastDate,
                                         onPicked: (d) => setState(() {
                                           _pickedPassportExpiryDate = d;
                                           _passportExpiryDateCtrl.text =

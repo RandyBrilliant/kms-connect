@@ -21,8 +21,8 @@ DOCUMENT_NAMES = {
     "pas-foto":                      ("Pas Foto",                         True,  6,  "JPG/PNG, maks. 500 KB.", INITIAL),
     "cv":                            ("Daftar Riwayat Hidup (CV)",        False, 7,  "Contoh format tersedia di aplikasi. PDF, maks. 2 MB.", INITIAL),
     "sertifikat-keterampilan":        ("Sertifikat Keterampilan",           False, 8,  "Jika ada. PDF, maks. 2 MB.", INITIAL),
-    "bukti-penyerahan-dokumen":       ("Bukti Penyerahan Dokumen",          False, 9,  "Template PDF tersedia di aplikasi. PDF, maks. 2 MB.", INITIAL),
-    # ── POST_INTERVIEW ───────────────────────────────────────────────────────
+    # ── POST_INTERVIEW (beberapa tersedia lebih awal — lihat applicant_document_access) ──
+    "bukti-penyerahan-dokumen":       ("Bukti Penyerahan Dokumen",          False, 9,  "Template PDF tersedia di aplikasi setelah tahap interview. PDF, maks. 2 MB.", POST),
     "ijin-keluarga":                  ("Surat Izin Keluarga (Form Biru)",   True,  10, "Template PDF tersedia di aplikasi. PDF, maks. 2 MB.", POST),
     "surat-keterangan-pemberi-ijin":  ("Surat Keterangan Pemberi Izin",     True,  11, "PDF, maks. 2 MB.", POST),
     "ktp-orangtua-wali":              ("KTP Orangtua / Wali",               True,  12, "JPG/PNG, maks. 500 KB.", POST),
@@ -34,7 +34,7 @@ DOCUMENT_NAMES = {
 
 
 class Command(BaseCommand):
-    help = "Buat/update tipe dokumen TKI (9 INITIAL + 7 POST_INTERVIEW)."
+    help = "Buat/update tipe dokumen TKI (8 INITIAL + 8 POST_INTERVIEW)."
 
     def handle(self, *args, **options):
         for code in DOCUMENT_SPECS:

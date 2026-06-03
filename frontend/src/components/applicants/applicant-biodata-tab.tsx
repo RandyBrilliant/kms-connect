@@ -778,6 +778,8 @@ export function ApplicantBiodataTab({
                           )
                         }
                         placeholder="Pilih tanggal kadaluarsa"
+                        fromYear={2000}
+                        toYear={new Date().getFullYear() + 20}
                       />
                     </Field>
                   )

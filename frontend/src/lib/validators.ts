@@ -131,10 +131,11 @@ export function validateBirthDate(
 }
 
 /**
- * Validate passport expiry date (must be in the future)
+ * Validate passport expiry date (required; past dates allowed for expired passports).
  */
 export function validatePassportExpiry(
-  expiryDate: string | Date
+  expiryDate: string | Date,
+  issueDate?: string | Date | null
 ): { valid: boolean; error?: string } {
   if (!expiryDate) {
     return { valid: false, error: "Tanggal kadaluarsa harus diisi" }
@@ -142,10 +143,16 @@ export function validatePassportExpiry(
 
   const dateObj =
     typeof expiryDate === "string" ? new Date(expiryDate) : expiryDate
-  const today = new Date()
 
-  if (dateObj <= today) {
-    return { valid: false, error: "Paspor sudah kadaluarsa" }
+  if (issueDate) {
+    const issueObj =
+      typeof issueDate === "string" ? new Date(issueDate) : issueDate
+    if (dateObj <= issueObj) {
+      return {
+        valid: false,
+        error: "Tanggal berakhir paspor harus setelah tanggal terbit paspor",
+      }
+    }
   }
 
   return { valid: true }

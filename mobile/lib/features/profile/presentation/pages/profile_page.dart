@@ -320,14 +320,15 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                           onTap: _handleViewBiodataPdf,
                           isLoading: pdfState.isLoading,
                         ),
-                        _ProfessionalMenuItem(
-                          icon: Icons.assignment_outlined,
-                          color: const Color(0xFF2563EB),
-                          title: 'Bukti Penyerahan Dokumen',
-                          subtitle:
-                              'Unduh template, lengkapi, lalu unggah PDF',
-                          onTap: _openBuktiPenyerahanUpload,
-                        ),
+                        if (profile?.hasInterviewLamaran == true)
+                          _ProfessionalMenuItem(
+                            icon: Icons.assignment_outlined,
+                            color: const Color(0xFF2563EB),
+                            title: 'Bukti Penyerahan Dokumen',
+                            subtitle:
+                                'Unduh template, lengkapi, lalu unggah PDF',
+                            onTap: _openBuktiPenyerahanUpload,
+                          ),
                         if (profile?.hasDiterimaLamaran == true)
                           _ProfessionalMenuItem(
                             icon: Icons.psychology_outlined,

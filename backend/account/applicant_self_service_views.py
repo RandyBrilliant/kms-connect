@@ -32,6 +32,11 @@ from .document_specs import validate_document_file, compress_image_file, is_imag
 from .services.biodata_pdf import generate_biodata_pdf
 from .services.pengantar_medical_pdf import generate_pengantar_medical_pdf
 from .services.pengantar_psikologi_pdf import generate_pengantar_psikologi_pdf
+from .services.applicant_document_access import (
+    BUKTI_PENYERAHAN_CODE,
+    applicant_may_upload_document_type,
+    get_applicant_document_types_queryset,
+)
 
 
 class ApplicantSelfServiceMixin:
@@ -301,6 +306,16 @@ class ApplicantDocumentSelfServiceViewSet(ApplicantSelfServiceMixin, viewsets.Mo
         except DocumentType.DoesNotExist:
             raise ValidationError({"document_type": "Tipe dokumen tidak ditemukan."})
 
+        if not applicant_may_upload_document_type(profile, document_type):
+            if document_type.code == BUKTI_PENYERAHAN_CODE:
+                detail = (
+                    "Bukti penyerahan dokumen dapat diunggah setelah "
+                    "lamaran Anda masuk tahap interview."
+                )
+            else:
+                detail = "Dokumen ini belum tersedia untuk tahap lamaran Anda saat ini."
+            raise ValidationError({"document_type": detail})
+
         # Validasi format dan ukuran file
         try:
             validate_document_file(file, document_type.code)
@@ -411,19 +426,12 @@ class ApplicantDocumentTypesChecklistView(APIView):
     GET /api/applicants/me/document-types/
 
     Daftar tipe dokumen untuk checklist unggah (mobile), disesuaikan dengan
-    progres lamaran:
-
-    - Hanya fase INITIAL sampai pelamar lulus pra-seleksi pada minimal satu
-      lamaran aktif (status PRA_SELEKSI dengan kehadiran terkonfirmasi) atau
-      mencapai tahap INTERVIEW+.
-    - Setelah itu: semua tipe (INITIAL + POST_INTERVIEW).
+    progres lamaran (lihat account.services.applicant_document_access).
     """
 
     permission_classes = [IsAuthenticated, IsApplicant]
 
     def get(self, request):
-        from main.models import JobApplication, ApplicationStatus
-
         profile = getattr(request.user, "applicant_profile", None)
         if profile is None:
             try:
@@ -439,33 +447,7 @@ class ApplicantDocumentTypesChecklistView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        # Unlock full document checklist once applicant has:
-        # - at least one application where PRA_SELEKSI attendance is confirmed
-        #   (pra_seleksi_confirmed_at is not null), OR
-        # - reached INTERVIEW or later on any application.
-        has_confirmed_pra_seleksi = JobApplication.objects.filter(
-            applicant=profile,
-            status=ApplicationStatus.PRA_SELEKSI,
-            pra_seleksi_confirmed_at__isnull=False,
-        ).exists()
-
-        post_interview_onwards = [
-            ApplicationStatus.INTERVIEW,
-            ApplicationStatus.DITERIMA,
-            ApplicationStatus.BERANGKAT,
-            ApplicationStatus.SELESAI,
-        ]
-        has_reached_interview_or_later = JobApplication.objects.filter(
-            applicant=profile,
-            status__in=post_interview_onwards,
-        ).exists()
-
-        if has_confirmed_pra_seleksi or has_reached_interview_or_later:
-            qs = DocumentType.objects.all().order_by("sort_order", "code")
-        else:
-            qs = DocumentType.objects.filter(phase=DocumentType.PHASE_INITIAL).order_by(
-                "sort_order", "code"
-            )
+        qs = get_applicant_document_types_queryset(profile)
 
         serializer = DocumentTypeSerializer(qs, many=True)
         return Response(

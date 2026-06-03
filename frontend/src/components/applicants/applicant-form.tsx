@@ -924,7 +924,7 @@ export function ApplicantForm({
                 {(field) => (
                   <Field>
                     <FieldLabel htmlFor={field.name}>Tanggal Kadaluarsa Paspor</FieldLabel>
-                    <DatePicker date={field.state.value ? new Date(field.state.value) : null} onDateChange={(d) => field.handleChange(d ? format(d, "yyyy-MM-dd") : "")} placeholder="Pilih tanggal kadaluarsa" />
+                    <DatePicker date={field.state.value ? new Date(field.state.value) : null} onDateChange={(d) => field.handleChange(d ? format(d, "yyyy-MM-dd") : "")} placeholder="Pilih tanggal kadaluarsa" fromYear={2000} toYear={new Date().getFullYear() + 20} />
                   </Field>
                 )}
               </form.Field>

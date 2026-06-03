@@ -10,9 +10,9 @@ Fase INITIAL (diunggah saat pendaftaran):
   6. Photo TKI
   7. Daftar Riwayat Hidup / CV (opsional, PDF)
   8. Sertifikat Keterampilan (opsional)
-  9. Bukti Penyerahan Dokumen (opsional, PDF)
 
-Fase POST_INTERVIEW (diunggah setelah lulus interview):
+Fase POST_INTERVIEW (diunggah setelah lulus interview; bukti penyerahan dari tahap INTERVIEW):
+  0. Bukti Penyerahan Dokumen (opsional, PDF — tersedia saat tahap interview)
   1. Surat Izin Keluarga (Form Biru)
   2. Surat Keterangan Pemberi Izin
   3. KTP Orangtua / Wali
@@ -45,8 +45,8 @@ DOCUMENT_SPECS = {
     "pas-foto":              {"format": "image", "extensions": IMAGE_EXTENSIONS, "max_bytes": MAX_IMAGE_BYTES},
     "cv":                    {"format": "pdf",   "extensions": PDF_EXTENSIONS,   "max_bytes": MAX_PDF_BYTES},
     "sertifikat-keterampilan":{"format": "pdf",   "extensions": PDF_EXTENSIONS,   "max_bytes": MAX_PDF_BYTES},
-    "bukti-penyerahan-dokumen": {"format": "pdf", "extensions": PDF_EXTENSIONS, "max_bytes": MAX_PDF_BYTES},
     # ── POST_INTERVIEW ───────────────────────────────────────────────────────
+    "bukti-penyerahan-dokumen": {"format": "pdf", "extensions": PDF_EXTENSIONS, "max_bytes": MAX_PDF_BYTES},
     "ijin-keluarga":                  {"format": "pdf", "extensions": PDF_EXTENSIONS, "max_bytes": MAX_PDF_BYTES},
     "surat-keterangan-pemberi-ijin":  {"format": "pdf", "extensions": PDF_EXTENSIONS, "max_bytes": MAX_PDF_BYTES},
     "ktp-orangtua-wali":              {"format": "image", "extensions": IMAGE_EXTENSIONS, "max_bytes": MAX_IMAGE_BYTES},

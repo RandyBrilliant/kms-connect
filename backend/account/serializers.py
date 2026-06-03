@@ -426,6 +426,7 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
     )
     jlh_uang_transport = serializers.SerializerMethodField(read_only=True)
     has_diterima_lamaran = serializers.SerializerMethodField(read_only=True)
+    has_interview_lamaran = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = ApplicantProfile
@@ -527,6 +528,7 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
             "score",
             "score_breakdown",
             "has_diterima_lamaran",
+            "has_interview_lamaran",
             "created_at",
             "updated_at",
         ]
@@ -536,6 +538,7 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
             "score_breakdown",
             "register_number",
             "has_diterima_lamaran",
+            "has_interview_lamaran",
             "created_at",
             "updated_at",
         ]
@@ -574,6 +577,7 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
         self.fields["verified_by"].queryset = backoffice_qs
         if not self.context.get("is_own_profile"):
             self.fields.pop("has_diterima_lamaran", None)
+            self.fields.pop("has_interview_lamaran", None)
         if self.context.get("is_own_profile"):
             for f in (
                 "referrer",
@@ -708,6 +712,16 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
             applicant_id=obj.pk,
             status=ApplicationStatus.DITERIMA,
         ).exists()
+
+    def get_has_interview_lamaran(self, obj):
+        """True if at least one lamaran is in INTERVIEW or a later pipeline status."""
+        if not obj or not getattr(obj, "pk", None):
+            return False
+        from account.services.applicant_document_access import (
+            applicant_has_interview_stage_lamaran,
+        )
+
+        return applicant_has_interview_stage_lamaran(obj)
 
     def validate_contact_phone(self, value):
         return normalize_indonesian_phone(value) if value else value
