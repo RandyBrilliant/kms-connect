@@ -68,17 +68,16 @@ class ChatWebSocketService {
 
   ChatWebSocketService({required this.threadId});
 
-  /// Build the WebSocket URL from the REST API base URL.
-  ///
-  /// Converts `https://data.kms-connect.com` → `wss://data.kms-connect.com/ws/chat/{threadId}/?token=<JWT>`
-  /// Converts `http://localhost:8000` → `ws://localhost:8000/ws/chat/{threadId}/?token=<JWT>`
-  String _buildWsUrl(String token) {
-    final httpBase = Env.apiBaseUrl; // e.g. https://data.kms-connect.com
+  static const String _wsAuthProtocol = 'kms-auth';
+
+  /// WebSocket URL without credentials (JWT is sent via subprotocol, not query).
+  String get _wsUrl {
+    final httpBase = Env.apiBaseUrl;
     final wsScheme = httpBase.startsWith('https') ? 'wss' : 'ws';
     final authority = httpBase
         .replaceFirst('https://', '')
         .replaceFirst('http://', '');
-    return '$wsScheme://$authority/ws/chat/$threadId/?token=$token';
+    return '$wsScheme://$authority/ws/chat/$threadId/';
   }
 
   /// Connect to the WebSocket server.
@@ -92,8 +91,10 @@ class ChatWebSocketService {
     }
 
     try {
-      final url = _buildWsUrl(token);
-      _channel = WebSocketChannel.connect(Uri.parse(url));
+      _channel = WebSocketChannel.connect(
+        Uri.parse(_wsUrl),
+        protocols: [_wsAuthProtocol, token],
+      );
 
       // Wait for the connection to be established
       await _channel!.ready;

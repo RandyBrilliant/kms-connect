@@ -1,7 +1,8 @@
 """
 WebSocket URL routing for the chat app.
 
-Path: ws(s)://<host>/ws/chat/<thread_id>/?token=<JWT>
+Path: ws(s)://<host>/ws/chat/<thread_id>/
+Auth: Sec-WebSocket-Protocol (kms-auth + JWT), cookie, or Bearer — not query string.
 """
 
 from django.urls import re_path

@@ -68,8 +68,12 @@ def _is_ktp_document_for_ocr(instance: ApplicantDocument) -> bool:
 def queue_ocr_on_document_upload(sender, instance: ApplicantDocument, created, **kwargs):
     """
     Setelah KTP diunggah (baru atau file diganti), antrekan OCR di background.
-    Dokumen selain KTP tidak memanggil Vision.
+    Dokumen selain KTP tidak memanggil Vision. Skipped when KTP_OCR_ENABLED is off.
     """
+    from django.conf import settings
+
+    if not getattr(settings, "KTP_OCR_ENABLED", False):
+        return
     if not _file_was_created_or_replaced(instance, created):
         return
     if not _is_ktp_document_for_ocr(instance):

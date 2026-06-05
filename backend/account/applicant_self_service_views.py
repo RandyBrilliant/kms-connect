@@ -7,6 +7,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
+from django.conf import settings as django_settings
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.shortcuts import get_object_or_404
@@ -387,6 +388,15 @@ class ApplicantDocumentSelfServiceViewSet(ApplicantSelfServiceMixin, viewsets.Mo
     @action(detail=True, methods=["get"])
     def ocr_prefill(self, request, pk=None):
         """Get OCR prefill data untuk KTP document."""
+        if not getattr(django_settings, "KTP_OCR_ENABLED", False):
+            return Response(
+                error_response(
+                    detail="Fitur OCR KTP tidak aktif.",
+                    code=ApiCode.NOT_FOUND,
+                ),
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
         document = self.get_object()
 
         if document.document_type.code != "ktp":

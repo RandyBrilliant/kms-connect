@@ -24,8 +24,19 @@ from .api_responses import (
     error_response,
     success_response,
 )
-from .throttles import AuthPublicRateThrottle
+from .jwt_cookie_auth import JWTCookieAuthentication
+from .throttles import (
+    AuthPublicRateThrottle,
+    OcrPreviewRateThrottle,
+    OcrSessionRateThrottle,
+)
 from .document_specs import validate_document_file, compress_image_file
+from .ocr_session import (
+    is_mobile_client,
+    issue_ocr_session_token,
+    validate_and_consume_ocr_session_token,
+)
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from .validators import validate_indonesian_phone, normalize_indonesian_phone
 
 
@@ -323,7 +334,7 @@ class ApplicantRegistrationView(APIView):
                     "access": access_token,
                     "refresh": refresh_token,
                 },
-                detail="Registrasi berhasil. KTP sedang diproses dengan OCR.",
+                detail="Registrasi berhasil. KTP telah diunggah.",
             ),
             status=status.HTTP_201_CREATED,
         )
@@ -678,7 +689,120 @@ class GoogleCompleteRegistrationView(APIView):
         return Response(
             success_response(
                 data={"user": serializer.data},
-                detail="Profil berhasil dilengkapi. KTP sedang diproses dengan OCR.",
+                detail="Profil berhasil dilengkapi. KTP telah diunggah.",
+            ),
+            status=status.HTTP_200_OK,
+        )
+
+
+def _ocr_feature_disabled_response():
+    return Response(
+        error_response(
+            detail="Fitur OCR KTP tidak aktif. Isi data KTP secara manual.",
+            code=ApiCode.NOT_FOUND,
+        ),
+        status=status.HTTP_404_NOT_FOUND,
+    )
+
+
+def _ocr_preview_mobile_required_response():
+    return Response(
+        error_response(
+            detail="Permintaan OCR hanya dapat diproses dari aplikasi mobile.",
+            code=ApiCode.PERMISSION_DENIED,
+        ),
+        status=status.HTTP_403_FORBIDDEN,
+    )
+
+
+def _ocr_preview_unauthorized_response():
+    return Response(
+        error_response(
+            detail=(
+                "Sesi OCR tidak valid atau sudah kedaluwarsa. "
+                "Buka ulang langkah unggah KTP di aplikasi."
+            ),
+            code=ApiCode.PERMISSION_DENIED,
+        ),
+        status=status.HTTP_401_UNAUTHORIZED,
+    )
+
+
+def _extract_nik_from_ktp_upload(ktp_file):
+    """
+    Run Vision OCR on an uploaded KTP image; return NIK string or raise ValueError.
+    Temp file is always removed.
+    """
+    import os
+    import tempfile
+
+    from .ocr import extract_text_with_blocks, parse_ktp_text_with_regency_match
+
+    tmp_file_path = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp_file:
+            for chunk in ktp_file.chunks():
+                tmp_file.write(chunk)
+            tmp_file_path = tmp_file.name
+
+        ocr_result = extract_text_with_blocks(tmp_file_path)
+        ocr_text = ocr_result["text"]
+        blocks = ocr_result["blocks"]
+
+        if not ocr_text:
+            raise ValueError(
+                "Tidak dapat mengekstrak teks dari KTP. Pastikan foto jelas dan tidak blur."
+            )
+
+        parsed_data = parse_ktp_text_with_regency_match(ocr_text, blocks)
+        if not parsed_data or not parsed_data.get("nik"):
+            raise ValueError(
+                "Tidak dapat mengidentifikasi data KTP. Pastikan foto KTP jelas "
+                "dan semua informasi terlihat."
+            )
+
+        return str(parsed_data["nik"]).strip()
+    finally:
+        if tmp_file_path:
+            try:
+                os.unlink(tmp_file_path)
+            except OSError:
+                pass
+
+
+class KTPOcrSessionView(APIView):
+    """
+    Issue a short-lived, IP-bound token required before calling OCR preview
+    without login (e.g. future email registration flow).
+
+    POST /api/auth/ocr-preview/session/
+    Header: X-Client-Type: mobile
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [OcrSessionRateThrottle]
+
+    def post(self, request):
+        if not getattr(django_settings, "KTP_OCR_ENABLED", False):
+            return _ocr_feature_disabled_response()
+        if not is_mobile_client(request):
+            return _ocr_preview_mobile_required_response()
+
+        token = issue_ocr_session_token(request)
+        if not token:
+            return Response(
+                error_response(
+                    detail="Terlalu banyak permintaan OCR. Coba lagi nanti.",
+                    code=ApiCode.RATE_LIMITED,
+                ),
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        return Response(
+            success_response(
+                data={"ocr_session": token},
+                detail="Sesi OCR siap. Unggah foto KTP dalam 15 menit.",
             ),
             status=status.HTTP_200_OK,
         )
@@ -686,25 +810,43 @@ class GoogleCompleteRegistrationView(APIView):
 
 class KTPOcrPreviewView(APIView):
     """
-    Public endpoint untuk OCR preview KTP sebelum registrasi.
-    Menerima file KTP, menjalankan OCR, mengembalikan **hanya NIK** di body.
-    Field lain (nama, tempat/tanggal lahir) diisi manual oleh pengguna.
+    OCR preview KTP — returns **only NIK** (PII minimization on the wire).
 
-    Full parse masih dijalankan di server untuk memverifikasi bahwa NIK
-    terbaca; data selain NIK tidak dikembalikan ke klien.
+    Authorization (one of):
+      - Logged-in user (social-complete after Google/Apple), or
+      - Valid one-time ``ocr_session`` from POST /api/auth/ocr-preview/session/
+
+    Requires header ``X-Client-Type: mobile``. Throttled per user/IP (Vision API cost).
     """
 
     permission_classes = [AllowAny]
-    authentication_classes = []
-    throttle_classes = [AuthPublicRateThrottle]
+    authentication_classes = [
+        JWTCookieAuthentication,
+        JWTAuthentication,
+    ]
+    throttle_classes = [OcrPreviewRateThrottle]
+
+    def _is_authorized(self, request) -> bool:
+        if request.user and request.user.is_authenticated:
+            return True
+        token = (
+            request.headers.get("X-OCR-Session")
+            or request.data.get("ocr_session")
+            or request.POST.get("ocr_session")
+            or ""
+        )
+        return validate_and_consume_ocr_session_token(request, token)
 
     def post(self, request):
-        import tempfile
-        import os
-        from .ocr import extract_text_with_blocks, parse_ktp_text_with_regency_match
+        if not getattr(django_settings, "KTP_OCR_ENABLED", False):
+            return _ocr_feature_disabled_response()
+        if not is_mobile_client(request):
+            return _ocr_preview_mobile_required_response()
+
+        if not self._is_authorized(request):
+            return _ocr_preview_unauthorized_response()
 
         ktp_file = request.FILES.get("ktp")
-
         if not ktp_file:
             return Response(
                 error_response(
@@ -714,7 +856,6 @@ class KTPOcrPreviewView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Validasi format dan ukuran KTP
         try:
             validate_document_file(ktp_file, "ktp")
         except Exception as e:
@@ -726,69 +867,37 @@ class KTPOcrPreviewView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Save file to temporary location
         try:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp_file:
-                for chunk in ktp_file.chunks():
-                    tmp_file.write(chunk)
-                tmp_file_path = tmp_file.name
-
-            # Extract text with bounding boxes using Google Cloud Vision
-            ocr_result = extract_text_with_blocks(tmp_file_path)
-            ocr_text = ocr_result["text"]
-            blocks = ocr_result["blocks"]
-
-            # Clean up temp file
-            os.unlink(tmp_file_path)
-
-            if not ocr_text:
-                return Response(
-                    error_response(
-                        detail="Tidak dapat mengekstrak teks dari KTP. Pastikan foto jelas dan tidak blur.",
-                        code=ApiCode.VALIDATION_ERROR,
-                    ),
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            # Parse KTP text with spatial extraction and regency matching
-            parsed_data = parse_ktp_text_with_regency_match(ocr_text, blocks)
-
-            if not parsed_data or not parsed_data.get("nik"):
-                return Response(
-                    error_response(
-                        detail="Tidak dapat mengidentifikasi data KTP. Pastikan foto KTP jelas dan semua informasi terlihat.",
-                        code=ApiCode.VALIDATION_ERROR,
-                    ),
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            nik_value = str(parsed_data["nik"]).strip()
-            return Response(
-                success_response(
-                    data={"nik": nik_value},
-                    detail=(
-                        "NIK berhasil dibaca dari foto KTP. Silakan isi nama, "
-                        "tempat lahir, dan tanggal lahir secara manual sesuai KTP."
-                    ),
-                ),
-                status=status.HTTP_200_OK,
-            )
-
-        except Exception as e:
-            # Clean up temp file if it exists
-            if 'tmp_file_path' in locals():
-                try:
-                    os.unlink(tmp_file_path)
-                except:
-                    pass
-
+            nik_value = _extract_nik_from_ktp_upload(ktp_file)
+        except ValueError as e:
             return Response(
                 error_response(
-                    detail=f"Gagal memproses OCR: {str(e)}",
-                    code=ApiCode.INTERNAL_ERROR,
+                    detail=str(e),
+                    code=ApiCode.VALIDATION_ERROR,
                 ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception as exc:
+            detail = (
+                f"Gagal memproses OCR: {exc}"
+                if django_settings.DEBUG
+                else "Gagal memproses OCR. Silakan coba lagi atau isi NIK manual."
+            )
+            return Response(
+                error_response(detail=detail, code=ApiCode.INTERNAL_ERROR),
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+        return Response(
+            success_response(
+                data={"nik": nik_value},
+                detail=(
+                    "NIK berhasil dibaca dari foto KTP. Silakan isi nama, "
+                    "tempat lahir, dan tanggal lahir secara manual sesuai KTP."
+                ),
+            ),
+            status=status.HTTP_200_OK,
+        )
 
 
 # ---------------------------------------------------------------------------

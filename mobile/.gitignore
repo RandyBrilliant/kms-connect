@@ -3,6 +3,13 @@
 .env.local
 .env.*.local
 
+# FlutterFire CLI may regenerate this with embedded API keys — do not commit
+lib/firebase_options.dart
+
+# Firebase native config (API keys, OAuth client IDs) — copy from .example after clone
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+
 # Miscellaneous
 *.class
 *.log

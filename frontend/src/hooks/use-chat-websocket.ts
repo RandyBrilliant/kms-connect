@@ -1,8 +1,9 @@
 /**
  * React hook for WebSocket chat connection.
  *
- * Connects to `ws(s)://<host>/ws/chat/<threadId>/?token=<JWT>` and provides
- * a stream of events: new messages, typing indicators, and read receipts.
+ * Connects to `ws(s)://<host>/ws/chat/<threadId>/` with JWT in
+ * Sec-WebSocket-Protocol (not the URL). Falls back to cookie-only handshake
+ * when the access token is HTTP-only and not readable from JS.
  *
  * Falls back gracefully to polling if WebSocket connection fails.
  */
@@ -56,32 +57,37 @@ export interface UseChatWebSocketResult {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
+const WS_AUTH_PROTOCOL = "kms-auth"
+
 function getAccessToken(): string | null {
-  // Read from cookie (same approach as the API client)
+  // Non-HTTP-only fallback only; production web uses kms_access cookie on handshake.
   const cookies = document.cookie.split(";")
   for (const c of cookies) {
     const [key, val] = c.trim().split("=")
     if (key === "kms_access" && val) return decodeURIComponent(val)
   }
-  // Fallback: localStorage
   return localStorage.getItem("access_token")
 }
 
 /**
  * WebSocket host must match the REST API (same as axios `VITE_API_URL`).
- * Legacy: if you still set `VITE_API_BASE_URL` only, set `VITE_API_URL` to the same value in production.
  */
-function buildWsUrl(threadId: number, token: string): string {
+function buildWsUrl(threadId: number): string {
   const legacyBase = import.meta.env.VITE_API_BASE_URL as string | undefined
   const base = env.VITE_API_URL || legacyBase
   if (base) {
     const url = new URL(base)
     const scheme = url.protocol === "https:" ? "wss" : "ws"
-    return `${scheme}://${url.host}/ws/chat/${threadId}/?token=${encodeURIComponent(token)}`
+    return `${scheme}://${url.host}/ws/chat/${threadId}/`
   }
   const loc = window.location
   const wsScheme = loc.protocol === "https:" ? "wss" : "ws"
-  return `${wsScheme}://${loc.host}/ws/chat/${threadId}/?token=${encodeURIComponent(token)}`
+  return `${wsScheme}://${loc.host}/ws/chat/${threadId}/`
+}
+
+function wsProtocols(token: string | null): string[] | undefined {
+  if (!token) return undefined
+  return [WS_AUTH_PROTOCOL, token]
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────
@@ -106,11 +112,11 @@ export function useChatWebSocket(
     if (!threadId || !enabled) return
 
     const token = getAccessToken()
-    if (!token) return
+    // When token is null (HTTP-only cookie), rely on cookie sent on WS handshake.
 
     try {
-      const url = buildWsUrl(threadId, token)
-      const ws = new WebSocket(url)
+      const url = buildWsUrl(threadId)
+      const ws = new WebSocket(url, wsProtocols(token))
       wsRef.current = ws
 
       ws.onopen = () => {
@@ -124,7 +130,6 @@ export function useChatWebSocket(
 
           switch (data.type) {
             case "chat.message":
-              // Invalidate queries so TanStack refetches
               queryClient.invalidateQueries({
                 queryKey: chatKeys.messages(threadId),
               })
@@ -134,7 +139,6 @@ export function useChatWebSocket(
               queryClient.invalidateQueries({
                 queryKey: chatKeys.unreadSummary(),
               })
-              // Clear typing when message arrives
               setTypingUser(null)
               break
 
@@ -188,7 +192,7 @@ export function useChatWebSocket(
   }, [connect])
 
   const sendTyping = useCallback(() => {
-    if (outgoingTypingTimerRef.current) return // debounce
+    if (outgoingTypingTimerRef.current) return
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: "typing" }))
       outgoingTypingTimerRef.current = setTimeout(() => {
@@ -203,7 +207,6 @@ export function useChatWebSocket(
     }
   }, [])
 
-  // Connect on mount / when threadId changes
   useEffect(() => {
     connect()
 

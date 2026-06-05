@@ -33,3 +33,36 @@ class AuthPublicRateThrottle(SimpleRateThrottle):
             "scope": self.scope,
             "ident": self.get_ident(request),
         }
+
+
+class OcrSessionRateThrottle(SimpleRateThrottle):
+    """Issue OCR preview session tokens (cheap; no Vision API). Scope: ocr_session."""
+
+    scope = "ocr_session"
+
+    def get_cache_key(self, request, view):
+        return self.cache_format % {
+            "scope": self.scope,
+            "ident": self.get_ident(request),
+        }
+
+
+class OcrPreviewRateThrottle(SimpleRateThrottle):
+    """
+    KTP OCR preview (Google Vision — expensive). Per IP for anonymous;
+    per user id when authenticated.
+    Scope: ocr_preview (e.g. 3/hour).
+    """
+
+    scope = "ocr_preview"
+
+    def get_cache_key(self, request, view):
+        if request.user and request.user.is_authenticated:
+            return self.cache_format % {
+                "scope": self.scope,
+                "ident": f"user-{request.user.pk}",
+            }
+        return self.cache_format % {
+            "scope": self.scope,
+            "ident": self.get_ident(request),
+        }

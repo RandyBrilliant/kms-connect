@@ -72,10 +72,9 @@ ProfileCompletionReport evaluateProfileCompletion(ApplicantProfile p) {
       p.districtId != null &&
       p.villageId != null;
 
-  // ── Data dokumen
+  // ── Data dokumen (BPJS/KIS optional)
   final documents = _nonEmpty(p.familyCardNumber) &&
-      _nonEmpty(p.diplomaNumber) &&
-      _nonEmpty(p.bpjsNumber);
+      _nonEmpty(p.diplomaNumber);
 
   // ── Paspor
   final passport = p.hasPassport != null &&

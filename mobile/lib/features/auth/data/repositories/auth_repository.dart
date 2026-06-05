@@ -178,42 +178,9 @@ class AuthRepository {
     }
   }
 
-  /// Preview OCR data from KTP image before registration
+  /// OCR preview disabled — use manual KTP entry in the UI.
   Future<KtpData> ocrPreview(File ktpFile) async {
-    try {
-      // Compress KTP image before uploading for OCR.
-      final compressed = await ImageCompressor.compressDocument(ktpFile);
-      final formData = FormData.fromMap({
-        'ktp': await MultipartFile.fromFile(
-          compressed.path,
-          filename: 'ktp.jpg',
-        ),
-      });
-
-      final response = await _apiClient.dio.post(
-        ApiEndpoints.ocrPreview,
-        data: formData,
-        options: Options(headers: {'Content-Type': 'multipart/form-data'}),
-      );
-
-      final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
-        response.data,
-        (data) => data as Map<String, dynamic>,
-      );
-
-      if (!apiResponse.isSuccess || apiResponse.data == null) {
-        throw DioException(
-          requestOptions: response.requestOptions,
-          response: response,
-          type: DioExceptionType.badResponse,
-          message: apiResponse.detail ?? 'OCR gagal memproses KTP',
-        );
-      }
-
-      return KtpData.fromJson(apiResponse.data!);
-    } on DioException catch (e) {
-      throw _handleError(e);
-    }
+    throw UnsupportedError('OCR tidak tersedia. Isi data KTP secara manual.');
   }
 
   /// Register with email, password, NIK, and KTP file

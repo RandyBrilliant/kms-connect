@@ -7,22 +7,19 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
+import 'config/firebase_init.dart';
 import 'core/api/api_client.dart';
 import 'features/notifications/data/services/notification_service.dart';
-import 'firebase_options.dart';
 import 'app.dart';
 
 // Register background message handler (must be top-level)
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await initializeFirebaseApp();
   if (kDebugMode) debugPrint('Background message: ${message.messageId}');
 
   // If the message is data-only (no notification payload), show a local
@@ -102,9 +99,7 @@ void main() async {
 
   // Initialize Firebase
   try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
+    await initializeFirebaseApp();
     // Register background message handler
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
     // Initialize notifications

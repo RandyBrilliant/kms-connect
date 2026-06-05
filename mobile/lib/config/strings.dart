@@ -23,7 +23,7 @@ class AppStrings {
   static const String ktpNote =
       'Hanya NIK yang diambil dari foto; lengkapi informasi lain sesuai dokumen asli';
   static const String registrationSuccess = 'Akun Berhasil Dibuat!';
-  static const String ktpProcessing = 'KTP sedang diproses dengan OCR.';
+  static const String ktpProcessing = 'KTP telah diunggah.';
   static const String completeProfile = 'Lengkapi Profil Anda';
   static const String completeNow = 'Lengkapi Sekarang';
   static const String completeLater = 'Nanti Saja';

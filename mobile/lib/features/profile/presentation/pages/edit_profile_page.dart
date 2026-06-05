@@ -491,7 +491,6 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     // Data dokumen
     requireText(_familyCardNumber, 'Nomor Kartu Keluarga');
     requireText(_diplomaNumber, 'Nomor Ijazah');
-    requireText(_bpjsNumber, 'Nomor BPJS / KIS');
 
     // Data paspor
     requireValue(_hasPassport, 'Memiliki Paspor');
@@ -1421,13 +1420,11 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                                   const SizedBox(height: 14),
                                   M3TextField(
                                     controller: _bpjsNumber,
-                                    label: 'Nomor BPJS / KIS',
+                                    label: 'Nomor BPJS / KIS (opsional)',
                                     hint: 'Nomor BPJS kesehatan',
                                     prefixIcon:
                                         Icons.health_and_safety_outlined,
                                     keyboardType: TextInputType.number,
-                                    requiredLabel: 'Nomor BPJS / KIS',
-                                    missingRequiredFields: _missingRequiredFields,
                                   ),
                                 ],
                               ),

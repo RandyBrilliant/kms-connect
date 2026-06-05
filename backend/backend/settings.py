@@ -307,8 +307,21 @@ REST_FRAMEWORK = {
         "user": _env("DRF_THROTTLE_USER", "120/min"),
         "auth": _env("DRF_THROTTLE_AUTH", "10/min"),
         "auth_public": _env("DRF_THROTTLE_AUTH_PUBLIC", "5/min"),
+        "ocr_session": _env("DRF_THROTTLE_OCR_SESSION", "10/min"),
+        "ocr_preview": _env("DRF_THROTTLE_OCR_PREVIEW", "3/hour"),
     },
 }
+
+# KTP OCR (Google Cloud Vision) — disabled by default; set KTP_OCR_ENABLED=1 to turn on.
+KTP_OCR_ENABLED = _env("KTP_OCR_ENABLED", "0").lower() in ("true", "1", "yes")
+
+# Only used when KTP_OCR_ENABLED (registration / social-complete preview)
+OCR_PREVIEW_SESSION_MAX_AGE_SECONDS = int(
+    _env("OCR_PREVIEW_SESSION_MAX_AGE_SECONDS", "900")
+)  # 15 minutes
+OCR_PREVIEW_SESSION_ISSUE_LIMIT_PER_HOUR = int(
+    _env("OCR_PREVIEW_SESSION_ISSUE_LIMIT_PER_HOUR", "10")
+)
 
 SIMPLE_JWT = {
     "AUTH_HEADER_TYPES": ("Bearer",),

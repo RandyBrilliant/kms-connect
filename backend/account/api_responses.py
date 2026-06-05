@@ -18,6 +18,7 @@ class ApiCode:
     VALIDATION_ERROR = "validation_error"
     NOT_FOUND = "not_found"
     PERMISSION_DENIED = "permission_denied"
+    RATE_LIMITED = "rate_limited"
     METHOD_NOT_ALLOWED = "method_not_allowed"
     INTERNAL_ERROR = "internal_error"
     # Alias for legacy / verbose naming (same client contract as internal_error)

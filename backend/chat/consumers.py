@@ -2,11 +2,12 @@
 WebSocket consumer for real-time chat.
 
 Protocol:
-  ws(s)://<host>/ws/chat/<thread_id>/?token=<JWT>
+  ws(s)://<host>/ws/chat/<thread_id>/
 
-Authentication:
-  JWT access token passed as query param.  Validated on connect using
-  the same SimpleJWT backend as the REST API.
+Authentication (JWT access token — never in the URL):
+  • Sec-WebSocket-Protocol: kms-auth, <access_jwt>  (mobile / web)
+  • Cookie kms_access on handshake (web, HTTP-only)
+  • Authorization: Bearer <access_jwt>  (optional)
 
 Inbound messages from client (JSON):
   • {"type": "typing"}            — broadcast typing indicator to others in thread
@@ -20,7 +21,6 @@ Outbound messages to client (JSON, via channel group):
 Channel group name: ``chat_thread_{thread_id}``
 """
 
-import json
 import logging
 
 from channels.db import database_sync_to_async
@@ -32,8 +32,12 @@ from rest_framework_simplejwt.tokens import AccessToken
 from account.models import CustomUser
 
 from .models import ChatMessage, ChatThread
+from .ws_auth import extract_ws_access_token, negotiated_subprotocol
 
 logger = logging.getLogger(__name__)
+
+# Applicant chat only after these application statuses (parity with REST API).
+_CHAT_ALLOWED_STATUSES = {"DITERIMA", "BERANGKAT", "SELESAI"}
 
 
 class ChatConsumer(AsyncJsonWebsocketConsumer):
@@ -57,10 +61,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.group_name = f"chat_thread_{self.thread_id}"
         self.user = None
 
-        # Authenticate via JWT query param
-        query_string = self.scope.get("query_string", b"").decode("utf-8")
-        token = self._parse_query_param(query_string, "token")
-
+        token = extract_ws_access_token(self.scope)
         if not token:
             await self.close(code=4001)
             return
@@ -81,9 +82,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.group_name = f"chat_thread_{self.thread_id}"
         self.user = user
 
-        # Join channel group
         await self.channel_layer.group_add(self.group_name, self.channel_name)
-        await self.accept()
+        await self.accept(subprotocol=negotiated_subprotocol(self.scope))
 
         logger.info(
             "WS connected: user=%s thread=%s", user.pk, self.thread_id
@@ -163,16 +163,6 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
 
     # ── Helpers ─────────────────────────────────────────────────────────
 
-    @staticmethod
-    def _parse_query_param(query_string: str, key: str) -> str | None:
-        """Parse a query parameter from a raw query string."""
-        for part in query_string.split("&"):
-            if "=" in part:
-                k, v = part.split("=", 1)
-                if k == key:
-                    return v
-        return None
-
     @database_sync_to_async
     def _authenticate(self, raw_token: str) -> CustomUser | None:
         """Validate JWT and return the corresponding user or None."""
@@ -197,7 +187,10 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         """
         thread = (
             ChatThread.objects.select_related("application__applicant__user")
-            .filter(Q(pk=thread_or_application_id) | Q(application_id=thread_or_application_id))
+            .filter(
+                Q(pk=thread_or_application_id)
+                | Q(application_id=thread_or_application_id)
+            )
             .order_by("pk")
             .first()
         )
@@ -207,11 +200,12 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         if user.role in ("MASTER_ADMIN", "ADMIN", "STAFF"):
             return thread.pk
 
-        # Applicant must own the application
         try:
-            if thread.application.applicant.user_id == user.pk:
-                return thread.pk
-            return None
+            if thread.application.applicant.user_id != user.pk:
+                return None
+            if thread.application.status not in _CHAT_ALLOWED_STATUSES:
+                return None
+            return thread.pk
         except Exception:
             return None
 

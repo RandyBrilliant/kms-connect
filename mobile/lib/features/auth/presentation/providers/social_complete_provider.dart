@@ -46,19 +46,13 @@ class SocialCompleteNotifier extends StateNotifier<SocialCompleteState> {
     state = state.copyWith(ktpData: data);
   }
 
+  /// OCR disabled — users fill KTP fields manually (parity with registration).
   Future<void> processOcr() async {
-    if (state.ktpImage == null) {
-      state = state.copyWith(error: 'Belum ada gambar KTP');
-      return;
-    }
-    state = state.copyWith(isProcessing: true, error: null);
-    try {
-      final ktpData = await _repository.ocrPreview(state.ktpImage!);
-      state = state.copyWith(ktpData: ktpData, isProcessing: false);
-    } catch (e) {
-      state = state.copyWith(isProcessing: false, error: e.toString());
-      rethrow;
-    }
+    state = state.copyWith(
+      isProcessing: false,
+      error: 'OCR tidak tersedia. Isi data KTP secara manual.',
+    );
+    throw UnsupportedError('OCR disabled');
   }
 
   Future<User> completeProfile({

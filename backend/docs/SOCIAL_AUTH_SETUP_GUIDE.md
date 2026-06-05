@@ -67,7 +67,7 @@ The backend verifies it independently (no redirect URLs needed for mobile).
 | **`GOOGLE_CLIENT_ID` in backend `.env`** | Not set |
 | **`APPLE_CLIENT_ID` in backend `.env`** | Not set |
 | **iOS "Sign in with Apple" capability** | Missing from entitlements |
-| **iOS bundle ID** | Currently `com.example.mobile`, should be `id.kmsconnect.app` |
+| **iOS bundle ID** | `id.kmsconnect.app` (Xcode, entitlements, `GoogleService-Info.plist`) |
 | **Android SHA-1 fingerprint** | Not registered in Firebase/GCP for OAuth |
 
 ---
@@ -335,13 +335,13 @@ idinfo = google_id_token.verify_oauth2_token(id_token_raw, ...)
 
 ### Step 6.1 — Fix iOS Bundle ID
 
-The iOS bundle ID in several places is still `com.example.mobile`.
+iOS uses `id.kmsconnect.app` everywhere that matters for Firebase and Sign in with Apple.
 It should be `id.kmsconnect.app` to match your Apple Developer account.
 
 **Files to check/update:**
 - `mobile/ios/Runner.xcodeproj/project.pbxproj` → `PRODUCT_BUNDLE_IDENTIFIER`
 - `mobile/ios/Runner/GoogleService-Info.plist` → `BUNDLE_ID`
-- `mobile/lib/firebase_options.dart` → `iosBundleId`
+- `mobile/ios/Runner/GoogleService-Info.plist` → `BUNDLE_ID` (Dart no longer embeds Firebase keys; see `lib/config/firebase_init.dart`)
 
 The easiest way: open Xcode, change the Bundle Identifier in the
 General tab, then re-run `flutterfire configure`.
@@ -361,8 +361,8 @@ cd mobile
 flutterfire configure --project=kms-connect-1541d
 ```
 
-This regenerates `firebase_options.dart`, `google-services.json`, and
-`GoogleService-Info.plist` consistently.
+This regenerates `google-services.json` and `GoogleService-Info.plist`
+(do not commit `lib/firebase_options.dart` if the CLI recreates it — it is gitignored).
 
 ---
 
@@ -515,5 +515,5 @@ have the same name.
    ```
 6. **Add "Sign in with Apple"** capability in Xcode
 7. **Enable Sign in with Apple** on the App ID in Apple Developer Portal
-8. **Fix iOS bundle ID** if still `com.example.mobile`
+8. **Confirm iOS bundle ID** is `id.kmsconnect.app` in Xcode and Firebase Console
 9. **Test** Google on Android, Apple on iOS, Email on both

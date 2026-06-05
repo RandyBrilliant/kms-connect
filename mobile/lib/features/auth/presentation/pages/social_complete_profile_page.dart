@@ -143,7 +143,8 @@ class _SocialCompleteProfilePageState
       setState(() => _isPickingImage = false);
       _clearFields();
       ref.read(socialCompleteProvider.notifier).setKtpImage(persistentFile);
-      await _runOcr();
+      // OCR disabled — user fills NIK and biodata manually.
+      // await _runOcr();
     } on PlatformException catch (e) {
       if (!mounted) return;
       CustomToast.show(context,
