@@ -1705,6 +1705,151 @@ class AdminMedicalReferralPdfView(APIView):
         return response
 
 
+_REFERRAL_PDF_GENERATORS = {
+    "medical": (generate_pengantar_medical_pdf, "Pengantar_Medical"),
+    "psychology": (generate_pengantar_psikologi_pdf, "Pengantar_Psikologi"),
+}
+
+
+class AdminBulkReferralPdfView(APIView):
+    """
+    Generate surat pengantar medical or psikologi for one or more pelamar.
+
+    POST /api/applicants/bulk-referral-pdf/
+    Body: { "kind": "medical" | "psychology", "applicant_user_ids": [1, 2, ...] }
+
+    - 1 pelamar → PDF (inline)
+    - 2+ pelamar → ZIP of PDF files
+    """
+
+    permission_classes = [IsBackofficeAdmin]
+
+    def post(self, request):
+        import io
+        import zipfile
+
+        kind = (request.data.get("kind") or "").strip().lower()
+        if kind not in _REFERRAL_PDF_GENERATORS:
+            return Response(
+                error_response(
+                    detail="Jenis surat tidak valid. Gunakan 'medical' atau 'psychology'.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        raw_ids = request.data.get("applicant_user_ids")
+        if not isinstance(raw_ids, list) or not raw_ids:
+            return Response(
+                error_response(
+                    detail="Pilih minimal satu pelamar.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user_ids: list[int] = []
+        seen: set[int] = set()
+        for raw in raw_ids:
+            try:
+                uid = int(raw)
+            except (TypeError, ValueError):
+                continue
+            if uid > 0 and uid not in seen:
+                seen.add(uid)
+                user_ids.append(uid)
+
+        if not user_ids:
+            return Response(
+                error_response(
+                    detail="Pilih minimal satu pelamar.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if len(user_ids) > 50:
+            return Response(
+                error_response(
+                    detail="Maksimal 50 pelamar per permintaan.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        generate_fn, prefix = _REFERRAL_PDF_GENERATORS[kind]
+        profiles_by_user = {
+            p.user_id: p
+            for p in ApplicantProfile.objects.filter(user_id__in=user_ids)
+            .select_related("user", "birth_place", "district")
+            .prefetch_related("job_applications__job__company")
+        }
+        ordered_profiles = [profiles_by_user[uid] for uid in user_ids if uid in profiles_by_user]
+
+        if not ordered_profiles:
+            return Response(
+                error_response(
+                    detail="Profil pelamar tidak ditemukan.",
+                    code=ApiCode.NOT_FOUND,
+                ),
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if len(ordered_profiles) == 1:
+            profile = ordered_profiles[0]
+            try:
+                pdf_bytes = generate_fn(profile)
+            except Exception as e:
+                return Response(
+                    error_response(
+                        detail=f"Gagal membuat PDF: {str(e)}",
+                        code=ApiCode.INTERNAL_ERROR,
+                    ),
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+            safe_name = (profile.user.full_name or "cpmi").replace(" ", "_")
+            filename = f"{prefix}_{safe_name}.pdf"
+            response = HttpResponse(pdf_bytes, content_type="application/pdf")
+            response["Content-Disposition"] = f'inline; filename="{filename}"'
+            return response
+
+        buffer = io.BytesIO()
+        used_names: set[str] = set()
+        generated = 0
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            for profile in ordered_profiles:
+                try:
+                    pdf_bytes = generate_fn(profile)
+                except Exception:
+                    continue
+                safe_name = (profile.user.full_name or "cpmi").replace(" ", "_")
+                base = f"{prefix}_{safe_name}"
+                arc_base = base
+                suffix = 2
+                while arc_base in used_names:
+                    arc_base = f"{base}_{suffix}"
+                    suffix += 1
+                used_names.add(arc_base)
+                zf.writestr(f"{arc_base}.pdf", pdf_bytes)
+                generated += 1
+
+        if generated == 0:
+            return Response(
+                error_response(
+                    detail="Gagal membuat PDF untuk pelamar terpilih.",
+                    code=ApiCode.INTERNAL_ERROR,
+                ),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        buffer.seek(0)
+        zip_filename = f"{prefix}_bulk_{generated}_pelamar.zip"
+        response = HttpResponse(buffer.read(), content_type="application/zip")
+        response["Content-Disposition"] = f'attachment; filename="{zip_filename}"'
+        response["Content-Transfer-Encoding"] = "binary"
+        return response
+
+
 # ---------------------------------------------------------------------------
 # Notifications
 # ---------------------------------------------------------------------------

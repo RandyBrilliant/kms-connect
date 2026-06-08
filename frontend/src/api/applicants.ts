@@ -441,6 +441,62 @@ export async function viewMedicalReferralPdf(applicantId: number): Promise<void>
   }
 }
 
+export type BulkReferralPdfKind = "medical" | "psychology"
+
+function filenameFromContentDisposition(header: string | undefined): string | null {
+  if (!header) return null
+  const match = /filename="([^"]+)"/.exec(header)
+  return match?.[1] ?? null
+}
+
+function triggerBlobDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = filename
+  a.style.display = "none"
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+/**
+ * POST /api/applicants/bulk-referral-pdf/
+ * One pelamar → opens PDF in a new tab; multiple → downloads a ZIP.
+ */
+export async function downloadBulkReferralPdf(
+  kind: BulkReferralPdfKind,
+  applicantUserIds: number[]
+): Promise<void> {
+  const response = await api.post(
+    "/api/applicants/bulk-referral-pdf/",
+    { kind, applicant_user_ids: applicantUserIds },
+    { responseType: "blob" }
+  )
+  const contentType = String(response.headers["content-type"] ?? "")
+  const disposition = String(response.headers["content-disposition"] ?? "")
+
+  if (contentType.includes("application/pdf")) {
+    const blob = new Blob([response.data as BlobPart], { type: "application/pdf" })
+    const url = URL.createObjectURL(blob)
+    const tab = window.open(url, "_blank")
+    if (tab) {
+      tab.addEventListener("load", () => URL.revokeObjectURL(url), { once: true })
+    } else {
+      setTimeout(() => URL.revokeObjectURL(url), 10_000)
+    }
+    return
+  }
+
+  const blob = new Blob([response.data as BlobPart], { type: "application/zip" })
+  const defaultName =
+    kind === "medical"
+      ? `Pengantar_Medical_bulk_${applicantUserIds.length}_pelamar.zip`
+      : `Pengantar_Psikologi_bulk_${applicantUserIds.length}_pelamar.zip`
+  triggerBlobDownload(blob, filenameFromContentDisposition(disposition) ?? defaultName)
+}
+
 /** DELETE /api/applicants/:applicantId/documents/:id/ */
 export async function deleteApplicantDocument(
   applicantId: number,

@@ -29,7 +29,6 @@ import {
   IconBriefcase,
   IconBuilding,
   IconCalendar,
-  IconCircleCheck,
   IconClipboardList,
   IconExternalLink,
   IconEye,
@@ -49,6 +48,7 @@ import { ApplicantDetailPreviewDialog } from "@/components/batches/applicant-det
 import { ApplicationStatusBadge } from "@/components/applications/application-status-badge"
 import { BulkFwcmsPsikotesCard } from "@/components/applications/bulk-fwcms-psikotes-card"
 import { BulkMedicalSmlCard } from "@/components/applications/bulk-medical-sml-card"
+import { BulkReferralPdfButton } from "@/components/applications/bulk-referral-pdf-button"
 import {
   formatDiterimaDate,
   MedicalHasilPill,
@@ -560,10 +560,8 @@ function PraSeleksiTab({
           <Table className="border-collapse">
             <TableHeader>
               <TableRow className={JD_HEADER_ROW}>
-                <TableHead className={jdTh("w-[80px]")}>Urutan</TableHead>
                 <TableHead className={jdTh()}>Nama Tahapan</TableHead>
                 <TableHead className={jdTh("text-center")}>Total</TableHead>
-                <TableHead className={jdTh("text-center")}>Pra-Seleksi</TableHead>
                 <TableHead className={jdTh("text-center")}>Diterima</TableHead>
                 <TableHead className={jdTh("text-center")}>Lanjut Interview</TableHead>
                 <TableHead className={jdTh("text-center")}>Ditolak</TableHead>
@@ -579,11 +577,6 @@ function PraSeleksiTab({
                     className={cn(JD_BODY_ROW, "cursor-pointer")}
                     onClick={() => navigate(`${batchBase}/${batch.id}`)}
                   >
-                    <TableCell className={jdTd()}>
-                      <Badge variant="outline" className="font-mono">
-                        Tahap {batch.tahap_order}
-                      </Badge>
-                    </TableCell>
                     <TableCell className={jdTd()}>
                       <div className="flex flex-col gap-0.5">
                         <span className="font-medium flex items-center gap-2">
@@ -602,11 +595,6 @@ function PraSeleksiTab({
                         <IconUsers className="size-3.5 text-muted-foreground" />
                         {batch.applicant_count}
                       </span>
-                    </TableCell>
-                    <TableCell className={jdTd("text-center tabular-nums")}>
-                      <Badge variant="secondary" className="font-mono">
-                        {batch.pra_seleksi_count}
-                      </Badge>
                     </TableCell>
                     <TableCell className={jdTd("text-center tabular-nums")}>
                       <Badge
@@ -663,7 +651,7 @@ function PraSeleksiTab({
               ) : (
                 <TableRow className="hover:bg-transparent">
                   <TableCell
-                    colSpan={9}
+                    colSpan={7}
                     className={jdTd("h-24 text-center text-muted-foreground")}
                   >
                     Belum ada tahapan pra-seleksi untuk lowongan ini.{" "}
@@ -777,10 +765,9 @@ function InterviewCohortsTab({
                 <TableHead className={jdTh()}>Jadwal Interview</TableHead>
                 <TableHead className={jdTh("text-center")}>Total</TableHead>
                 <TableHead className={jdTh("text-center")}>Interview</TableHead>
+                <TableHead className={jdTh("text-center")}>Cadangan</TableHead>
                 <TableHead className={jdTh("text-center")}>Diterima</TableHead>
-                <TableHead className={jdTh("text-center")}>Berangkat</TableHead>
-                <TableHead className={jdTh("text-center")}>Selesai</TableHead>
-                <TableHead className={jdTh()}>Status</TableHead>
+                <TableHead className={jdTh("text-center")}>Ditolak</TableHead>
                 <TableHead className={jdTh("w-[60px]")} />
               </TableRow>
             </TableHeader>
@@ -835,28 +822,25 @@ function InterviewCohortsTab({
                       </Badge>
                     </TableCell>
                     <TableCell className={jdTd("text-center tabular-nums")}>
-                      <Badge variant="default" className="font-mono">
+                      <Badge variant="outline" className="font-mono">
+                        {cohort.cadangan_count}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className={jdTd("text-center tabular-nums")}>
+                      <Badge
+                        variant="outline"
+                        className="font-mono border-emerald-500/40 text-emerald-700 dark:text-emerald-400"
+                      >
                         {cohort.diterima_count}
                       </Badge>
                     </TableCell>
                     <TableCell className={jdTd("text-center tabular-nums")}>
-                      <Badge variant="default" className="font-mono">
-                        {cohort.berangkat_count}
+                      <Badge
+                        variant={cohort.ditolak_count ? "destructive" : "outline"}
+                        className="font-mono"
+                      >
+                        {cohort.ditolak_count}
                       </Badge>
-                    </TableCell>
-                    <TableCell className={jdTd("text-center tabular-nums")}>
-                      <Badge variant="outline" className="font-mono">
-                        {cohort.selesai_count}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className={jdTd()}>
-                      {cohort.is_active ? (
-                        <Badge variant="default" className="gap-1">
-                          <IconCircleCheck className="size-3" /> Aktif
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline">Non-aktif</Badge>
-                      )}
                     </TableCell>
                     <TableCell className={jdTd()} onClick={(e) => e.stopPropagation()}>
                       <Button
@@ -874,7 +858,7 @@ function InterviewCohortsTab({
               ) : (
                 <TableRow className="hover:bg-transparent">
                   <TableCell
-                    colSpan={9}
+                    colSpan={8}
                     className={jdTd("h-24 text-center text-muted-foreground")}
                   >
                     Belum ada sesi interview untuk lowongan ini.{" "}
@@ -1003,6 +987,8 @@ function ApplicationsTab({
   const showDocCol = status === "DITERIMA" && selectedDiterimaStep !== "ALL"
   const isMedicalDiterimaStep =
     status === "DITERIMA" && selectedDiterimaStep === "MEDICAL"
+  const isPsikologiTestDiterimaStep =
+    status === "DITERIMA" && selectedDiterimaStep === "PSIKOLOGI_TEST"
   const isFwcmsOrPsikologiDiterimaStep =
     status === "DITERIMA" &&
     (selectedDiterimaStep === "FWCMS" || selectedDiterimaStep === "PSIKOLOGI_TEST")
@@ -1076,6 +1062,21 @@ function ApplicationsTab({
       return next
     })
   }
+  const selectedAdvanceApplicantUserIds = useMemo(() => {
+    const ids: number[] = []
+    const seen = new Set<number>()
+    for (const app of filteredApps) {
+      if (
+        selectedAdvanceAppIds.has(app.id) &&
+        typeof app.applicant_user === "number" &&
+        !seen.has(app.applicant_user)
+      ) {
+        seen.add(app.applicant_user)
+        ids.push(app.applicant_user)
+      }
+    }
+    return ids
+  }, [filteredApps, selectedAdvanceAppIds])
   const selectedRecipientIds = Array.from(selectedApplicantUsers)
   const selectedRecipientNames = filteredApps
     .filter(
@@ -1543,15 +1544,29 @@ function ApplicationsTab({
           </Card>
         )}
 
-        <div className="relative max-w-md">
-          <IconSearch className="text-muted-foreground absolute left-3 top-1/2 size-4 -translate-y-1/2" />
-          <Input
-            placeholder="Cari nama, email, NIK, atau rujukan..."
-            value={stageSearch}
-            onChange={(e) => setStageSearch(e.target.value)}
-            className="pl-9 h-9 text-sm"
-            aria-label="Filter pelamar di tahap ini"
-          />
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+          <div className="relative max-w-md min-w-[min(100%,16rem)] flex-1">
+            <IconSearch className="text-muted-foreground absolute left-3 top-1/2 size-4 -translate-y-1/2" />
+            <Input
+              placeholder="Cari nama, email, NIK, atau rujukan..."
+              value={stageSearch}
+              onChange={(e) => setStageSearch(e.target.value)}
+              className="pl-9 h-9 text-sm"
+              aria-label="Filter pelamar di tahap ini"
+            />
+          </div>
+          {isMedicalDiterimaStep ? (
+            <BulkReferralPdfButton
+              kind="medical"
+              selectedApplicantUserIds={selectedAdvanceApplicantUserIds}
+            />
+          ) : null}
+          {isPsikologiTestDiterimaStep ? (
+            <BulkReferralPdfButton
+              kind="psychology"
+              selectedApplicantUserIds={selectedAdvanceApplicantUserIds}
+            />
+          ) : null}
         </div>
 
         <div className={JOB_DETAIL_TABLE_SHELL}>

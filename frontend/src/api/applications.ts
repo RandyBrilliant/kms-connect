@@ -48,6 +48,48 @@ export async function getApplications(
   return data
 }
 
+export type ActivityExportType = "PRA_SELEKSI" | "INTERVIEW" | "MEDICAL" | "PSIKOTES"
+
+export interface ActivityExportExcelParams {
+  date_from: string
+  date_to: string
+  activities: ActivityExportType[]
+}
+
+/**
+ * GET /api/applications/export-activity-excel/
+ * Export pelamar + lamaran/tahapan filtered by scheduled activity dates.
+ */
+export async function exportActivityApplicationsExcel(
+  params: ActivityExportExcelParams,
+  filename?: string
+): Promise<void> {
+  const search = new URLSearchParams()
+  search.set("date_from", params.date_from)
+  search.set("date_to", params.date_to)
+  for (const activity of params.activities) {
+    search.append("activity", activity)
+  }
+  const qs = search.toString()
+  const response = await api.get(
+    `/api/applications/export-activity-excel/${qs ? `?${qs}` : ""}`,
+    { responseType: "blob" }
+  )
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download =
+    filename ?? `export_aktivitas_${params.date_from}_${params.date_to}.xlsx`
+  a.style.display = "none"
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
 /**
  * GET /api/applications/export-excel/
  * Export applicants using the same filters as application list.

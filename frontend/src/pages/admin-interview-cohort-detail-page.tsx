@@ -860,8 +860,8 @@ function CohortStatusTab({
                         onClick={() => navigate(`${batchBase}/${app.batch}`)}
                         title="Buka tahapan pra-seleksi (batch)"
                       >
-                        {app.batch_tahap_label ??
-                          app.batch_name ??
+                        {app.batch_name?.trim() ||
+                          app.batch_tahap_label?.trim() ||
                           `Batch #${app.batch}`}
                         <IconExternalLink className="size-3 shrink-0" />
                       </button>

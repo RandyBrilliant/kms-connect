@@ -12,6 +12,7 @@ import {
   IconSend,
   IconChartBar,
   IconTrash,
+  IconFileSpreadsheet,
 } from "@tabler/icons-react"
 
 import { useAuth } from "@/hooks/use-auth"
@@ -68,6 +69,7 @@ function getNavItems(basePath: string, role?: string) {
       { title: "Berita", url: `${basePath}/berita`, icon: IconNews },
       { title: "Kirim Broadcast", url: `${basePath}/broadcasts`, icon: IconSend },
       { title: "Chat", url: `${basePath}/chat`, icon: IconMessage },
+      { title: "Export Excel", url: `${basePath}/export-excel`, icon: IconFileSpreadsheet },
     ]
   }
 
@@ -92,6 +94,7 @@ function getNavItems(basePath: string, role?: string) {
     { title: "Kirim Broadcast", url: `${basePath}/broadcasts`, icon: IconSend },
     { title: "Chat", url: `${basePath}/chat`, icon: IconMessage },
     { title: "Laporan", url: `${basePath}/laporan`, icon: IconChartBar },
+    { title: "Export Excel", url: `${basePath}/export-excel`, icon: IconFileSpreadsheet },
     { title: "Hapus Akun", url: `${basePath}/hapus-akun`, icon: IconTrash },
   ]
 }

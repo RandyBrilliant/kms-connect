@@ -1802,6 +1802,60 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response
 
+    @action(detail=False, methods=["get"], url_path="export-activity-excel")
+    def export_activity_excel(self, request):
+        """
+        GET /api/applications/export-activity-excel/
+
+        Export pelamar + lamaran/tahapan context filtered by activity schedule dates.
+
+        Query params:
+          - date_from, date_to (YYYY-MM-DD, required)
+          - activity (repeatable): PRA_SELEKSI | INTERVIEW | MEDICAL | PSIKOTES
+        """
+        from django.http import HttpResponse
+
+        from main.services.activity_export import (
+            build_activity_application_queryset,
+            generate_activity_applications_excel,
+            parse_activity_export_params,
+        )
+
+        try:
+            activity_set, date_from, date_to = parse_activity_export_params(
+                request.query_params
+            )
+        except ValueError as e:
+            return Response(
+                error_response(detail=str(e), code=ApiCode.VALIDATION_ERROR),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        applications = build_activity_application_queryset(
+            activity_set, date_from, date_to
+        ).prefetch_related(
+            "applicant__work_experiences",
+            "applicant__documents__document_type",
+        )
+
+        excel_file = generate_activity_applications_excel(
+            applications,
+            activity_set,
+            date_from,
+            date_to,
+            request,
+        )
+
+        filename = (
+            f"export_aktivitas_{date_from.isoformat()}_{date_to.isoformat()}.xlsx"
+        )
+        response = HttpResponse(
+            excel_file.read(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+
     @action(detail=False, methods=["post"], url_path="bulk-advance-diterima-step")
     def bulk_advance_diterima_step(self, request):
         """

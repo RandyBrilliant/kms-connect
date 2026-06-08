@@ -181,6 +181,11 @@ report_paths = [
         views.AdminMedicalReferralPdfView.as_view(),
         name="applicant-medical-referral-pdf",
     ),
+    path(
+        "applicants/bulk-referral-pdf/",
+        views.AdminBulkReferralPdfView.as_view(),
+        name="applicants-bulk-referral-pdf",
+    ),
 ]
 
 # FCM token management

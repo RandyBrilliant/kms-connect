@@ -57,6 +57,7 @@ const AdminChatPage = lazy(() => import("@/pages/admin-chat-page").then(m => ({ 
 const PrivacyPolicyPage = lazy(() => import("@/pages/privacy-policy-page").then(m => ({ default: m.PrivacyPolicyPage })))
 const AccountDeletionPage = lazy(() => import("@/pages/account-deletion-page").then(m => ({ default: m.AccountDeletionPage })))
 const DownloadAppPage = lazy(() => import("@/pages/download-app-page").then(m => ({ default: m.DownloadAppPage })))
+const AdminExportExcelPage = lazy(() => import("@/pages/admin-export-excel-page").then(m => ({ default: m.AdminExportExcelPage })))
 const AdminDeletionRequestsPage = lazy(() => import("@/pages/admin-deletion-requests-page").then(m => ({ default: m.AdminDeletionRequestsPage })))
 
 // Loading fallback component
@@ -162,6 +163,7 @@ function AppRoutes() {
         <Route path="broadcasts/new" element={<AdminBroadcastFormPage />} />
         <Route path="broadcasts/:id/edit" element={<AdminBroadcastFormPage />} />
         <Route path="laporan" element={<AdminLaporanPage />} />
+        <Route path="export-excel" element={<AdminExportExcelPage />} />
         <Route path="lamaran/:id" element={<AdminApplicationDetailPage />} />
         <Route path="batch" element={<AdminBatchListPage />} />
         <Route path="batch/:id" element={<AdminBatchDetailPage />} />
@@ -202,6 +204,7 @@ function AppRoutes() {
         <Route path="broadcasts/new" element={<AdminBroadcastFormPage />} />
         <Route path="broadcasts/:id/edit" element={<AdminBroadcastFormPage />} />
         <Route path="laporan" element={<Navigate to="/admin-portal" replace />} />
+        <Route path="export-excel" element={<AdminExportExcelPage />} />
         <Route path="lamaran/:id" element={<AdminApplicationDetailPage />} />
         <Route path="batch" element={<AdminBatchListPage />} />
         <Route path="batch/:id" element={<AdminBatchDetailPage />} />

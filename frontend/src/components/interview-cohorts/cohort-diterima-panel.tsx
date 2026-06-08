@@ -22,6 +22,7 @@ import { ApplicantDetailPreviewDialog } from "@/components/batches/applicant-det
 import { ApplicationStatusBadge } from "@/components/applications/application-status-badge"
 import { BulkFwcmsPsikotesCard } from "@/components/applications/bulk-fwcms-psikotes-card"
 import { BulkMedicalSmlCard } from "@/components/applications/bulk-medical-sml-card"
+import { BulkReferralPdfButton } from "@/components/applications/bulk-referral-pdf-button"
 import {
   formatDiterimaDate,
   MedicalHasilPill,
@@ -183,6 +184,7 @@ export function CohortDiterimaPanel({
   const onDiterimaSubStep = selectedDiterimaStep !== "ALL"
   const isLastDiterimaStep = selectedDiterimaStep === DITERIMA_LAST_STEP
   const isMedicalStep = selectedDiterimaStep === "MEDICAL"
+  const isPsikologiTestStep = selectedDiterimaStep === "PSIKOLOGI_TEST"
   const isFwcmsOrPsikologiStep =
     selectedDiterimaStep === "FWCMS" || selectedDiterimaStep === "PSIKOLOGI_TEST"
   const isBuatIdPekerjaStep = selectedDiterimaStep === "BUAT_ID_PEKERJA"
@@ -268,6 +270,11 @@ export function CohortDiterimaPanel({
     }
     return out
   }, [])
+
+  const selectedAdvanceApplicantUserIds = useMemo(
+    () => resolveApplicantUsersFromAppIds(selectedAdvanceAppIds),
+    [resolveApplicantUsersFromAppIds, selectedAdvanceAppIds]
+  )
 
   const pageApplicationIds = useMemo(() => new Set(filteredApps.map((a) => a.id)), [filteredApps])
 
@@ -1010,6 +1017,18 @@ export function CohortDiterimaPanel({
             </Select>
           </div>
         ) : null}
+        {isMedicalStep ? (
+          <BulkReferralPdfButton
+            kind="medical"
+            selectedApplicantUserIds={selectedAdvanceApplicantUserIds}
+          />
+        ) : null}
+        {isPsikologiTestStep ? (
+          <BulkReferralPdfButton
+            kind="psychology"
+            selectedApplicantUserIds={selectedAdvanceApplicantUserIds}
+          />
+        ) : null}
       </div>
 
       <p className="text-sm text-muted-foreground">
@@ -1363,7 +1382,9 @@ export function CohortDiterimaPanel({
                             className="inline-flex cursor-pointer items-center gap-1 text-left text-sm text-primary underline-offset-2 hover:underline"
                             onClick={() => navigate(`${batchBase}/${app.batch}`)}
                           >
-                            {app.batch_tahap_label ?? app.batch_name ?? `Batch #${app.batch}`}
+                            {app.batch_name?.trim() ||
+                              app.batch_tahap_label?.trim() ||
+                              `Batch #${app.batch}`}
                             <IconExternalLink className="size-3 shrink-0" />
                           </button>
                         ) : (
