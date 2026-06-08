@@ -29,12 +29,25 @@ def applicant_has_interview_stage_lamaran(profile: ApplicantProfile) -> bool:
 
 
 def applicant_has_confirmed_pra_seleksi(profile: ApplicantProfile) -> bool:
+    from main.models import JobApplication
+
+    # Keep pra confirmation even after status advances past PRA_SELEKSI.
+    return JobApplication.objects.filter(
+        applicant=profile,
+        pra_seleksi_confirmed_at__isnull=False,
+    ).exists()
+
+
+def applicant_has_diterima_or_later(profile: ApplicantProfile) -> bool:
     from main.models import ApplicationStatus, JobApplication
 
     return JobApplication.objects.filter(
         applicant=profile,
-        status=ApplicationStatus.PRA_SELEKSI,
-        pra_seleksi_confirmed_at__isnull=False,
+        status__in=(
+            ApplicationStatus.DITERIMA,
+            ApplicationStatus.BERANGKAT,
+            ApplicationStatus.SELESAI,
+        ),
     ).exists()
 
 
@@ -43,17 +56,19 @@ def get_applicant_document_types_queryset(profile: ApplicantProfile) -> QuerySet
     Document types the pelamar may see/upload, based on lamaran progress.
 
     - Default: INITIAL phase only.
-    - INTERVIEW+ (without pra shortcut alone): INITIAL + bukti penyerahan.
+    - INTERVIEW (without pra shortcut): INITIAL + bukti penyerahan.
     - Pra-seleksi confirmed (still PRA_SELEKSI): all except bukti penyerahan.
-    - INTERVIEW+ with pra confirmed, or INTERVIEW+ alone with full unlock path:
-      all types when pra confirmed OR interview+ (interview+ adds bukti early).
+    - INTERVIEW with pra confirmed: all types (incl. bukti penyerahan).
+    - DITERIMA+ (lulus interview / diterima): all types.
     """
     has_interview = applicant_has_interview_stage_lamaran(profile)
     has_pra_confirmed = applicant_has_confirmed_pra_seleksi(profile)
+    has_diterima = applicant_has_diterima_or_later(profile)
+
+    if has_diterima or (has_interview and has_pra_confirmed):
+        return DocumentType.objects.all().order_by("sort_order", "code")
 
     if has_interview:
-        if has_pra_confirmed:
-            return DocumentType.objects.all().order_by("sort_order", "code")
         return (
             DocumentType.objects.filter(
                 Q(phase=DocumentType.PHASE_INITIAL)
