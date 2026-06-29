@@ -3,19 +3,16 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'config/theme.dart';
-import 'core/navigation/main_tab_transition.dart';
 import 'core/widgets/custom_toast.dart';
 
 import 'features/auth/presentation/pages/splash_page.dart';
 import 'features/auth/presentation/pages/login_page_new.dart';
 import 'features/auth/presentation/pages/registration_page_new.dart';
-import 'features/auth/presentation/pages/social_complete_profile_page.dart';
 import 'features/auth/presentation/pages/email_verification_page.dart';
 import 'features/auth/presentation/pages/forgot_password_page.dart';
 import 'features/auth/presentation/pages/reset_password_page.dart';
 import 'features/home/presentation/pages/home_page.dart';
 import 'features/profile/presentation/pages/profile_page.dart';
-import 'features/profile/presentation/pages/profile_complete_page.dart';
 import 'features/profile/presentation/pages/edit_profile_page.dart';
 import 'features/profile/presentation/pages/work_experiences_page.dart';
 import 'features/profile/presentation/pages/change_password_page.dart';
@@ -31,14 +28,11 @@ import 'features/chat/presentation/pages/chat_thread_page.dart';
 import 'features/news/presentation/pages/news_list_page.dart';
 import 'features/news/presentation/pages/news_detail_page.dart';
 import 'features/notifications/presentation/pages/notifications_page.dart';
-import 'features/notifications/presentation/pages/notification_detail_page.dart';
 import 'features/notifications/presentation/pages/notification_settings_page.dart';
 import 'features/auth/data/providers/auth_provider.dart';
 import 'features/profile/data/providers/profile_provider.dart';
 import 'features/documents/data/providers/document_provider.dart';
 import 'config/strings.dart';
-import 'core/navigation/onboarding_resolver.dart';
-import 'core/navigation/root_scaffold_messenger.dart';
 
 /// A [ChangeNotifier] that bridges Riverpod [AuthState] changes to GoRouter's
 /// [refreshListenable], so the router is created ONCE and only re-evaluates
@@ -55,14 +49,6 @@ final routerProvider = Provider<GoRouter>((ref) {
   // - notify the router so redirects are re-evaluated
   // - clear user-scoped cached data when logging out, so a new login
   //   never sees stale profile/documents from the previous account.
-  ref.listen<ProfileState>(profileNotifierProvider, (previous, next) {
-    final prevAt = previous?.lastFetchedAt;
-    final nextAt = next.lastFetchedAt;
-    if (prevAt != nextAt || previous?.profile?.id != next.profile?.id) {
-      authNotifier.notify();
-    }
-  });
-
   ref.listen<AuthState>(authStateProvider, (previous, next) {
     final wasAuthenticated = previous?.isAuthenticated ?? false;
     final isAuthenticated = next.isAuthenticated;
@@ -99,13 +85,42 @@ final routerProvider = Provider<GoRouter>((ref) {
     initialLocation: '/splash',
     refreshListenable: authNotifier,
     redirect: (context, state) {
+      final loc = state.matchedLocation;
+
+      // Splash handles its own auth-aware navigation — never redirect away.
+      if (loc == '/splash') return null;
+
+      // Read current auth state at redirect-evaluation time.
       final authState = ref.read(authStateProvider);
-      final profileState = ref.read(profileNotifierProvider);
-      return resolveOnboardingRedirect(
-        currentLocation: state.matchedLocation,
-        authState: authState,
-        profileState: profileState,
-      );
+      final isAuthenticated = authState.isAuthenticated;
+
+      // Pre-auth routes: login, register, email verification, and password reset.
+      final isPreAuthRoute = loc == '/login' || 
+                            loc == '/register' || 
+                            loc.startsWith('/email-verification') ||
+                            loc == '/forgot-password' ||
+                            loc.startsWith('/reset-password');
+
+      if (!isAuthenticated) {
+        // Unauthenticated users can only access pre-auth routes.
+        return isPreAuthRoute ? null : '/login';
+      }
+
+      // Authenticated but email not verified — must verify before accessing app.
+      final emailVerified = authState.user?.emailVerified ?? true;
+      if (!emailVerified) {
+        final userEmail = Uri.encodeComponent(authState.user!.email);
+        return loc.startsWith('/email-verification')
+            ? null
+            : '/email-verification?email=$userEmail';
+      }
+
+      // Authenticated & complete — send away from pre-auth routes.
+      if (isPreAuthRoute) {
+        return '/home';
+      }
+
+      return null;
     },
     routes: [
       GoRoute(
@@ -141,11 +156,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const RegistrationPageNew(),
       ),
       GoRoute(
-        path: '/social-complete',
-        name: 'social-complete',
-        builder: (context, state) => const SocialCompleteProfilePage(),
-      ),
-      GoRoute(
         path: '/email-verification',
         name: 'email-verification',
         builder: (context, state) {
@@ -170,20 +180,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/home',
         name: 'home',
-        pageBuilder: (context, state) => MainTabTransition.buildPage(
-          key: state.pageKey,
-          location: state.matchedLocation,
-          child: const HomePage(),
-        ),
-      ),
-      GoRoute(
-        path: '/notifications/:notificationId',
-        name: 'notification-detail',
-        builder: (context, state) {
-          final id =
-              int.tryParse(state.pathParameters['notificationId'] ?? '') ?? 0;
-          return NotificationDetailPage(notificationId: id);
-        },
+        builder: (context, state) => const HomePage(),
       ),
       GoRoute(
         path: '/notifications',
@@ -198,16 +195,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/profile',
         name: 'profile',
-        pageBuilder: (context, state) => MainTabTransition.buildPage(
-          key: state.pageKey,
-          location: state.matchedLocation,
-          child: const ProfilePage(),
-        ),
-      ),
-      GoRoute(
-        path: '/profile/complete',
-        name: 'profile-complete',
-        builder: (context, state) => const ProfileCompletePage(),
+        builder: (context, state) => const ProfilePage(),
       ),
       GoRoute(
         path: '/profile/edit',
@@ -247,21 +235,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/jobs',
         name: 'jobs',
-        pageBuilder: (context, state) => MainTabTransition.buildPage(
-          key: state.pageKey,
-          location: state.matchedLocation,
-          child: const JobsListPage(),
-        ),
+        builder: (context, state) => const JobsListPage(),
       ),
       // Must come before /jobs/:id so GoRouter doesn't match "my-applications" as an :id
       GoRoute(
         path: '/jobs/my-applications',
         name: 'my-applications',
-        pageBuilder: (context, state) => MainTabTransition.buildPage(
-          key: state.pageKey,
-          location: state.matchedLocation,
-          child: const MyApplicationsPage(),
-        ),
+        builder: (context, state) => const MyApplicationsPage(),
       ),
       // Must come before /jobs/:id so GoRouter doesn't match "applications" as an :id
       GoRoute(
@@ -291,11 +271,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/news',
         name: 'news',
-        pageBuilder: (context, state) => MainTabTransition.buildPage(
-          key: state.pageKey,
-          location: state.matchedLocation,
-          child: const NewsListPage(),
-        ),
+        builder: (context, state) => const NewsListPage(),
       ),
       GoRoute(
         path: '/chat',
@@ -322,7 +298,6 @@ class App extends ConsumerWidget {
     final router = ref.watch(routerProvider);
     
     return MaterialApp.router(
-      scaffoldMessengerKey: rootScaffoldMessengerKey,
       title: AppStrings.appName,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,

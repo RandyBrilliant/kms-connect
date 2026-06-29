@@ -88,11 +88,7 @@ class BottomNavBar extends ConsumerWidget {
                 _ProfessionalNavItem(
                   destination: _kDestinations[i],
                   isSelected: i == _selectedIndex,
-                  onTap: () {
-                    final target = _kDestinations[i].route;
-                    if (target == currentRoute) return;
-                    context.go(target);
-                  },
+                  onTap: () => context.go(_kDestinations[i].route),
                 ),
             ],
           ),

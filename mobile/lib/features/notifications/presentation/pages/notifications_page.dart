@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../config/colors.dart';
 import '../../../../core/widgets/custom_toast.dart';
 import '../../data/providers/notification_provider.dart';
-import '../delete_undo_snackbar.dart';
 import '../../domain/models/app_notification.dart';
 
 /// Professional notifications page with clean Material Design 3 styling
@@ -56,27 +54,11 @@ class NotificationsPage extends ConsumerWidget {
                           separatorBuilder: (context, index) => const SizedBox(height: 12),
                           itemBuilder: (ctx, i) {
                             final n = state.notifications[i];
-                            return Dismissible(
-                              key: ValueKey('notification-${n.id}'),
-                              direction: DismissDirection.endToStart,
-                              background: const _DeleteNotificationBackground(),
-                              confirmDismiss: (_) async {
-                                final approved =
-                                    await _confirmDeleteNotification(context);
-                                if (!approved) return false;
-
-                                ref
-                                    .read(notificationProvider.notifier)
-                                    .queueDeleteNotification(n.id);
-                                showNotificationDeleteUndoSnackBar(ref, n.id);
-                                return true;
-                              },
-                              child: _ProfessionalNotificationCard(
-                                notification: n,
-                                onTap: () {
-                                  context.push('/notifications/${n.id}');
-                                },
-                              ),
+                            return _ProfessionalNotificationCard(
+                              notification: n,
+                              onTap: () => ref
+                                  .read(notificationProvider.notifier)
+                                  .markRead(n.id),
                             );
                           },
                         ),
@@ -448,56 +430,6 @@ class _ProfessionalNotificationCard extends StatelessWidget {
     if (diff.inMinutes >= 1) return '${diff.inMinutes} menit lalu';
     return 'Baru saja';
   }
-}
-
-class _DeleteNotificationBackground extends StatelessWidget {
-  const _DeleteNotificationBackground();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.error.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      alignment: Alignment.centerRight,
-      child: const Icon(
-        Icons.delete_outline_rounded,
-        color: Colors.white,
-        size: 24,
-      ),
-    );
-  }
-}
-
-Future<bool> _confirmDeleteNotification(BuildContext context) async {
-  final result = await showDialog<bool>(
-    context: context,
-    builder: (dialogContext) {
-      return AlertDialog(
-        title: const Text('Hapus notifikasi?'),
-        content: const Text(
-          'Notifikasi yang dihapus tidak bisa dikembalikan.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Batal'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.error,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Hapus'),
-          ),
-        ],
-      );
-    },
-  );
-  return result ?? false;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

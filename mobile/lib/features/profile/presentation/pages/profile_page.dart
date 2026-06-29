@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -14,8 +12,6 @@ import '../../../notifications/data/providers/notification_provider.dart';
 import '../../../notifications/data/providers/notification_settings_provider.dart';
 import '../../data/providers/profile_provider.dart';
 import '../../domain/models/applicant_profile.dart';
-
-const bool _hideGoogleSignInTemporarily = true;
 
 /// Professional profile page with modern Material Design 3 styling
 class ProfilePage extends ConsumerStatefulWidget {
@@ -118,54 +114,10 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
     if (mounted) context.go('/login');
   }
 
-  Future<void> _openBuktiPenyerahanUpload() async {
-    try {
-      final types = await ref.read(documentTypesProvider.future);
-      if (!mounted) return;
-      final match = types
-          .where((t) => t.code == 'bukti-penyerahan-dokumen')
-          .firstOrNull;
-      if (match != null) {
-        context.push('/documents/upload?type=${match.id}');
-      } else {
-        context.push('/documents');
-      }
-    } catch (_) {
-      if (!mounted) return;
-      context.push('/documents');
-    }
-  }
-
   Future<void> _handleViewBiodataPdf() async {
     final ok = await ref.read(biodataPdfProvider.notifier).open();
     if (!ok && mounted) {
       final err = ref.read(biodataPdfProvider).error ?? 'Gagal membuka PDF.';
-      CustomToast.show(
-        context,
-        message: err,
-        type: ToastType.error,
-      );
-    }
-  }
-
-  Future<void> _handleViewPsychologyReferralPdf() async {
-    final ok = await ref.read(psychologyReferralPdfProvider.notifier).open();
-    if (!ok && mounted) {
-      final err =
-          ref.read(psychologyReferralPdfProvider).error ?? 'Gagal membuka PDF.';
-      CustomToast.show(
-        context,
-        message: err,
-        type: ToastType.error,
-      );
-    }
-  }
-
-  Future<void> _handleViewMedicalReferralPdf() async {
-    final ok = await ref.read(medicalReferralPdfProvider.notifier).open();
-    if (!ok && mounted) {
-      final err =
-          ref.read(medicalReferralPdfProvider).error ?? 'Gagal membuka PDF.';
       CustomToast.show(
         context,
         message: err,
@@ -182,8 +134,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
     final notifState = ref.watch(notificationProvider);
     final workExpState = ref.watch(workExperienceNotifierProvider);
     final pdfState = ref.watch(biodataPdfProvider);
-    final psychPdfState = ref.watch(psychologyReferralPdfProvider);
-    final medicalPdfState = ref.watch(medicalReferralPdfProvider);
 
     final profile = profileState.profile;
     final fullName = profile?.fullName?.isNotEmpty == true
@@ -232,18 +182,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                     0.15,
                     0.55,
                   ),
-
-                  if (profile?.inboundTransportStageCosts != null &&
-                      profile!.inboundTransportStageCosts!.isNotEmpty) ...[
-                    const SizedBox(height: 20),
-                    _animated(
-                      _InboundTransportCostsCard(
-                        rows: profile.inboundTransportStageCosts!,
-                      ),
-                      0.22,
-                      0.60,
-                    ),
-                  ],
 
                   const SizedBox(height: 28),
 
@@ -307,83 +245,41 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
 
                   const SizedBox(height: 20),
 
-                  // PDF Biodata (+ pengantar psikologi jika lamaran DITERIMA)
-                  _animated(
-                    _ProfessionalMenuSection(
-                      title: 'Dokumen Saya',
-                      items: [
-                        _ProfessionalMenuItem(
-                          icon: Icons.picture_as_pdf_outlined,
-                          color: AppColors.error,
-                          title: 'Biodata PDF',
-                          subtitle: 'Lihat biodata dalam format PDF',
-                          onTap: _handleViewBiodataPdf,
-                          isLoading: pdfState.isLoading,
-                        ),
-                        if (profile?.hasInterviewLamaran == true)
+                  // PDF Biodata (only visible when application accepted)
+                  if (profile?.verificationStatus == 'ACCEPTED')
+                    _animated(
+                      _ProfessionalMenuSection(
+                        title: 'Dokumen Saya',
+                        items: [
                           _ProfessionalMenuItem(
-                            icon: Icons.assignment_outlined,
-                            color: const Color(0xFF2563EB),
-                            title: 'Bukti Penyerahan Dokumen',
-                            subtitle:
-                                'Unduh template, lengkapi, lalu unggah PDF',
-                            onTap: _openBuktiPenyerahanUpload,
+                            icon: Icons.picture_as_pdf_outlined,
+                            color: AppColors.error,
+                            title: 'Biodata PDF',
+                            subtitle: 'Lihat biodata dalam format PDF',
+                            onTap: _handleViewBiodataPdf,
+                            isLoading: pdfState.isLoading,
                           ),
-                        if (profile?.hasDiterimaLamaran == true)
-                          _ProfessionalMenuItem(
-                            icon: Icons.psychology_outlined,
-                            color: const Color(0xFF0D9488),
-                            title: 'Surat pengantar tes psikologi',
-                            subtitle: 'PDF untuk klinik (tahap Diterima)',
-                            onTap: _handleViewPsychologyReferralPdf,
-                            isLoading: psychPdfState.isLoading,
-                          ),
-                        if (profile?.hasDiterimaLamaran == true)
-                          _ProfessionalMenuItem(
-                            icon: Icons.medical_services_outlined,
-                            color: const Color(0xFFDC2626),
-                            title: 'Surat pengantar medical',
-                            subtitle: 'PDF medical check up (tahap Diterima)',
-                            onTap: _handleViewMedicalReferralPdf,
-                            isLoading: medicalPdfState.isLoading,
-                          ),
-                      ],
+                        ],
+                      ),
+                      0.50,
+                      0.78,
                     ),
-                    0.50,
-                    0.78,
-                  ),
 
-                  const SizedBox(height: 20),
-
-                  // Linked Accounts (hidden on Android while Google sign-in is disabled)
-                  if (Platform.isIOS || !_hideGoogleSignInTemporarily) ...[
-                  // Linked Accounts
-                  _animated(
-                    _LinkedAccountsSection(
-                      hasGoogle: authState.user?.hasGoogle ?? false,
-                      hasApple: authState.user?.hasApple ?? false,
-                    ),
-                    0.55,
-                    0.88,
-                  ),
-
-                  const SizedBox(height: 20),
-                  ],
+                  if (profile?.verificationStatus == 'ACCEPTED')
+                    const SizedBox(height: 20),
 
                   // Account
                   _animated(
                     _ProfessionalMenuSection(
                       title: 'Akun',
                       items: [
-                        if (!(authState.user?.hasGoogle == true && authState.user?.hasApple == false && authState.user?.hasPassword == false) &&
-                            !(authState.user?.hasApple == true && authState.user?.hasGoogle == false && authState.user?.hasPassword == false))
-                          _ProfessionalMenuItem(
-                            icon: Icons.lock_outline_rounded,
-                            color: const Color(0xFF0891B2),
-                            title: 'Ganti Password',
-                            subtitle: 'Ubah password akun kamu',
-                            onTap: () => context.push('/profile/change-password'),
-                          ),
+                        _ProfessionalMenuItem(
+                          icon: Icons.lock_outline_rounded,
+                          color: const Color(0xFF0891B2),
+                          title: 'Ganti Password',
+                          subtitle: 'Ubah password akun kamu',
+                          onTap: () => context.push('/profile/change-password'),
+                        ),
                         _ProfessionalMenuItem(
                           icon: Icons.delete_outline_rounded,
                           color: AppColors.error,
@@ -613,7 +509,6 @@ class _ProfessionalProfileHeader extends StatelessWidget {
     switch (status) {
       case 'ACCEPTED':
         return 'Terverifikasi';
-      case 'SUBMITTED':
       case 'PENDING':
         return 'Menunggu Verifikasi';
       case 'REJECTED':
@@ -952,223 +847,6 @@ class _ProfessionalMenuItem extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Linked Accounts Section
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _LinkedAccountsSection extends ConsumerWidget {
-  const _LinkedAccountsSection({
-    required this.hasGoogle,
-    required this.hasApple,
-  });
-
-  final bool hasGoogle;
-  final bool hasApple;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final isLoading = ref.watch(authStateProvider).isLoading;
-    final tt = Theme.of(context).textTheme;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              width: 4,
-              height: 16,
-              decoration: BoxDecoration(
-                color: AppColors.primaryDarkGreen,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              'Akun Terhubung',
-              style: tt.titleMedium?.copyWith(
-                color: AppColors.textDark,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: AppColors.divider.withValues(alpha: 0.3),
-              width: 1,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Column(
-            children: [
-              if (!_hideGoogleSignInTemporarily)
-                _LinkedAccountTile(
-                  provider: 'Google',
-                  icon: Icons.g_mobiledata_rounded,
-                  iconColor: const Color(0xFFDB4437),
-                  isLinked: hasGoogle,
-                  isLoading: isLoading,
-                  onLink: () async {
-                    final ok = await ref.read(authStateProvider.notifier).linkGoogle();
-                    if (!context.mounted) return;
-                    if (ok) {
-                      CustomToast.show(context, message: 'Akun Google berhasil dihubungkan', type: ToastType.success);
-                    } else {
-                      final err = ref.read(authStateProvider).error;
-                      if (err != null) CustomToast.show(context, message: err, type: ToastType.error);
-                    }
-                  },
-                ),
-              if (Platform.isIOS) ...[
-                if (!_hideGoogleSignInTemporarily)
-                Divider(color: AppColors.divider.withValues(alpha: 0.2), height: 1, indent: 20, endIndent: 20),
-                _LinkedAccountTile(
-                  provider: 'Apple',
-                  icon: Icons.apple_rounded,
-                  iconColor: Colors.black,
-                  isLinked: hasApple,
-                  isLoading: isLoading,
-                  onLink: () async {
-                    final ok = await ref.read(authStateProvider.notifier).linkApple();
-                    if (!context.mounted) return;
-                    if (ok) {
-                      CustomToast.show(context, message: 'Akun Apple berhasil dihubungkan', type: ToastType.success);
-                    } else {
-                      final err = ref.read(authStateProvider).error;
-                      if (err != null) CustomToast.show(context, message: err, type: ToastType.error);
-                    }
-                  },
-                ),
-              ],
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _LinkedAccountTile extends StatelessWidget {
-  const _LinkedAccountTile({
-    required this.provider,
-    required this.icon,
-    required this.iconColor,
-    required this.isLinked,
-    required this.isLoading,
-    required this.onLink,
-  });
-
-  final String provider;
-  final IconData icon;
-  final Color iconColor;
-  final bool isLinked;
-  final bool isLoading;
-  final VoidCallback onLink;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: isLinked || isLoading ? null : onLink,
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: iconColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, color: iconColor, size: 24),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      provider,
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textDark,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      isLinked ? 'Terhubung' : 'Belum terhubung',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: isLinked
-                            ? AppColors.primaryDarkGreen
-                            : AppColors.textMedium,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (isLinked)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryDarkGreen.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.check_circle_rounded, size: 16, color: AppColors.primaryDarkGreen),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Aktif',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.primaryDarkGreen,
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              else
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryDarkGreen,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    'Hubungkan',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Professional Notification Toggle
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1239,88 +917,6 @@ class _ProfessionalNotificationToggle extends ConsumerWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _InboundTransportCostsCard extends StatelessWidget {
-  const _InboundTransportCostsCard({required this.rows});
-
-  final List<InboundTransportStageCostRow> rows;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.divider.withValues(alpha: 0.4)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Biaya transport (ringkas)',
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textDark,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Rincian per tahapan seleksi (inbound cost).',
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 12,
-              color: AppColors.textMedium,
-            ),
-          ),
-          const SizedBox(height: 12),
-          ...rows.map((r) {
-            final parts = <String>[];
-            if (r.amount != null) {
-              parts.add('Rp ${r.amount!.toStringAsFixed(0)}');
-            }
-            if (r.tanggalProses?.isNotEmpty == true) {
-              parts.add(r.tanggalProses!);
-            }
-            final sub = parts.join(' · ');
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    flex: 5,
-                    child: Text(
-                      r.label,
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    flex: 6,
-                    child: Text(
-                      [
-                        if (sub.isNotEmpty) sub,
-                        if (r.keterangan.isNotEmpty) r.keterangan,
-                      ].join(' — '),
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 12,
-                        color: AppColors.textMedium,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
-        ],
       ),
     );
   }

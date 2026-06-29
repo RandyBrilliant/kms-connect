@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -8,27 +9,27 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../../../config/colors.dart';
 import '../../../../../core/widgets/terms_privacy_modal.dart';
+import '../../../../../core/models/region.dart';
 import '../../../../../core/widgets/custom_toast.dart';
 import '../../../../../core/widgets/ktp_camera_screen.dart';
-import '../../../../../core/widgets/ktp_gallery_crop_screen.dart';
 import '../../../../../core/widgets/professional_text_field.dart';
 import '../../../../../core/widgets/professional_dropdown_field.dart';
 import '../../../../../core/widgets/professional/professional_button.dart';
-import '../../../data/providers/auth_provider.dart';
+import '../../../data/providers/regions_provider.dart';
 import '../../../domain/models/ktp_data.dart';
-import '../../../../notifications/data/services/notification_service.dart';
-import '../../../../profile/data/providers/profile_provider.dart';
 import '../../providers/registration_provider.dart';
 
-/// Step 2 of registration: upload KTP photo and enter identity fields manually.
+/// Step 2 of registration: upload KTP photo, auto-extract OCR data,
+/// let the user verify / complete the form, then submit.
 ///
-/// Performance note: [ProfessionalTextField] derives styles from [Theme].
+/// Performance note: [M3TextField] derives all styles from [Theme], avoiding
+/// per-keystroke [TextStyle] allocations. [regenciesProvider] is not watched in
+/// [build] so loading the full regency list does not rebuild this widget on
+/// every frame; birth-place resolution awaits the provider when needed.
 class RegistrationStep2Ktp extends ConsumerStatefulWidget {
   const RegistrationStep2Ktp({super.key});
 
@@ -50,12 +51,18 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
   final _nikFocus = FocusNode();
   final _nameFocus = FocusNode();
 
+  // Structured picker state
+  Region? _selectedCity;
   DateTime? _selectedDate;
+
+  /// Raw OCR city name  used to pre-fill the city search query.
+  String? _ocrBirthPlace;
 
   bool _isPickingImage = false;
   bool _isRegistering = false;
 
   bool _dataDeclarationChecked = false;
+  bool _zeroCostChecked = false;
 
   //  Lifecycle 
 
@@ -64,6 +71,9 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      // Warm up city data without subscribing (no rebuilds when it loads).
+      ref.read(regenciesProvider);
+      // Restore OCR data if available.
       final ktpData = ref.read(registrationProvider).ktpData;
       if (ktpData != null) _populateFields(ktpData);
     });
@@ -147,12 +157,10 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
     try {
       final imageFile = await _pickImage(source);
       if (imageFile == null || !mounted) return;
-      final persistentFile = await _persistKtpImage(imageFile);
       setState(() => _isPickingImage = false);
       _clearFields();
-      ref.read(registrationProvider.notifier).setKtpImage(persistentFile);
-      // OCR disabled — user fills all fields manually.
-      // await _runOcr();
+      ref.read(registrationProvider.notifier).setKtpImage(imageFile);
+      await _runOcr();
     } on PlatformException catch (e) {
       if (!mounted) return;
       CustomToast.show(context,
@@ -164,24 +172,6 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
     } finally {
       if (mounted && _isPickingImage) setState(() => _isPickingImage = false);
     }
-  }
-
-  Future<File> _persistKtpImage(File source) async {
-    final appDir = await getApplicationSupportDirectory();
-    final ktpDir = Directory(p.join(appDir.path, 'ktp_uploads'));
-    if (!await ktpDir.exists()) {
-      await ktpDir.create(recursive: true);
-    }
-    final ext = p.extension(source.path).toLowerCase();
-    final safeExt = switch (ext) {
-      '.jpg' || '.jpeg' || '.png' || '.webp' => ext,
-      _ => '.jpg',
-    };
-    final targetPath = p.join(
-      ktpDir.path,
-      'ktp_${DateTime.now().millisecondsSinceEpoch}$safeExt',
-    );
-    return source.copy(targetPath);
   }
 
   Future<File?> _pickImage(ImageSource source) async {
@@ -208,62 +198,171 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
         imageQuality: 85,
         maxWidth: 1920,
         maxHeight: 1080);
-    if (picked == null) return null;
-    return _cropGalleryImageToKtpGuide(File(picked.path));
+    return picked == null ? null : File(picked.path);
   }
 
-  Future<File?> _cropGalleryImageToKtpGuide(File sourceFile) async {
+  //  OCR 
+
+  Future<void> _runOcr() async {
     try {
-      final cropped = await Navigator.push<File>(
-        context,
-        MaterialPageRoute(
-          builder: (_) => KtpGalleryCropScreen(sourceFile: sourceFile),
-        ),
-      );
-      return cropped;
-    } catch (_) {
-      if (!mounted) return sourceFile;
-      CustomToast.show(
-        context,
-        message: 'Gagal menyesuaikan rasio foto KTP',
-        type: ToastType.info,
-      );
-      return sourceFile;
+      await ref.read(registrationProvider.notifier).processOcr();
+      if (!mounted) return;
+      final data = ref.read(registrationProvider).ktpData;
+      if (data != null && data.hasData) {
+        _populateFields(data);
+        CustomToast.show(context,
+            message: 'Data KTP berhasil diekstrak! Periksa dan lengkapi.',
+            type: ToastType.success);
+      } else {
+        CustomToast.show(context,
+            message:
+                'OCR selesai, tapi tidak ada data terdeteksi. Silakan isi manual.',
+            type: ToastType.info);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      CustomToast.show(context,
+          message: 'Gagal memproses OCR: ${_extractMessage(e)}',
+          type: ToastType.error);
     }
   }
 
-  // OCR disabled for registration — re-enable by uncommenting _runOcr() after upload.
-  //
-  // Future<void> _runOcr() async {
-  //   try {
-  //     await ref.read(registrationProvider.notifier).processOcr();
-  //     if (!mounted) return;
-  //     final data = ref.read(registrationProvider).ktpData;
-  //     if (data != null && data.hasData) {
-  //       _populateFields(data);
-  //       CustomToast.show(context,
-  //           message:
-  //               'NIK terisi dari foto KTP. Isi nama, tempat lahir, dan tanggal lahir sesuai KTP.',
-  //           type: ToastType.success);
-  //     } else {
-  //       CustomToast.show(context,
-  //           message:
-  //               'OCR selesai, tapi tidak ada data terdeteksi. Silakan isi manual.',
-  //           type: ToastType.info);
-  //     }
-  //   } catch (e) {
-  //     if (!mounted) return;
-  //     CustomToast.show(context,
-  //         message: 'Gagal memproses OCR: ${_extractMessage(e)}',
-  //         type: ToastType.error);
-  //   }
-  // }
-
   void _populateFields(KtpData data) {
     setState(() {
-      // OCR preview returns NIK only; other fields are manual per policy.
       if (data.nik != null) _nikCtrl.text = data.nik!;
+      if (data.name != null) _nameCtrl.text = data.name!.toUpperCase();
+      if (data.birthPlace != null) _ocrBirthPlace = data.birthPlace;
+      if (data.birthDate != null) _parseAndSetDate(data.birthDate!);
     });
+    if (data.birthPlace != null || data.birthPlaceRegency != null) {
+      unawaited(_resolveBirthPlaceFromKtp(data));
+    }
+  }
+
+  /// Loads regencies then applies OCR/backend birth place — avoids [whenData]
+  /// silently doing nothing while [regenciesProvider] is still loading.
+  Future<void> _resolveBirthPlaceFromKtp(KtpData data) async {
+    final cities = await _loadRegenciesWithRetry();
+    if (!mounted || cities == null) return;
+
+    if (data.birthPlaceRegency != null) {
+      final regency = data.birthPlaceRegency!;
+      final match = cities.where((c) => c.id == regency.id).firstOrNull;
+      if (match != null) {
+        setState(() {
+          _selectedCity = match;
+          _birthPlaceCtrl.text = match.name;
+        });
+        return;
+      }
+      if (data.birthPlace != null) {
+        _applyTryMatchCity(data.birthPlace!, cities);
+      } else if (_ocrBirthPlace != null) {
+        _applyTryMatchCity(_ocrBirthPlace!, cities);
+      }
+    } else if (data.birthPlace != null) {
+      _applyTryMatchCity(data.birthPlace!, cities);
+    }
+  }
+
+  /// Fetches all regencies; on failure invalidates once and retries (helps
+  /// after transient errors so Riverpod does not stay stuck on AsyncError).
+  Future<List<Region>?> _loadRegenciesWithRetry() async {
+    try {
+      return await ref.read(regenciesProvider.future);
+    } catch (_) {
+      ref.invalidate(regenciesProvider);
+      try {
+        return await ref.read(regenciesProvider.future);
+      } catch (_) {
+        return null;
+      }
+    }
+  }
+
+  //  City matching helpers
+
+  String _normalizePlace(String s) {
+    return s
+        .toUpperCase()
+        .trim()
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .replaceAll(RegExp(r'\bKAB\.?\b'), 'KABUPATEN')
+        .replaceAll(RegExp(r'\bKT\.?\b'), 'KOTA')
+        .replaceAll('.', '')
+        .trim();
+  }
+
+  String _stripRegencyPrefix(String s) {
+    return s
+        .replaceFirst(RegExp(r'^KABUPATEN\s+'), '')
+        .replaceFirst(RegExp(r'^KOTA\s+'), '')
+        .trim();
+  }
+
+  void _applyTryMatchCity(String birthPlace, List<Region> cities) {
+    final query = _normalizePlace(birthPlace);
+    if (query.isEmpty) return;
+    Region? match;
+
+    for (final c in cities) {
+      if (_normalizePlace(c.name) == query) {
+        match = c;
+        break;
+      }
+    }
+    if (match == null) {
+      final qs = _stripRegencyPrefix(query);
+      if (qs.isNotEmpty) {
+        for (final c in cities) {
+          if (_stripRegencyPrefix(_normalizePlace(c.name)) == qs) {
+            match = c;
+            break;
+          }
+        }
+      }
+    }
+    if (match == null) {
+      for (final c in cities) {
+        final cn = _normalizePlace(c.name);
+        if (cn.contains(query) || query.contains(cn)) {
+          match = c;
+          break;
+        }
+      }
+    }
+    if (match == null) {
+      final qs = _stripRegencyPrefix(query);
+      if (qs.length >= 3) {
+        for (final c in cities) {
+          final cn = _stripRegencyPrefix(_normalizePlace(c.name));
+          if (cn.contains(qs) || qs.contains(cn)) {
+            match = c;
+            break;
+          }
+        }
+      }
+    }
+
+    if (match != null && mounted) {
+      setState(() {
+        _selectedCity = match;
+        _birthPlaceCtrl.text = match!.name;
+      });
+    }
+  }
+
+  void _parseAndSetDate(String dateStr) {
+    try {
+      final parts = dateStr.split('-');
+      if (parts.length == 3) {
+        final d = int.parse(parts[0]);
+        final m = int.parse(parts[1]);
+        final y = int.parse(parts[2]);
+        _selectedDate = DateTime(y, m, d);
+        _birthDateCtrl.text = _formattedDate;
+      }
+    } catch (_) {}
   }
 
   void _clearFields() {
@@ -272,7 +371,9 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
       _nameCtrl.clear();
       _birthPlaceCtrl.clear();
       _birthDateCtrl.clear();
+      _selectedCity = null;
       _selectedDate = null;
+      _ocrBirthPlace = null;
     });
   }
 
@@ -371,15 +472,51 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
     }
   }
 
+  Future<void> _showCityPicker() async {
+    final cities = await _loadRegenciesWithRetry();
+    if (!mounted) return;
+    if (cities == null) {
+      CustomToast.show(context,
+          message:
+              'Gagal memuat daftar kota/kabupaten. Periksa koneksi internet lalu coba lagi.',
+          type: ToastType.error);
+      return;
+    }
+    if (cities.isEmpty) {
+      CustomToast.show(context,
+          message:
+              'Daftar wilayah kosong di server. Hubungi administrator atau coba lagi nanti.',
+          type: ToastType.error);
+      return;
+    }
+    final result = await showModalBottomSheet<Region>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _CityPickerSheet(
+        cities: cities,
+        initialSearch: _ocrBirthPlace ?? _selectedCity?.name ?? '',
+        selected: _selectedCity,
+      ),
+    );
+    if (result != null && mounted) {
+      setState(() {
+        _selectedCity = result;
+        _birthPlaceCtrl.text = result.name;
+      });
+    }
+  }
+
   //  Registration 
 
   Future<void> _handleRegister() async {
     if (!_formKey.currentState!.validate()) return;
 
-    if (!_dataDeclarationChecked) {
+    if (!_dataDeclarationChecked || !_zeroCostChecked) {
       CustomToast.show(
         context,
-        message: 'Anda harus menyetujui pernyataan data benar sebelum melanjutkan.',
+        message:
+            'Anda harus menyetujui pernyataan data benar dan memahami skema zero cost sebelum melanjutkan.',
         type: ToastType.error,
       );
       return;
@@ -409,25 +546,16 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
       }
     }
 
-    final selectedKtpFile = ref.read(registrationProvider).ktpImage;
-    if (selectedKtpFile == null || !await selectedKtpFile.exists()) {
-      CustomToast.show(
-        context,
-        message: 'File KTP tidak ditemukan. Silakan upload ulang foto KTP.',
-        type: ToastType.error,
-      );
-      return;
-    }
-
     ref.read(registrationProvider.notifier).updateKtpData(KtpData(
           nik: _nikCtrl.text.trim(),
           name: _nameCtrl.text.trim(),
-          birthPlace: _birthPlaceCtrl.text.trim(),
+          birthPlace: _selectedCity?.name ?? '',
           birthDate: _formattedDate,
         ));
 
+    // Save the confirmed region ID and ISO date so the backend can persist them.
     ref.read(registrationProvider.notifier).setBirthInfo(
-      birthPlaceText: _birthPlaceCtrl.text.trim().toUpperCase(),
+      birthPlaceId: _selectedCity?.id,
       birthDateIso: _selectedDate != null
           ? '${_selectedDate!.year.toString().padLeft(4, '0')}-'
             '${_selectedDate!.month.toString().padLeft(2, '0')}-'
@@ -437,29 +565,26 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
 
     ref.read(registrationProvider.notifier).setDeclarations(
           dataDeclarationConfirmed: _dataDeclarationChecked,
+          zeroCostUnderstood: _zeroCostChecked,
         );
+
+    final email = ref.read(registrationProvider).email;
 
     try {
       setState(() => _isRegistering = true);
 
-      final authResponse = await ref
+      await ref
           .read(registrationProvider.notifier)
           .completeRegistration();
 
       if (!mounted) return;
 
-      ref
-          .read(authStateProvider.notifier)
-          .setAuthenticatedUser(authResponse.user);
-      NotificationService().registerToken();
-      await ref
-          .read(profileNotifierProvider.notifier)
-          .loadProfile(force: true);
-
       ref.read(registrationProvider.notifier).reset();
 
-      if (mounted) {
-        context.go('/profile/complete');
+      // Email registration — do NOT set authenticated user yet.
+      // Auth tokens are stored; the user must verify email first.
+      if (mounted && email != null) {
+        context.go('/email-verification?email=${Uri.encodeComponent(email)}');
       }
     } catch (e) {
       if (!mounted) return;
@@ -474,7 +599,7 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
 
   @override
   Widget build(BuildContext context) {
-    // Registration wizard state.
+    // Read state without watching regencies  prefetch is done in initState.
     final state = ref.watch(registrationProvider);
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
@@ -518,6 +643,12 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
             onTap: _isPickingImage ? null : _showImageSourceSheet,
           ),
 
+          //  OCR progress banner 
+          if (state.isProcessing && !_isRegistering) ...[
+            const SizedBox(height: 12),
+            _OcrProgressBanner(),
+          ],
+
           const SizedBox(height: 24),
 
           // Data fields section
@@ -532,7 +663,7 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Lengkapi NIK, nama, tempat lahir, dan tanggal lahir sesuai KTP.',
+            'Periksa dan lengkapi data diri sesuai KTP',
             style: GoogleFonts.plusJakartaSans(
               fontSize: 14,
               fontWeight: FontWeight.w500,
@@ -573,23 +704,20 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
             keyboardType: TextInputType.name,
             textInputAction: TextInputAction.done,
             textCapitalization: TextCapitalization.characters,
-            upperCase: true,
             validator: (v) =>
                 (v == null || v.trim().isEmpty) ? 'Nama wajib diisi' : null,
           ),
           const SizedBox(height: 16),
 
-          ProfessionalTextField(
+          // Tempat Lahir – city picker
+          ProfessionalDropdownField(
             controller: _birthPlaceCtrl,
             label: 'Tempat Lahir',
-            hintText: 'Sesuai KTP',
+            hint: 'Pilih kota/kabupaten',
             prefixIcon: Icons.location_on_outlined,
-            keyboardType: TextInputType.text,
-            textInputAction: TextInputAction.next,
-            textCapitalization: TextCapitalization.characters,
-            upperCase: true,
-            validator: (v) =>
-                (v == null || v.trim().isEmpty) ? 'Tempat lahir wajib diisi' : null,
+            onTap: _showCityPicker,
+            validator: (_) =>
+                _selectedCity == null ? 'Tempat lahir wajib dipilih' : null,
           ),
           const SizedBox(height: 16),
 
@@ -671,6 +799,30 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
                             ),
                           ],
                         ),
+                        style: tt.bodySmall?.copyWith(
+                          color: cs.onSurface,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Checkbox(
+                      value: _zeroCostChecked,
+                      onChanged: (v) {
+                        setState(() {
+                          _zeroCostChecked = v ?? false;
+                        });
+                      },
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        'Saya telah membaca dan memahami bahwa proses penempatan kerja menggunakan skema zero cost, '
+                        'di mana seluruh biaya proses resmi ditanggung oleh perusahaan sesuai ketentuan yang berlaku.',
                         style: tt.bodySmall?.copyWith(
                           color: cs.onSurface,
                         ),
@@ -820,6 +972,239 @@ class _KtpPlaceholder extends StatelessWidget {
   }
 }
 
-// OCR progress banner — kept for when OCR is re-enabled.
-//
-// class _OcrProgressBanner extends StatelessWidget { ... }
+//  OCR progress banner 
+
+class _OcrProgressBanner extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: cs.tertiaryContainer,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(
+                strokeWidth: 2, color: cs.onTertiaryContainer),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            'Memproses OCR dari foto KTP...',
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: cs.onTertiaryContainer,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+//  City picker bottom sheet 
+
+class _CityPickerSheet extends StatefulWidget {
+  final List<Region> cities;
+  final String initialSearch;
+  final Region? selected;
+
+  const _CityPickerSheet({
+    required this.cities,
+    required this.initialSearch,
+    required this.selected,
+  });
+
+  @override
+  State<_CityPickerSheet> createState() => _CityPickerSheetState();
+}
+
+class _CityPickerSheetState extends State<_CityPickerSheet> {
+  late final TextEditingController _searchCtrl;
+  late List<Region> _filtered;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchCtrl = TextEditingController(text: widget.initialSearch);
+    _filtered = _applyFilter(widget.initialSearch);
+    _searchCtrl.addListener(() {
+      setState(() => _filtered = _applyFilter(_searchCtrl.text));
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  List<Region> _applyFilter(String q) {
+    final query = q.trim().toLowerCase();
+    if (query.isEmpty) return widget.cities;
+    return widget.cities
+        .where((c) => c.name.toLowerCase().contains(query))
+        .toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.75,
+      minChildSize: 0.4,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (_, scrollCtrl) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: Column(
+            children: [
+              // Handle
+              Padding(
+                padding: const EdgeInsets.only(top: 12, bottom: 4),
+                child: Container(
+                  width: 32,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.divider,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+
+              // Title
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                child: Row(
+                  children: [
+                    Text(
+                      'Pilih Kota / Kabupaten',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textDark,
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      icon: Icon(Icons.close, color: AppColors.textMedium),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Search field
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                child: TextField(
+                  controller: _searchCtrl,
+                  autofocus: true,
+                  style: GoogleFonts.plusJakartaSans(
+                      fontSize: 14, color: AppColors.textDark),
+                  decoration: InputDecoration(
+                    hintText: 'Cari kota atau kabupaten...',
+                    hintStyle: GoogleFonts.plusJakartaSans(
+                      fontSize: 14,
+                      color: AppColors.textLight,
+                    ),
+                    prefixIcon:
+                        Icon(Icons.search, color: AppColors.textMedium, size: 20),
+                    suffixIcon: _searchCtrl.text.isNotEmpty
+                        ? IconButton(
+                            icon: Icon(Icons.clear,
+                                color: AppColors.textMedium, size: 18),
+                            onPressed: () => _searchCtrl.clear(),
+                          )
+                        : null,
+                    filled: true,
+                    fillColor: AppColors.backgroundOffWhite,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                        color: AppColors.primaryDarkGreen,
+                        width: 1.5,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+
+              // Results count
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '${_filtered.length} kota/kabupaten',
+                    style: GoogleFonts.plusJakartaSans(
+                        fontSize: 12,
+                        color: AppColors.textMedium,
+                        fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ),
+              Divider(height: 1, color: AppColors.divider),
+
+              // City list
+              Expanded(
+                child: ListView.builder(
+                  controller: scrollCtrl,
+                  itemCount: _filtered.length,
+                  itemBuilder: (_, i) {
+                    final city = _filtered[i];
+                    final isSelected = widget.selected?.id == city.id;
+                    return ListTile(
+                      onTap: () => Navigator.pop(context, city),
+                      selected: isSelected,
+                      selectedTileColor: AppColors.primaryDarkGreen.withValues(alpha: 0.1),
+                      tileColor: Colors.white,
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
+                      title: Text(
+                        city.name,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 14,
+                          fontWeight: isSelected
+                              ? FontWeight.w700
+                              : FontWeight.w500,
+                          color: isSelected
+                              ? AppColors.primaryDarkGreen
+                              : AppColors.textDark,
+                        ),
+                      ),
+                      trailing: isSelected
+                          ? Icon(Icons.check_circle_rounded,
+                              color: AppColors.primaryDarkGreen, size: 20)
+                          : null,
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}

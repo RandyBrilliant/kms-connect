@@ -16,16 +16,20 @@ class ProfessionalGradientBackground extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(gradient: AppColors.professionalGradient),
+      decoration: const BoxDecoration(
+        gradient: AppColors.professionalGradient,
+      ),
       child: Stack(
         children: [
           // Subtle geometric pattern overlay
           if (withGeometricPattern)
             Positioned.fill(
-              child: CustomPaint(painter: _GeometricPatternPainter()),
+              child: CustomPaint(
+                painter: _GeometricPatternPainter(),
+              ),
             ),
-
-          ?child,
+          
+          if (child != null) child!,
         ],
       ),
     );
@@ -63,7 +67,7 @@ class _GeometricPatternPainter extends CustomPainter {
       80,
       circlePaint,
     );
-
+    
     canvas.drawCircle(
       Offset(size.width * 0.9, size.height * 0.1),
       140,
@@ -76,7 +80,7 @@ class _GeometricPatternPainter extends CustomPainter {
       100,
       circlePaint,
     );
-
+    
     canvas.drawCircle(
       Offset(size.width * 0.1, size.height * 0.9),
       160,

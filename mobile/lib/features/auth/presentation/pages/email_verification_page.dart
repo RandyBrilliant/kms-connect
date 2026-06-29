@@ -15,7 +15,6 @@ import '../../../../core/widgets/custom_toast.dart';
 import '../../../../core/widgets/professional/professional_gradient_background.dart';
 import '../../../../core/widgets/professional/professional_card.dart';
 import '../../../../core/widgets/professional/professional_button.dart';
-import '../../../../core/widgets/professional_text_field.dart';
 import '../../data/providers/auth_provider.dart';
 
 const _kDigitCount = 6;
@@ -37,40 +36,22 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
   final _controllers =
       List.generate(_kDigitCount, (_) => TextEditingController());
   final _focusNodes = List.generate(_kDigitCount, (_) => FocusNode());
-  final _currentEmailCtrl = TextEditingController();
-  final _newEmailCtrl = TextEditingController();
-  final _passwordCtrl = TextEditingController();
 
   bool _isVerifying = false;
   bool _isResending = false;
   bool _isSuccess = false;
   int _resendCountdown = _kResendSeconds;
   Timer? _countdownTimer;
-  late String _verificationEmail;
 
   late final AnimationController _animCtrl;
   late final Animation<double> _fadeIn;
   late final Animation<double> _slideUp;
 
   String get _code => _controllers.map((c) => c.text).join();
-  String get _maskedVerificationEmail => _maskEmail(_verificationEmail);
-
-  String _maskEmail(String email) {
-    final value = email.trim().toLowerCase();
-    final parts = value.split('@');
-    if (parts.length != 2) return value;
-    final local = parts[0];
-    final domain = parts[1];
-    if (local.isEmpty) return value;
-    if (local.length <= 2) return '${local[0]}***@$domain';
-    return '${local.substring(0, 2)}***@$domain';
-  }
 
   @override
   void initState() {
     super.initState();
-    _verificationEmail = widget.email.trim().toLowerCase();
-    _currentEmailCtrl.text = _verificationEmail;
     _startCountdown();
 
     _animCtrl = AnimationController(
@@ -96,9 +77,6 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
   void dispose() {
     _countdownTimer?.cancel();
     _animCtrl.dispose();
-    _currentEmailCtrl.dispose();
-    _newEmailCtrl.dispose();
-    _passwordCtrl.dispose();
     for (final c in _controllers) {
       c.dispose();
     }
@@ -108,12 +86,9 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
     super.dispose();
   }
 
-  Future<void> _handleBack() async {
-    // User is authenticated-but-unverified on this page. If we navigate to
-    // /login without clearing auth, router redirect will push back here.
-    await ref.read(authStateProvider.notifier).logout();
-    if (!mounted) return;
-    context.go('/login');
+  void _handleBack() {
+    // Clear any pending state and navigate back
+    context.go('/register');
   }
 
   void _startCountdown() {
@@ -156,12 +131,6 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
       _controllers[index].text = value.substring(value.length - 1);
     }
 
-    // Backspace cleared this digit — move focus to the previous cell so the
-    // user can edit it (no KeyboardListener / no orphan FocusNodes).
-    if (value.isEmpty && index > 0) {
-      _focusNodes[index - 1].requestFocus();
-    }
-
     setState(() {}); // Rebuild to update cell colors
 
     if (value.isNotEmpty && index < _kDigitCount - 1) {
@@ -182,7 +151,7 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
     try {
       final response = await ApiClient().dio.post(
         ApiEndpoints.verifyEmailCode,
-        data: {'email': _verificationEmail, 'code': code},
+        data: {'email': widget.email, 'code': code},
       );
 
       final apiResp = ApiResponse<Map<String, dynamic>>.fromJson(
@@ -244,7 +213,7 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
 
     final ok = await ref
         .read(authStateProvider.notifier)
-        .resendVerificationEmail(_verificationEmail);
+        .resendVerificationEmail(widget.email);
 
     if (!mounted) return;
     setState(() => _isResending = false);
@@ -262,175 +231,14 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
     }
   }
 
-  Future<void> _showUpdateEmailBottomSheet() async {
-    _currentEmailCtrl.text = _verificationEmail;
-    _newEmailCtrl.clear();
-    _passwordCtrl.clear();
-    bool obscurePassword = true;
-    var saving = false;
-
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setModalState) {
-            final bottomInset = MediaQuery.viewInsetsOf(ctx).bottom;
-            return SafeArea(
-              top: false,
-              child: AnimatedPadding(
-                padding: EdgeInsets.only(bottom: bottomInset),
-                duration: const Duration(milliseconds: 120),
-                curve: Curves.easeOut,
-                child: SingleChildScrollView(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                    Text(
-                      'Ubah Email Verifikasi',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textDark,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Masukkan email baru dan password akun Anda.',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 13,
-                        color: AppColors.textMedium,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    ProfessionalTextField(
-                      controller: _currentEmailCtrl,
-                      label: 'Email saat ini',
-                      hintText: '-',
-                      prefixIcon: Icons.alternate_email_rounded,
-                      readOnly: true,
-                      enabled: false,
-                    ),
-                    const SizedBox(height: 12),
-                    ProfessionalTextField(
-                      controller: _newEmailCtrl,
-                      label: 'Email baru',
-                      hintText: 'contoh@email.com',
-                      prefixIcon: Icons.email_outlined,
-                      keyboardType: TextInputType.emailAddress,
-                      textInputAction: TextInputAction.next,
-                    ),
-                    const SizedBox(height: 12),
-                    ProfessionalTextField(
-                      controller: _passwordCtrl,
-                      label: 'Password akun',
-                      hintText: 'Masukkan password akun',
-                      prefixIcon: Icons.lock_outline_rounded,
-                      obscureText: obscurePassword,
-                      textInputAction: TextInputAction.done,
-                      onSubmitted: (_) async {
-                        if (saving) return;
-                      },
-                      suffixIcon: IconButton(
-                        onPressed: () =>
-                            setModalState(() => obscurePassword = !obscurePassword),
-                        icon: Icon(
-                          obscurePassword
-                              ? Icons.visibility_off_outlined
-                              : Icons.visibility_outlined,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    ProfessionalButton(
-                      label: saving ? 'Menyimpan...' : 'Simpan Email Baru',
-                      isLoading: saving,
-                      onPressed: saving
-                          ? null
-                          : () async {
-                              final nextEmail = _newEmailCtrl.text.trim().toLowerCase();
-                              final password = _passwordCtrl.text;
-                              if (nextEmail.isEmpty || password.isEmpty) {
-                                CustomToast.show(
-                                  ctx,
-                                  message: 'Email baru dan password wajib diisi.',
-                                  type: ToastType.error,
-                                );
-                                return;
-                              }
-
-                              saving = true;
-                              setModalState(() {});
-
-                              final ok = await ref.read(authStateProvider.notifier).updateUnverifiedEmail(
-                                    currentEmail: _verificationEmail,
-                                    newEmail: nextEmail,
-                                    password: password,
-                                  );
-
-                              if (!ctx.mounted) return;
-                              saving = false;
-                              setModalState(() {});
-
-                              if (!ok) {
-                                CustomToast.show(
-                                  ctx,
-                                  message: 'Gagal mengubah email. Periksa kembali data Anda.',
-                                  type: ToastType.error,
-                                );
-                                return;
-                              }
-
-                              if (!mounted) return;
-                              setState(() {
-                                _verificationEmail = nextEmail;
-                                _currentEmailCtrl.text = nextEmail;
-                              });
-                              _clearCode();
-                              _startCountdown();
-                              Navigator.of(ctx).pop();
-                              WidgetsBinding.instance.addPostFrameCallback((_) {
-                                if (mounted) _focusNodes[0].requestFocus();
-                              });
-                              CustomToast.showGlobal(
-                                message: 'Email diperbarui. Kode verifikasi baru sudah dikirim.',
-                                type: ToastType.success,
-                              );
-                            },
-                    ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, _) {
-        if (didPop) return;
-        unawaited(_handleBack());
-      },
-      child: Scaffold(
-        resizeToAvoidBottomInset: true,
-        body: ProfessionalGradientBackground(
-          child: SafeArea(
-            child: Column(
-              children: [
+    return Scaffold(
+      resizeToAvoidBottomInset: true,
+      body: ProfessionalGradientBackground(
+        child: SafeArea(
+          child: Column(
+            children: [
               const SizedBox(height: 16),
               
               // Header
@@ -439,7 +247,7 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
                 child: Row(
                   children: [
                     GestureDetector(
-                      onTap: () => unawaited(_handleBack()),
+                      onTap: _handleBack,
                       child: Container(
                         width: 44,
                         height: 44,
@@ -498,8 +306,7 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
                   ),
                 ),
               ),
-              ],
-            ),
+            ],
           ),
         ),
       ),
@@ -607,7 +414,7 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
             ),
             const SizedBox(height: 4),
             Text(
-              _maskedVerificationEmail,
+              widget.email,
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
@@ -649,20 +456,6 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
 
             // Resend section
             _buildResendSection(),
-            const SizedBox(height: 12),
-            GestureDetector(
-              onTap: _showUpdateEmailBottomSheet,
-              child: Text(
-                'Email salah? Ubah email',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.primaryDarkGreen,
-                  decoration: TextDecoration.underline,
-                  decorationColor: AppColors.primaryDarkGreen,
-                ),
-              ),
-            ),
             const SizedBox(height: 20),
 
             // Tips
@@ -681,45 +474,59 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
     return SizedBox(
       width: width,
       height: height,
-      child: TextField(
-        controller: _controllers[index],
-        focusNode: _focusNodes[index],
-        textAlign: TextAlign.center,
-        keyboardType: TextInputType.number,
-        maxLength: 2,
-        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-        onChanged: (v) => _onDigitChanged(index, v),
-        style: GoogleFonts.plusJakartaSans(
-          fontSize: fontSize,
-          fontWeight: FontWeight.w700,
-          color: AppColors.textDark,
-        ),
-        decoration: InputDecoration(
-          counterText: '',
-          contentPadding: EdgeInsets.symmetric(vertical: height * 0.2),
-          filled: true,
-          fillColor: Colors.white,
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(
-              color: hasValue
-                  ? AppColors.primaryDarkGreen
-                  : AppColors.divider,
-              width: 1.5,
-            ),
+      child: KeyboardListener(
+        focusNode: FocusNode(),
+        onKeyEvent: (event) {
+          if (event is KeyDownEvent &&
+              event.logicalKey == LogicalKeyboardKey.backspace) {
+            // If current field is empty and backspace is pressed, go to previous and clear it
+            if (_controllers[index].text.isEmpty && index > 0) {
+              _controllers[index - 1].clear();
+              _focusNodes[index - 1].requestFocus();
+              setState(() {});
+            }
+          }
+        },
+        child: TextField(
+          controller: _controllers[index],
+          focusNode: _focusNodes[index],
+          textAlign: TextAlign.center,
+          keyboardType: TextInputType.number,
+          maxLength: 2,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          onChanged: (v) => _onDigitChanged(index, v),
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: fontSize,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textDark,
           ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(
-              color: AppColors.primaryDarkGreen,
-              width: 2.5,
+          decoration: InputDecoration(
+            counterText: '',
+            contentPadding: EdgeInsets.symmetric(vertical: height * 0.2),
+            filled: true,
+            fillColor: Colors.white,
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: hasValue 
+                    ? AppColors.primaryDarkGreen 
+                    : AppColors.divider,
+                width: 1.5,
+              ),
             ),
-          ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(
-              color: AppColors.divider,
-              width: 1.5,
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: AppColors.primaryDarkGreen,
+                width: 2.5,
+              ),
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: AppColors.divider,
+                width: 1.5,
+              ),
             ),
           ),
         ),
