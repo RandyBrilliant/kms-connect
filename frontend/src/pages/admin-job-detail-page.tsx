@@ -79,6 +79,13 @@ import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -929,6 +936,8 @@ function ApplicationsTab({
   const [selectedDiterimaStep, setSelectedDiterimaStep] = useState<"ALL" | DocumentCollectionStepCode>(
     "ALL"
   )
+  const [batchFilterId, setBatchFilterId] = useState<number | null>(null)
+  const [cohortFilterId, setCohortFilterId] = useState<number | null>(null)
   // Selection state for the admin "advance to next sub-step" action.
   // Only active when viewing a specific (non-ALL) DITERIMA sub-step tab.
   const [selectedAdvanceAppIds, setSelectedAdvanceAppIds] = useState<Set<number>>(new Set())
@@ -942,9 +951,36 @@ function ApplicationsTab({
 
   const debouncedStageSearch = useDebounce(stageSearch, 400)
 
+  const showDiterimaBatchCohortFilters = status === "DITERIMA"
+
+  const { data: batchFilterData } = useQuery({
+    queryKey: ["batches", { job: jobId, select: "diterima-filter" }],
+    queryFn: () =>
+      getBatches({
+        job: jobId,
+        page_size: 200,
+        ordering: "tahap_order,created_at",
+      }),
+    enabled: enabled && showDiterimaBatchCohortFilters,
+  })
+
+  const { data: cohortFilterData } = useQuery({
+    queryKey: ["interview-cohorts", { job: jobId, select: "diterima-filter" }],
+    queryFn: () =>
+      getInterviewCohorts({
+        job: jobId,
+        page_size: 200,
+        ordering: "-interview_date,-created_at",
+      }),
+    enabled: enabled && showDiterimaBatchCohortFilters,
+  })
+
+  const batchFilterOptions = batchFilterData?.results ?? []
+  const cohortFilterOptions = cohortFilterData?.results ?? []
+
   useEffect(() => {
     setPage(1)
-  }, [debouncedStageSearch])
+  }, [debouncedStageSearch, batchFilterId, cohortFilterId, selectedDiterimaStep])
 
   const { data, isLoading, isFetching } = useQuery({
     queryKey: [
@@ -955,6 +991,8 @@ function ApplicationsTab({
         page,
         search: debouncedStageSearch,
         diterima_step: selectedDiterimaStep,
+        batch: batchFilterId,
+        interview_cohort: cohortFilterId,
       },
     ],
     queryFn: () =>
@@ -965,6 +1003,8 @@ function ApplicationsTab({
           status === "DITERIMA" && selectedDiterimaStep !== "ALL"
             ? selectedDiterimaStep
             : undefined,
+        batch: batchFilterId ?? undefined,
+        interview_cohort: cohortFilterId ?? undefined,
         page,
         page_size: APPLICATIONS_TAB_PAGE_SIZE,
         search: debouncedStageSearch.trim() || undefined,
@@ -1114,6 +1154,8 @@ function ApplicationsTab({
             status === "DITERIMA" && selectedDiterimaStep !== "ALL"
               ? selectedDiterimaStep
               : undefined,
+          batch: batchFilterId ?? undefined,
+          interview_cohort: cohortFilterId ?? undefined,
           search: debouncedStageSearch.trim() || undefined,
           ordering: "applicant_name",
         },
@@ -1555,6 +1597,67 @@ function ApplicationsTab({
               aria-label="Filter pelamar di tahap ini"
             />
           </div>
+          {showDiterimaBatchCohortFilters ? (
+            <>
+              <div className="flex w-full flex-col gap-1 sm:w-auto sm:min-w-[200px]">
+                <Label htmlFor="diterima-batch-filter" className="text-xs text-muted-foreground">
+                  Tahapan / batch
+                </Label>
+                <Select
+                  value={batchFilterId != null ? String(batchFilterId) : "ALL"}
+                  onValueChange={(v) => {
+                    setBatchFilterId(v === "ALL" ? null : Number(v))
+                    setSelectedAdvanceAppIds(new Set())
+                    setSelectedApplicantUsers(new Set())
+                  }}
+                >
+                  <SelectTrigger id="diterima-batch-filter" className="h-9 w-full sm:w-[220px]">
+                    <SelectValue placeholder="Semua tahapan" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Semua tahapan</SelectItem>
+                    {batchFilterOptions.map((b) => (
+                      <SelectItem key={b.id} value={String(b.id)}>
+                        Tahap {b.tahap_order}: {b.name}
+                        {b.tahap_label ? ` · ${b.tahap_label}` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex w-full flex-col gap-1 sm:w-auto sm:min-w-[220px]">
+                <Label htmlFor="diterima-cohort-filter" className="text-xs text-muted-foreground">
+                  Sesi interview
+                </Label>
+                <Select
+                  value={cohortFilterId != null ? String(cohortFilterId) : "ALL"}
+                  onValueChange={(v) => {
+                    setCohortFilterId(v === "ALL" ? null : Number(v))
+                    setSelectedAdvanceAppIds(new Set())
+                    setSelectedApplicantUsers(new Set())
+                  }}
+                >
+                  <SelectTrigger id="diterima-cohort-filter" className="h-9 w-full sm:w-[240px]">
+                    <SelectValue placeholder="Semua sesi" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Semua sesi</SelectItem>
+                    {cohortFilterOptions.map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>
+                        {c.name}
+                        {c.interview_date
+                          ? ` · ${format(new Date(c.interview_date), "dd MMM yyyy HH:mm", {
+                              locale: idLocale,
+                            })}`
+                          : " · Belum dijadwalkan"}
+                        {!c.is_active ? " · Non-aktif" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          ) : null}
           {isMedicalDiterimaStep ? (
             <BulkReferralPdfButton
               kind="medical"
