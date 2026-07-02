@@ -249,8 +249,6 @@ def notify_on_verification_status_change(
             event=NotificationEvent.PROFILE_REJECTED,
             user=instance.user,
             context=ctx,
-            action_url="/profil",
-            action_label="Perbaiki Profil",
         )
 
     elif new_status == ApplicantVerificationStatus.SUBMITTED:

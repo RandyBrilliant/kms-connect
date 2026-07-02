@@ -394,11 +394,13 @@ def _tmpl_profile_accepted(ctx: dict) -> tuple[str, str]:
 def _tmpl_profile_rejected(ctx: dict) -> tuple[str, str]:
     name = ctx.get("user_name", "Anda")
     notes = ctx.get("verification_notes", "")
-    body = f"Maaf {name}, profil Anda belum bisa diterima saat ini."
+    body = (
+        f"Maaf {name}, pendaftaran Anda tidak dapat kami terima. "
+        "Terima kasih atas minat, waktu, dan usaha Anda selama proses pendaftaran ini."
+    )
     if notes:
         body += f" Catatan dari admin: {notes}"
-    body += " Harap perbaiki data Anda dan kirim ulang."
-    return ("Profil Anda Ditolak", body)
+    return ("Pendaftaran Anda Ditolak", body)
 
 
 @_t(NotificationEvent.PROFILE_SUBMISSION_SUMMARY)
