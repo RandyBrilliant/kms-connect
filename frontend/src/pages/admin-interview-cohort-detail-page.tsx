@@ -85,6 +85,7 @@ import { CohortDiterimaPanel } from "@/components/interview-cohorts/cohort-diter
 
 import {
   exportCohortExcel,
+  type ExportCohortExcelParams,
   getCohortAnnouncements,
   createCohortAnnouncement,
   getInterviewCohort,
@@ -99,6 +100,7 @@ import {
 import {
   APPLICATION_STATUS_LABELS,
   type ApplicationStatus,
+  type DocumentCollectionStepCode,
   type JobApplication,
 } from "@/types/job-applications"
 import type { InterviewCohortAnnouncement } from "@/types/interview-cohort"
@@ -198,6 +200,28 @@ async function getAllApplicationsByCohortAndStatus(
     page += 1
   }
   return all
+}
+
+type CohortDiterimaExportFilters = {
+  diterima_step?: DocumentCollectionStepCode
+  hasil_medical?: "FIT" | "UNFIT"
+}
+
+function buildCohortExportParams(
+  status?: ApplicationStatus,
+  diterimaFilters?: CohortDiterimaExportFilters
+): ExportCohortExcelParams | undefined {
+  if (!status) return undefined
+  const params: ExportCohortExcelParams = { statuses: [status] }
+  if (status === "DITERIMA") {
+    if (diterimaFilters?.diterima_step) {
+      params.diterima_step = diterimaFilters.diterima_step
+    }
+    if (diterimaFilters?.hasil_medical) {
+      params.hasil_medical = diterimaFilters.hasil_medical
+    }
+  }
+  return params
 }
 
 const NEXT_FORWARD: Partial<Record<ApplicationStatus, ApplicationStatus>> = {
@@ -388,6 +412,7 @@ function CohortStatusTab({
   cohortBase,
   status,
   apps,
+  onDiterimaExportFiltersChange,
 }: {
   cohortId: number
   jobId: number
@@ -396,6 +421,7 @@ function CohortStatusTab({
   cohortBase: string
   status: ApplicationStatus
   apps: JobApplication[]
+  onDiterimaExportFiltersChange?: (filters: CohortDiterimaExportFilters) => void
 }) {
   if (status === "DITERIMA") {
     return (
@@ -405,6 +431,7 @@ function CohortStatusTab({
         batchBase={batchBase}
         pelamarBase={pelamarBase}
         cohortBase={cohortBase}
+        onExportFiltersChange={onDiterimaExportFiltersChange}
       />
     )
   }
@@ -1213,6 +1240,14 @@ export function AdminInterviewCohortDetailPage() {
   const [activeStatusTab, setActiveStatusTab] =
     useState<ApplicationStatus>("INTERVIEW")
   const [isExporting, setIsExporting] = useState(false)
+  const [diterimaExportFilters, setDiterimaExportFilters] =
+    useState<CohortDiterimaExportFilters>({})
+
+  useEffect(() => {
+    if (activeStatusTab !== "DITERIMA") {
+      setDiterimaExportFilters({})
+    }
+  }, [activeStatusTab])
 
   const cohortQuery = useQuery({
     queryKey: ["interview-cohort", cohortId],
@@ -1281,10 +1316,14 @@ export function AdminInterviewCohortDetailPage() {
     { label: "Semua" },
   ]
 
-  async function handleExportExcel(statuses?: ApplicationStatus[]) {
+  async function handleExportExcel(status?: ApplicationStatus) {
     setIsExporting(true)
     try {
-      await exportCohortExcel(cohortId, cohortQuery.data?.name ?? "sesi_interview", statuses)
+      await exportCohortExcel(
+        cohortId,
+        cohortQuery.data?.name ?? "sesi_interview",
+        buildCohortExportParams(status, diterimaExportFilters)
+      )
       toast.success("File Excel berhasil diunduh.")
     } catch {
       toast.error("Gagal mengunduh Excel.")
@@ -1419,7 +1458,7 @@ export function AdminInterviewCohortDetailPage() {
               <DropdownMenuItem
                 className="cursor-pointer flex-col items-start gap-0"
                 disabled={statusCounts[activeStatusTab] === 0}
-                onClick={() => handleExportExcel([activeStatusTab])}
+                onClick={() => handleExportExcel(activeStatusTab)}
               >
                 <span className="font-medium">Tahapan tab saat ini</span>
                 <span className="text-muted-foreground text-xs font-normal">
@@ -1435,7 +1474,7 @@ export function AdminInterviewCohortDetailPage() {
                     key={opt.label}
                     className="cursor-pointer justify-between gap-4"
                     disabled={count === 0}
-                    onClick={() => handleExportExcel(opt.value ? [opt.value] : undefined)}
+                    onClick={() => handleExportExcel(opt.value)}
                   >
                     <span>{opt.label}</span>
                     <span className="text-muted-foreground tabular-nums text-xs">
@@ -1537,6 +1576,7 @@ export function AdminInterviewCohortDetailPage() {
               cohortBase={cohortBase}
               status={t.value}
               apps={appsByStatus[t.value]}
+              onDiterimaExportFiltersChange={setDiterimaExportFilters}
             />
           </TabsContent>
         ))}

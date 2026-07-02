@@ -216,15 +216,23 @@ export async function previewCohortAnnouncementRecipients(
  * GET /api/interview-cohorts/:id/export-excel/
  * Triggers a browser file download with applicants in this cohort.
  */
+export type ExportCohortExcelParams = {
+  statuses?: ApplicationStatus[]
+  diterima_step?: string
+  hasil_medical?: "FIT" | "UNFIT"
+}
+
 export async function exportCohortExcel(
   cohortId: number,
   cohortName: string,
-  statuses?: ApplicationStatus[]
+  params?: ExportCohortExcelParams
 ): Promise<void> {
   const search = new URLSearchParams()
-  if (statuses?.length) {
-    for (const s of statuses) search.append("status", s)
+  if (params?.statuses?.length) {
+    for (const s of params.statuses) search.append("status", s)
   }
+  if (params?.diterima_step) search.set("diterima_step", params.diterima_step)
+  if (params?.hasil_medical) search.set("hasil_medical", params.hasil_medical)
   const qs = search.toString()
   const response = await api.get(
     `/api/interview-cohorts/${cohortId}/export-excel/${qs ? `?${qs}` : ""}`,
@@ -236,11 +244,12 @@ export async function exportCohortExcel(
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")
   const safeName = cohortName.replace(/[^a-zA-Z0-9\s_-]/g, "").trim().replace(/\s+/g, "_")
-  const stagePart =
-    statuses?.length === 1
-      ? `_${statuses[0]}`
-      : statuses?.length
-        ? `_tahapan_${statuses.length}`
+  const stagePart = params?.diterima_step
+    ? `_DITERIMA_${params.diterima_step}`
+    : params?.statuses?.length === 1
+      ? `_${params.statuses[0]}`
+      : params?.statuses?.length
+        ? `_tahapan_${params.statuses.length}`
         : ""
   a.href = url
   a.download = `interview_${safeName}${stagePart}.xlsx`

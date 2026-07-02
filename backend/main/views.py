@@ -206,6 +206,58 @@ def _first_serializer_error_detail(errors: dict) -> str | None:
     return None
 
 
+def _parse_pra_seleksi_passed_query_param(request) -> bool | None:
+    """
+    Optional query param `pra_seleksi_passed` — filter PRA_SELEKSI sub-status.
+    true: only marked passed; false: belum dinilai (null).
+    """
+    raw = (request.query_params.get("pra_seleksi_passed") or "").strip().lower()
+    if not raw:
+        return None
+    if raw in ("true", "1", "yes"):
+        return True
+    if raw in ("false", "0", "no"):
+        return False
+    raise ValueError(
+        "Parameter pra_seleksi_passed tidak valid. Gunakan true atau false."
+    )
+
+
+def _parse_diterima_step_query_param(request) -> str | None:
+    """Parse optional query param `diterima_step` (DITERIMA sub-tahapan)."""
+    raw = (request.query_params.get("diterima_step") or "").strip().upper()
+    if not raw:
+        return None
+    valid_step_codes = {
+        code for code, _ in ApplicationService.DOCUMENT_COLLECTION_STEP_ORDER
+    }
+    if raw not in valid_step_codes:
+        raise ValueError(
+            "Parameter diterima_step tidak valid. "
+            f"Pilihan: {', '.join(sorted(valid_step_codes))}."
+        )
+    return raw
+
+
+def _parse_hasil_medical_query_param(request) -> str | None:
+    """Parse optional query param `hasil_medical` (FIT / UNFIT)."""
+    raw = (request.query_params.get("hasil_medical") or "").strip().upper()
+    if not raw:
+        return None
+    if raw not in ("FIT", "UNFIT"):
+        raise ValueError(
+            "Parameter hasil_medical tidak valid. Pilihan: FIT, UNFIT."
+        )
+    return raw
+
+
+def _filter_applications_by_diterima_step(queryset, step_code: str):
+    return queryset.filter(
+        status=ApplicationStatus.DITERIMA,
+        diterima_current_step=step_code,
+    )
+
+
 class LamaranBatchViewSet(viewsets.ModelViewSet):
     """
     CRUD + custom actions untuk LamaranBatch (admin/backoffice).
@@ -1053,6 +1105,8 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
         Query params (optional):
           status — repeat untuk setiap tahapan lamaran yang ingin diekspor,
                    mis. ?status=PRA_SELEKSI&status=INTERVIEW
+          pra_seleksi_passed — true/false; filter sub-status pra-seleksi
+                               (hanya berlaku untuk status PRA_SELEKSI)
           Tanpa parameter: semua lamaran di batch (semua tahapan).
 
         Returns an .xlsx file containing applicant biodata for matching
@@ -1085,6 +1139,25 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             applications = applications.filter(status__in=status_params)
+
+        try:
+            pra_seleksi_passed = _parse_pra_seleksi_passed_query_param(request)
+        except ValueError as e:
+            return Response(
+                error_response(detail=str(e), code=ApiCode.VALIDATION_ERROR),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if pra_seleksi_passed is True:
+            applications = applications.filter(
+                status=ApplicationStatus.PRA_SELEKSI,
+                pra_seleksi_passed=True,
+            )
+        elif pra_seleksi_passed is False:
+            applications = applications.filter(
+                status=ApplicationStatus.PRA_SELEKSI,
+                pra_seleksi_passed__isnull=True,
+            )
+
         applicant_user_ids = (
             applications.values_list("applicant__user_id", flat=True).distinct()
         )
@@ -1520,6 +1593,23 @@ class InterviewCohortViewSet(viewsets.ModelViewSet):
                 )
             applications = applications.filter(status__in=status_params)
 
+        try:
+            diterima_step = _parse_diterima_step_query_param(request)
+            hasil_medical = _parse_hasil_medical_query_param(request)
+        except ValueError as e:
+            return Response(
+                error_response(detail=str(e), code=ApiCode.VALIDATION_ERROR),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if diterima_step:
+            applications = _filter_applications_by_diterima_step(
+                applications, diterima_step
+            )
+        if hasil_medical:
+            applications = applications.filter(
+                applicant__hasil_medical__iexact=hasil_medical
+            )
+
         applicant_user_ids = (
             applications.values_list("applicant__user_id", flat=True).distinct()
         )
@@ -1630,63 +1720,16 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
         return qs
 
     def _parse_diterima_step_param(self, request) -> str | None:
-        """
-        Parse and validate optional query param `diterima_step`.
-        Returns normalized step code or None if not provided.
-        Raises ValueError when provided but invalid.
-        """
-        raw = (request.query_params.get("diterima_step") or "").strip().upper()
-        if not raw:
-            return None
-        valid_step_codes = {
-            code for code, _ in ApplicationService.DOCUMENT_COLLECTION_STEP_ORDER
-        }
-        if raw not in valid_step_codes:
-            raise ValueError(
-                "Parameter diterima_step tidak valid. "
-                f"Pilihan: {', '.join(sorted(valid_step_codes))}."
-            )
-        return raw
+        return _parse_diterima_step_query_param(request)
 
     def _parse_hasil_medical_param(self, request) -> str | None:
-        """
-        Optional query param `hasil_medical` — filter by ApplicantProfile.hasil_medical (FIT / UNFIT).
-        """
-        raw = (request.query_params.get("hasil_medical") or "").strip().upper()
-        if not raw:
-            return None
-        if raw not in ("FIT", "UNFIT"):
-            raise ValueError(
-                "Parameter hasil_medical tidak valid. Pilihan: FIT, UNFIT."
-            )
-        return raw
+        return _parse_hasil_medical_query_param(request)
 
     def _parse_pra_seleksi_passed_param(self, request) -> bool | None:
-        """
-        Optional query param `pra_seleksi_passed` — filter PRA_SELEKSI sub-status.
-        true: only marked passed; false: belum dinilai (null).
-        """
-        raw = (request.query_params.get("pra_seleksi_passed") or "").strip().lower()
-        if not raw:
-            return None
-        if raw in ("true", "1", "yes"):
-            return True
-        if raw in ("false", "0", "no"):
-            return False
-        raise ValueError(
-            "Parameter pra_seleksi_passed tidak valid. Gunakan true atau false."
-        )
+        return _parse_pra_seleksi_passed_query_param(request)
 
     def _filter_queryset_by_diterima_step(self, queryset, step_code: str):
-        """
-        Filter queryset to applicants currently at *step_code* within the
-        DITERIMA sub-step flow.  Uses the indexed DB column for efficiency
-        (O(log n) instead of the previous O(n) Python loop).
-        """
-        return queryset.filter(
-            status=ApplicationStatus.DITERIMA,
-            diterima_current_step=step_code,
-        )
+        return _filter_applications_by_diterima_step(queryset, step_code)
 
     def list(self, request, *args, **kwargs):
         try:

@@ -129,6 +129,10 @@ export interface CohortDiterimaPanelProps {
   batchBase: string
   pelamarBase: string
   cohortBase: string
+  onExportFiltersChange?: (filters: {
+    diterima_step?: DocumentCollectionStepCode
+    hasil_medical?: "FIT" | "UNFIT"
+  }) => void
 }
 
 export function CohortDiterimaPanel({
@@ -137,6 +141,7 @@ export function CohortDiterimaPanel({
   batchBase,
   pelamarBase,
   cohortBase,
+  onExportFiltersChange,
 }: CohortDiterimaPanelProps) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -242,6 +247,16 @@ export function CohortDiterimaPanel({
   useEffect(() => {
     setPage(1)
   }, [selectedDiterimaStep, debouncedStageSearch, medicalHasilFilter])
+
+  useEffect(() => {
+    onExportFiltersChange?.({
+      diterima_step:
+        selectedDiterimaStep !== "ALL"
+          ? (selectedDiterimaStep as DocumentCollectionStepCode)
+          : undefined,
+      hasil_medical: medicalHasilApi,
+    })
+  }, [selectedDiterimaStep, medicalHasilApi, onExportFiltersChange])
 
   useEffect(() => {
     setPage((p) => Math.min(p, pageCount))

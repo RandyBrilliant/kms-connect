@@ -110,6 +110,7 @@ import {
   createBatchAnnouncement,
   previewBatchAnnouncementRecipients,
   exportBatchExcel,
+  type ExportBatchExcelParams,
   advanceBatchToInterview,
   markBatchPraSeleksiPassed,
   moveApplicationsToBatch,
@@ -459,6 +460,17 @@ async function fetchApplicationCountForTab(
         : { batch: batchId, status: tab }
   const res = await getApplications({ ...base, page: 1, page_size: 1 })
   return res.count
+}
+
+function buildBatchExportParams(tab?: BatchApplicantTab): ExportBatchExcelParams | undefined {
+  if (!tab) return undefined
+  if (tab === "PRA_SELEKSI_PASSED") {
+    return { statuses: ["PRA_SELEKSI"], pra_seleksi_passed: true }
+  }
+  if (tab === "PRA_SELEKSI") {
+    return { statuses: ["PRA_SELEKSI"], pra_seleksi_passed: false }
+  }
+  return { statuses: [tab] }
 }
 
 // ---------------------------------------------------------------------------
@@ -1516,11 +1528,11 @@ export function AdminBatchDetailPage() {
     setAnnoPreviewCount(null)
   }, [annoRecipientMode, annoSelectedStatuses])
 
-  async function handleExportExcel(statuses?: ApplicationStatus[]) {
+  async function handleExportExcel(tab?: BatchApplicantTab) {
     if (!batch) return
     setIsExporting(true)
     try {
-      await exportBatchExcel(batchId, batch.name, statuses)
+      await exportBatchExcel(batchId, batch.name, buildBatchExportParams(tab))
       toast.success("File Excel berhasil diunduh.")
     } catch {
       toast.error("Gagal mengunduh data Excel.")
@@ -1752,14 +1764,7 @@ export function AdminBatchDetailPage() {
               <DropdownMenuItem
                 className="cursor-pointer flex-col items-start gap-0"
                 disabled={statusCounts[activeApplicantTab] === 0}
-                onClick={() =>
-                  handleExportExcel(
-                    activeApplicantTab === "PRA_SELEKSI_PASSED" ||
-                      activeApplicantTab === "PRA_SELEKSI"
-                      ? ["PRA_SELEKSI"]
-                      : [activeApplicantTab]
-                  )
-                }
+                onClick={() => handleExportExcel(activeApplicantTab)}
               >
                 <span className="font-medium">Tahapan tab saat ini</span>
                 <span className="text-muted-foreground text-xs font-normal">
@@ -1773,13 +1778,7 @@ export function AdminBatchDetailPage() {
                   key={t.value}
                   className="cursor-pointer justify-between gap-4"
                   disabled={statusCounts[t.value] === 0}
-                  onClick={() =>
-                    handleExportExcel(
-                      t.value === "PRA_SELEKSI_PASSED" || t.value === "PRA_SELEKSI"
-                        ? ["PRA_SELEKSI"]
-                        : [t.value]
-                    )
-                  }
+                  onClick={() => handleExportExcel(t.value)}
                 >
                   <span>{t.label}</span>
                   <span className="text-muted-foreground tabular-nums text-xs">

@@ -462,19 +462,30 @@ export async function previewBatchAnnouncementRecipients(
  * GET /api/batches/{id}/export-excel/
  * Downloads an .xlsx with applicant biodata for this batch.
  * Pass `statuses` to limit rows to those lamaran tahapan (repeatable query param `status`).
+ * Pass `pra_seleksi_passed` to filter PRA_SELEKSI sub-status (true = diterima, false = belum dinilai).
  * Omit `statuses` to include every tahapan in the batch.
  * Triggers a browser file download automatically.
  */
+export type ExportBatchExcelParams = {
+  statuses?: ApplicationStatus[]
+  pra_seleksi_passed?: boolean
+}
+
 export async function exportBatchExcel(
   batchId: number,
   batchName: string,
-  statuses?: ApplicationStatus[]
+  params?: ExportBatchExcelParams
 ): Promise<void> {
   const search = new URLSearchParams()
-  if (statuses?.length) {
-    for (const s of statuses) {
+  if (params?.statuses?.length) {
+    for (const s of params.statuses) {
       search.append("status", s)
     }
+  }
+  if (params?.pra_seleksi_passed === true) {
+    search.set("pra_seleksi_passed", "true")
+  } else if (params?.pra_seleksi_passed === false) {
+    search.set("pra_seleksi_passed", "false")
   }
   const qs = search.toString()
   const response = await api.get(
@@ -490,11 +501,15 @@ export async function exportBatchExcel(
   const a = document.createElement("a")
   const safeName = batchName.replace(/[^a-zA-Z0-9\s_-]/g, "").trim().replace(/\s+/g, "_")
   const stagePart =
-    statuses?.length === 1
-      ? `_${statuses[0]}`
-      : statuses?.length
-        ? `_tahapan_${statuses.length}`
-        : ""
+    params?.pra_seleksi_passed === true
+      ? "_PRA_SELEKSI_DITERIMA"
+      : params?.pra_seleksi_passed === false
+        ? "_PRA_SELEKSI"
+        : params?.statuses?.length === 1
+          ? `_${params.statuses[0]}`
+          : params?.statuses?.length
+            ? `_tahapan_${params.statuses.length}`
+            : ""
   a.href = url
   a.download = `pelamar_${safeName}${stagePart}.xlsx`
   a.style.display = "none"
