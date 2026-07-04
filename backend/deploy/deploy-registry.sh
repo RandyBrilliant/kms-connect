@@ -66,7 +66,7 @@ if [ "${SKIP_PULL_CODE:-false}" != "true" ]; then
 fi
 
 log "Pulling image from registry..."
-if ! docker pull "$TARGET_APP_IMAGE"; then
+if ! docker_cmd pull "$TARGET_APP_IMAGE"; then
     print_error "docker pull failed for $TARGET_APP_IMAGE"
     print_error "Ensure GHCR login succeeded and the package allows this token to pull"
     exit 1

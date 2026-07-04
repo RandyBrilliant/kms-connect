@@ -35,15 +35,31 @@ require_project_root() {
     cd "$PROJECT_ROOT"
 }
 
+DOCKER_CMD=(docker)
+
 require_docker() {
     if ! command -v docker >/dev/null 2>&1; then
         print_error "docker is not installed"
         exit 1
     fi
-    if ! docker compose version >/dev/null 2>&1; then
+    if docker info >/dev/null 2>&1; then
+        DOCKER_CMD=(docker)
+    elif sudo docker info >/dev/null 2>&1; then
+        DOCKER_CMD=(sudo docker)
+        print_warning "Using sudo for Docker (consider: sudo usermod -aG docker \$USER)"
+    else
+        print_error "Cannot access Docker daemon (permission denied on /var/run/docker.sock)"
+        print_error "Fix: sudo usermod -aG docker \$USER  then log out and back in"
+        exit 1
+    fi
+    if ! "${DOCKER_CMD[@]}" compose version >/dev/null 2>&1; then
         print_error "docker compose is not available"
         exit 1
     fi
+}
+
+docker_cmd() {
+    "${DOCKER_CMD[@]}" "$@"
 }
 
 make_scripts_executable() {
@@ -56,7 +72,7 @@ compose() {
     if [ -f "$PROJECT_ROOT/$ENV_FILE" ]; then
         args+=(--env-file "$PROJECT_ROOT/$ENV_FILE")
     fi
-    docker compose -f "$PROJECT_ROOT/$COMPOSE_FILE" "${args[@]}" "$@"
+    "${DOCKER_CMD[@]}" compose -f "$PROJECT_ROOT/$COMPOSE_FILE" "${args[@]}" "$@"
 }
 
 persist_app_image() {
@@ -76,7 +92,7 @@ read_persisted_app_image() {
 }
 
 read_running_app_image() {
-    docker inspect "$APP_CONTAINER_NAME" --format '{{.Config.Image}}' 2>/dev/null | tr -d '\r' || true
+    "${DOCKER_CMD[@]}" inspect "$APP_CONTAINER_NAME" --format '{{.Config.Image}}' 2>/dev/null | tr -d '\r' || true
 }
 
 read_last_good_app_image() {

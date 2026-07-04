@@ -190,6 +190,11 @@ mkdir -p "$PROJECT_DIR/nginx/ssl"
 chmod 755 "$PROJECT_DIR/logs" "$PROJECT_DIR/nginx/logs" "$PROJECT_DIR/media" "$PROJECT_DIR/staticfiles" "$PROJECT_DIR/nginx/ssl"
 echo -e "${GREEN}✓ Directories created${NC}"
 
+if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ]; then
+    usermod -aG docker "$SUDO_USER" 2>/dev/null || true
+    echo -e "${GREEN}✓ Added $SUDO_USER to docker group (re-login required for passwordless docker)${NC}"
+fi
+
 echo ""
 echo -e "${GREEN}=========================================="
 echo "✅ Server Setup Complete!"
