@@ -38,6 +38,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.prod
+    image: ${APP_IMAGE:-kms-connect-backend:latest}
     container_name: kms-backend
     command: ./entrypoint.sh daphne -b 0.0.0.0 -p 8000 --proxy-headers backend.asgi:application
     env_file:
@@ -65,9 +66,7 @@ services:
       start_period: 120s
 
   celery:
-    build:
-      context: .
-      dockerfile: Dockerfile.prod
+    image: ${APP_IMAGE:-kms-connect-backend:latest}
     container_name: kms-connect-celery
     user: "1000:1000"
     command: celery -A backend worker -l info
@@ -93,9 +92,7 @@ services:
       disable: true
 
   celery-beat:
-    build:
-      context: .
-      dockerfile: Dockerfile.prod
+    image: ${APP_IMAGE:-kms-connect-backend:latest}
     container_name: kms-connect-celery-beat
     user: "1000:1000"
     command: celery -A backend beat -l info

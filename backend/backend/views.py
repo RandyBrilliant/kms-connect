@@ -41,4 +41,5 @@ def health(request):
     if failed:
         result["status"] = "degraded"
         return JsonResponse(result, status=503)
+    result["success"] = True
     return JsonResponse(result, status=200)
