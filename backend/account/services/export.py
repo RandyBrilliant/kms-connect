@@ -21,6 +21,8 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill
 from openpyxl.utils import get_column_letter
 
+from account.services.parent_display import format_parent_age, format_parent_name
+
 # Excel column headers follow client-provided template order.
 # NextOfKinRelationship imported lazily in spouse/wali helpers to avoid import cycles.
 EXPORT_COLUMNS = [
@@ -806,23 +808,44 @@ def generate_applicants_excel(applicants: Iterable[Any], request: Any = None) ->
                 else:
                     value = "-"
             elif field_path == "father_name":
-                value = _get_nested_value(profile, "father_name")
+                value = format_parent_name(
+                    _get_nested_value(profile, "father_name"),
+                    almarhum=getattr(profile, "father_almarhum", False),
+                )
             elif field_path == "father_occupation":
                 value = _get_nested_value(profile, "father_occupation")
             elif field_path == "father_age":
-                value = _get_nested_value(profile, "father_age")
+                value = format_parent_age(
+                    _get_nested_value(profile, "father_age"),
+                    almarhum=getattr(profile, "father_almarhum", False),
+                    fallback="-",
+                )
             elif field_path == "mother_name":
-                value = _get_nested_value(profile, "mother_name")
+                value = format_parent_name(
+                    _get_nested_value(profile, "mother_name"),
+                    almarhum=getattr(profile, "mother_almarhum", False),
+                )
             elif field_path == "mother_occupation":
                 value = _get_nested_value(profile, "mother_occupation")
             elif field_path == "mother_age":
-                value = _get_nested_value(profile, "mother_age")
+                value = format_parent_age(
+                    _get_nested_value(profile, "mother_age"),
+                    almarhum=getattr(profile, "mother_almarhum", False),
+                    fallback="-",
+                )
             elif field_path == "spouse_name":
-                value = _get_nested_value(profile, "spouse_name")
+                value = format_parent_name(
+                    _get_nested_value(profile, "spouse_name"),
+                    almarhum=getattr(profile, "spouse_almarhum", False),
+                )
             elif field_path == "spouse_occupation":
                 value = _get_nested_value(profile, "spouse_occupation")
             elif field_path == "spouse_age":
-                value = _get_nested_value(profile, "spouse_age")
+                value = format_parent_age(
+                    _get_nested_value(profile, "spouse_age"),
+                    almarhum=getattr(profile, "spouse_almarhum", False),
+                    fallback="-",
+                )
             elif field_path == "education_graduation_year":
                 value = _get_nested_value(profile, "education_graduation_year")
             # Family Info (orang tua / keluarga)

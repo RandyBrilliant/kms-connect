@@ -22,6 +22,7 @@ from django.utils import timezone
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
+from account.services.parent_display import format_parent_name
 from account.services.pengantar_referral_layout import (
     LX,
     PAGE_H,
@@ -173,7 +174,10 @@ def generate_pengantar_medical_pdf(profile) -> bytes:
     nik = _str(profile.nik)
     ttl = _fmt_date(profile.birth_date)
     umur = _age_years(profile.birth_date)
-    bapak = _str(profile.father_name)
+    bapak = format_parent_name(
+        profile.father_name,
+        almarhum=getattr(profile, "father_almarhum", False),
+    )
     sr = _sr_display(profile)
     medan_tgl = _fmt_date(timezone.localdate())
 

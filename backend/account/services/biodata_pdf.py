@@ -28,6 +28,8 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
 
+from account.services.parent_display import format_parent_age, format_parent_name
+
 # ─── Debug flag ─────────────────────────────────────────────────────────────
 DEBUG_GRID = False
 
@@ -245,43 +247,20 @@ def generate_biodata_pdf(profile) -> bytes:
     # Ayah / Suami row
     marital = _str(profile.marital_status)
     if marital in ("MENIKAH", "CERAI HIDUP", "CERAI MATI") and profile.spouse_name:
-        ayah_name = _str(profile.spouse_name)
-        ayah_age  = _str(profile.spouse_age, "")
+        spouse_almarhum = getattr(profile, "spouse_almarhum", False)
+        ayah_name = format_parent_name(profile.spouse_name, almarhum=spouse_almarhum)
+        ayah_age  = format_parent_age(profile.spouse_age, almarhum=spouse_almarhum)
         ayah_pkj  = _str(profile.spouse_occupation)
-        if getattr(profile, "spouse_almarhum", False):
-            g = _str(getattr(profile, "gender", "") or "")
-            if ayah_name:
-                if g == "M":
-                    ayah_name = f"{ayah_name} (Almarhumah)"
-                elif g == "F":
-                    ayah_name = f"{ayah_name} (Almarhum)"
-                else:
-                    ayah_name = f"{ayah_name} (Almarhum/Almarhumah)"
-            else:
-                if g == "M":
-                    ayah_name = "Almarhumah"
-                elif g == "F":
-                    ayah_name = "Almarhum"
-                else:
-                    ayah_name = "Almarhum/Almarhumah"
     else:
-        ayah_name = _str(profile.father_name)
-        ayah_age  = _str(profile.father_age, "")
+        father_almarhum = getattr(profile, "father_almarhum", False)
+        ayah_name = format_parent_name(profile.father_name, almarhum=father_almarhum)
+        ayah_age  = format_parent_age(profile.father_age, almarhum=father_almarhum)
         ayah_pkj  = _str(profile.father_occupation)
-        if getattr(profile, "father_almarhum", False):
-            if ayah_name:
-                ayah_name = f"{ayah_name} (Almarhum)"
-            else:
-                ayah_name = "Almarhum"
 
-    ibu_name = _str(profile.mother_name)
-    ibu_age  = _str(profile.mother_age, "")
+    mother_almarhum = getattr(profile, "mother_almarhum", False)
+    ibu_name = format_parent_name(profile.mother_name, almarhum=mother_almarhum)
+    ibu_age  = format_parent_age(profile.mother_age, almarhum=mother_almarhum)
     ibu_pkj  = _str(profile.mother_occupation)
-    if getattr(profile, "mother_almarhum", False):
-        if ibu_name:
-            ibu_name = f"{ibu_name} (Almarhumah)"
-        else:
-            ibu_name = "Almarhumah"
 
     family_parts = [
         _str(profile.family_village.name   if profile.family_village   else ""),

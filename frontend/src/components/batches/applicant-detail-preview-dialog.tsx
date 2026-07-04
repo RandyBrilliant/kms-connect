@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useApplicantQuery } from "@/hooks/use-applicants-query"
 import { getVerificationStatusLabel } from "@/constants/applicant"
 import { formatDate } from "@/lib/formatters"
+import { formatParentAge, formatParentName } from "@/lib/parent-display"
 import { cn } from "@/lib/utils"
 
 function FieldItem({
@@ -150,18 +151,18 @@ export function ApplicantDetailPreviewDialog({
                   <CardTitle className="text-base">Orangtua / Keluarga</CardTitle>
                 </CardHeader>
                 <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <FieldItem label="Nama Ayah" value={profile.father_name} />
-                  <FieldItem label="Umur Ayah" value={profile.father_age} />
+                  <FieldItem label="Nama Ayah" value={formatParentName(profile.father_name, profile.father_almarhum)} />
+                  <FieldItem label="Umur Ayah" value={formatParentAge(profile.father_age, profile.father_almarhum)} />
                   <FieldItem label="Pekerjaan Ayah" value={profile.father_occupation} />
                   <FieldItem label="No. HP Ayah" value={profile.father_phone} />
                   <FieldItem label="Ayah Almarhum" value={yesNo(profile.father_almarhum)} />
-                  <FieldItem label="Nama Ibu" value={profile.mother_name} />
-                  <FieldItem label="Umur Ibu" value={profile.mother_age} />
+                  <FieldItem label="Nama Ibu" value={formatParentName(profile.mother_name, profile.mother_almarhum)} />
+                  <FieldItem label="Umur Ibu" value={formatParentAge(profile.mother_age, profile.mother_almarhum)} />
                   <FieldItem label="Pekerjaan Ibu" value={profile.mother_occupation} />
                   <FieldItem label="No. HP Ibu" value={profile.mother_phone} />
                   <FieldItem label="Ibu Almarhumah" value={yesNo(profile.mother_almarhum)} />
-                  <FieldItem label="Nama Suami/Istri" value={profile.spouse_name} />
-                  <FieldItem label="Umur Suami/Istri" value={profile.spouse_age} />
+                  <FieldItem label="Nama Suami/Istri" value={formatParentName(profile.spouse_name, profile.spouse_almarhum)} />
+                  <FieldItem label="Umur Suami/Istri" value={formatParentAge(profile.spouse_age, profile.spouse_almarhum)} />
                   <FieldItem label="Pekerjaan Suami/Istri" value={profile.spouse_occupation} />
                   <FieldItem label="Suami/Istri Almarhum" value={yesNo(profile.spouse_almarhum)} />
                   <FieldItem
