@@ -57,7 +57,7 @@ EXPOSE 8000
 
 # Health check (requires curl in image)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:8000/health/ || exit 1
+    CMD curl -f -H "X-Forwarded-Proto: https" http://localhost:8000/health/ || exit 1
 
 # Default command (overridden in docker-compose.prod.yml with daphne)
 CMD ["./entrypoint.sh", "daphne", "-b", "0.0.0.0", "-p", "8000", "--proxy-headers", "backend.asgi:application"]

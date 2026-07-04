@@ -117,7 +117,9 @@ probe_app_http_health() {
     local i
 
     for i in $(seq 1 "$max_attempts"); do
-        if compose exec -T "$API_SERVICE" curl -fsS --max-time 5 "http://localhost:8000/health/" 2>/dev/null \
+        if compose exec -T "$API_SERVICE" curl -fsS --max-time 5 \
+            -H "X-Forwarded-Proto: https" \
+            "http://localhost:8000/health/" 2>/dev/null \
             | grep -qE '"success"[[:space:]]*:[[:space:]]*true|"up"[[:space:]]*:[[:space:]]*true|"status"[[:space:]]*:[[:space:]]*"ok"'; then
             return 0
         fi

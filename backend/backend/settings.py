@@ -36,6 +36,8 @@ ALLOWED_HOSTS = _env("ALLOWED_HOSTS", "").split(",") if _env("ALLOWED_HOSTS") el
 
 # Production SSL / secure cookies (set in .env after SSL setup)
 SECURE_SSL_REDIRECT = _env("SECURE_SSL_REDIRECT", "0") == "1"
+# Allow Docker/load-balancer health probes over HTTP inside the container network
+SECURE_REDIRECT_EXEMPT = [r"^/health/?$"]
 SESSION_COOKIE_SECURE = _env("SESSION_COOKIE_SECURE", "0") == "1"
 CSRF_COOKIE_SECURE = _env("CSRF_COOKIE_SECURE", "0") == "1"
 CSRF_TRUSTED_ORIGINS = _env("CSRF_TRUSTED_ORIGINS", "").split(",") if _env("CSRF_TRUSTED_ORIGINS") else []
