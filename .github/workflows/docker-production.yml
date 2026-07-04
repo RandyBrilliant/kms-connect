@@ -98,21 +98,29 @@ jobs:
         env:
           APP_IMAGE: ${{ env.REGISTRY }}/${{ steps.img.outputs.name }}:${{ github.sha }}
           REGISTRY: ${{ env.REGISTRY }}
-          GHCR_USER: ${{ github.actor }}
+          GHCR_USER: ${{ github.repository_owner }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           SSH_OPTS="-i $HOME/.ssh/deploy_key -o IdentitiesOnly=yes -o PreferredAuthentications=publickey -o StrictHostKeyChecking=yes"
+          GHCR_USER_LC="$(echo "$GHCR_USER" | tr '[:upper:]' '[:lower:]')"
           ssh $SSH_OPTS -p ${{ secrets.DO_SSH_PORT }} ${{ secrets.DO_USERNAME }}@${{ secrets.DO_HOST }} \
-            "PROJECT_PATH='${{ secrets.DO_PROJECT_PATH }}' APP_IMAGE='$APP_IMAGE' REGISTRY='$REGISTRY' GHCR_USER='$GHCR_USER' GHCR_TOKEN='$GHCR_TOKEN' bash -s" << 'EOF'
-          set -e
+            "PROJECT_PATH='${{ secrets.DO_PROJECT_PATH }}' APP_IMAGE='$APP_IMAGE' REGISTRY='$REGISTRY' GHCR_USER='$GHCR_USER_LC' GHCR_TOKEN='$GHCR_TOKEN' bash -s" << 'EOF'
+          set -euo pipefail
           cd "$PROJECT_PATH"
+          echo "Deploy path: $(pwd)"
+          echo "Target image: $APP_IMAGE"
           echo "$GHCR_TOKEN" | docker login "$REGISTRY" -u "$GHCR_USER" --password-stdin
-          BEFORE_HEAD="$(git -C "$(dirname "$PROJECT_PATH")" rev-parse HEAD 2>/dev/null || git rev-parse HEAD 2>/dev/null || true)"
-          git -C "$(dirname "$PROJECT_PATH")" pull origin main 2>/dev/null || git pull origin main
-          AFTER_HEAD="$(git -C "$(dirname "$PROJECT_PATH")" rev-parse HEAD 2>/dev/null || git rev-parse HEAD 2>/dev/null || true)"
-          CHANGED_FILES="$(git -C "$(dirname "$PROJECT_PATH")" diff --name-only "$BEFORE_HEAD" "$AFTER_HEAD" 2>/dev/null || git diff --name-only "$BEFORE_HEAD" "$AFTER_HEAD" 2>/dev/null || true)"
+          GIT_ROOT="$PROJECT_PATH"
+          if [ -d "$(dirname "$PROJECT_PATH")/.git" ]; then
+            GIT_ROOT="$(dirname "$PROJECT_PATH")"
+          fi
+          BEFORE_HEAD="$(git -C "$GIT_ROOT" rev-parse HEAD 2>/dev/null || true)"
+          git -C "$GIT_ROOT" pull origin main
+          AFTER_HEAD="$(git -C "$GIT_ROOT" rev-parse HEAD 2>/dev/null || true)"
+          CHANGED_FILES="$(git -C "$GIT_ROOT" diff --name-only "$BEFORE_HEAD" "$AFTER_HEAD" 2>/dev/null || true)"
           chmod +x deploy/*.sh deploy/lib/*.sh entrypoint.sh 2>/dev/null || true
-          APP_IMAGE="$APP_IMAGE" CHANGED_FILES="$CHANGED_FILES" AUTO_DEPLOY=true SKIP_PULL_CODE=true bash deploy/deploy-registry.sh
+          export APP_IMAGE CHANGED_FILES
+          AUTO_DEPLOY=true SKIP_PULL_CODE=true bash deploy/deploy-registry.sh
           docker logout "$REGISTRY" || true
           EOF
 
@@ -121,12 +129,11 @@ jobs:
           SSH_OPTS="-i $HOME/.ssh/deploy_key -o IdentitiesOnly=yes -o PreferredAuthentications=publickey -o StrictHostKeyChecking=yes"
           ssh $SSH_OPTS -p ${{ secrets.DO_SSH_PORT }} ${{ secrets.DO_USERNAME }}@${{ secrets.DO_HOST }} \
             "PROJECT_PATH='${{ secrets.DO_PROJECT_PATH }}' bash -s" << 'EOF'
-          set -e
+          set -euo pipefail
           cd "$PROJECT_PATH"
-          PORT="$(grep -E '^PORT=' .env 2>/dev/null | head -n1 | cut -d= -f2 | tr -d ' \"\r' || true)"
-          PORT="${PORT:-8000}"
           for i in $(seq 1 6); do
-            if curl -fsS --max-time 5 "http://127.0.0.1:${PORT}/health/" 2>/dev/null \
+            if docker compose --env-file .env -f docker-compose.prod.yml exec -T api \
+              curl -fsS --max-time 5 "http://localhost:8000/health/" 2>/dev/null \
               | grep -qE '"success"[[:space:]]*:[[:space:]]*true|"status"[[:space:]]*:[[:space:]]*"ok"'; then
               echo "Health check passed"
               exit 0

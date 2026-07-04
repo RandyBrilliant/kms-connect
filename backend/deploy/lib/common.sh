@@ -72,7 +72,7 @@ persist_app_image() {
 }
 
 read_persisted_app_image() {
-    grep -E '^APP_IMAGE=' "$PROJECT_ROOT/$ENV_FILE" 2>/dev/null | head -n1 | cut -d= -f2- | tr -d '\r"'"'"
+    grep -E '^APP_IMAGE=' "$PROJECT_ROOT/$ENV_FILE" 2>/dev/null | head -n1 | cut -d= -f2- | tr -d '\r\"'
 }
 
 read_running_app_image() {
@@ -89,17 +89,16 @@ save_last_good_app_image() {
 
 resolve_app_port() {
     local port
-    port="$(grep -E '^PORT=' "$PROJECT_ROOT/$ENV_FILE" 2>/dev/null | head -n1 | cut -d= -f2 | tr -d ' "\r'"'"'')"
+    port="$(grep -E '^PORT=' "$PROJECT_ROOT/$ENV_FILE" 2>/dev/null | head -n1 | cut -d= -f2 | tr -d ' \r\"')"
     echo "${port:-8000}"
 }
 
 probe_app_http_health() {
-    local port="${1:-$(resolve_app_port)}"
     local max_attempts="${2:-12}"
     local i
 
     for i in $(seq 1 "$max_attempts"); do
-        if curl -fsS --max-time 5 "http://127.0.0.1:${port}/health/" 2>/dev/null \
+        if compose exec -T "$API_SERVICE" curl -fsS --max-time 5 "http://localhost:8000/health/" 2>/dev/null \
             | grep -qE '"success"[[:space:]]*:[[:space:]]*true|"up"[[:space:]]*:[[:space:]]*true|"status"[[:space:]]*:[[:space:]]*"ok"'; then
             return 0
         fi
@@ -131,7 +130,7 @@ rollback_app_deployment() {
     compose pull "$API_SERVICE" 2>/dev/null || true
     compose up -d --no-deps "$API_SERVICE"
 
-    if wait_for_healthy "$API_SERVICE" 40 && probe_app_http_health "$(resolve_app_port)" 12; then
+    if wait_for_healthy "$API_SERVICE" 40 && probe_app_http_health 12; then
         # shellcheck disable=SC2086
         compose up -d --no-deps $WORKER_SERVICES
         persist_app_image "$rollback_image"
