@@ -72,15 +72,18 @@ persist_app_image() {
 }
 
 read_persisted_app_image() {
-    grep -E '^APP_IMAGE=' "$PROJECT_ROOT/$ENV_FILE" 2>/dev/null | head -n1 | cut -d= -f2- | tr -d '\r\"'
+    grep -E '^APP_IMAGE=' "$PROJECT_ROOT/$ENV_FILE" 2>/dev/null | head -n1 | cut -d= -f2- | tr -d '\r\"' || true
 }
 
 read_running_app_image() {
-    docker inspect "$APP_CONTAINER_NAME" --format '{{.Config.Image}}' 2>/dev/null | tr -d '\r'
+    docker inspect "$APP_CONTAINER_NAME" --format '{{.Config.Image}}' 2>/dev/null | tr -d '\r' || true
 }
 
 read_last_good_app_image() {
-    [ -f "$PROJECT_ROOT/.deploy-last-good-image" ] && head -n1 "$PROJECT_ROOT/.deploy-last-good-image" | tr -d '\r'
+    if [ -f "$PROJECT_ROOT/.deploy-last-good-image" ]; then
+        head -n1 "$PROJECT_ROOT/.deploy-last-good-image" | tr -d '\r'
+    fi
+    return 0
 }
 
 save_last_good_app_image() {

@@ -28,12 +28,17 @@ log() { echo "[deploy-registry] $*"; }
 TARGET_APP_IMAGE="$APP_IMAGE"
 log "Target image: $TARGET_APP_IMAGE"
 
-PREVIOUS_APP_IMAGE="$(read_running_app_image)"
+PREVIOUS_APP_IMAGE="$(read_running_app_image || true)"
 if [ -z "$PREVIOUS_APP_IMAGE" ]; then
-    PREVIOUS_APP_IMAGE="$(read_persisted_app_image)"
+    PREVIOUS_APP_IMAGE="$(read_persisted_app_image || true)"
 fi
 if [ -z "$PREVIOUS_APP_IMAGE" ]; then
-    PREVIOUS_APP_IMAGE="$(read_last_good_app_image)"
+    PREVIOUS_APP_IMAGE="$(read_last_good_app_image || true)"
+fi
+if [ -n "$PREVIOUS_APP_IMAGE" ]; then
+    log "Previous image: $PREVIOUS_APP_IMAGE"
+else
+    log "No previous image found (first registry deploy)"
 fi
 
 export APP_IMAGE="$TARGET_APP_IMAGE"
