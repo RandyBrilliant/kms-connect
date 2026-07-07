@@ -30,6 +30,8 @@ from reportlab.lib.utils import ImageReader
 
 from account.services.parent_display import format_parent_age, format_parent_name
 
+_MARITAL_USES_SPOUSE = frozenset({"MENIKAH", "CERAI HIDUP", "CERAI MATI"})
+
 # ─── Debug flag ─────────────────────────────────────────────────────────────
 DEBUG_GRID = False
 
@@ -103,6 +105,13 @@ _F_KETERANGAN_2 = _frac(0.479, 0.599)
 
 # Name max width for the left part of the Ayah/Ibu row (stops before "Umur :")
 _FX_UMUR_LABEL = 0.620   # "Umur :" pre-printed label starts here
+
+# Pre-printed label strike zones — (x_start_frac, x_end_frac, y_top_frac).
+# Calibrated on biodata_template.png (2550×3300); see Note (*) coret yang tidak perlu.
+_STRIKE_AYAH  = (0.240, 0.270, 0.410)
+_STRIKE_SUAMI = (0.285, 0.325, 0.410)
+_STRIKE_IBU   = (0.240, 0.260, 0.454)
+_STRIKE_ISTRI = (0.273, 0.300, 0.454)
 
 # Photo box — top-left corner of the 3×4 placeholder (top-right of form)
 # Adjust _FX_PHOTO / _FY_PHOTO to move; PHOTO_W_PT / PHOTO_H_PT for size.
@@ -179,6 +188,43 @@ def _read_field_file_bytes(field_file) -> bytes | None:
         return None
 
 
+def _family_row_mode(profile) -> tuple[bool, bool]:
+    """
+    Return ``(row1_is_spouse, row2_is_spouse)`` for Section II labels/values.
+
+    Perempuan yang menikah → suami di baris Ayah/Suami; laki-laki → istri di
+    baris Ibu/Istri. Selain itu pakai data orang tua (ayah + ibu).
+    """
+    marital = _str(profile.marital_status)
+    if marital not in _MARITAL_USES_SPOUSE or not _str(profile.spouse_name):
+        return False, False
+
+    gender = _str(profile.gender)
+    if gender == "F":
+        return True, False
+    if gender == "M":
+        return False, True
+    # Gender belum diisi: tetap suami/istri di baris 1 (perilaku lama).
+    return True, False
+
+
+def _draw_label_strike(
+    c: canvas.Canvas,
+    x_start_frac: float,
+    x_end_frac: float,
+    y_top_frac: float,
+) -> None:
+    """Draw a horizontal strike through a pre-printed label word."""
+    x1 = x_start_frac * PAGE_W
+    x2 = x_end_frac * PAGE_W
+    # Mid-height of ~9 pt pre-printed label text.
+    y = (1.0 - y_top_frac) * PAGE_H - 3.0
+    c.setStrokeColorRGB(0, 0, 0)
+    c.setLineWidth(1.6)
+    c.line(x1, y, x2, y)
+    c.setStrokeColorRGB(0, 0, 0)
+
+
 def _draw_debug_grid(c: canvas.Canvas, fields: dict):
     """Draw small red crosses at every field position for calibration."""
     c.setStrokeColorRGB(1, 0, 0)
@@ -244,23 +290,29 @@ def generate_biodata_pdf(profile) -> bytes:
     pengalaman_1 = _work_exp_summary(work_exps[0]) if len(work_exps) > 0 else ""
     pengalaman_2 = _work_exp_summary(work_exps[1]) if len(work_exps) > 1 else ""
 
-    # Ayah / Suami row
-    marital = _str(profile.marital_status)
-    if marital in ("MENIKAH", "CERAI HIDUP", "CERAI MATI") and profile.spouse_name:
-        spouse_almarhum = getattr(profile, "spouse_almarhum", False)
+    # Ayah / Suami & Ibu / Istri rows — coret label yang tidak dipakai (Note *).
+    row1_spouse, row2_spouse = _family_row_mode(profile)
+    spouse_almarhum = getattr(profile, "spouse_almarhum", False)
+    father_almarhum = getattr(profile, "father_almarhum", False)
+    mother_almarhum = getattr(profile, "mother_almarhum", False)
+
+    if row1_spouse:
         ayah_name = format_parent_name(profile.spouse_name, almarhum=spouse_almarhum)
         ayah_age  = format_parent_age(profile.spouse_age, almarhum=spouse_almarhum)
         ayah_pkj  = _str(profile.spouse_occupation)
     else:
-        father_almarhum = getattr(profile, "father_almarhum", False)
         ayah_name = format_parent_name(profile.father_name, almarhum=father_almarhum)
         ayah_age  = format_parent_age(profile.father_age, almarhum=father_almarhum)
         ayah_pkj  = _str(profile.father_occupation)
 
-    mother_almarhum = getattr(profile, "mother_almarhum", False)
-    ibu_name = format_parent_name(profile.mother_name, almarhum=mother_almarhum)
-    ibu_age  = format_parent_age(profile.mother_age, almarhum=mother_almarhum)
-    ibu_pkj  = _str(profile.mother_occupation)
+    if row2_spouse:
+        ibu_name = format_parent_name(profile.spouse_name, almarhum=spouse_almarhum)
+        ibu_age  = format_parent_age(profile.spouse_age, almarhum=spouse_almarhum)
+        ibu_pkj  = _str(profile.spouse_occupation)
+    else:
+        ibu_name = format_parent_name(profile.mother_name, almarhum=mother_almarhum)
+        ibu_age  = format_parent_age(profile.mother_age, almarhum=mother_almarhum)
+        ibu_pkj  = _str(profile.mother_occupation)
 
     family_parts = [
         _str(profile.family_village.name   if profile.family_village   else ""),
@@ -307,6 +359,16 @@ def generate_biodata_pdf(profile) -> bytes:
 
     draw(_F_PENGALAMAN_1, pengalaman_1, max_w=right - _F_PENGALAMAN_1[0])
     draw(_F_PENGALAMAN_2, pengalaman_2, max_w=right - _F_PENGALAMAN_2[0])
+
+    # Section II — coret label Ayah/Suami & Ibu/Istri yang tidak dipakai
+    if row1_spouse:
+        _draw_label_strike(c, *_STRIKE_AYAH)
+    else:
+        _draw_label_strike(c, *_STRIKE_SUAMI)
+    if row2_spouse:
+        _draw_label_strike(c, *_STRIKE_IBU)
+    else:
+        _draw_label_strike(c, *_STRIKE_ISTRI)
 
     # Section II — cap name width so it doesn't spill into the "Umur :" label
     name_max = (_FX_UMUR_LABEL * PAGE_W) - _F_AYAH_NAME[0] - 6
