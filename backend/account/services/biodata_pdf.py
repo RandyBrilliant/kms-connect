@@ -45,7 +45,7 @@ TEMPLATE_PATH = os.path.join(_ACCOUNT_DIR, "assets", "biodata_template.png")
 
 # ─── Typography ─────────────────────────────────────────────────────────────
 FONT_NAME = "Helvetica"
-FONT_SIZE = 8.5
+FONT_SIZE = 7.0
 FONT_BOLD = "Helvetica-Bold"
 
 # ─── Coordinate helper ───────────────────────────────────────────────────────
@@ -66,7 +66,6 @@ def _frac(x_frac: float, y_top_frac: float) -> tuple:
 # Right edge of input boxes: x ≈ 0.958
 
 _FX_FIELD  = 0.479   # left start of input boxes
-_FX_RIGHT  = 0.958   # right edge of input boxes
 
 # Section I
 _F_NAMA_PERUSAHAAN = _frac(0.479, 0.190)
@@ -102,9 +101,6 @@ _F_NOHP_KEL   = _frac(0.479, 0.547)
 # Section III — Keterangan (below the family section)
 _F_KETERANGAN_1 = _frac(0.479, 0.579)
 _F_KETERANGAN_2 = _frac(0.479, 0.599)
-
-# Name max width for the left part of the Ayah/Ibu row (stops before "Umur :")
-_FX_UMUR_LABEL = 0.620   # "Umur :" pre-printed label starts here
 
 # Pre-printed label strike zones — (x_start_frac, x_end_frac, y_top_frac).
 # Calibrated on biodata_template.png (2550×3300); see Note (*) coret yang tidak perlu.
@@ -323,42 +319,39 @@ def generate_biodata_pdf(profile) -> bytes:
     family_location = ", ".join(p for p in family_parts if p)
     family_phone    = _str(profile.father_phone or profile.mother_phone)
 
-    notes      = _str(getattr(profile, "notes", ""))
-    note_line1 = notes[:90]      if notes           else ""
-    note_line2 = notes[90:180]   if len(notes) > 90 else ""
+    notes = _str(getattr(profile, "notes", ""))
+    if "\n" in notes:
+        note_line1, note_line2 = notes.split("\n", 1)
+    else:
+        note_line1, note_line2 = notes, ""
 
     # ── 3. Draw helper ────────────────────────────────────────────────────────
     c.setFont(FONT_NAME, FONT_SIZE)
     c.setFillColorRGB(0, 0, 0)
 
-    right = _FX_RIGHT * PAGE_W   # right edge of input boxes in points
-
-    def draw(xy, text, max_w=None):
-        """Draw text at (x, y) tuple, optionally truncating to max_w points."""
+    def draw(xy, text):
+        """Draw text at (x, y) tuple."""
         if not text:
             return
         x, y = xy
-        if max_w:
-            while text and c.stringWidth(text, FONT_NAME, FONT_SIZE) > max_w:
-                text = text[:-1]
         c.drawString(x, y, text)
 
     # ── 4. Draw all fields ────────────────────────────────────────────────────
 
     # Section I
-    draw(_F_NAMA_CPMI,  full_name,    max_w=right - _F_NAMA_CPMI[0])
-    draw(_F_TTL,        ttl,          max_w=right - _F_TTL[0])
-    draw(_F_ALAMAT_KTP, address,      max_w=right - _F_ALAMAT_KTP[0])
-    draw(_F_KOTA_KTP,   ktp_location, max_w=right - _F_KOTA_KTP[0])
-    draw(_F_NOHP,       phone,        max_w=right - _F_NOHP[0])
-    draw(_F_EMAIL,      email,        max_w=right - _F_EMAIL[0])
+    draw(_F_NAMA_CPMI,  full_name)
+    draw(_F_TTL,        ttl)
+    draw(_F_ALAMAT_KTP, address)
+    draw(_F_KOTA_KTP,   ktp_location)
+    draw(_F_NOHP,       phone)
+    draw(_F_EMAIL,      email)
 
     # "X  Orang   Anak ke  Y" — values sit inside the pre-printed boxes
     draw(_F_SAUDARA_VAL, saudara)
     draw(_F_ANAK_VAL,    anak_ke)
 
-    draw(_F_PENGALAMAN_1, pengalaman_1, max_w=right - _F_PENGALAMAN_1[0])
-    draw(_F_PENGALAMAN_2, pengalaman_2, max_w=right - _F_PENGALAMAN_2[0])
+    draw(_F_PENGALAMAN_1, pengalaman_1)
+    draw(_F_PENGALAMAN_2, pengalaman_2)
 
     # Section II — coret label Ayah/Suami & Ibu/Istri yang tidak dipakai
     if row1_spouse:
@@ -370,23 +363,22 @@ def generate_biodata_pdf(profile) -> bytes:
     else:
         _draw_label_strike(c, *_STRIKE_ISTRI)
 
-    # Section II — cap name width so it doesn't spill into the "Umur :" label
-    name_max = (_FX_UMUR_LABEL * PAGE_W) - _F_AYAH_NAME[0] - 6
-    draw(_F_AYAH_NAME, ayah_name, max_w=name_max)
+    # Section II
+    draw(_F_AYAH_NAME, ayah_name)
     draw(_F_AYAH_AGE,  ayah_age)
-    draw(_F_PKJ_AYAH,  ayah_pkj,  max_w=right - _F_PKJ_AYAH[0])
+    draw(_F_PKJ_AYAH,  ayah_pkj)
 
-    draw(_F_IBU_NAME,  ibu_name,  max_w=name_max)
+    draw(_F_IBU_NAME,  ibu_name)
     draw(_F_IBU_AGE,   ibu_age)
-    draw(_F_PKJ_IBU,   ibu_pkj,   max_w=right - _F_PKJ_IBU[0])
+    draw(_F_PKJ_IBU,   ibu_pkj)
 
-    draw(_F_ALAMAT_KEL,  family_addr,     max_w=right - _F_ALAMAT_KEL[0])
-    draw(_F_KOTA_KEL,    family_location, max_w=right - _F_KOTA_KEL[0])
-    draw(_F_NOHP_KEL,    family_phone,    max_w=right - _F_NOHP_KEL[0])
+    draw(_F_ALAMAT_KEL,  family_addr)
+    draw(_F_KOTA_KEL,    family_location)
+    draw(_F_NOHP_KEL,    family_phone)
 
     # Section III
-    draw(_F_KETERANGAN_1, note_line1, max_w=right - _F_KETERANGAN_1[0])
-    draw(_F_KETERANGAN_2, note_line2, max_w=right - _F_KETERANGAN_2[0])
+    draw(_F_KETERANGAN_1, note_line1)
+    draw(_F_KETERANGAN_2, note_line2)
 
     # ── 5. Photo ──────────────────────────────────────────────────────────────
     if profile.photo and profile.photo.name:
