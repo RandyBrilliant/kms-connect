@@ -8,6 +8,7 @@ import { format } from "date-fns"
 import { id } from "date-fns/locale"
 
 import { StaffReferralLamaranProgress } from "@/components/staff/staff-referral-lamaran-progress"
+import { StaffReferralAttendanceStatus } from "@/components/staff/staff-referral-attendance-status"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -182,6 +183,33 @@ export function StaffApplicantDetailPage() {
               {applicant.applications_summary.map((sum) => (
                 <li key={sum.id} className="border-b pb-4 last:border-0 last:pb-0">
                   <StaffReferralLamaranProgress applicationsSummary={[sum]} />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-muted-foreground text-sm">Belum ada data lamaran.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Konfirmasi kehadiran per tahapan */}
+      <Card className="@container/card">
+        <CardHeader>
+          <CardTitle>Konfirmasi kehadiran</CardTitle>
+          <CardDescription>
+            Status konfirmasi kehadiran pelamar di setiap tahapan yang memerlukan konfirmasi.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {applicant.applications_summary?.length ? (
+            <ul className="space-y-6">
+              {applicant.applications_summary.map((sum) => (
+                <li key={sum.id} className="border-b pb-6 last:border-0 last:pb-0">
+                  <p className="mb-3 text-sm font-medium">
+                    {sum.job_title?.trim() || "Tanpa lowongan"}
+                    {sum.batch_name?.trim() ? ` · ${sum.batch_name.trim()}` : ""}
+                  </p>
+                  <StaffReferralAttendanceStatus summary={sum} />
                 </li>
               ))}
             </ul>

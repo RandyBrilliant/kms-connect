@@ -4,6 +4,8 @@
  * full_name is on CustomUser; WorkExperience.country uses ISO 3166-1 alpha-2.
  */
 
+import type { ApplicationStatus } from "@/types/job-applications"
+
 export type ApplicantVerificationStatus =
   | "SUBMITTED"
   | "ACCEPTED"
@@ -226,6 +228,23 @@ export interface StaffReferralApplicationSummary {
   interview_cohort_name?: string
   diterima_current_step?: string | null
   diterima_sub_stage_label?: string | null
+  /** Tahapan yang sudah dicapai pelamar. */
+  reached_stages?: ApplicationStatus[]
+  /** Waktu konfirmasi kehadiran per tahapan (ISO-8601 atau null). */
+  attendance_marked_at_by_stage?: Partial<Record<ApplicationStatus, string | null>>
+  /** Progress konfirmasi sub-tahapan DITERIMA (bila sudah mencapai tahap DITERIMA). */
+  document_collection_progress?: {
+    items: Array<{
+      code: string
+      label: string
+      done: boolean
+      confirmed: boolean
+      confirmed_at: string | null
+    }>
+    done_count: number
+    total_count: number
+    is_complete: boolean
+  } | null
 }
 
 export interface ApplicantUser {

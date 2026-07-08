@@ -28,6 +28,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { StaffReferralLamaranProgress } from "@/components/staff/staff-referral-lamaran-progress"
+import { StaffReferralAttendanceStatus } from "@/components/staff/staff-referral-attendance-status"
 import { useStaffReferredApplicantsQuery } from "@/hooks/use-staff-self-service-query"
 import { usePageTitle } from "@/hooks/use-page-title"
 
@@ -149,6 +150,7 @@ export function StaffReferredApplicantsPage() {
                       <TableHead>No. Telepon</TableHead>
                       <TableHead>Status Verifikasi</TableHead>
                       <TableHead>Tahapan Proses</TableHead>
+                      <TableHead className="min-w-[10rem]">Konfirmasi Kehadiran</TableHead>
                       <TableHead>Terdaftar</TableHead>
                       <TableHead className="text-right">Aksi</TableHead>
                     </TableRow>
@@ -156,7 +158,7 @@ export function StaffReferredApplicantsPage() {
                   <TableBody>
                     {data.results.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center">
+                        <TableCell colSpan={8} className="text-center">
                           <p className="text-muted-foreground text-sm">
                             Tidak ada pelamar ditemukan.
                           </p>
@@ -195,6 +197,16 @@ export function StaffReferredApplicantsPage() {
                               <StaffReferralLamaranProgress
                                 applicationsSummary={applicant.applications_summary}
                               />
+                            </TableCell>
+                            <TableCell className="align-top">
+                              {applicant.applications_summary?.[0] ? (
+                                <StaffReferralAttendanceStatus
+                                  summary={applicant.applications_summary[0]}
+                                  compact
+                                />
+                              ) : (
+                                <span className="text-muted-foreground text-xs">—</span>
+                              )}
                             </TableCell>
                             <TableCell>
                               <span className="text-sm">{formatDate(applicant.date_joined)}</span>

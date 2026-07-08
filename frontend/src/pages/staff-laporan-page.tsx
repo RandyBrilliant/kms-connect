@@ -14,6 +14,7 @@ import { id } from "date-fns/locale"
 import { Link } from "react-router-dom"
 
 import { StaffReferralLamaranProgress } from "@/components/staff/staff-referral-lamaran-progress"
+import { StaffReferralAttendanceStatus } from "@/components/staff/staff-referral-attendance-status"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -256,6 +257,7 @@ export function StaffLaporanPage() {
                         <TableHead>No. Telepon</TableHead>
                         <TableHead>Status Verifikasi</TableHead>
                         <TableHead className="min-w-[12rem]">Tahapan lamaran</TableHead>
+                        <TableHead className="min-w-[10rem]">Konfirmasi kehadiran</TableHead>
                         <TableHead>Terdaftar</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -295,6 +297,16 @@ export function StaffLaporanPage() {
                               <StaffReferralLamaranProgress
                                 applicationsSummary={applicant.applications_summary}
                               />
+                            </TableCell>
+                            <TableCell className="align-top">
+                              {applicant.applications_summary?.[0] ? (
+                                <StaffReferralAttendanceStatus
+                                  summary={applicant.applications_summary[0]}
+                                  compact
+                                />
+                              ) : (
+                                <span className="text-muted-foreground text-xs">—</span>
+                              )}
                             </TableCell>
                             <TableCell>
                               <span className="text-sm">{formatDate(applicant.date_joined)}</span>

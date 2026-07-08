@@ -1073,12 +1073,16 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
             apps = list(
                 JobApplication.objects.filter(applicant=profile)
                 .select_related("job", "job__company", "batch", "interview_cohort")
+                .prefetch_related("status_history")
                 .order_by("-applied_at")[:5]
             )
         else:
             apps = list(prefetched)[:5]
 
         out = []
+        from main.serializers import JobApplicationSerializer
+
+        app_attendance_serializer = JobApplicationSerializer()
         for app in apps:
             try:
                 status_label = ApplicationStatus(app.status).label
@@ -1097,6 +1101,11 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
             diterima_sub_stage_label = None
             if app.status == ApplicationStatus.DITERIMA and diterima_code:
                 diterima_sub_stage_label = step_labels.get(diterima_code, diterima_code)
+            attendance_marked = app_attendance_serializer.get_attendance_marked_at_by_stage(app)
+            reached_stages = app_attendance_serializer.get_reached_stages(app)
+            document_progress = None
+            if ApplicationStatus.DITERIMA in reached_stages:
+                document_progress = app_attendance_serializer.get_document_collection_progress(app)
             out.append(
                 {
                     "id": app.id,
@@ -1113,6 +1122,9 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
                     if app.status == ApplicationStatus.DITERIMA
                     else None,
                     "diterima_sub_stage_label": diterima_sub_stage_label,
+                    "reached_stages": reached_stages,
+                    "attendance_marked_at_by_stage": attendance_marked,
+                    "document_collection_progress": document_progress,
                 }
             )
         return out

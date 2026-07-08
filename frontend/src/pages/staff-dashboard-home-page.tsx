@@ -24,6 +24,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { StaffReferralLamaranProgress } from "@/components/staff/staff-referral-lamaran-progress"
+import { StaffReferralAttendanceStatus } from "@/components/staff/staff-referral-attendance-status"
 import { useStaffDashboardStatsQuery } from "@/hooks/use-staff-self-service-query"
 import { usePageTitle } from "@/hooks/use-page-title"
 
@@ -197,6 +198,7 @@ export function StaffDashboardHomePage() {
                     <TableHead>NIK</TableHead>
                     <TableHead>Status Verifikasi</TableHead>
                     <TableHead className="min-w-[12rem]">Tahapan lamaran</TableHead>
+                    <TableHead className="min-w-[10rem]">Konfirmasi kehadiran</TableHead>
                     <TableHead>Terdaftar</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -230,6 +232,16 @@ export function StaffDashboardHomePage() {
                           <StaffReferralLamaranProgress
                             applicationsSummary={applicant.applications_summary}
                           />
+                        </TableCell>
+                        <TableCell className="align-top">
+                          {applicant.applications_summary?.[0] ? (
+                            <StaffReferralAttendanceStatus
+                              summary={applicant.applications_summary[0]}
+                              compact
+                            />
+                          ) : (
+                            <span className="text-muted-foreground text-xs">—</span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <span className="text-sm">{formatDate(applicant.date_joined)}</span>

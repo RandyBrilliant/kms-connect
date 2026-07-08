@@ -2576,8 +2576,11 @@ class StaffReferredApplicantsViewSet(viewsets.ReadOnlyModelViewSet):
         if not self.request.user.is_authenticated:
             from account.models import CustomUser
             return CustomUser.objects.none()
-        
+
+        from django.db.models import Prefetch
         from account.models import CustomUser, UserRole
+        from main.models import JobApplication
+
         return (
             CustomUser.objects.filter(
                 role=UserRole.APPLICANT,
@@ -2586,7 +2589,19 @@ class StaffReferredApplicantsViewSet(viewsets.ReadOnlyModelViewSet):
             .select_related("applicant_profile")
             .prefetch_related(
                 "applicant_profile__work_experiences",
-                "applicant_profile__documents__document_type"
+                "applicant_profile__documents__document_type",
+                Prefetch(
+                    "applicant_profile__job_applications",
+                    queryset=JobApplication.objects.select_related(
+                        "job",
+                        "job__company",
+                        "batch",
+                        "interview_cohort",
+                    )
+                    .prefetch_related("status_history")
+                    .order_by("-applied_at"),
+                    to_attr="_job_apps_summary_prefetch",
+                ),
             )
         )
 
@@ -2638,7 +2653,26 @@ class StaffDashboardStatsView(APIView):
         ).count()
         
         # Recent applicants
-        recent_applicants = referred_applicants_qs.order_by('-date_joined')[:5]
+        from django.db.models import Prefetch
+        from main.models import JobApplication
+
+        recent_applicants = (
+            referred_applicants_qs.prefetch_related(
+                Prefetch(
+                    "applicant_profile__job_applications",
+                    queryset=JobApplication.objects.select_related(
+                        "job",
+                        "job__company",
+                        "batch",
+                        "interview_cohort",
+                    )
+                    .prefetch_related("status_history")
+                    .order_by("-applied_at"),
+                    to_attr="_job_apps_summary_prefetch",
+                ),
+            )
+            .order_by("-date_joined")[:5]
+        )
         recent_applicants_data = ApplicantUserSerializer(
             recent_applicants,
             many=True,
