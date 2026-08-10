@@ -380,14 +380,22 @@ If you see an error like `failed to bind host port 0.0.0.0:80/tcp: address alrea
 1. **Check certificate status:**
    ```bash
    sudo certbot certificates
+   # or: openssl s_client -servername data.kms-connect.com -connect data.kms-connect.com:443 </dev/null 2>/dev/null | openssl x509 -noout -dates
    ```
 
-2. **Test certificate renewal:**
+2. **Test / force renewal + deploy PEMs to nginx:**
    ```bash
-   sudo certbot renew --dry-run
+   sudo ./deploy/install-ssl-auto-renewal.sh   # once per server / after moving the app dir
+   sudo ./deploy/ssl-renew.sh                  # renew if due + copy PEMs + nginx reload
+   FORCE_SSL_RENEWAL=1 sudo ./deploy/ssl-renew.sh
    ```
 
-3. **Check nginx SSL config:**
+3. **Common failure: renewal still on `standalone`**
+   While docker nginx holds port 80, `authenticator = standalone` always fails.
+   `install-ssl-auto-renewal.sh` / `ssl-renew.sh` migrate to `webroot` automatically.
+   Confirm: `grep authenticator /etc/letsencrypt/renewal/data.kms-connect.com.conf`
+
+4. **Check nginx SSL config:**
    ```bash
    docker compose -f docker-compose.prod.yml exec nginx nginx -t
    ```

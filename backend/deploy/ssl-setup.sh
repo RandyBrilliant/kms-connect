@@ -152,11 +152,11 @@ else
     exit 1
 fi
 
-# Auto-renewal: twice-daily cron + PEM copy + nginx reload (see install-ssl-auto-renewal.sh)
+# Auto-renewal: systemd certbot.timer deploy-hook + cron (see install-ssl-auto-renewal.sh)
 echo ""
 echo -e "${BLUE}Setting up certificate auto-renewal...${NC}"
 bash "$APP_DIR/deploy/install-ssl-auto-renewal.sh"
-echo -e "${GREEN}✓ Auto-renewal installed (see /etc/cron.d/kms-connect-certbot)${NC}"
+echo -e "${GREEN}✓ Auto-renewal installed${NC}"
 
 echo ""
 echo -e "${GREEN}=========================================="
@@ -172,7 +172,8 @@ echo -e "${GREEN}Your site is now available at: https://$DOMAIN${NC}"
 echo ""
 echo -e "${YELLOW}Important:${NC}"
 echo "  - Auto-renewal: sudo ./deploy/install-ssl-auto-renewal.sh (re-run if you move this app directory)."
-echo "  - If /etc/letsencrypt/renewal still uses standalone, follow the WARNING from that script (webroot --force-renewal once)."
+echo "  - Manual renew: sudo ./deploy/ssl-renew.sh  (or ./deploy/ssl-renew.sh with docker)."
+echo "  - Renewal must use webroot (not standalone) while nginx binds port 80 — install script migrates this."
 echo "  - Update your .env file:"
 echo "    ${BLUE}SECURE_SSL_REDIRECT=1${NC}"
 echo "    ${BLUE}SESSION_COOKIE_SECURE=1${NC}"
