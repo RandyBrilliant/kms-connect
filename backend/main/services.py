@@ -37,6 +37,30 @@ if TYPE_CHECKING:
     from account.models import ApplicantProfile, CustomUser
 
 
+def _audit_status_change(
+    *,
+    actor: "CustomUser",
+    resource_type: str,
+    resource_id,
+    resource_label: str,
+    summary: str,
+    metadata: dict | None = None,
+) -> None:
+    """Best-effort audit emit; never raises into business logic."""
+    from audit.models import AuditAction
+    from audit.services import emit
+
+    emit(
+        action=AuditAction.STATUS_CHANGE,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        resource_label=resource_label,
+        summary=summary,
+        actor=actor,
+        metadata=metadata or {},
+    )
+
+
 # ---------------------------------------------------------------------------
 # FSM Transition table
 # Key: (current_status, actor_role) → list[allowed_next_status]
@@ -410,6 +434,23 @@ class ApplicationService:
             logging.getLogger(__name__).exception(
                 "Failed to send APPLICATION_ASSIGNED notifications for batch %s", batch.pk
             )
+
+        from audit.models import AuditResourceType
+
+        _audit_status_change(
+            actor=assigned_by,
+            resource_type=AuditResourceType.BATCH,
+            resource_id=batch.pk,
+            resource_label=batch.name,
+            summary=(
+                f"Menugaskan {len(created_applications)} pelamar ke batch '{batch.name}'"
+            ),
+            metadata={
+                "count": len(created_applications),
+                "skipped": len(skipped),
+                "to_status": ApplicationStatus.PRA_SELEKSI,
+            },
+        )
 
         return BatchAssignResult(assigned=list(created_applications), skipped=skipped)
 
@@ -821,6 +862,29 @@ class ApplicationService:
             changed_by=actor,
             note=note,
         )
+
+        from audit.models import AuditResourceType
+
+        applicant_user = getattr(
+            getattr(application, "applicant", None), "user", None
+        )
+        label = (
+            (getattr(applicant_user, "email", None) or "")
+            or f"lamaran:{application.pk}"
+        )
+        _audit_status_change(
+            actor=actor,
+            resource_type=AuditResourceType.APPLICATION,
+            resource_id=application.pk,
+            resource_label=label,
+            summary=f"Mengubah status lamaran {label}: {old_status} → {new_status}",
+            metadata={
+                "from_status": old_status,
+                "to_status": new_status,
+                "job_id": application.job_id,
+                "batch_id": application.batch_id,
+            },
+        )
         return application
 
     @classmethod
@@ -922,6 +986,24 @@ class ApplicationService:
         # Reflect new state on in-memory objects so callers see updated rows.
         for app in apps:
             app.status = new_status
+
+        from audit.models import AuditResourceType
+
+        _audit_status_change(
+            actor=actor,
+            resource_type=AuditResourceType.BATCH,
+            resource_id=batch.pk,
+            resource_label=batch.name,
+            summary=(
+                f"Bulk ubah status {len(apps)} lamaran di batch '{batch.name}' "
+                f"ke {new_status}"
+            ),
+            metadata={
+                "count": len(apps),
+                "to_status": new_status,
+                "job_id": batch.job_id,
+            },
+        )
 
         return apps
 
@@ -1074,6 +1156,24 @@ class ApplicationService:
                 app.placement_end_date = update_kwargs["placement_end_date"]
             if new_status == ApplicationStatus.DITERIMA:
                 app.diterima_current_step = update_kwargs["diterima_current_step"]
+
+        from audit.models import AuditResourceType
+
+        _audit_status_change(
+            actor=actor,
+            resource_type=AuditResourceType.COHORT,
+            resource_id=cohort.pk,
+            resource_label=cohort.name,
+            summary=(
+                f"Bulk ubah status {len(apps)} lamaran di sesi '{cohort.name}' "
+                f"ke {new_status}"
+            ),
+            metadata={
+                "count": len(apps),
+                "to_status": new_status,
+                "job_id": cohort.job_id,
+            },
+        )
 
         return apps
 

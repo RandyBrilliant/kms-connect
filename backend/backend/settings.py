@@ -66,6 +66,7 @@ INSTALLED_APPS = [
     'account.apps.AccountConfig',
     'main.apps.MainConfig',
     'chat.apps.ChatConfig',
+    'audit.apps.AuditConfig',
 ]
 
 AUTH_USER_MODEL = 'account.CustomUser'

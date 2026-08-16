@@ -13,6 +13,8 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from .filters import ApplicantUserFilterSet
+from audit.mixins import AuditedMixin
+from audit.models import AuditResourceType
 
 from django.conf import settings as django_settings
 from django.core.cache import cache
@@ -272,12 +274,13 @@ class NotificationPreferenceView(APIView):
 # ViewSets
 # ---------------------------------------------------------------------------
 
-class AdminUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
+class AdminUserViewSet(AuditedMixin, DeactivateActivateMixin, viewsets.ModelViewSet):
     """
     CRUD untuk pengguna Admin Utama / Admin (operator).
     List & retrieve: kedua jenis admin. Tulis & deactivate: hanya Admin Utama / superuser.
     """
 
+    audit_resource_type = AuditResourceType.USER
     http_method_names = ["get", "post", "put", "patch", "head", "options"]
     serializer_class = AdminUserSerializer
     permission_classes = [IsBackofficeAdmin]
@@ -301,12 +304,13 @@ class AdminUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
         return destroy_disallowed_response()
 
 
-class StaffUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
+class StaffUserViewSet(AuditedMixin, DeactivateActivateMixin, viewsets.ModelViewSet):
     """
     CRUD untuk pengguna Staff (CustomUser + StaffProfile).
     List, create, retrieve, update, partial_update. Tidak ada delete; gunakan deactivate.
     """
 
+    audit_resource_type = AuditResourceType.STAFF
     http_method_names = ["get", "post", "put", "patch", "head", "options"]
     serializer_class = StaffUserSerializer
     permission_classes = [IsBackofficeAdmin]
@@ -331,12 +335,13 @@ class StaffUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
         return destroy_disallowed_response()
 
 
-class CompanyUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
+class CompanyUserViewSet(AuditedMixin, DeactivateActivateMixin, viewsets.ModelViewSet):
     """
     CRUD untuk pengguna Perusahaan (CustomUser + CompanyProfile).
     List, create, retrieve, update, partial_update. Tidak ada delete; gunakan deactivate.
     """
 
+    audit_resource_type = AuditResourceType.COMPANY
     http_method_names = ["get", "post", "put", "patch", "head", "options"]
     serializer_class = CompanyUserSerializer
     permission_classes = [IsMasterAdmin]
@@ -365,13 +370,15 @@ class CompanyUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
         return destroy_disallowed_response()
 
 
-class ApplicantUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
+class ApplicantUserViewSet(AuditedMixin, DeactivateActivateMixin, viewsets.ModelViewSet):
     """
     CRUD untuk pelamar (CustomUser + ApplicantProfile).
     Admin: list, create (backdoor), retrieve, update, partial_update. Review data pelamar.
     Tidak ada DELETE HTTP biasa; gunakan deactivate/activate.
     Admin Utama: POST .../permanent-delete/ untuk menghapus pelamar beserta seluruh data terkait.
     """
+
+    audit_resource_type = AuditResourceType.APPLICANT
 
     http_method_names = ["get", "post", "put", "patch", "head", "options"]
     serializer_class = ApplicantUserSerializer
@@ -754,6 +761,7 @@ class ApplicantUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
         profile = getattr(applicant, "applicant_profile", None)
         snapshot_id = applicant.id
         snapshot_email = applicant.email
+        snapshot_name = applicant.full_name or ""
 
         with transaction.atomic():
             if profile is not None:
@@ -761,6 +769,20 @@ class ApplicantUserViewSet(DeactivateActivateMixin, viewsets.ModelViewSet):
                 for doc in list(profile.documents.all()):
                     doc.delete()
             applicant.delete()
+
+        from audit.models import AuditAction
+        from audit.services import emit
+
+        emit(
+            action=AuditAction.DELETE,
+            resource_type=AuditResourceType.APPLICANT,
+            resource_id=snapshot_id,
+            resource_label=snapshot_email,
+            summary=f"Menghapus permanen pelamar {snapshot_email}",
+            actor=request.user,
+            request=request,
+            metadata={"full_name": snapshot_name},
+        )
 
         return Response(
             success_response(
@@ -1250,13 +1272,19 @@ class WorkExperienceViewSet(viewsets.ModelViewSet):
 # ApplicantDocument (nested under applicant, file upload)
 # ---------------------------------------------------------------------------
 
-class ApplicantDocumentViewSet(viewsets.ModelViewSet):
+class ApplicantDocumentViewSet(AuditedMixin, viewsets.ModelViewSet):
     """
     CRUD dokumen pelamar (file upload). Nested: /api/applicants/<applicant_pk>/documents/
     """
 
+    audit_resource_type = AuditResourceType.DOCUMENT
     serializer_class = ApplicantDocumentSerializer
     permission_classes = [IsBackofficeAdmin]
+
+    def get_audit_resource_label(self, instance) -> str:
+        doc_type = getattr(instance, "document_type", None)
+        type_name = getattr(doc_type, "name", None) if doc_type else None
+        return (type_name or f"dokumen:{instance.pk}")[:255]
 
     def get_queryset(self):
         applicant_pk = self.kwargs.get("applicant_pk")
@@ -1274,6 +1302,8 @@ class ApplicantDocumentViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(applicant_profile=self.get_applicant_profile())
+        from audit.models import AuditAction
+        self._emit_audit(AuditAction.CREATE, serializer.instance)
 
 
 # ---------------------------------------------------------------------------
@@ -1953,7 +1983,7 @@ class NotificationViewSet(viewsets.ModelViewSet):
         )
 
 
-class BroadcastViewSet(viewsets.ModelViewSet):
+class BroadcastViewSet(AuditedMixin, viewsets.ModelViewSet):
     """
     ViewSet untuk broadcast notifications (admin only).
     GET /api/broadcasts/ - List broadcasts
@@ -1962,7 +1992,8 @@ class BroadcastViewSet(viewsets.ModelViewSet):
     POST /api/broadcasts/{id}/send/ - Send broadcast immediately
     POST /api/broadcasts/{id}/preview-recipients/ - Preview recipient count
     """
-    
+
+    audit_resource_type = AuditResourceType.BROADCAST
     serializer_class = BroadcastSerializer
     permission_classes = [IsBackofficeAdmin]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
@@ -1983,6 +2014,8 @@ class BroadcastViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         """Set created_by to current user."""
         serializer.save(created_by=self.request.user)
+        from audit.models import AuditAction
+        self._emit_audit(AuditAction.CREATE, serializer.instance)
 
     @action(detail=True, methods=["post"], url_path="send")
     def send(self, request, pk=None):
@@ -2255,6 +2288,20 @@ class AccountDeletionRequestViewSet(viewsets.GenericViewSet):
 
         payload_data = self.get_serializer(obj).data
 
+        from audit.models import AuditAction, AuditResourceType
+        from audit.services import emit
+
+        emit(
+            action=AuditAction.APPROVE,
+            resource_type=AuditResourceType.DELETION_REQUEST,
+            resource_id=obj.pk,
+            resource_label=user.email,
+            summary=f"Menyetujui permintaan hapus akun {user.email}",
+            actor=request.user,
+            request=request,
+            metadata={"user_id": user.pk},
+        )
+
         email_ctx = {
             "user_name": (user.full_name or "").strip() or user.email.split("@")[0],
             "admin_notes": admin_notes or "",
@@ -2299,6 +2346,20 @@ class AccountDeletionRequestViewSet(viewsets.GenericViewSet):
         obj.reviewed_at = timezone.now()
         obj.admin_notes = admin_notes
         obj.save(update_fields=["status", "reviewed_by", "reviewed_at", "admin_notes"])
+
+        from audit.models import AuditAction, AuditResourceType
+        from audit.services import emit
+
+        emit(
+            action=AuditAction.REJECT,
+            resource_type=AuditResourceType.DELETION_REQUEST,
+            resource_id=obj.pk,
+            resource_label=obj.user.email,
+            summary=f"Menolak permintaan hapus akun {obj.user.email}",
+            actor=request.user,
+            request=request,
+            metadata={"user_id": obj.user_id},
+        )
 
         recipient = obj.user
         try:

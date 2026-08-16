@@ -59,6 +59,7 @@ const AccountDeletionPage = lazy(() => import("@/pages/account-deletion-page").t
 const DownloadAppPage = lazy(() => import("@/pages/download-app-page").then(m => ({ default: m.DownloadAppPage })))
 const AdminExportExcelPage = lazy(() => import("@/pages/admin-export-excel-page").then(m => ({ default: m.AdminExportExcelPage })))
 const AdminDeletionRequestsPage = lazy(() => import("@/pages/admin-deletion-requests-page").then(m => ({ default: m.AdminDeletionRequestsPage })))
+const AdminAuditLogPage = lazy(() => import("@/pages/admin-audit-log-page").then(m => ({ default: m.AdminAuditLogPage })))
 
 // Loading fallback component
 function PageLoader() {
@@ -171,6 +172,7 @@ function AppRoutes() {
         <Route path="notifikasi" element={<NotificationsPage />} />
         <Route path="notifikasi/preferensi" element={<NotificationPreferencesPage />} />
         <Route path="hapus-akun" element={<AdminDeletionRequestsPage />} />
+        <Route path="log-audit" element={<AdminAuditLogPage />} />
         <Route path="profil" element={<ProfilePage />} />
       </Route>
       <Route

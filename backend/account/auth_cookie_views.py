@@ -21,6 +21,31 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from .api_responses import ApiCode, ApiMessage, error_response, success_response
 from .throttles import AuthRateThrottle, AuthPublicRateThrottle
+from audit.models import AuditAction, AuditResourceType
+from audit.services import emit
+
+
+def _audit_auth_event(
+    *,
+    request,
+    action: str,
+    summary: str,
+    actor=None,
+    actor_email: str = "",
+    metadata: dict | None = None,
+):
+    emit(
+        action=action,
+        resource_type=AuditResourceType.AUTH,
+        resource_id=getattr(actor, "pk", "") if actor is not None else "",
+        resource_label=actor_email
+        or (getattr(actor, "email", None) or ""),
+        summary=summary,
+        actor=actor,
+        request=request,
+        actor_email=actor_email or None,
+        metadata=metadata or {},
+    )
 
 
 def _cookie_settings():
@@ -129,6 +154,14 @@ class CookieTokenObtainPairView(APIView):
                 detail = str(detail[0])
             elif not isinstance(detail, str):
                 detail = "Email atau password salah."
+            email_attempt = (request.data.get("email") or "").strip().lower()
+            _audit_auth_event(
+                request=request,
+                action=AuditAction.LOGIN_FAILED,
+                summary=f"Login gagal untuk {email_attempt or '(tanpa email)'}",
+                actor_email=email_attempt,
+                metadata={"reason": "authentication_failed"},
+            )
             return Response(
                 error_response(
                     detail=detail,
@@ -138,6 +171,14 @@ class CookieTokenObtainPairView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
         except (InvalidToken, TokenError) as e:
+            email_attempt = (request.data.get("email") or "").strip().lower()
+            _audit_auth_event(
+                request=request,
+                action=AuditAction.LOGIN_FAILED,
+                summary=f"Login gagal untuk {email_attempt or '(tanpa email)'}",
+                actor_email=email_attempt,
+                metadata={"reason": "invalid_token"},
+            )
             return Response(
                 error_response(
                     detail=str(e) or ApiMessage.PERMISSION_DENIED,
@@ -164,6 +205,14 @@ class CookieTokenObtainPairView(APIView):
             refresh = str(mobile_token)
 
         cookie_settings = _cookie_settings()
+
+        _audit_auth_event(
+            request=request,
+            action=AuditAction.LOGIN,
+            summary=f"Login berhasil: {user.email}",
+            actor=user,
+            metadata={"method": "password"},
+        )
 
         response = Response(
             success_response(
@@ -302,6 +351,19 @@ class CookieLogoutView(APIView):
 
     def post(self, request):
         cookie_settings = _cookie_settings()
+        actor = None
+        if getattr(request, "user", None) and request.user.is_authenticated:
+            actor = request.user
+        _audit_auth_event(
+            request=request,
+            action=AuditAction.LOGOUT,
+            summary=(
+                f"Logout: {actor.email}"
+                if actor is not None
+                else "Logout"
+            ),
+            actor=actor,
+        )
         response = Response(
             success_response(detail="Logout berhasil.", code=ApiCode.SUCCESS),
             status=status.HTTP_200_OK,
@@ -543,6 +605,12 @@ class ConfirmResetPasswordView(APIView):
             )
         user.set_password(new_password)
         user.save(update_fields=["password"])
+        _audit_auth_event(
+            request=request,
+            action=AuditAction.PASSWORD_RESET,
+            summary=f"Reset password: {user.email}",
+            actor=user,
+        )
         return Response(
             success_response(
                 detail=ApiMessage.RESET_PASSWORD_SUCCESS,
@@ -613,6 +681,13 @@ class ChangePasswordView(APIView):
 
         user.set_password(new_password)
         user.save(update_fields=["password"])
+
+        _audit_auth_event(
+            request=request,
+            action=AuditAction.PASSWORD_CHANGE,
+            summary=f"Ubah password: {user.email}",
+            actor=user,
+        )
 
         return Response(
             success_response(

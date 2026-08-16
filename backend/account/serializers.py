@@ -777,8 +777,12 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
         return attrs
 
     def validate_nik(self, value):
-        """Format 16 digit; uniqueness dicek di parent ApplicantUserSerializer (supaya punya akses profile instance)."""
-        return validate_nik_format(value) if value else value
+        """Format 16 digit + unik, termasuk NIK milik akun yang sudah dinonaktifkan."""
+        if not value:
+            return value
+        cleaned = validate_nik_format(value)
+        profile_instance = self.instance if getattr(self.instance, "pk", None) else None
+        return validate_nik_unique(cleaned, profile_instance)
 
     def validate_hasil_medical(self, value):
         raw = (value or "").strip()

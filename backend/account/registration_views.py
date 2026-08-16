@@ -3,6 +3,7 @@ Public registration and Google OAuth views for mobile app.
 Separate file to keep account/views.py focused on admin CRUD.
 """
 from django.conf import settings as django_settings
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
@@ -62,6 +63,53 @@ def _parse_birth_date(birth_date_str):
         return None
 
 
+def _inactive_account_response():
+    """Google/Apple (and similar) must not sign in or re-register a deactivated user."""
+    return Response(
+        error_response(
+            detail=ApiMessage.ACCOUNT_INACTIVE,
+            code=ApiCode.ACCOUNT_INACTIVE,
+            status_code=status.HTTP_403_FORBIDDEN,
+        ),
+        status=status.HTTP_403_FORBIDDEN,
+    )
+
+
+def _nik_taken_error_response():
+    """Same NIK cannot be reused, including on deactivated accounts."""
+    return Response(
+        error_response(
+            detail=ApiMessage.NIK_TAKEN,
+            code=ApiCode.NIK_TAKEN,
+        ),
+        status=status.HTTP_400_BAD_REQUEST,
+    )
+
+
+def _nik_taken_by_other_user(nik: str, user=None) -> bool:
+    qs = ApplicantProfile.objects.filter(nik=nik)
+    if user is not None:
+        qs = qs.exclude(user=user)
+    return qs.exists()
+
+
+def _find_oauth_user(*, social_id_field: str, social_id: str | None, email: str):
+    """
+    Look up an existing user by social subject then email.
+
+    Returns (user, error_response). error_response is set when the matched
+    account is inactive — callers must not issue tokens or link social IDs.
+    """
+    user = None
+    if social_id:
+        user = CustomUser.objects.filter(**{social_id_field: social_id}).first()
+    if user is None and email:
+        user = CustomUser.objects.filter(email__iexact=email).first()
+    if user is not None and not user.is_active:
+        return user, _inactive_account_response()
+    return user, None
+
+
 class ApplicantRegistrationView(APIView):
     """
     Public endpoint untuk registrasi pelamar dengan KTP upload.
@@ -113,15 +161,9 @@ class ApplicantRegistrationView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Cek NIK sudah terdaftar
-        if ApplicantProfile.objects.filter(nik=nik).exists():
-            return Response(
-                error_response(
-                    detail="NIK ini sudah terdaftar untuk pelamar lain.",
-                    code=ApiCode.VALIDATION_ERROR,
-                ),
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        # Cek NIK sudah terdaftar (termasuk akun yang sudah dinonaktifkan)
+        if _nik_taken_by_other_user(nik):
+            return _nik_taken_error_response()
 
         # Validasi referral code (OPTIONAL - can be filled in via edit profile)
         referrer_user = None
@@ -340,6 +382,15 @@ class ApplicantRegistrationView(APIView):
         )
 
 
+def _verify_google_id_token(id_token_raw: str, google_client_id: str) -> dict:
+    from google.auth.transport import requests as google_requests
+    from google.oauth2 import id_token as google_id_token
+
+    return google_id_token.verify_oauth2_token(
+        id_token_raw, google_requests.Request(), google_client_id
+    )
+
+
 class GoogleOAuthView(APIView):
     """
     Public endpoint untuk Google Sign-In authentication.
@@ -367,9 +418,6 @@ class GoogleOAuthView(APIView):
 
         # Verifikasi Google ID token
         try:
-            from google.auth.transport import requests as google_requests
-            from google.oauth2 import id_token as google_id_token
-
             google_client_id = getattr(django_settings, "GOOGLE_CLIENT_ID", "")
             if not google_client_id:
                 return Response(
@@ -380,11 +428,8 @@ class GoogleOAuthView(APIView):
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
 
-            # Verifikasi token
             try:
-                idinfo = google_id_token.verify_oauth2_token(
-                    id_token_raw, google_requests.Request(), google_client_id
-                )
+                idinfo = _verify_google_id_token(id_token_raw, google_client_id)
             except ValueError:
                 return Response(
                     error_response(
@@ -425,45 +470,38 @@ class GoogleOAuthView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        # Cari atau buat user
-        user = None
+        # Cari atau buat user — akun nonaktif tidak boleh login/daftar ulang via Google
+        user, inactive_error = _find_oauth_user(
+            social_id_field="google_id",
+            social_id=google_id,
+            email=email,
+        )
+        if inactive_error is not None:
+            return inactive_error
+
         created = False
+        if user is None:
+            user = CustomUser.objects.create_user(
+                email=email,
+                password=None,  # OAuth users tidak punya password
+                role=UserRole.APPLICANT,
+                is_active=True,
+                email_verified=True,  # Google sudah verifikasi email
+                google_id=google_id,
+                full_name=name or "",
+            )
+            created = True
 
-        # Cek berdasarkan google_id dulu
-        if google_id:
-            try:
-                user = CustomUser.objects.get(google_id=google_id)
-            except CustomUser.DoesNotExist:
-                pass
-
-        # Jika tidak ditemukan, cek berdasarkan email
-        if not user:
-            try:
-                user = CustomUser.objects.get(email=email)
-                # Update google_id jika belum ada
-                if not user.google_id and google_id:
-                    user.google_id = google_id
-                    user.save(update_fields=["google_id"])
-            except CustomUser.DoesNotExist:
-                # Buat user baru
-                user = CustomUser.objects.create_user(
-                    email=email,
-                    password=None,  # OAuth users tidak punya password
-                    role=UserRole.APPLICANT,
-                    is_active=True,
-                    email_verified=True,  # Google sudah verifikasi email
-                    google_id=google_id,
-                    full_name=name or "",
-                )
-                created = True
-
-                # Buat applicant profile - NIK sementara (max 16 char), wajib diganti saat lengkapi profil
-                ApplicantProfile.objects.create(
-                    user=user,
-                    nik=f"G{user.pk:015d}",  # Placeholder Google OAuth; wajib diganti NIK asli dari KTP
-                    verification_status=ApplicantVerificationStatus.SUBMITTED,
-                    submitted_at=timezone.now(),
-                )
+            # Buat applicant profile - NIK sementara (max 16 char), wajib diganti saat lengkapi profil
+            ApplicantProfile.objects.create(
+                user=user,
+                nik=f"G{user.pk:015d}",  # Placeholder Google OAuth; wajib diganti NIK asli dari KTP
+                verification_status=ApplicantVerificationStatus.SUBMITTED,
+                submitted_at=timezone.now(),
+            )
+        elif google_id and not user.google_id:
+            user.google_id = google_id
+            user.save(update_fields=["google_id"])
 
         # Generate JWT tokens — mobile clients get longer-lived refresh tokens
         try:
@@ -500,6 +538,19 @@ class GoogleOAuthView(APIView):
 
         # Return user data + tokens
         serializer = ApplicantUserSerializer(instance=user, context={"request": request})
+        from audit.models import AuditAction, AuditResourceType
+        from audit.services import emit
+
+        emit(
+            action=AuditAction.LOGIN,
+            resource_type=AuditResourceType.AUTH,
+            resource_id=user.pk,
+            resource_label=user.email,
+            summary=f"Login Google: {user.email}",
+            actor=user,
+            request=request,
+            metadata={"method": "google", "created": created},
+        )
         return Response(
             success_response(
                 data={
@@ -546,15 +597,9 @@ class GoogleCompleteRegistrationView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Validasi NIK belum dipakai user lain
-        if ApplicantProfile.objects.filter(nik=nik).exclude(user=user).exists():
-            return Response(
-                error_response(
-                    detail="NIK ini sudah terdaftar untuk akun lain.",
-                    code=ApiCode.VALIDATION_ERROR,
-                ),
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        # Validasi NIK belum dipakai user lain (termasuk akun yang sudah dinonaktifkan)
+        if _nik_taken_by_other_user(nik, user):
+            return _nik_taken_error_response()
 
         # Validasi referral code (OPTIONAL - can be filled in via edit profile)
         referrer_user = None
@@ -621,33 +666,36 @@ class GoogleCompleteRegistrationView(APIView):
 
         # Create or update ApplicantProfile
         try:
-            profile, _ = ApplicantProfile.objects.get_or_create(
-                user=user,
-                defaults={
-                    "nik": nik,
-                    "verification_status": ApplicantVerificationStatus.SUBMITTED,
-                    "submitted_at": timezone.now(),
-                    "referrer": referrer_user,
-                    "contact_phone": phone_number,
-                    "birth_place_text": birth_place_text,
-                    "birth_date": birth_date,
-                },
-            )
-            # Overwrite placeholder fields regardless
-            profile.nik = nik
-            profile.referrer = referrer_user
-            if phone_number:
-                profile.contact_phone = phone_number
-            if birth_place_text:
-                profile.birth_place_text = birth_place_text
-            if birth_date:
-                profile.birth_date = birth_date
-            update_fields = ["nik", "referrer", "contact_phone"]
-            if birth_place_text:
-                update_fields.append("birth_place_text")
-            if birth_date:
-                update_fields.append("birth_date")
-            profile.save(update_fields=update_fields)
+            with transaction.atomic():
+                profile, _ = ApplicantProfile.objects.get_or_create(
+                    user=user,
+                    defaults={
+                        "nik": nik,
+                        "verification_status": ApplicantVerificationStatus.SUBMITTED,
+                        "submitted_at": timezone.now(),
+                        "referrer": referrer_user,
+                        "contact_phone": phone_number,
+                        "birth_place_text": birth_place_text,
+                        "birth_date": birth_date,
+                    },
+                )
+                # Overwrite placeholder fields regardless
+                profile.nik = nik
+                profile.referrer = referrer_user
+                if phone_number:
+                    profile.contact_phone = phone_number
+                if birth_place_text:
+                    profile.birth_place_text = birth_place_text
+                if birth_date:
+                    profile.birth_date = birth_date
+                update_fields = ["nik", "referrer", "contact_phone"]
+                if birth_place_text:
+                    update_fields.append("birth_place_text")
+                if birth_date:
+                    update_fields.append("birth_date")
+                profile.save(update_fields=update_fields)
+        except IntegrityError:
+            return _nik_taken_error_response()
         except Exception as e:
             return Response(
                 error_response(
@@ -1000,41 +1048,20 @@ class AppleOAuthView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        user = None
+        user, inactive_error = _find_oauth_user(
+            social_id_field="apple_id",
+            social_id=apple_sub,
+            email=email,
+        )
+        if inactive_error is not None:
+            return inactive_error
+
         created = False
-
-        # Look up by apple_id first
-        if apple_sub:
-            try:
-                user = CustomUser.objects.get(apple_id=apple_sub)
-            except CustomUser.DoesNotExist:
-                pass
-
-        # Fall back to email match
-        if not user and email:
-            try:
-                user = CustomUser.objects.get(email=email)
-                if not user.apple_id:
-                    user.apple_id = apple_sub
-                    user.save(update_fields=["apple_id"])
-            except CustomUser.DoesNotExist:
-                pass
-
-        # Create new user
-        if not user:
+        if user is None:
             if not email:
                 return Response(
                     error_response(
                         detail="Email tidak ditemukan di Apple account. Pastikan Anda mengizinkan berbagi email.",
-                        code=ApiCode.VALIDATION_ERROR,
-                    ),
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            if CustomUser.objects.filter(email=email).exists():
-                return Response(
-                    error_response(
-                        detail="Email sudah terdaftar dengan metode login lain. Silakan login dengan email/password atau Google.",
                         code=ApiCode.VALIDATION_ERROR,
                     ),
                     status=status.HTTP_400_BAD_REQUEST,
@@ -1057,6 +1084,9 @@ class AppleOAuthView(APIView):
                 verification_status=ApplicantVerificationStatus.SUBMITTED,
                 submitted_at=timezone.now(),
             )
+        elif apple_sub and not user.apple_id:
+            user.apple_id = apple_sub
+            user.save(update_fields=["apple_id"])
 
         # Generate JWT tokens
         try:
@@ -1090,6 +1120,19 @@ class AppleOAuthView(APIView):
                 needs_registration = True
 
         serializer = ApplicantUserSerializer(instance=user, context={"request": request})
+        from audit.models import AuditAction, AuditResourceType
+        from audit.services import emit
+
+        emit(
+            action=AuditAction.LOGIN,
+            resource_type=AuditResourceType.AUTH,
+            resource_id=user.pk,
+            resource_label=user.email,
+            summary=f"Login Apple: {user.email}",
+            actor=user,
+            request=request,
+            metadata={"method": "apple", "created": created},
+        )
         return Response(
             success_response(
                 data={

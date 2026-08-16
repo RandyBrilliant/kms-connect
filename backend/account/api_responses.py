@@ -31,6 +31,7 @@ class ApiCode:
     ALREADY_PROCESSED = "already_processed"
     DEACTIVATED = "deactivated"
     ACTIVATED = "activated"
+    ACCOUNT_INACTIVE = "account_inactive"
     PROFILE_UPDATED = "profile_updated"
     EMAIL_SENT = "email_sent"
     EMAIL_ALREADY_VERIFIED = "email_already_verified"
@@ -74,6 +75,10 @@ class ApiMessage:
     ALREADY_ACTIVATED = "Akun sudah aktif."
     DEACTIVATED = "Akun berhasil dinonaktifkan."
     ACTIVATED = "Akun berhasil diaktifkan kembali."
+    ACCOUNT_INACTIVE = (
+        "Akun ini sudah dinonaktifkan dan tidak dapat digunakan untuk masuk "
+        "atau mendaftar ulang."
+    )
     PROFILE_UPDATED = "Profil berhasil diperbarui."
     EMAIL_SENT = "Email berhasil dikirim."
     EMAIL_ALREADY_VERIFIED = "Email sudah terverifikasi."

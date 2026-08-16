@@ -89,7 +89,11 @@ function LamaranApplicationCard({
             <div className="flex flex-wrap items-center gap-2">
               <ApplicationStatusBadge status={app.status} />
               <Badge variant="outline" className="text-[11px] font-normal">
-                {app.assigned_by != null ? "Ditugaskan admin" : "Mandiri"}
+                {app.assigned_by != null
+                  ? app.assigned_by_name?.trim()
+                    ? `Ditugaskan ${app.assigned_by_name.trim()}`
+                    : "Ditugaskan admin"
+                  : "Mandiri"}
               </Badge>
               {app.applied_at ? (
                 <span className="text-muted-foreground text-xs tabular-nums">

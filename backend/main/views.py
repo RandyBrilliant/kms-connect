@@ -82,9 +82,12 @@ from .serializers import (
     NewsSerializer,
 )
 from .services import ApplicationService, CooldownError, EligibilityError, TransitionError
+from audit.mixins import AuditedMixin
+from audit.models import AuditAction, AuditResourceType
+from audit.services import emit
 
 
-class NewsViewSet(viewsets.ModelViewSet):
+class NewsViewSet(AuditedMixin, viewsets.ModelViewSet):
     """
     CRUD berita untuk admin/backoffice.
     Tidak ada delete fisik di requirement awal; namun untuk konten berita,
@@ -92,6 +95,7 @@ class NewsViewSet(viewsets.ModelViewSet):
     diganti nanti dengan status ARCHIVED saja.
     """
 
+    audit_resource_type = AuditResourceType.NEWS
     http_method_names = ["get", "post", "put", "patch", "delete", "head", "options"]
     serializer_class = NewsSerializer
     permission_classes = [IsBackofficeAdmin]
@@ -105,12 +109,13 @@ class NewsViewSet(viewsets.ModelViewSet):
         return News.objects.select_related("created_by")
 
 
-class LowonganKerjaViewSet(viewsets.ModelViewSet):
+class LowonganKerjaViewSet(AuditedMixin, viewsets.ModelViewSet):
     """
     CRUD lowongan kerja untuk admin/backoffice.
     Admin Utama mengubah master data; Admin operator hanya baca (list/detail).
     """
 
+    audit_resource_type = AuditResourceType.JOB
     http_method_names = ["get", "post", "put", "patch", "delete", "head", "options"]
     serializer_class = LowonganKerjaSerializer
     permission_classes = [IsBackofficeAdmin]
@@ -258,7 +263,7 @@ def _filter_applications_by_diterima_step(queryset, step_code: str):
     )
 
 
-class LamaranBatchViewSet(viewsets.ModelViewSet):
+class LamaranBatchViewSet(AuditedMixin, viewsets.ModelViewSet):
     """
     CRUD + custom actions untuk LamaranBatch (admin/backoffice).
 
@@ -277,6 +282,7 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
       POST  /api/batches/{id}/bulk-transition/           — advance all apps in batch at once
     """
 
+    audit_resource_type = AuditResourceType.BATCH
     permission_classes = [IsBackofficeAdmin]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ["job", "tahap_order"]
@@ -1196,7 +1202,7 @@ class LamaranBatchViewSet(viewsets.ModelViewSet):
 # ---------------------------------------------------------------------------
 
 
-class InterviewCohortViewSet(viewsets.ModelViewSet):
+class InterviewCohortViewSet(AuditedMixin, viewsets.ModelViewSet):
     """
     CRUD + custom actions for `InterviewCohort` (admin/backoffice).
 
@@ -1217,6 +1223,7 @@ class InterviewCohortViewSet(viewsets.ModelViewSet):
       GET   /api/interview-cohorts/{id}/export-excel/    — export applicants
     """
 
+    audit_resource_type = AuditResourceType.COHORT
     permission_classes = [IsBackofficeAdmin]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ["job", "is_active"]
@@ -1880,6 +1887,7 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
             "applicant__work_experiences",
             "applicant__documents__document_type",
         )
+        export_count = applications.count()
 
         excel_file = generate_activity_applications_excel(
             applications,
@@ -1887,6 +1895,25 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
             date_from,
             date_to,
             request,
+        )
+
+        emit(
+            action=AuditAction.EXPORT,
+            resource_type=AuditResourceType.EXPORT,
+            resource_id="",
+            resource_label="export-activity-excel",
+            summary=(
+                f"Mengekspor Excel aktivitas "
+                f"({date_from.isoformat()}–{date_to.isoformat()})"
+            ),
+            actor=request.user,
+            request=request,
+            metadata={
+                "activities": sorted(activity_set),
+                "date_from": date_from.isoformat(),
+                "date_to": date_to.isoformat(),
+                "count": export_count,
+            },
         )
 
         filename = (

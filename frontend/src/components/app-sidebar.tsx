@@ -13,6 +13,7 @@ import {
   IconChartBar,
   IconTrash,
   IconFileSpreadsheet,
+  IconHistory,
 } from "@tabler/icons-react"
 
 import { useAuth } from "@/hooks/use-auth"
@@ -95,6 +96,7 @@ function getNavItems(basePath: string, role?: string) {
     { title: "Chat", url: `${basePath}/chat`, icon: IconMessage },
     { title: "Laporan", url: `${basePath}/laporan`, icon: IconChartBar },
     { title: "Export Excel", url: `${basePath}/export-excel`, icon: IconFileSpreadsheet },
+    { title: "Log Audit", url: `${basePath}/log-audit`, icon: IconHistory },
     { title: "Hapus Akun", url: `${basePath}/hapus-akun`, icon: IconTrash },
   ]
 }
