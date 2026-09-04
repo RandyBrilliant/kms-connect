@@ -19,6 +19,7 @@ import '../../../../core/widgets/professional/professional_gradient_background.d
 import '../../../documents/data/providers/document_provider.dart';
 import '../../../documents/domain/models/document_type.dart';
 import '../../utils/bundled_document_templates.dart';
+import '../../../profile/data/providers/profile_provider.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Page
@@ -68,6 +69,18 @@ class _UploadDocumentPageState extends ConsumerState<UploadDocumentPage> {
 
   bool get _isPdf =>
       _selectedType != null && _pdfDocCodes.contains(_selectedType!.code);
+
+  Future<void> _openFilledCv() async {
+    final ok = await ref.read(cvPdfProvider.notifier).open();
+    if (ok || !mounted) return;
+    CustomToast.show(
+      context,
+      message: ref.read(cvPdfProvider).error ??
+          'Gagal mengunduh CV. Membuka template kosong.',
+      type: ToastType.warning,
+    );
+    await openCvTemplatePdf(context);
+  }
 
   @override
   void initState() {
@@ -478,11 +491,13 @@ class _UploadDocumentPageState extends ConsumerState<UploadDocumentPage> {
 
                               if (_selectedType?.code == 'cv') ...[
                                 _BundledTemplateBanner(
-                                  title: 'Contoh format CV',
+                                  title: 'CV dari data Anda',
                                   subtitle:
-                                      'Buka template resmi untuk diisi, lalu unggah sebagai PDF di bawah.',
+                                      'Unduh CV resmi yang sudah terisi (termasuk pas foto), lalu unggah sebagai PDF di bawah jika diminta.',
                                   usePdfIcon: true,
-                                  onOpen: () => openCvTemplatePdf(context),
+                                  onOpen: () {
+                                    _openFilledCv();
+                                  },
                                 ),
                                 const SizedBox(height: 12),
                               ],

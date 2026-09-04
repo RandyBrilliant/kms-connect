@@ -36,6 +36,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   // ── Controllers ────────────────────────────────────────────────────────────
   final _fullName = TextEditingController();
   final _nik = TextEditingController();
+  final _birthPlaceCtrl = TextEditingController();
   final _birthDate = TextEditingController();
   final _address = TextEditingController();
   final _phone = TextEditingController();
@@ -85,9 +86,6 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   Region? _kabupaten;   // Kabupaten/Kota (regency)
   Region? _kecamatan;   // Kecamatan (district)
   Region? _kelurahan;   // Kelurahan/Desa (village)
-
-  // ── Region state – Tempat Lahir ──────────────────────────────────────────
-  Region? _birthPlace;  // Regency
 
   // ── Region state – Alamat Keluarga (cascading) ────────────────────────
   Region? _familyProvince;
@@ -169,7 +167,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   @override
   void dispose() {
     for (final c in [
-      _fullName, _nik, _birthDate, _address, _phone,
+      _fullName, _nik, _birthPlaceCtrl, _birthDate, _address, _phone,
       _siblingCount, _birthOrder, _fatherName, _fatherAge, _fatherOccupation,
       _motherName, _motherAge, _motherOccupation, _familyAddress, _fatherPhone,
       _motherPhone,
@@ -213,6 +211,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     _populated = true;
     _fullName.text = (p.fullName ?? '').toUpperCase();
     _nik.text = p.nik ?? '';
+    _birthPlaceCtrl.text = (p.birthPlaceText ?? '').toUpperCase();
     if (p.birthDate != null) {
       _pickedDate = p.birthDate;
       _birthDate.text = DateFormat('dd MMMM yyyy', 'id').format(p.birthDate!);
@@ -292,9 +291,6 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     _heirContactPhone.text = p.heirContactPhone ?? '';
 
     // Pre-seed region objects from names stored in profile
-    if (p.birthPlaceId != null && p.birthPlaceName != null) {
-      _birthPlace = Region(id: p.birthPlaceId!, code: '', name: p.birthPlaceName!);
-    }
     if (p.provinceId != null && p.provinceName != null) {
       _province = Region(id: p.provinceId!, code: '', name: p.provinceName!);
     }
@@ -398,7 +394,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
       if (_fullName.text.trim().isNotEmpty)
         'full_name': _fullName.text.trim(),
       if (_nik.text.trim().isNotEmpty) 'nik': _nik.text.trim(),
-      if (_birthPlace != null) 'birth_place': _birthPlace!.id,
+      if (_birthPlaceCtrl.text.trim().isNotEmpty)
+        'birth_place_text': _birthPlaceCtrl.text.trim().toUpperCase(),
       if (_pickedDate != null)
         'birth_date': DateFormat('yyyy-MM-dd').format(_pickedDate!),
       if (_gender != null) 'gender': _gender,
@@ -747,27 +744,17 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           ),
                         ),
                         const SizedBox(height: 14),
-                        // Tempat lahir – regency picker
-                        _RegionPickerField(
+                        M3TextField(
+                          controller: _birthPlaceCtrl,
                           label: 'Tempat Lahir',
-                          hint: 'Pilih kabupaten/kota',
+                          hint: 'Sesuai KTP',
                           prefixIcon: Icons.location_city_outlined,
-                          selected: _birthPlace,
-                          onTap: () async {
-                            final items = await readRegionListWithRetry(
-                              ref,
-                              () => ref.read(regenciesProvider.future),
-                              () => ref.invalidate(regenciesProvider),
-                            );
-                            if (!mounted) return;
-                            final picked = await _showRegionPicker(
-                                title: 'Pilih Kota/Kabupaten',
-                                items: items,
-                                selected: _birthPlace);
-                            if (picked != null) {
-                              setState(
-                                  () => _birthPlace = picked);
+                          upperCase: true,
+                          validator: (v) {
+                            if ((v ?? '').trim().isEmpty) {
+                              return 'Tempat lahir wajib diisi';
                             }
+                            return null;
                           },
                         ),
                         const SizedBox(height: 14),

@@ -71,7 +71,11 @@ class AuditEvent(models.Model):
 
     actor = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
+        # Append-only: deleting a user must not UPDATE/DELETE audit rows.
+        # SET_NULL would rewrite actor_id; a real FK would also SET NULL / RESTRICT
+        # at the database. Keep the historical id without a constraint.
+        on_delete=models.DO_NOTHING,
+        db_constraint=False,
         null=True,
         blank=True,
         related_name="audit_events",

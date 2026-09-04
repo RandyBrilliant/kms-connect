@@ -205,6 +205,28 @@ class ProfileRepository {
     }
   }
 
+  /// Official filled CV (daftar riwayat hidup) from biodata + pas foto.
+  Future<void> downloadAndOpenCvPdf() async {
+    final response = await _apiClient.dio.get<List<int>>(
+      ApiEndpoints.myCvPdf,
+      options: Options(responseType: ResponseType.bytes),
+    );
+
+    final bytes = response.data;
+    if (bytes == null || bytes.isEmpty) {
+      throw Exception('Server mengembalikan file kosong.');
+    }
+
+    final tmpDir = await getTemporaryDirectory();
+    final file = File('${tmpDir.path}/cv_daftar_riwayat_hidup.pdf');
+    await file.writeAsBytes(bytes, flush: true);
+
+    final result = await OpenFilex.open(file.path, type: 'application/pdf');
+    if (result.type != ResultType.done) {
+      throw Exception('Tidak dapat membuka PDF: ${result.message}');
+    }
+  }
+
   /// Surat Pengantar Tes Psikologi — same flow as biodata PDF (requires DITERIMA lamaran).
   Future<void> downloadAndOpenPsychologyReferralPdf() async {
     final response = await _apiClient.dio.get<List<int>>(

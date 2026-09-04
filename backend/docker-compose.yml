@@ -69,6 +69,10 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    networks:
+      default:
+        aliases:
+          - redis
 
   db:
     image: postgres:15-alpine

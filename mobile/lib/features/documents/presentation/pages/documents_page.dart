@@ -11,6 +11,7 @@ import '../../../../core/widgets/professional/professional_gradient_background.d
 import '../../data/providers/document_provider.dart';
 import '../../domain/models/document_checklist_item.dart';
 import '../../utils/bundled_document_templates.dart';
+import '../../../profile/data/providers/profile_provider.dart';
 
 /// Matches backend `account.document_specs` / `seed_document_types` (PHASE_INITIAL).
 const _kDocPhaseInitialSubtitle =
@@ -771,25 +772,47 @@ class _ChecklistCard extends StatelessWidget {
                     const SizedBox(height: 8),
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: TextButton.icon(
-                        onPressed: () => openCvTemplatePdf(context),
-                        icon: Icon(
-                          Icons.picture_as_pdf_outlined,
-                          size: 18,
-                          color: AppColors.primaryDarkGreen,
-                        ),
-                        label: Text(
-                          'Lihat contoh template CV',
-                          style: tt.labelLarge?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.primaryDarkGreen,
-                          ),
-                        ),
-                        style: TextButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          foregroundColor: AppColors.primaryDarkGreen,
-                        ),
+                      child: Consumer(
+                        builder: (context, ref, _) {
+                          final cvState = ref.watch(cvPdfProvider);
+                          return TextButton.icon(
+                            onPressed: cvState.isLoading
+                                ? null
+                                : () async {
+                                    final ok = await ref
+                                        .read(cvPdfProvider.notifier)
+                                        .open();
+                                    if (ok || !context.mounted) return;
+                                    final err = ref.read(cvPdfProvider).error;
+                                    CustomToast.show(
+                                      context,
+                                      message: err ??
+                                          'Gagal mengunduh CV. Membuka template kosong.',
+                                      type: ToastType.warning,
+                                    );
+                                    await openCvTemplatePdf(context);
+                                  },
+                            icon: Icon(
+                              Icons.picture_as_pdf_outlined,
+                              size: 18,
+                              color: AppColors.primaryDarkGreen,
+                            ),
+                            label: Text(
+                              cvState.isLoading
+                                  ? 'Menyiapkan CV...'
+                                  : 'Unduh CV terisi',
+                              style: tt.labelLarge?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.primaryDarkGreen,
+                              ),
+                            ),
+                            style: TextButton.styleFrom(
+                              padding: EdgeInsets.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              foregroundColor: AppColors.primaryDarkGreen,
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ],

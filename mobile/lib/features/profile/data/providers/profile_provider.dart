@@ -180,6 +180,42 @@ final biodataPdfProvider =
   return BiodataPdfNotifier(ref.read(profileRepositoryProvider));
 });
 
+class CvPdfState {
+  final bool isLoading;
+  final String? error;
+  const CvPdfState({this.isLoading = false, this.error});
+  CvPdfState copyWith({bool? isLoading, String? error}) {
+    return CvPdfState(
+      isLoading: isLoading ?? this.isLoading,
+      error: error,
+    );
+  }
+}
+
+class CvPdfNotifier extends StateNotifier<CvPdfState> {
+  final ProfileRepository _repository;
+  CvPdfNotifier(this._repository) : super(const CvPdfState());
+
+  Future<bool> open() async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      await _repository.downloadAndOpenCvPdf();
+      state = state.copyWith(isLoading: false);
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: e.toString().replaceAll('Exception: ', ''),
+      );
+      return false;
+    }
+  }
+}
+
+final cvPdfProvider = StateNotifierProvider<CvPdfNotifier, CvPdfState>((ref) {
+  return CvPdfNotifier(ref.read(profileRepositoryProvider));
+});
+
 // ─── Psychology referral PDF (lamaran DITERIMA only) ────────────────────────
 
 class PsychologyReferralPdfState {

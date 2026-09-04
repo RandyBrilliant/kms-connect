@@ -26,6 +26,8 @@ class AuditEventSerializer(serializers.ModelSerializer):
     resource_type_display = serializers.CharField(
         source="get_resource_type_display", read_only=True
     )
+    # actor_id is historical; the referenced user may already be deleted.
+    actor = serializers.IntegerField(source="actor_id", read_only=True, allow_null=True)
 
     class Meta:
         model = AuditEvent

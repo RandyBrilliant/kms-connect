@@ -46,6 +46,7 @@ class ApiEndpoints {
   static const String changePassword =
       '$baseUrl/applicants/me/change-password/';
   static const String myBiodataPdf = '$baseUrl/applicants/me/biodata-pdf/';
+  static const String myCvPdf = '$baseUrl/applicants/me/cv-pdf/';
   static const String myPsychologyReferralPdf =
       '$baseUrl/applicants/me/psychology-referral-pdf/';
   static const String myMedicalReferralPdf =

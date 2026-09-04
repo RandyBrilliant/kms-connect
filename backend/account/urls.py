@@ -11,6 +11,7 @@ from . import views
 from . import applicant_self_service_views
 from .applicant_self_service_views import (
     ApplicantBiodataPdfView,
+    ApplicantCvPdfView,
     ApplicantMedicalReferralPdfView,
     ApplicantPsychologyReferralPdfView,
 )
@@ -124,6 +125,11 @@ applicant_self_service_paths = [
         name="applicant-me-biodata-pdf",
     ),
     path(
+        "applicants/me/cv-pdf/",
+        ApplicantCvPdfView.as_view(),
+        name="applicant-me-cv-pdf",
+    ),
+    path(
         "applicants/me/psychology-referral-pdf/",
         ApplicantPsychologyReferralPdfView.as_view(),
         name="applicant-me-psychology-referral-pdf",
@@ -165,6 +171,11 @@ report_paths = [
         "applicants/<int:pk>/biodata-pdf/",
         views.AdminBiodataPdfView.as_view(),
         name="applicant-biodata-pdf",
+    ),
+    path(
+        "applicants/<int:pk>/cv-pdf/",
+        views.AdminCvPdfView.as_view(),
+        name="applicant-cv-pdf",
     ),
     path(
         "applicants/<int:pk>/inbond-pdf/",

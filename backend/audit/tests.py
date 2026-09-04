@@ -77,6 +77,31 @@ class AuditEmitTests(TestCase):
         with self.assertRaises(PermissionError):
             AuditEvent.objects.filter(pk=event.pk).delete()
 
+    def test_deleting_actor_preserves_audit_events(self):
+        user = User.objects.create_user(
+            email="pelamar@example.com",
+            password="testpass123",
+            role=UserRole.APPLICANT,
+            full_name="Pelamar Uji",
+        )
+        event = AuditEvent.objects.create(
+            action=AuditAction.LOGIN,
+            resource_type=AuditResourceType.AUTH,
+            summary="login pelamar",
+            actor=user,
+            actor_email=user.email,
+            actor_role=user.role,
+            actor_name=user.full_name,
+        )
+        actor_id = user.id
+
+        user.delete()
+
+        event.refresh_from_db()
+        self.assertEqual(event.actor_id, actor_id)
+        self.assertEqual(event.actor_email, "pelamar@example.com")
+        self.assertFalse(User.objects.filter(pk=actor_id).exists())
+
 
 @override_settings(CACHES=_LOCMEM_CACHE)
 class AuditAPITests(TestCase):
@@ -145,6 +170,75 @@ class AuditAPITests(TestCase):
                 ),
                 msg=f"{method} returned {res.status_code}",
             )
+
+    def test_list_still_works_after_actor_deleted(self):
+        self.client.force_authenticate(user=self.master)
+        operator_id = self.operator.id
+        AuditEvent.objects.create(
+            action=AuditAction.LOGIN,
+            resource_type=AuditResourceType.AUTH,
+            summary="login operator",
+            actor=self.operator,
+            actor_email=self.operator.email,
+            actor_role=self.operator.role,
+        )
+        self.operator.delete()
+
+        res = self.client.get("/api/audit-events/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        matching = [
+            row for row in res.data["results"] if row["summary"] == "login operator"
+        ]
+        self.assertEqual(len(matching), 1)
+        self.assertEqual(matching[0]["actor"], operator_id)
+        self.assertEqual(matching[0]["actor_email"], "operator@example.com")
+
+
+@override_settings(CACHES=_LOCMEM_CACHE)
+class ApplicantPermanentDeleteAuditTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.master = User.objects.create_user(
+            email="master-delete@example.com",
+            password="testpass123",
+            role=UserRole.MASTER_ADMIN,
+            full_name="Master",
+            is_active=True,
+            email_verified=True,
+        )
+        self.applicant = User.objects.create_user(
+            email="hapus-pelamar@example.com",
+            password="testpass123",
+            role=UserRole.APPLICANT,
+            full_name="Pelamar Hapus",
+            is_active=True,
+            email_verified=True,
+        )
+        AuditEvent.objects.create(
+            action=AuditAction.LOGIN,
+            resource_type=AuditResourceType.AUTH,
+            summary="login pelamar sebelum hapus",
+            actor=self.applicant,
+            actor_email=self.applicant.email,
+            actor_role=self.applicant.role,
+            actor_name=self.applicant.full_name,
+        )
+
+    def test_permanent_delete_succeeds_when_applicant_has_audit_events(self):
+        self.client.force_authenticate(user=self.master)
+        applicant_id = self.applicant.id
+        with self.captureOnCommitCallbacks(execute=True):
+            res = self.client.post(
+                f"/api/applicants/{applicant_id}/permanent-delete/"
+            )
+        self.assertEqual(
+            res.status_code,
+            status.HTTP_200_OK,
+            msg=getattr(res, "data", res.content),
+        )
+        self.assertFalse(User.objects.filter(pk=applicant_id).exists())
+        leftover = AuditEvent.objects.get(summary="login pelamar sebelum hapus")
+        self.assertEqual(leftover.actor_id, applicant_id)
 
 
 @override_settings(CACHES=_LOCMEM_CACHE)

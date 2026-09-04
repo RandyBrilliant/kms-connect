@@ -553,9 +553,12 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
           birthDate: _formattedDate,
         ));
 
-    // Save the confirmed region ID and ISO date so the backend can persist them.
+    // Save confirmed tempat lahir (free text) and ISO date for the backend.
+    final birthPlaceText = _birthPlaceCtrl.text.trim().isNotEmpty
+        ? _birthPlaceCtrl.text.trim()
+        : (_selectedCity?.name ?? '');
     ref.read(registrationProvider.notifier).setBirthInfo(
-      birthPlaceId: _selectedCity?.id,
+      birthPlaceText: birthPlaceText.toUpperCase(),
       birthDateIso: _selectedDate != null
           ? '${_selectedDate!.year.toString().padLeft(4, '0')}-'
             '${_selectedDate!.month.toString().padLeft(2, '0')}-'
@@ -565,7 +568,6 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
 
     ref.read(registrationProvider.notifier).setDeclarations(
           dataDeclarationConfirmed: _dataDeclarationChecked,
-          zeroCostUnderstood: _zeroCostChecked,
         );
 
     final email = ref.read(registrationProvider).email;

@@ -76,6 +76,7 @@ from .services.export import (
     generate_applicants_excel,
 )
 from .services.biodata_pdf import generate_biodata_pdf
+from .services.cv_pdf import generate_cv_pdf
 from .services.inbond_pdf import generate_inbond_pdf
 from .services.pengantar_medical_pdf import generate_pengantar_medical_pdf
 from .services.pengantar_psikologi_pdf import generate_pengantar_psikologi_pdf
@@ -1613,6 +1614,46 @@ class AdminBiodataPdfView(APIView):
 
         safe_name = (applicant.user.full_name or "biodata").replace(" ", "_")
         filename = f"Biodata_{safe_name}.pdf"
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'inline; filename="{filename}"'
+        return response
+
+
+class AdminCvPdfView(APIView):
+    """
+    Generate the official CPMI CV (daftar riwayat hidup) PDF.
+    GET /api/applicants/<pk>/cv-pdf/
+    """
+
+    permission_classes = [IsBackofficeAdmin]
+
+    def get(self, request, pk):
+        applicant = get_object_or_404(
+            ApplicantProfile.objects.select_related(
+                "user",
+                "birth_place",
+                "province",
+                "district",
+                "village",
+                "family_province",
+                "family_district",
+                "family_village",
+            ).prefetch_related("work_experiences", "documents__document_type"),
+            user__id=pk,
+        )
+        try:
+            pdf_bytes = generate_cv_pdf(applicant)
+        except Exception as e:
+            return Response(
+                error_response(
+                    detail=f"Gagal membuat PDF: {str(e)}",
+                    code=ApiCode.INTERNAL_ERROR,
+                ),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        safe_name = (applicant.user.full_name or "cv").replace(" ", "_")
+        filename = f"CV_{safe_name}.pdf"
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
         response["Content-Disposition"] = f'inline; filename="{filename}"'
         return response

@@ -31,6 +31,7 @@ from .permissions import IsApplicant
 from .api_responses import success_response, error_response, ApiCode, ApiMessage
 from .document_specs import validate_document_file, compress_image_file, is_image_type
 from .services.biodata_pdf import generate_biodata_pdf
+from .services.cv_pdf import generate_cv_pdf
 from .services.pengantar_medical_pdf import generate_pengantar_medical_pdf
 from .services.pengantar_psikologi_pdf import generate_pengantar_psikologi_pdf
 from .services.applicant_document_access import (
@@ -579,6 +580,56 @@ class ApplicantBiodataPdfView(APIView):
 
         safe_name = (profile.user.full_name or "biodata").replace(" ", "_")
         filename = f"Biodata_{safe_name}.pdf"
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+
+
+class ApplicantCvPdfView(APIView):
+    """
+    GET /api/applicants/me/cv-pdf/
+    Generates the official CPMI CV PDF for the logged-in applicant.
+    """
+
+    permission_classes = [IsAuthenticated, IsApplicant]
+
+    def get(self, request):
+        try:
+            profile = ApplicantProfile.objects.select_related(
+                "user",
+                "birth_place",
+                "province",
+                "district",
+                "village",
+                "family_province",
+                "family_district",
+                "family_village",
+            ).prefetch_related(
+                "work_experiences",
+                "documents__document_type",
+            ).get(user=request.user)
+        except ApplicantProfile.DoesNotExist:
+            return Response(
+                error_response(
+                    detail="Profil pelamar tidak ditemukan.",
+                    code=ApiCode.NOT_FOUND,
+                ),
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        try:
+            pdf_bytes = generate_cv_pdf(profile)
+        except Exception as e:
+            return Response(
+                error_response(
+                    detail=f"Gagal membuat PDF: {str(e)}",
+                    code=ApiCode.INTERNAL_ERROR,
+                ),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        safe_name = (profile.user.full_name or "cv").replace(" ", "_")
+        filename = f"CV_{safe_name}.pdf"
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response

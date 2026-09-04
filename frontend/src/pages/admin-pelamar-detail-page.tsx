@@ -56,6 +56,7 @@ import {
 import { toast } from "@/lib/toast"
 import {
   viewBiodataPdf,
+  viewCvPdf,
   viewInbondPdf,
   viewMedicalReferralPdf,
   viewPsychologyReferralPdf,
@@ -92,6 +93,7 @@ function ApplicantSidebar({
   const sendSubmissionSummaryMutation = useSendSubmissionSummaryMutation()
 
   const [isViewingPdf, setIsViewingPdf] = useState(false)
+  const [isViewingCvPdf, setIsViewingCvPdf] = useState(false)
   const [isViewingInbond, setIsViewingInbond] = useState(false)
   const [isViewingPsychReferral, setIsViewingPsychReferral] = useState(false)
   const [isViewingMedicalReferral, setIsViewingMedicalReferral] = useState(false)
@@ -105,6 +107,17 @@ function ApplicantSidebar({
       toast.error("Gagal membuka PDF", "Coba lagi nanti")
     } finally {
       setIsViewingPdf(false)
+    }
+  }
+
+  const handleViewCvPdf = async () => {
+    setIsViewingCvPdf(true)
+    try {
+      await viewCvPdf(applicant.id)
+    } catch {
+      toast.error("Gagal membuka CV PDF", "Coba lagi nanti")
+    } finally {
+      setIsViewingCvPdf(false)
     }
   }
 
@@ -680,6 +693,29 @@ function ApplicantSidebar({
           >
             <IconFileTypePdf className="mr-2 size-4" />
             {isViewingPdf ? "Memproses..." : "Lihat Biodata PDF"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Download CV PDF */}
+      <Card>
+        <CardHeader>
+          <CardTitle>CV PDF</CardTitle>
+          <CardDescription>
+            Buka daftar riwayat hidup resmi yang sudah terisi, termasuk pas foto.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="cursor-pointer"
+            onClick={handleViewCvPdf}
+            disabled={isViewingCvPdf}
+          >
+            <IconFileTypePdf className="mr-2 size-4" />
+            {isViewingCvPdf ? "Memproses..." : "Lihat CV PDF"}
           </Button>
         </CardContent>
       </Card>

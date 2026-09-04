@@ -18,7 +18,7 @@ class AuditEventAdmin(admin.ModelAdmin):
     ordering = ("-created_at", "-id")
     readonly_fields = (
         "created_at",
-        "actor",
+        "actor_id",
         "actor_email",
         "actor_role",
         "actor_name",
