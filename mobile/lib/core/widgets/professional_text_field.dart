@@ -21,7 +21,7 @@ class ProfessionalTextField extends StatefulWidget {
     this.suffixIcon,
     this.inputFormatters,
     this.textCapitalization = TextCapitalization.none,
-    this.upperCase = true,
+    this.upperCase = false,
     this.readOnly = false,
     this.onTap,
     this.maxLines = 1,
@@ -41,6 +41,8 @@ class ProfessionalTextField extends StatefulWidget {
   final Widget? suffixIcon;
   final List<TextInputFormatter>? inputFormatters;
   final TextCapitalization textCapitalization;
+  /// When true, typed text is forced to uppercase. Opt in for KTP/biodata
+  /// fields only — never for email, password, or codes.
   final bool upperCase;
   final bool readOnly;
   final VoidCallback? onTap;
@@ -117,6 +119,10 @@ class _ProfessionalTextFieldState extends State<ProfessionalTextField> {
               });
             },
       maxLines: widget.maxLines,
+      autocorrect: !widget.obscureText &&
+          widget.keyboardType != TextInputType.emailAddress,
+      enableSuggestions: !widget.obscureText &&
+          widget.keyboardType != TextInputType.emailAddress,
       inputFormatters: [
         if (widget.upperCase) const UpperCaseTextInputFormatter(),
         ...?widget.inputFormatters,
