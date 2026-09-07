@@ -25,7 +25,7 @@ export const broadcastKeys = {
   lists: () => [...broadcastKeys.all, "list"] as const,
   list: (params: BroadcastsListParams) => [...broadcastKeys.lists(), params] as const,
   details: () => [...broadcastKeys.all, "detail"] as const,
-  detail: (id: number) => [...broadcastKeys.details(), id] as const,
+  detail: (id: number | "pending") => [...broadcastKeys.details(), id] as const,
 }
 
 /**
@@ -43,7 +43,7 @@ export function useBroadcastsQuery(params: BroadcastsListParams = {}) {
  */
 export function useBroadcastQuery(id: number | null, enabled = true) {
   return useQuery({
-    queryKey: broadcastKeys.detail(id ?? 0),
+    queryKey: broadcastKeys.detail(id ?? "pending"),
     queryFn: () => getBroadcast(id!),
     enabled: enabled && id != null && id > 0,
   })

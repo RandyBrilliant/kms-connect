@@ -27,9 +27,9 @@ export const chatKeys = {
   threads: () => [...chatKeys.all, "threads"] as const,
   threadList: (params: ChatThreadsListParams) =>
     [...chatKeys.threads(), params] as const,
-  thread: (id: number) => [...chatKeys.threads(), id] as const,
+  thread: (id: number | "pending") => [...chatKeys.threads(), id] as const,
   unreadSummary: () => [...chatKeys.threads(), "unread-summary"] as const,
-  messages: (threadId: number) =>
+  messages: (threadId: number | "pending") =>
     [...chatKeys.all, "messages", threadId] as const,
 }
 
@@ -42,7 +42,7 @@ export function useChatThreadsQuery(params: ChatThreadsListParams = {}) {
 
 export function useChatThreadQuery(id: number | null, enabled = true) {
   return useQuery({
-    queryKey: chatKeys.thread(id ?? 0),
+    queryKey: chatKeys.thread(id ?? "pending"),
     queryFn: () => getChatThread(id!),
     enabled: enabled && id != null && id > 0,
   })
@@ -63,7 +63,7 @@ export function useChatUnreadSummaryQuery(enabled = true) {
  */
 export function useChatMessagesQuery(threadId: number | null, enabled = true) {
   return useQuery({
-    queryKey: chatKeys.messages(threadId ?? 0),
+    queryKey: chatKeys.messages(threadId ?? "pending"),
     queryFn: () => getChatMessages(threadId!),
     enabled: enabled && threadId != null && threadId > 0,
     refetchInterval: enabled ? POLL_INTERVAL_MS : false,

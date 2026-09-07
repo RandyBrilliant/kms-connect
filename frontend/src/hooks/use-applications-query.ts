@@ -24,7 +24,7 @@ export const applicationsKeys = {
   list: (params: ApplicationsListParams) =>
     [...applicationsKeys.lists(), params] as const,
   details: () => [...applicationsKeys.all, "detail"] as const,
-  detail: (id: number) => [...applicationsKeys.details(), id] as const,
+  detail: (id: number | "pending") => [...applicationsKeys.details(), id] as const,
 }
 
 export function useApplicationsQuery(params: ApplicationsListParams = {}, enabled = true) {
@@ -37,7 +37,7 @@ export function useApplicationsQuery(params: ApplicationsListParams = {}, enable
 
 export function useApplicationQuery(id: number | null, enabled = true) {
   return useQuery({
-    queryKey: applicationsKeys.detail(id ?? 0),
+    queryKey: applicationsKeys.detail(id ?? "pending"),
     queryFn: () => getApplication(id!),
     enabled: enabled && id != null && id > 0,
   })

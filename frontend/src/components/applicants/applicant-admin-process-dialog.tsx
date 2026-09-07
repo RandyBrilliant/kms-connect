@@ -34,7 +34,7 @@ export function ApplicantAdminProcessDialog({
   const queryClient = useQueryClient()
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: applicantsKeys.detail(applicantUserId ?? 0),
+    queryKey: applicantsKeys.detail(applicantUserId ?? "pending"),
     queryFn: () => getApplicant(applicantUserId!),
     enabled: open && applicantUserId != null && applicantUserId > 0,
   })

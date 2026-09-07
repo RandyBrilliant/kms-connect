@@ -24,7 +24,7 @@ export const staffsKeys = {
     lists: () => [...staffsKeys.all, "list"] as const,
     list: (params: StaffsListParams) => [...staffsKeys.lists(), params] as const,
     details: () => [...staffsKeys.all, "detail"] as const,
-    detail: (id: number) => [...staffsKeys.details(), id] as const,
+    detail: (id: number | "pending") => [...staffsKeys.details(), id] as const,
 }
 
 export function useStaffsQuery(params: StaffsListParams = {}) {
@@ -36,7 +36,7 @@ export function useStaffsQuery(params: StaffsListParams = {}) {
 
 export function useStaffQuery(id: number | null, enabled = true) {
     return useQuery({
-        queryKey: staffsKeys.detail(id ?? 0),
+        queryKey: staffsKeys.detail(id ?? "pending"),
         queryFn: () => getStaff(id!),
         enabled: enabled && id != null && id > 0,
     })

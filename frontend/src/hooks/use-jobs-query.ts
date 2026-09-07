@@ -12,7 +12,7 @@ export const jobsKeys = {
   lists: () => [...jobsKeys.all, "list"] as const,
   list: (params: JobsListParams) => [...jobsKeys.lists(), params] as const,
   details: () => [...jobsKeys.all, "detail"] as const,
-  detail: (id: number) => [...jobsKeys.details(), id] as const,
+  detail: (id: number | "pending") => [...jobsKeys.details(), id] as const,
 }
 
 export function useJobsQuery(params: JobsListParams = {}) {
@@ -24,7 +24,7 @@ export function useJobsQuery(params: JobsListParams = {}) {
 
 export function useJobQuery(id: number | null, enabled = true) {
   return useQuery({
-    queryKey: jobsKeys.detail(id ?? 0),
+    queryKey: jobsKeys.detail(id ?? "pending"),
     queryFn: () => getJob(id!),
     enabled: enabled && id != null && id > 0,
   })

@@ -42,10 +42,10 @@ export const applicantsKeys = {
   list: (params: ApplicantsListParams) =>
     [...applicantsKeys.lists(), params] as const,
   details: () => [...applicantsKeys.all, "detail"] as const,
-  detail: (id: number) => [...applicantsKeys.details(), id] as const,
-  workExperiences: (applicantId: number) =>
+  detail: (id: number | "pending") => [...applicantsKeys.details(), id] as const,
+  workExperiences: (applicantId: number | "pending") =>
     [...applicantsKeys.detail(applicantId), "work_experiences"] as const,
-  documents: (applicantId: number) =>
+  documents: (applicantId: number | "pending") =>
     [...applicantsKeys.detail(applicantId), "documents"] as const,
 }
 
@@ -62,7 +62,7 @@ export function useApplicantsQuery(params: ApplicantsListParams = {}) {
 
 export function useApplicantQuery(id: number | null, enabled = true) {
   return useQuery({
-    queryKey: applicantsKeys.detail(id ?? 0),
+    queryKey: applicantsKeys.detail(id ?? "pending"),
     queryFn: () => getApplicant(id!),
     enabled: enabled && id != null && id > 0,
     staleTime: 5 * 60 * 1000,
@@ -210,7 +210,7 @@ export function useBulkRejectApplicantsMutation() {
 // --- Work Experiences ---
 export function useWorkExperiencesQuery(applicantId: number | null, enabled = true) {
   return useQuery({
-    queryKey: applicantsKeys.workExperiences(applicantId ?? 0),
+    queryKey: applicantsKeys.workExperiences(applicantId ?? "pending"),
     queryFn: () => getWorkExperiences(applicantId!),
     enabled: enabled && applicantId != null && applicantId > 0,
   })
@@ -268,7 +268,7 @@ export function useApplicantDocumentsQuery(
   enabled = true
 ) {
   return useQuery({
-    queryKey: applicantsKeys.documents(applicantId ?? 0),
+    queryKey: applicantsKeys.documents(applicantId ?? "pending"),
     queryFn: () => getApplicantDocuments(applicantId!),
     enabled: enabled && applicantId != null && applicantId > 0,
   })

@@ -72,7 +72,6 @@ export async function requestNotificationPermission(): Promise<string | null> {
     })
 
     if (token) {
-      console.log("FCM Token obtained:", token)
       currentToken = token
       
       // Register token with backend

@@ -24,7 +24,7 @@ export const companiesKeys = {
   lists: () => [...companiesKeys.all, "list"] as const,
   list: (params: CompaniesListParams) => [...companiesKeys.lists(), params] as const,
   details: () => [...companiesKeys.all, "detail"] as const,
-  detail: (id: number) => [...companiesKeys.details(), id] as const,
+  detail: (id: number | "pending") => [...companiesKeys.details(), id] as const,
 }
 
 export function useCompaniesQuery(params: CompaniesListParams = {}) {
@@ -36,7 +36,7 @@ export function useCompaniesQuery(params: CompaniesListParams = {}) {
 
 export function useCompanyQuery(id: number | null, enabled = true) {
   return useQuery({
-    queryKey: companiesKeys.detail(id ?? 0),
+    queryKey: companiesKeys.detail(id ?? "pending"),
     queryFn: () => getCompany(id!),
     enabled: enabled && id != null && id > 0,
   })

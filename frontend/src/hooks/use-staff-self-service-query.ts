@@ -16,10 +16,10 @@ export const staffKeys = {
   all: ["staff-self-service"] as const,
   jobs: () => [...staffKeys.all, "jobs"] as const,
   jobsList: (params: JobsListParams) => [...staffKeys.jobs(), params] as const,
-  jobDetail: (id: number) => [...staffKeys.jobs(), id] as const,
+  jobDetail: (id: number | "pending") => [...staffKeys.jobs(), id] as const,
   applicants: () => [...staffKeys.all, "applicants"] as const,
   applicantsList: (params: unknown) => [...staffKeys.applicants(), params] as const,
-  applicantDetail: (id: number) => [...staffKeys.applicants(), id] as const,
+  applicantDetail: (id: number | "pending") => [...staffKeys.applicants(), id] as const,
   dashboardStats: () => [...staffKeys.all, "dashboard-stats"] as const,
 }
 
@@ -32,9 +32,9 @@ export function useStaffJobsQuery(params: JobsListParams = {}) {
 
 export function useStaffJobQuery(id: number | null, enabled = true) {
   return useQuery({
-    queryKey: staffKeys.jobDetail(id!),
+    queryKey: staffKeys.jobDetail(id ?? "pending"),
     queryFn: () => getStaffJob(id!),
-    enabled: enabled && id !== null,
+    enabled: enabled && id != null && id > 0,
   })
 }
 
@@ -55,9 +55,9 @@ export function useStaffReferredApplicantsQuery(
 
 export function useStaffReferredApplicantQuery(id: number | null, enabled = true) {
   return useQuery({
-    queryKey: staffKeys.applicantDetail(id!),
+    queryKey: staffKeys.applicantDetail(id ?? "pending"),
     queryFn: () => getStaffReferredApplicant(id!),
-    enabled: enabled && id !== null,
+    enabled: enabled && id != null && id > 0,
   })
 }
 

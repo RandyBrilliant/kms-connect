@@ -19,14 +19,14 @@ export const companyKeys = {
   all: ["company-self-service"] as const,
   jobs: () => [...companyKeys.all, "jobs"] as const,
   jobsList: (params: JobsListParams) => [...companyKeys.jobs(), params] as const,
-  jobDetail: (id: number) => [...companyKeys.jobs(), id] as const,
+  jobDetail: (id: number | "pending") => [...companyKeys.jobs(), id] as const,
   applicants: () => [...companyKeys.all, "applicants"] as const,
   applicantsList: (params: unknown) => [...companyKeys.applicants(), params] as const,
-  applicantDetail: (id: number) => [...companyKeys.applicants(), id] as const,
+  applicantDetail: (id: number | "pending") => [...companyKeys.applicants(), id] as const,
   applications: () => [...companyKeys.all, "applications"] as const,
   applicationsList: (params: ApplicationsListParams) =>
     [...companyKeys.applications(), params] as const,
-  applicationDetail: (id: number) => [...companyKeys.applications(), id] as const,
+  applicationDetail: (id: number | "pending") => [...companyKeys.applications(), id] as const,
   dashboardStats: () => [...companyKeys.all, "dashboard-stats"] as const,
 }
 
@@ -39,9 +39,9 @@ export function useCompanyJobsQuery(params: JobsListParams = {}) {
 
 export function useCompanyJobQuery(id: number | null, enabled = true) {
   return useQuery({
-    queryKey: companyKeys.jobDetail(id!),
+    queryKey: companyKeys.jobDetail(id ?? "pending"),
     queryFn: () => getCompanyJob(id!),
-    enabled: enabled && id !== null,
+    enabled: enabled && id != null && id > 0,
   })
 }
 
@@ -56,9 +56,9 @@ export function useCompanyApplicantsQuery(
 
 export function useCompanyApplicantQuery(id: number | null, enabled = true) {
   return useQuery({
-    queryKey: companyKeys.applicantDetail(id!),
+    queryKey: companyKeys.applicantDetail(id ?? "pending"),
     queryFn: () => getCompanyApplicant(id!),
-    enabled: enabled && id !== null,
+    enabled: enabled && id != null && id > 0,
   })
 }
 
@@ -71,9 +71,9 @@ export function useCompanyApplicationsQuery(params: ApplicationsListParams = {})
 
 export function useCompanyApplicationQuery(id: number | null, enabled = true) {
   return useQuery({
-    queryKey: companyKeys.applicationDetail(id!),
+    queryKey: companyKeys.applicationDetail(id ?? "pending"),
     queryFn: () => getCompanyApplication(id!),
-    enabled: enabled && id !== null,
+    enabled: enabled && id != null && id > 0,
   })
 }
 

@@ -24,7 +24,7 @@ export const adminsKeys = {
   lists: () => [...adminsKeys.all, "list"] as const,
   list: (params: AdminsListParams) => [...adminsKeys.lists(), params] as const,
   details: () => [...adminsKeys.all, "detail"] as const,
-  detail: (id: number) => [...adminsKeys.details(), id] as const,
+  detail: (id: number | "pending") => [...adminsKeys.details(), id] as const,
 }
 
 export function useAdminsQuery(params: AdminsListParams = {}) {
@@ -36,7 +36,7 @@ export function useAdminsQuery(params: AdminsListParams = {}) {
 
 export function useAdminQuery(id: number | null, enabled = true) {
   return useQuery({
-    queryKey: adminsKeys.detail(id ?? 0),
+    queryKey: adminsKeys.detail(id ?? "pending"),
     queryFn: () => getAdmin(id!),
     enabled: enabled && id != null && id > 0,
   })

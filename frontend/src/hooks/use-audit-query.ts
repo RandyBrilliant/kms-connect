@@ -11,7 +11,7 @@ export const auditKeys = {
   lists: () => [...auditKeys.all, "list"] as const,
   list: (params: AuditEventsListParams) => [...auditKeys.lists(), params] as const,
   details: () => [...auditKeys.all, "detail"] as const,
-  detail: (id: number) => [...auditKeys.details(), id] as const,
+  detail: (id: number | "pending") => [...auditKeys.details(), id] as const,
 }
 
 export function useAuditEventsQuery(params: AuditEventsListParams = {}) {
@@ -23,7 +23,7 @@ export function useAuditEventsQuery(params: AuditEventsListParams = {}) {
 
 export function useAuditEventQuery(id: number | null, enabled = true) {
   return useQuery({
-    queryKey: auditKeys.detail(id ?? 0),
+    queryKey: auditKeys.detail(id ?? "pending"),
     queryFn: () => getAuditEvent(id!),
     enabled: enabled && id != null && id > 0,
   })

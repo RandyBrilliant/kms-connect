@@ -12,7 +12,7 @@ export const newsKeys = {
   lists: () => [...newsKeys.all, "list"] as const,
   list: (params: NewsListParams) => [...newsKeys.lists(), params] as const,
   details: () => [...newsKeys.all, "detail"] as const,
-  detail: (id: number) => [...newsKeys.details(), id] as const,
+  detail: (id: number | "pending") => [...newsKeys.details(), id] as const,
 }
 
 export function useNewsQuery(params: NewsListParams = {}) {
@@ -24,7 +24,7 @@ export function useNewsQuery(params: NewsListParams = {}) {
 
 export function useNewsItemQuery(id: number | null, enabled = true) {
   return useQuery({
-    queryKey: newsKeys.detail(id ?? 0),
+    queryKey: newsKeys.detail(id ?? "pending"),
     queryFn: () => getNewsItem(id!),
     enabled: enabled && id != null && id > 0,
   })
