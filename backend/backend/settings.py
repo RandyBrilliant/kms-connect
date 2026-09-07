@@ -20,17 +20,40 @@ except ImportError:
     pass
 
 
+from django.core.exceptions import ImproperlyConfigured
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = _env(
-    "SECRET_KEY",
-    "django-insecure-+=w8)4##cbke$i$i8hrmu15i=iwm#_7gnmuthd(k9-hfgunlk4",
+# The key that used to be hardcoded below. Rejected even if set in the
+# environment, so a missed env var cannot silently revive it.
+COMMITTED_INSECURE_SECRET_KEY = (
+    "django-insecure-+=w8)4##cbke$i$i8hrmu15i=iwm#_7gnmuthd(k9-hfgunlk4"
 )
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = _env("DEBUG", "True").lower() in ("true", "1", "yes")
+
+def require_secret_key(value) -> str:
+    key = str(value or "").strip()
+    if not key:
+        raise ImproperlyConfigured(
+            "SECRET_KEY is not set. Put it in the environment; the app will "
+            "not boot with a default."
+        )
+    if key == COMMITTED_INSECURE_SECRET_KEY:
+        raise ImproperlyConfigured(
+            "SECRET_KEY matches the value that was committed to git. "
+            "Generate a new one."
+        )
+    return key
+
+
+def debug_from_env(value) -> bool:
+    """True only for an explicit opt-in. Unset or junk is False."""
+    return str(value or "").strip().lower() in ("true", "1", "yes")
+
+
+SECRET_KEY = require_secret_key(_env("SECRET_KEY", ""))
+DEBUG = debug_from_env(_env("DEBUG", "False"))
 
 ALLOWED_HOSTS = _env("ALLOWED_HOSTS", "").split(",") if _env("ALLOWED_HOSTS") else []
 
@@ -59,6 +82,7 @@ INSTALLED_APPS = [
     'django_countries',
     'rest_framework',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
     'anymail',
     'channels',
@@ -340,7 +364,7 @@ SIMPLE_JWT = {
     # Rotate refresh tokens so each refresh call issues a fresh refresh token.
     # Mobile clients MUST persist the new refresh token returned in the response body.
     "ROTATE_REFRESH_TOKENS": True,
-    "BLACKLIST_AFTER_ROTATION": False,  # Set True only after adding token_blacklist app + migration
+    "BLACKLIST_AFTER_ROTATION": True,
     # Cookie names for web (HTTP-only). Mobile uses response body tokens.
     "AUTH_COOKIE_ACCESS_KEY": _env("JWT_ACCESS_COOKIE_NAME", "kms_access"),
     "AUTH_COOKIE_REFRESH_KEY": _env("JWT_REFRESH_COOKIE_NAME", "kms_refresh"),

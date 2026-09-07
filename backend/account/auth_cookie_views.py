@@ -117,6 +117,26 @@ def _mobile_refresh_lifetime():
     return timedelta(days=getattr(django_settings, "JWT_MOBILE_REFRESH_DAYS", 365))
 
 
+def _blacklist_refresh(token_str: str | None) -> None:
+    """Best-effort: logout should kill the refresh token, not only the cookies."""
+    if not token_str:
+        return
+    try:
+        RefreshToken(token_str).blacklist()
+    except (TokenError, AttributeError):
+        return
+
+
+def _user_id_from_refresh(token_str: str):
+    """
+    Read the user claim before TokenRefreshSerializer rotates.
+
+    With BLACKLIST_AFTER_ROTATION the presented token is blacklisted during
+    is_valid(), so constructing RefreshToken from it afterwards raises.
+    """
+    return RefreshToken(token_str).get(jwt_api_settings.USER_ID_CLAIM)
+
+
 def _mobile_refresh_token_for_user(user):
     """Create a long-lived refresh token for persistent mobile sessions."""
     token = RefreshToken.for_user(user)
@@ -272,6 +292,10 @@ class CookieTokenRefreshView(APIView):
         serializer_class = import_string(jwt_api_settings.TOKEN_REFRESH_SERIALIZER)
         serializer = serializer_class(data={"refresh": refresh_raw}, context={"request": request})
         try:
+            user_id = _user_id_from_refresh(refresh_raw)
+        except TokenError:
+            user_id = None
+        try:
             serializer.is_valid(raise_exception=True)
         except Exception as e:
             if isinstance(e, (InvalidToken, TokenError)):
@@ -297,11 +321,8 @@ class CookieTokenRefreshView(APIView):
         if new_refresh and _is_mobile_client(request):
             new_refresh = _extend_refresh_token(new_refresh)
 
-        # Get user from the (original) refresh token payload for user summary.
         from django.contrib.auth import get_user_model
         try:
-            refresh_token = RefreshToken(refresh_raw)
-            user_id = refresh_token.get(jwt_api_settings.USER_ID_CLAIM)
             user = get_user_model().objects.get(pk=user_id)
             user_data = _user_summary(user)
         except Exception:
@@ -344,13 +365,18 @@ class CookieTokenRefreshView(APIView):
 @method_decorator(csrf_exempt, name="dispatch")
 class CookieLogoutView(APIView):
     """
-    POST (no body required) → clear access and refresh cookies.
+    POST (no body required) → blacklist the refresh token if present, then
+    clear access and refresh cookies.
     """
     permission_classes = ()
     authentication_classes = ()
 
     def post(self, request):
         cookie_settings = _cookie_settings()
+        refresh_raw = request.COOKIES.get(cookie_settings["refresh_key"])
+        if not refresh_raw:
+            refresh_raw = request.data.get("refresh") if hasattr(request, "data") else None
+        _blacklist_refresh(refresh_raw)
         actor = None
         if getattr(request, "user", None) and request.user.is_authenticated:
             actor = request.user
