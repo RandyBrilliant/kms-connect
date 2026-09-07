@@ -4,7 +4,8 @@
  * Includes bulk selection and verification workflow.
  */
 
-import { useState, useMemo, useCallback, useEffect } from "react"
+import { useState, useMemo, useCallback, useEffect, useRef } from "react"
+import { useVirtualizer } from "@tanstack/react-virtual"
 import { Link, useNavigate } from "react-router-dom"
 import {
   flexRender,
@@ -709,6 +710,15 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
     enableRowSelection: true,
   })
 
+  const tableRows = table.getRowModel().rows
+  const tableScrollRef = useRef<HTMLDivElement>(null)
+  const rowVirtualizer = useVirtualizer({
+    count: tableRows.length,
+    getScrollElement: () => tableScrollRef.current,
+    estimateSize: () => 52,
+    overscan: 8,
+  })
+
   const pageCount = data ? Math.ceil(data.count / (params.page_size ?? 20)) : 0
   const currentPage = params.page ?? 1
   const pageSize = params.page_size ?? 20
@@ -1129,6 +1139,10 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
               <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
             </div>
           ) : (
+            <div
+              ref={tableScrollRef}
+              className="max-h-[min(70vh,40rem)] overflow-auto"
+            >
             <Table className="border-collapse">
               <TableHeader>
                 {table.getHeaderGroups().map((headerGroup) => (
@@ -1153,8 +1167,24 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
                 ))}
               </TableHeader>
               <TableBody>
-                {table.getRowModel().rows?.length ? (
-                  table.getRowModel().rows.map((row) => (
+                {tableRows.length ? (
+                  <>
+                    {rowVirtualizer.getVirtualItems().length > 0 &&
+                    (rowVirtualizer.getVirtualItems()[0]?.start ?? 0) > 0 ? (
+                      <tr aria-hidden>
+                        <td
+                          colSpan={columns.length}
+                          style={{
+                            height: rowVirtualizer.getVirtualItems()[0]?.start ?? 0,
+                            padding: 0,
+                            border: 0,
+                          }}
+                        />
+                      </tr>
+                    ) : null}
+                    {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                      const row = tableRows[virtualRow.index]
+                      return (
                     <TableRow
                       key={row.id}
                       data-state={row.getIsSelected() ? "selected" : undefined}
@@ -1172,7 +1202,28 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
                         </TableCell>
                       ))}
                     </TableRow>
-                  ))
+                      )
+                    })}
+                    {(() => {
+                      const items = rowVirtualizer.getVirtualItems()
+                      const last = items[items.length - 1]
+                      const paddingBottom = last
+                        ? rowVirtualizer.getTotalSize() - last.end
+                        : 0
+                      return paddingBottom > 0 ? (
+                        <tr aria-hidden>
+                          <td
+                            colSpan={columns.length}
+                            style={{
+                              height: paddingBottom,
+                              padding: 0,
+                              border: 0,
+                            }}
+                          />
+                        </tr>
+                      ) : null
+                    })()}
+                  </>
                 ) : (
                   <TableRow className="hover:bg-transparent">
                     <TableCell
@@ -1185,6 +1236,7 @@ export function ApplicantTable({ basePath }: ApplicantTableProps) {
                 )}
               </TableBody>
             </Table>
+            </div>
           )}
         </div>
       )}

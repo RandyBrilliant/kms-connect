@@ -60,14 +60,16 @@ This document explains the security headers configured in `vercel.json`.
 default-src 'self'
   └─ Only load resources from same origin by default
 
-script-src 'self' 'unsafe-inline' 'unsafe-eval'
-  └─ Scripts from same origin, inline scripts, and eval()
-  └─ NOTE: 'unsafe-inline' and 'unsafe-eval' needed for React/Vite
-  └─ TODO: Remove 'unsafe-*' in production with nonce-based CSP
+script-src 'self'
+  └─ Production Vite emits hashed /assets/ modules — no inline scripts, no eval
+  └─ Nonce/hash CSP is not required for this static Vercel build
+
+worker-src 'self'
+  └─ Firebase messaging service worker when push is wired in
 
 style-src 'self' 'unsafe-inline'
   └─ Styles from same origin and inline styles
-  └─ NOTE: 'unsafe-inline' needed for Tailwind CSS
+  └─ NOTE: 'unsafe-inline' needed for Tailwind CSS / Radix
 
 img-src 'self' data: https: blob:
   └─ Images from same origin, data URLs, any HTTPS, and blobs
@@ -75,8 +77,9 @@ img-src 'self' data: https: blob:
 font-src 'self' data:
   └─ Fonts from same origin and data URLs
 
-connect-src 'self' https://data.kms-connect.com wss://data.kms-connect.com https://*.kms-connect.com
+connect-src 'self' https://data.kms-connect.com wss://data.kms-connect.com https://*.kms-connect.com https://*.googleapis.com https://*.gstatic.com https://*.firebaseio.com wss://*.firebaseio.com
   └─ API and WebSocket calls to the production backend (data.kms-connect.com)
+  └─ Google / Firebase origins for FCM registration
   └─ Local Vite (`npm run dev`) is not gated by these headers — localhost is omitted on purpose
 
 frame-ancestors 'self'
@@ -93,17 +96,14 @@ form-action 'self'
 
 Before deploying to production, confirm:
 
-1. **CSP `connect-src`** already allows the production API:
+1. **CSP `connect-src`** already allows the production API and FCM:
    ```
-   connect-src 'self' https://data.kms-connect.com wss://data.kms-connect.com https://*.kms-connect.com
+   connect-src 'self' https://data.kms-connect.com wss://data.kms-connect.com https://*.kms-connect.com https://*.googleapis.com https://*.gstatic.com https://*.firebaseio.com wss://*.firebaseio.com
    ```
 
 2. **Localhost is not in production CSP.** Vite dev does not use `vercel.json` headers.
 
-3. **Consider stricter CSP** (if possible):
-   - Remove `'unsafe-inline'` and `'unsafe-eval'`
-   - Use nonce or hash-based CSP
-   - This requires build configuration changes
+3. **script-src is `'self'` only.** Do not add `'unsafe-inline'` or `'unsafe-eval'` back. `style-src` still needs `'unsafe-inline'` for Tailwind.
 
 4. **Verify HTTPS** is enabled on Vercel
 

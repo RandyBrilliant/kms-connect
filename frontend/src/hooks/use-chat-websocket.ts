@@ -1,9 +1,9 @@
 /**
  * React hook for WebSocket chat connection.
  *
- * Connects to `ws(s)://<host>/ws/chat/<threadId>/` with JWT in
- * Sec-WebSocket-Protocol (not the URL). Falls back to cookie-only handshake
- * when the access token is HTTP-only and not readable from JS.
+ * Connects to `ws(s)://<host>/ws/chat/<threadId>/`. Auth is the HttpOnly
+ * `kms_access` cookie on the upgrade — the JWT is never read from
+ * document.cookie or localStorage.
  *
  * Falls back gracefully to polling if WebSocket connection fails.
  */
@@ -57,18 +57,6 @@ export interface UseChatWebSocketResult {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-const WS_AUTH_PROTOCOL = "kms-auth"
-
-function getAccessToken(): string | null {
-  // Non-HTTP-only fallback only; production web uses kms_access cookie on handshake.
-  const cookies = document.cookie.split(";")
-  for (const c of cookies) {
-    const [key, val] = c.trim().split("=")
-    if (key === "kms_access" && val) return decodeURIComponent(val)
-  }
-  return localStorage.getItem("access_token")
-}
-
 /**
  * WebSocket host must match the REST API (same as axios `VITE_API_URL`).
  */
@@ -83,11 +71,6 @@ function buildWsUrl(threadId: number): string {
   const loc = window.location
   const wsScheme = loc.protocol === "https:" ? "wss" : "ws"
   return `${wsScheme}://${loc.host}/ws/chat/${threadId}/`
-}
-
-function wsProtocols(token: string | null): string[] | undefined {
-  if (!token) return undefined
-  return [WS_AUTH_PROTOCOL, token]
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────
@@ -111,12 +94,10 @@ export function useChatWebSocket(
   const connect = useCallback(() => {
     if (!threadId || !enabled) return
 
-    const token = getAccessToken()
-    // When token is null (HTTP-only cookie), rely on cookie sent on WS handshake.
-
     try {
+      // Cookie-only handshake. Do not put a JWT in Sec-WebSocket-Protocol.
       const url = buildWsUrl(threadId)
-      const ws = new WebSocket(url, wsProtocols(token))
+      const ws = new WebSocket(url)
       wsRef.current = ws
 
       ws.onopen = () => {

@@ -1,5 +1,6 @@
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
+import { useQueryClient } from "@tanstack/react-query"
 import {
   IconBell,
   IconLoader,
@@ -11,10 +12,11 @@ import {
 
 import { useAuth } from "@/hooks/use-auth"
 import {
-  getUnreadNotificationCount,
-  getNotifications,
-  markNotificationRead,
-} from "@/api/notifications"
+  notificationsKeys,
+  useMarkNotificationReadMutation,
+  useNotificationsQuery,
+  useUnreadNotificationCountQuery,
+} from "@/hooks/use-notifications-query"
 import type { Notification } from "@/types/notification"
 
 import { Button } from "@/components/ui/button"
@@ -188,14 +190,25 @@ export function SiteHeader() {
   const navigate = useNavigate()
   const location = useLocation()
   const { user } = useAuth()
-  const [unreadCount, setUnreadCount] = useState(0)
-  const [notifications, setNotifications] = useState<Notification[]>([])
-  const [isLoadingNotifications, setIsLoadingNotifications] = useState(false)
-  
-  // Memoize page title to avoid unnecessary recalculations
+  const queryClient = useQueryClient()
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+
   const pageTitle = useMemo(() => getPageTitle(location.pathname), [location.pathname])
 
-  // Get notification path based on user role
+  const { data: unreadData } = useUnreadNotificationCountQuery()
+  const unreadCount = unreadData?.count ?? 0
+  const {
+    data: preview,
+    isLoading: isLoadingNotifications,
+    isError: notificationsError,
+    refetch: refetchPreview,
+  } = useNotificationsQuery(
+    { page: 1, page_size: 5, ordering: "-created_at" },
+    { enabled: dropdownOpen }
+  )
+  const notifications = preview?.results ?? []
+  const markReadMutation = useMarkNotificationReadMutation()
+
   const getNotificationPath = () => {
     switch (user?.role) {
       case "STAFF":
@@ -209,76 +222,29 @@ export function SiteHeader() {
     }
   }
 
-  // Fetch recent notifications (limit 5 for dropdown)
-  const fetchNotifications = async () => {
-    setIsLoadingNotifications(true)
-    try {
-      const response = await getNotifications({
-        page: 1,
-        page_size: 5,
-        ordering: "-created_at",
-      })
-      setNotifications(response.results)
-    } catch (error) {
-      console.error("Failed to fetch notifications:", error)
-    } finally {
-      setIsLoadingNotifications(false)
-    }
-  }
-
-  // Fetch unread count
-  const fetchUnreadCount = async () => {
-    try {
-      const { count } = await getUnreadNotificationCount()
-      setUnreadCount(count)
-    } catch (error) {
-      console.error("Failed to fetch unread count:", error)
-    }
-  }
-
-  // Handle notification click - mark as read and navigate if has action
   const handleNotificationClick = async (notification: Notification) => {
     try {
       if (!notification.is_read) {
-        await markNotificationRead(notification.id)
-        await fetchUnreadCount()
-        await fetchNotifications()
+        await markReadMutation.mutateAsync(notification.id)
       }
-
-      // Navigate to action URL if provided
       if (notification.action_url) {
         navigate(notification.action_url)
       }
-    } catch (error) {
-      console.error("Failed to mark notification as read:", error)
+    } catch {
+      // Mutation invalidates the shared cache on success; keep the dropdown open on failure.
     }
   }
 
-  // Fetch data on mount and set up polling
   useEffect(() => {
-    fetchUnreadCount()
-
-    // Poll for updates every 30 seconds
-    const interval = setInterval(fetchUnreadCount, 30000)
-
-    // Listen for new notification events from Firebase
     const handleNewNotification = () => {
-      fetchUnreadCount()
-      fetchNotifications()
+      void queryClient.invalidateQueries({ queryKey: notificationsKeys.all })
     }
     window.addEventListener("newNotification", handleNewNotification)
+    return () => window.removeEventListener("newNotification", handleNewNotification)
+  }, [queryClient])
 
-    return () => {
-      clearInterval(interval)
-      window.removeEventListener("newNotification", handleNewNotification)
-    }
-  }, [])
-
-  // Fetch notifications when dropdown opens
   const handleDropdownOpenChange = (open: boolean) => {
-    if (open && notifications.length === 0) {
-      fetchNotifications()
-    }
+    setDropdownOpen(open)
   }
 
   return (
@@ -319,6 +285,17 @@ export function SiteHeader() {
                 {isLoadingNotifications ? (
                   <div className="flex items-center justify-center py-8">
                     <IconLoader className="size-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : notificationsError ? (
+                  <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
+                    <p className="text-destructive text-sm">Gagal memuat notifikasi</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void refetchPreview()}
+                    >
+                      Coba lagi
+                    </Button>
                   </div>
                 ) : notifications.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-8 text-center">

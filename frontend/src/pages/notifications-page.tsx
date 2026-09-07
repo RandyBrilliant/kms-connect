@@ -2,16 +2,16 @@
  * Notifications list page - shows user's notifications with filters and mark as read.
  */
 
-import { useState, useEffect } from "react"
+import { useState, type MouseEvent } from "react"
 import { usePageTitle } from "@/hooks/use-page-title"
 import { BreadcrumbNav } from "@/components/breadcrumb-nav"
 import {
-  getNotifications,
-  markNotificationRead,
-  markAllNotificationsRead,
-  deleteNotification,
-} from "@/api/notifications"
-import type { Notification } from "@/types/notification"
+  useDeleteNotificationMutation,
+  useMarkAllNotificationsReadMutation,
+  useMarkNotificationReadMutation,
+  useNotificationsQuery,
+  useUnreadNotificationCountQuery,
+} from "@/hooks/use-notifications-query"
 import { Button } from "@/components/ui/button"
 import { Link } from "react-router-dom"
 import {
@@ -34,68 +34,49 @@ import { toast } from "@/lib/toast"
 
 export function NotificationsPage() {
   usePageTitle("Notifikasi")
-  
-  const [notifications, setNotifications] = useState<Notification[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+
   const [filter, setFilter] = useState<"all" | "unread">("all")
   const [currentPage, setCurrentPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
   const pageSize = 20
 
-  const fetchNotifications = async () => {
-    setIsLoading(true)
-    try {
-      const response = await getNotifications({
-        page: currentPage,
-        page_size: pageSize,
-        is_read: filter === "unread" ? false : undefined,
-        ordering: "-created_at",
-      })
-      setNotifications(response.results)
-      setTotalPages(Math.ceil(response.count / pageSize))
-    } catch (error) {
-      console.error("Failed to fetch notifications:", error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  const { data, isLoading, isError, error, refetch, isFetching } = useNotificationsQuery({
+    page: currentPage,
+    page_size: pageSize,
+    is_read: filter === "unread" ? false : undefined,
+    ordering: "-created_at",
+  })
+  const { data: unread } = useUnreadNotificationCountQuery()
+  const markReadMutation = useMarkNotificationReadMutation()
+  const markAllMutation = useMarkAllNotificationsReadMutation()
+  const deleteMutation = useDeleteNotificationMutation()
 
-  useEffect(() => {
-    fetchNotifications()
-  }, [currentPage, filter])
+  const notifications = data?.results ?? []
+  const totalPages = Math.max(1, Math.ceil((data?.count ?? 0) / pageSize))
+  const unreadCount = unread?.count ?? 0
 
   const handleMarkAsRead = async (id: number) => {
     try {
-      const updated = await markNotificationRead(id)
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, ...updated } : n))
-      )
-    } catch (error) {
-      console.error("Failed to mark as read:", error)
+      await markReadMutation.mutateAsync(id)
+    } catch {
+      toast.error("Gagal menandai dibaca", "Coba lagi nanti")
     }
   }
 
   const handleMarkAllAsRead = async () => {
     try {
-      await markAllNotificationsRead()
-      // Refresh list
-      fetchNotifications()
-    } catch (error) {
-      console.error("Failed to mark all as read:", error)
+      await markAllMutation.mutateAsync()
+      toast.success("Semua ditandai dibaca", "Notifikasi berhasil ditandai dibaca")
+    } catch {
+      toast.error("Gagal menandai semua", "Coba lagi nanti")
     }
   }
 
-  const handleDelete = async (id: number, event: React.MouseEvent) => {
-    // Prevent notification click event
+  const handleDelete = async (id: number, event: MouseEvent) => {
     event.stopPropagation()
-    
     try {
-      await deleteNotification(id)
-      // Update local state
-      setNotifications((prev) => prev.filter((n) => n.id !== id))
+      await deleteMutation.mutateAsync(id)
       toast.success("Notifikasi dihapus", "Notifikasi berhasil dihapus")
-    } catch (error) {
-      console.error("Failed to delete notification:", error)
+    } catch {
       toast.error("Gagal menghapus", "Gagal menghapus notifikasi")
     }
   }
@@ -124,8 +105,6 @@ export function NotificationsPage() {
     }
   }
 
-  const unreadCount = notifications.filter((n) => !n.is_read).length
-
   return (
     <div className="flex flex-col gap-4 px-6 py-6 md:px-8 md:py-8">
       <BreadcrumbNav
@@ -144,7 +123,12 @@ export function NotificationsPage() {
         </div>
         <div className="flex items-center gap-2">
           {unreadCount > 0 && (
-            <Button onClick={handleMarkAllAsRead} variant="outline" size="sm">
+            <Button
+              onClick={handleMarkAllAsRead}
+              variant="outline"
+              size="sm"
+              disabled={markAllMutation.isPending}
+            >
               <IconBellOff className="mr-2 size-4" />
               Tandai Semua Dibaca
             </Button>
@@ -190,8 +174,23 @@ export function NotificationsPage() {
 
       {/* Notifications List */}
       <div className="space-y-2">
-        {isLoading ? (
-          // Loading skeleton
+        {isError ? (
+          <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-6 text-center">
+            <p className="text-destructive text-sm">
+              Gagal memuat notifikasi
+              {error instanceof Error && error.message ? `: ${error.message}` : "."}
+            </p>
+            <Button
+              className="mt-3"
+              variant="outline"
+              size="sm"
+              onClick={() => void refetch()}
+              disabled={isFetching}
+            >
+              Coba lagi
+            </Button>
+          </div>
+        ) : isLoading ? (
           Array.from({ length: 5 }).map((_, i) => (
             <div
               key={i}
@@ -220,7 +219,7 @@ export function NotificationsPage() {
                 className="flex min-w-0 flex-1 cursor-pointer items-start gap-4"
                 onClick={() => {
                   if (!notification.is_read) {
-                    handleMarkAsRead(notification.id)
+                    void handleMarkAsRead(notification.id)
                   }
                   if (notification.action_url) {
                     window.location.href = notification.action_url
@@ -259,12 +258,11 @@ export function NotificationsPage() {
                   </div>
                 </div>
               </div>
-              {/* Delete button */}
               <Button
                 variant="ghost"
                 size="icon"
                 className="size-8 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 sm:opacity-100"
-                onClick={(e) => handleDelete(notification.id, e)}
+                onClick={(e) => void handleDelete(notification.id, e)}
                 title="Hapus notifikasi"
               >
                 <IconTrash className="size-4 text-muted-foreground hover:text-destructive" />
@@ -274,14 +272,13 @@ export function NotificationsPage() {
         )}
       </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
+      {totalPages > 1 && !isError && (
         <div className="flex items-center justify-center gap-2">
           <Button
             variant="outline"
             size="sm"
             onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-            disabled={currentPage === 1 || isLoading}
+            disabled={currentPage === 1 || isLoading || isFetching}
           >
             <IconChevronLeft className="size-4" />
           </Button>
@@ -292,7 +289,7 @@ export function NotificationsPage() {
             variant="outline"
             size="sm"
             onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-            disabled={currentPage === totalPages || isLoading}
+            disabled={currentPage === totalPages || isLoading || isFetching}
           >
             <IconChevronRight className="size-4" />
           </Button>
