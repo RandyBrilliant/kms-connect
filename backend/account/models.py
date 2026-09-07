@@ -18,7 +18,7 @@ from django.core.exceptions import ValidationError
 from django.core.cache import cache
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from django.utils.text import get_valid_filename, slugify
+from django.utils.text import get_valid_filename
 from django_countries.fields import CountryField
 
 from .managers import (
@@ -1714,39 +1714,20 @@ class DocumentType(models.Model):
 
 def applicant_document_upload_to(instance, filename: str) -> str:
     """
-    Upload path convention:
-    account/documents/<applicant_profile_id>/<doc_type_code>/<uuid>-<slug-name>-<last4nik>-<doc_type_code>.<ext>
+    account/documents/<applicant_profile_id>/<doc_type_code>/<32-hex>.<ext>
 
-    - Folder per applicant (stable numeric ID, no PII in path beyond that ID)
-    - A unique prefix per upload so replaced files get new URLs (avoids browser cache
-      showing the previous file when the path would otherwise be identical).
-    - File name is human-readable but only uses:
-      - slugified full name (no spaces/special chars)
-      - last 4 digits of NIK (not full NIK, to reduce PII exposure)
-      - document type code (e.g. ktp, ijasah)
-    - Original filename contributes only its extension.
+    Folder id and document type come from the database. The filename is opaque
+    so the applicant's name and NIK do not appear in storage keys, CDN logs,
+    browser history, or Referer headers. Downloads rebuild a human name from
+    the database. A new uuid on every upload so a replacement is not served
+    from a stale browser cache.
     """
     profile = instance.applicant_profile
     doc_type_code = instance.document_type.code
-
-    # Ensure we always have a safe base filename and extension
     safe_original = get_valid_filename(filename) or "document"
-    base, ext = os.path.splitext(safe_original)
-    ext = ext or ""
-
-    full_name_slug = slugify(profile.user.full_name or "") or "applicant"
-    nik = (profile.nik or "").strip()
-    last4_nik = nik[-4:] if len(nik) >= 4 else ""
-
-    name_parts = [full_name_slug]
-    if last4_nik:
-        name_parts.append(last4_nik)
-    if doc_type_code:
-        name_parts.append(doc_type_code)
-
-    final_name = "-".join(name_parts) + ext
-    unique_prefix = uuid.uuid4().hex[:16]
-    return f"account/documents/{profile.id}/{doc_type_code}/{unique_prefix}-{final_name}"
+    _, ext = os.path.splitext(safe_original)
+    ext = (ext or "").lower()
+    return f"account/documents/{profile.id}/{doc_type_code}/{uuid.uuid4().hex}{ext}"
 
 
 # ---------------------------------------------------------------------------

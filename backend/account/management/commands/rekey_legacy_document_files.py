@@ -37,9 +37,9 @@ from account.models import ApplicantDocument
 
 DOCUMENTS_PREFIX = "account/documents/"
 
-# Keys produced by the current applicant_document_upload_to().
+# Intermediate keys: 16-hex prefix plus a readable name (pre-B18 upload_to).
 RANDOM_PREFIX_RE = re.compile(r"^[0-9a-f]{16}-")
-# Keys produced by this command. Recognised so re-runs are idempotent.
+# Opaque keys from this command and from the current upload_to().
 OPAQUE_NAME_RE = re.compile(r"^[0-9a-f]{32}(\.[A-Za-z0-9]+)?$")
 
 
