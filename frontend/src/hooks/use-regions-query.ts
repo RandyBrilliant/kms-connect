@@ -31,8 +31,7 @@ export function useRegenciesQuery(provinceId: number | null, search?: string) {
   return useQuery({
     queryKey: regionsKeys.regencies(provinceId, search),
     queryFn: () => getRegencies(provinceId, search),
-    // Allow querying all regencies when provinceId is null (for birth_place)
-    enabled: true,
+    enabled: provinceId != null && provinceId > 0,
   })
 }
 

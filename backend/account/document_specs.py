@@ -34,6 +34,10 @@ MAX_IMAGE_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB (allowed upload, will be comp
 PDF_EXTENSIONS = (".pdf",)
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png")  # PNG often from phones; we normalize to JPG on optimize
 
+_JPEG_MAGIC = b"\xff\xd8\xff"
+_PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+_PDF_MAGIC = b"%PDF-"
+
 # Document type code -> spec
 DOCUMENT_SPECS = {
     # ── INITIAL ──────────────────────────────────────────────────────────────
@@ -64,22 +68,80 @@ def get_spec_for_code(code: str) -> dict | None:
     return DOCUMENT_SPECS.get((code or "").strip().lower())
 
 
+def _file_prefix(file, size: int = 16) -> bytes:
+    """First bytes of an uploaded file, then rewind so later readers are unaffected."""
+    if file is None:
+        return b""
+    try:
+        file.seek(0)
+    except Exception:
+        pass
+    data = file.read(size) or b""
+    try:
+        file.seek(0)
+    except Exception:
+        pass
+    return data if isinstance(data, (bytes, bytearray)) else b""
+
+
+def sniff_file_kind(file) -> str | None:
+    """
+    What the bytes actually are: 'jpeg', 'png', 'pdf', or None.
+
+    Signatures only — no libmagic — so this runs in the same image we already
+    ship. HTML/JS named .pdf or .jpg falls through as None.
+    """
+    header = _file_prefix(file)
+    if header.startswith(_JPEG_MAGIC):
+        return "jpeg"
+    if header.startswith(_PNG_MAGIC):
+        return "png"
+    if header.startswith(_PDF_MAGIC):
+        return "pdf"
+    return None
+
+
+def _assert_image_decodes(file) -> None:
+    """Pillow must be able to parse the image, not just match a prefix."""
+    try:
+        from PIL import Image, UnidentifiedImageError
+    except ImportError:
+        return
+    try:
+        file.seek(0)
+        with Image.open(file) as image:
+            image.verify()
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        raise ValidationError(
+            _("Isi berkas bukan gambar JPG atau PNG yang sah."),
+            code="invalid_content",
+        ) from exc
+    finally:
+        try:
+            file.seek(0)
+        except Exception:
+            pass
+
+
 def validate_document_file(file, doc_type_code: str) -> None:
     """
-    Validate file extension and size for the given document type.
+    Validate file extension, magic bytes, and size for the given document type.
     Raises ValidationError if invalid.
-    
-    For images: allows up to MAX_IMAGE_UPLOAD_BYTES (10MB) - compression handled separately.
-    For PDFs: strict MAX_PDF_BYTES limit.
-    
+
+    Unknown codes fail closed. For images: allows up to MAX_IMAGE_UPLOAD_BYTES
+    (10MB) — compression is handled separately. For PDFs: MAX_PDF_BYTES.
+
     Panggil dari ApplicantDocument.clean() (admin/form) atau dari API serializer sebelum save.
     """
     spec = get_spec_for_code(doc_type_code)
     if not spec:
-        # Unknown type: allow but you can restrict in API
-        return
+        raise ValidationError(
+            _("Tipe dokumen tidak dikenali: %(code)s.")
+            % {"code": doc_type_code or "-"},
+            code="unknown_document_type",
+        )
 
-    ext = "." + (file.name.rsplit(".", 1)[-1].lower() if "." in file.name else "")
+    ext = "." + (file.name.rsplit(".", 1)[-1].lower() if getattr(file, "name", None) and "." in file.name else "")
     if ext not in spec["extensions"]:
         allowed = ", ".join(spec["extensions"])
         raise ValidationError(
@@ -87,23 +149,33 @@ def validate_document_file(file, doc_type_code: str) -> None:
             code="invalid_format",
         )
 
-    # For images: allow larger uploads (will be compressed automatically)
-    # For PDFs: strict size limit
+    kind = sniff_file_kind(file)
     if spec["format"] == "image":
+        if kind not in ("jpeg", "png"):
+            raise ValidationError(
+                _("Isi berkas bukan gambar JPG atau PNG."),
+                code="invalid_content",
+            )
+        _assert_image_decodes(file)
         if file.size > MAX_IMAGE_UPLOAD_BYTES:
             max_mb = MAX_IMAGE_UPLOAD_BYTES / (1024 * 1024)
             raise ValidationError(
                 _("Ukuran gambar terlalu besar (maks %(max)s MB). Harap gunakan gambar yang lebih kecil.") % {"max": int(max_mb)},
                 code="file_too_large",
             )
-    else:
-        # PDF
-        if file.size > spec["max_bytes"]:
-            max_mb = spec["max_bytes"] / (1024 * 1024)
-            raise ValidationError(
-                _("Ukuran berkas melebihi %(max)s MB. Harap kompres PDF lalu unggah lagi.") % {"max": max_mb},
-                code="file_too_large",
-            )
+        return
+
+    if kind != "pdf":
+        raise ValidationError(
+            _("Isi berkas bukan PDF."),
+            code="invalid_content",
+        )
+    if file.size > spec["max_bytes"]:
+        max_mb = spec["max_bytes"] / (1024 * 1024)
+        raise ValidationError(
+            _("Ukuran berkas melebihi %(max)s MB. Harap kompres PDF lalu unggah lagi.") % {"max": max_mb},
+            code="file_too_large",
+        )
 
 
 def get_max_size_for_code(doc_type_code: str) -> int | None:

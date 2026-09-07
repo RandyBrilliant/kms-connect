@@ -341,6 +341,7 @@ REST_FRAMEWORK = {
         "auth_public": _env("DRF_THROTTLE_AUTH_PUBLIC", "5/min"),
         "ocr_session": _env("DRF_THROTTLE_OCR_SESSION", "10/min"),
         "ocr_preview": _env("DRF_THROTTLE_OCR_PREVIEW", "3/hour"),
+        "geo": _env("DRF_THROTTLE_GEO", "60/min"),
     },
 }
 

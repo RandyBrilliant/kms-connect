@@ -1,10 +1,15 @@
 """
 Public read-only API for Indonesian regions (dropdowns / search).
 
-No auth required so applicants can load Provinsi → Kabupaten/Kota → Kecamatan → Kelurahan.
+No auth required so applicants can load Provinsi → Kabupaten/Kota → Kecamatan → Kelurahan
+during registration. List endpoints that sit under a parent require that parent
+id — a bare GET /api/villages/ would otherwise dump ~80,000 rows.
 """
 
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
 from rest_framework import viewsets
+from rest_framework.exceptions import ValidationError
 from rest_framework.filters import SearchFilter
 from rest_framework.permissions import AllowAny
 
@@ -16,71 +21,114 @@ from .serializers import (
     VillageSerializer,
     VillageDetailSerializer,
 )
+from .throttles import GeoRateThrottle
+
+# Data is essentially static (Kemendagri import). 24h is fine; a re-import
+# is a deploy-time event, not something that must be visible immediately.
+REGION_LIST_CACHE_SECONDS = 60 * 60 * 24
 
 
-class ProvinceViewSet(viewsets.ReadOnlyModelViewSet):
-    """List all provinces. No filter needed. Public — no auth required."""
+def _require_int_query(request, name: str) -> int:
+    raw = (request.query_params.get(name) or "").strip()
+    if not raw:
+        raise ValidationError(
+            {
+                name: (
+                    "Wajib diisi. Tidak dapat menampilkan seluruh data; "
+                    "pilih wilayah induk terlebih dahulu."
+                )
+            }
+        )
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        raise ValidationError({name: "Tidak valid."})
+    if value <= 0:
+        raise ValidationError({name: "Tidak valid."})
+    return value
+
+
+class _PublicRegionViewSet(viewsets.ReadOnlyModelViewSet):
+    filter_backends = [SearchFilter]
+    pagination_class = None
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [GeoRateThrottle]
+
+
+@method_decorator(cache_page(REGION_LIST_CACHE_SECONDS), name="list")
+class ProvinceViewSet(_PublicRegionViewSet):
+    """List all provinces. ~38 rows; no parent filter."""
 
     queryset = Province.objects.all().order_by("name")
     serializer_class = ProvinceSerializer
-    filter_backends = [SearchFilter]
     search_fields = ["name", "code"]
-    pagination_class = None  # Return all for dropdowns
-    permission_classes = [AllowAny]
-    authentication_classes = []
 
 
-class RegencyViewSet(viewsets.ReadOnlyModelViewSet):
-    """List regencies; filter by province_id for cascading dropdown. Public — no auth required."""
+@method_decorator(cache_page(REGION_LIST_CACHE_SECONDS), name="list")
+class RegencyViewSet(_PublicRegionViewSet):
+    """
+    List regencies.
+
+    province_id is optional: the mobile birth-place picker needs the full
+    kabupaten/kota list (~500 rows). Villages are the dangerous table, not this.
+    """
 
     serializer_class = RegencySerializer
-    filter_backends = [SearchFilter]
     search_fields = ["name", "code"]
-    pagination_class = None  # Return all for dropdowns (birth_place, address cascade)
-    permission_classes = [AllowAny]
-    authentication_classes = []
 
     def get_queryset(self):
         qs = Regency.objects.all().select_related("province").order_by("name")
-        province_id = self.request.query_params.get("province_id")
-        if province_id:
-            qs = qs.filter(province_id=province_id)
-        return qs
+        raw = (self.request.query_params.get("province_id") or "").strip()
+        if not raw:
+            return qs
+        try:
+            return qs.filter(province_id=int(raw))
+        except (TypeError, ValueError):
+            raise ValidationError({"province_id": "Tidak valid."})
 
 
-class DistrictViewSet(viewsets.ReadOnlyModelViewSet):
-    """List districts; filter by regency_id for cascading dropdown. Public — no auth required."""
+@method_decorator(cache_page(REGION_LIST_CACHE_SECONDS), name="list")
+class DistrictViewSet(_PublicRegionViewSet):
+    """List districts. regency_id is required on list."""
 
     serializer_class = DistrictSerializer
-    filter_backends = [SearchFilter]
     search_fields = ["name", "code"]
-    pagination_class = None  # Return all for dropdown cascade
-    permission_classes = [AllowAny]
-    authentication_classes = []
+
+    def list(self, request, *args, **kwargs):
+        _require_int_query(request, "regency_id")
+        return super().list(request, *args, **kwargs)
 
     def get_queryset(self):
         qs = District.objects.all().select_related("regency").order_by("name")
-        regency_id = self.request.query_params.get("regency_id")
-        if regency_id:
-            qs = qs.filter(regency_id=regency_id)
+        raw = (self.request.query_params.get("regency_id") or "").strip()
+        if raw:
+            try:
+                qs = qs.filter(regency_id=int(raw))
+            except (TypeError, ValueError):
+                raise ValidationError({"regency_id": "Tidak valid."})
         return qs
 
 
-class VillageViewSet(viewsets.ReadOnlyModelViewSet):
-    """List villages; filter by district_id for cascading dropdown. Public — no auth required."""
+@method_decorator(cache_page(REGION_LIST_CACHE_SECONDS), name="list")
+class VillageViewSet(_PublicRegionViewSet):
+    """List villages. district_id is required on list (~80k rows unfiltered)."""
 
     serializer_class = VillageSerializer
-    filter_backends = [SearchFilter]
     search_fields = ["name", "code"]
-    pagination_class = None  # Return all for dropdown cascade
-    permission_classes = [AllowAny]
-    authentication_classes = []
+
+    def list(self, request, *args, **kwargs):
+        _require_int_query(request, "district_id")
+        return super().list(request, *args, **kwargs)
 
     def get_queryset(self):
         qs = Village.objects.all().select_related("district").order_by("name")
-        district_id = self.request.query_params.get("district_id")
-        if district_id:
-            qs = qs.filter(district_id=district_id)
+        raw = (self.request.query_params.get("district_id") or "").strip()
+        if raw:
+            try:
+                qs = qs.filter(district_id=int(raw))
+            except (TypeError, ValueError):
+                raise ValidationError({"district_id": "Tidak valid."})
         return qs
 
     def get_serializer_class(self):
