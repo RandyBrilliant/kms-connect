@@ -19,11 +19,37 @@ Two shapes are exposed because the clients differ:
 """
 
 from django.http import HttpResponseRedirect
+from django.urls import NoReverseMatch, reverse
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound
 from rest_framework.response import Response
 
 from account.services.signed_media import signed_media_url, signed_url_ttl
+
+
+def document_view_endpoint(applicant_user_id, document_pk, request=None) -> str | None:
+    """
+    Absolute URL of the file/ endpoint for one document.
+
+    Returns the endpoint rather than a signed URL because the callers are places
+    a URL has to keep working: a link in a rendered page and a cell in a
+    downloaded spreadsheet both outlive a 15-minute signature. The endpoint
+    re-signs on every request and only answers a caller allowed to see the
+    document, so it is safe to persist.
+
+    `applicant_user_id` is the CustomUser id, which is what the nested route
+    matches on — not the ApplicantProfile pk.
+    """
+    if not applicant_user_id or not document_pk:
+        return None
+    try:
+        path = reverse(
+            "account:applicant-document-file",
+            kwargs={"applicant_pk": applicant_user_id, "pk": document_pk},
+        )
+    except NoReverseMatch:
+        return None
+    return request.build_absolute_uri(path) if request is not None else path
 
 
 class DocumentFileAccessMixin:

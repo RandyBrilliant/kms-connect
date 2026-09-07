@@ -49,7 +49,6 @@ import {
 import { downloadApplicantDocuments } from "@/api/applicants"
 import { toast } from "@/lib/toast"
 import type { ApplicantDocument, DocumentType, DocumentReviewStatus } from "@/types/applicant"
-import { env } from "@/lib/env"
 
 interface ApplicantDocumentsTabProps {
   applicantId: number
@@ -61,14 +60,6 @@ const REVIEW_STATUS_LABELS: Record<DocumentReviewStatus, string> = {
   PENDING: "Menunggu Review",
   APPROVED: "Diterima",
   REJECTED: "Ditolak",
-}
-
-function getFileUrl(filePath: string): string {
-  if (!filePath) return ""
-  if (filePath.startsWith("http")) return filePath
-  const base = (env.VITE_API_URL || "").replace(/\/$/, "")
-  const path = filePath.startsWith("/") ? filePath : `/${filePath}`
-  return `${base}${path}`
 }
 
 export function ApplicantDocumentsTab({
@@ -482,14 +473,18 @@ export function ApplicantDocumentsTab({
                       })}
                     </TableCell>
                     <TableCell>
-                      <a
-                        href={getFileUrl(doc.file)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary hover:underline cursor-pointer"
-                      >
-                        Lihat file
-                      </a>
+                      {doc.file_view_url ? (
+                        <a
+                          href={doc.file_view_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline cursor-pointer"
+                        >
+                          Lihat file
+                        </a>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">-</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">

@@ -335,8 +335,16 @@ export type DocumentReviewStatus = "PENDING" | "APPROVED" | "REJECTED"
 
 export interface ApplicantDocument {
   id: number
-  document_type: number
+  /**
+   * Raw object URL. Do not link to this — it becomes unreadable once documents
+   * are private. Use file_view_url instead.
+   */
   file: string
+  document_type: number
+  /** Redirects to a short-lived signed URL. Authenticates via the session cookie. */
+  file_view_url?: string | null
+  /** Returns {url, expires_in} as JSON. For non-browser clients. */
+  file_access_url?: string | null
   uploaded_at: string
   ocr_text: string
   ocr_data: Record<string, unknown> | null

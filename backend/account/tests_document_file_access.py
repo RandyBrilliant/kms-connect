@@ -4,11 +4,12 @@ import tempfile
 from io import BytesIO
 
 from django.core.files.base import ContentFile
-from django.test import TestCase, override_settings
+from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from PIL import Image
 from rest_framework.test import APIClient
 
+from account.document_file_access import document_view_endpoint
 from account.models import (
     ApplicantDocument,
     ApplicantProfile,
@@ -228,3 +229,140 @@ class DocumentFileAccessTests(TestCase):
 
         self.assertIn("file_access_url", row)
         self.assertTrue(row["file_access_url"].endswith(self._admin_file_url_path()))
+
+    def test_serializer_exposes_a_browser_view_url(self):
+        """The field the frontend links to, distinct from the JSON one."""
+        self.client.force_authenticate(user=self.admin)
+        list_path = reverse(
+            "account:applicant-documents",
+            kwargs={"applicant_pk": self.applicant.pk},
+        )
+        response = self.client.get(list_path)
+        self.assertEqual(response.status_code, 200)
+
+        payload = response.json()
+        rows = payload if isinstance(payload, list) else payload.get("results", [])
+        row = next(r for r in rows if r["id"] == self.document.pk)
+
+        self.assertTrue(row["file_view_url"].endswith(self._admin_file_path()))
+        self.assertNotEqual(row["file_view_url"], row["file_access_url"])
+
+
+@local_media
+class DocumentLinkTests(TestCase):
+    """
+    Nothing user-facing may hand out the stored object URL.
+
+    Every link here has to survive the objects becoming private, which means
+    pointing at the file/ endpoint rather than at Spaces.
+    """
+
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.paspor = DocumentType.objects.create(code="paspor", name="Paspor")
+
+        self.applicant = CustomUser.objects.create_user(
+            email="pelamar.link@example.com",
+            password="testpass123",
+            role=UserRole.APPLICANT,
+            full_name="Dewi Lestari",
+            is_active=True,
+            email_verified=True,
+        )
+        self.profile = ApplicantProfile.objects.create(
+            user=self.applicant,
+            contact_phone="081211112222",
+            nik="3210987654321098",
+        )
+        self.document = ApplicantDocument.objects.create(
+            applicant_profile=self.profile,
+            document_type=self.paspor,
+            file=_tiny_jpeg("paspor.jpg"),
+        )
+
+    def _request(self):
+        return self.factory.get("/", secure=True)
+
+    # -- the shared URL builder -------------------------------------------
+
+    def test_endpoint_uses_the_user_id_not_the_profile_pk(self):
+        """
+        The nested route filters on applicant_profile__user_id, so passing the
+        profile pk would silently build a URL that 404s.
+        """
+        url = document_view_endpoint(self.profile.user_id, self.document.pk)
+        self.assertEqual(
+            url,
+            reverse(
+                "account:applicant-document-file",
+                kwargs={
+                    "applicant_pk": self.applicant.pk,
+                    "pk": self.document.pk,
+                },
+            ),
+        )
+
+    def test_endpoint_is_absolute_when_given_a_request(self):
+        url = document_view_endpoint(
+            self.profile.user_id, self.document.pk, request=self._request()
+        )
+        self.assertTrue(url.startswith("http"))
+        self.assertTrue(url.endswith("/file/"))
+
+    def test_endpoint_is_none_without_ids(self):
+        self.assertIsNone(document_view_endpoint(None, self.document.pk))
+        self.assertIsNone(document_view_endpoint(self.profile.user_id, None))
+
+    # -- passport link on job applications --------------------------------
+
+    def test_passport_url_is_the_endpoint_not_the_object_url(self):
+        from main.models import JobApplication
+        from main.serializers import JobApplicationSerializer
+
+        # Unsaved is enough: the field only reads obj.applicant.
+        job_app = JobApplication(applicant=self.profile)
+        serializer = JobApplicationSerializer(context={"request": self._request()})
+        url = serializer.get_passport_file_url(job_app)
+
+        self.assertIsNotNone(url)
+        self.assertTrue(url.endswith(f"/documents/{self.document.pk}/file/"))
+        self.assertNotIn("/media/", url)
+
+    def test_passport_url_is_none_without_a_passport(self):
+        from main.models import JobApplication
+        from main.serializers import JobApplicationSerializer
+
+        self.document.delete()
+        job_app = JobApplication(applicant=self.profile)
+        serializer = JobApplicationSerializer(context={"request": self._request()})
+        self.assertIsNone(serializer.get_passport_file_url(job_app))
+
+    # -- excel export ------------------------------------------------------
+
+    def test_excel_links_to_the_endpoint_not_the_object_url(self):
+        from openpyxl import load_workbook
+
+        from account.services.export import generate_applicants_excel
+
+        queryset = CustomUser.objects.filter(pk=self.applicant.pk).select_related(
+            "applicant_profile__user"
+        )
+        workbook = load_workbook(
+            generate_applicants_excel(queryset, self._request())
+        )
+        values = [
+            str(cell.value)
+            for row in workbook.active.iter_rows()
+            for cell in row
+            if cell.value
+        ]
+
+        expected = f"/documents/{self.document.pk}/file/"
+        self.assertTrue(
+            any(expected in value for value in values),
+            f"No cell links to {expected}",
+        )
+        self.assertFalse(
+            any("/media/" in value for value in values),
+            "An export cell still holds a stored object URL",
+        )

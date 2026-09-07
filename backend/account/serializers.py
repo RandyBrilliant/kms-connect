@@ -1415,6 +1415,7 @@ class ApplicantDocumentSerializer(serializers.ModelSerializer):
     )
     reviewed_by_name = serializers.SerializerMethodField(read_only=True)
     file_access_url = serializers.SerializerMethodField(read_only=True)
+    file_view_url = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = ApplicantDocument
@@ -1423,6 +1424,7 @@ class ApplicantDocumentSerializer(serializers.ModelSerializer):
             "document_type",
             "file",
             "file_access_url",
+            "file_view_url",
             "uploaded_at",
             "ocr_text",
             "ocr_data",
@@ -1459,14 +1461,13 @@ class ApplicantDocumentSerializer(serializers.ModelSerializer):
             return None
         return user.full_name or user.email
 
-    def get_file_access_url(self, obj) -> str | None:
+    def _file_endpoint(self, obj, suffix: str) -> str | None:
         """
-        Endpoint that hands back a short-lived signed URL for this document.
+        Absolute URL of one of this document's access endpoints.
 
-        Unlike `file`, this URL never expires and is safe to keep in an export,
-        because it only serves the document to an authenticated caller who is
-        allowed to see it. Clients should request it and use the `url` it
-        returns rather than storing that signed URL.
+        Routes differ by caller: the admin viewset is nested under the
+        applicant, the self-service one is not, so the route is chosen from the
+        view's kwargs rather than the request path.
         """
         request = self.context.get("request")
         file_field = getattr(obj, "file", None)
@@ -1478,17 +1479,38 @@ class ApplicantDocumentSerializer(serializers.ModelSerializer):
         try:
             if applicant_pk:
                 path = reverse(
-                    "account:applicant-document-file-url",
+                    f"account:applicant-document-{suffix}",
                     kwargs={"applicant_pk": applicant_pk, "pk": obj.pk},
                 )
             else:
                 path = reverse(
-                    "account:applicant-me-documents-file-url",
+                    f"account:applicant-me-documents-{suffix}",
                     kwargs={"pk": obj.pk},
                 )
         except NoReverseMatch:
             return None
         return request.build_absolute_uri(path)
+
+    def get_file_access_url(self, obj) -> str | None:
+        """
+        Endpoint returning JSON {url, expires_in} with a short-lived signed URL.
+
+        For clients that authenticate with a bearer token: they cannot follow a
+        redirect into Spaces with that header still attached, so they read the
+        URL from here and fetch it with a clean client.
+        """
+        return self._file_endpoint(obj, "file-url")
+
+    def get_file_view_url(self, obj) -> str | None:
+        """
+        Endpoint that redirects straight to a short-lived signed URL.
+
+        For anything the browser navigates to directly — a link, an <img> — as
+        it authenticates with the HTTP-only cookie. Unlike `file`, this URL is
+        safe to persist in a link or an export: it never expires and only
+        serves the document to a caller allowed to see it.
+        """
+        return self._file_endpoint(obj, "file")
 
     def validate(self, attrs):
         """

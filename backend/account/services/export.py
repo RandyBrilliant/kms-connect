@@ -15,12 +15,11 @@ from io import BytesIO
 from typing import Any, Iterable
 from datetime import date, datetime
 
-from django.conf import settings
-
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill
 from openpyxl.utils import get_column_letter
 
+from account.document_file_access import document_view_endpoint
 from account.services.parent_display import format_parent_age, format_parent_name
 
 # Excel column headers follow client-provided template order.
@@ -425,45 +424,24 @@ def _get_region_display(profile: Any, field: str) -> str:
     return "-"
 
 
-def _get_file_url(file_field: Any, request: Any = None) -> str:
+def _get_document_link(profile: Any, doc: Any, request: Any = None) -> str:
     """
-    Get full URL for a file field.
-    
-    Args:
-        file_field: Django FileField
-        request: Django request object (optional, for building absolute URLs)
-    
-    Returns:
-        Full URL to the file or "-" if no file
+    Link to one applicant document for a spreadsheet cell.
+
+    This is the authenticated file/ endpoint rather than the stored object URL.
+    A spreadsheet is downloaded once and opened for months, so the cell cannot
+    hold a signed URL that expires in 15 minutes; the endpoint re-signs on each
+    request instead. The trade-off is that whoever opens the sheet has to be
+    signed in to the backoffice for the link to resolve.
     """
-    if not file_field:
+    if not doc:
         return "-"
-    
-    try:
-        # Get the file URL
-        url = file_field.url if hasattr(file_field, 'url') else str(file_field)
-        
-        # If URL is relative, make it absolute
-        if url.startswith('/'):
-            # Use MEDIA_URL from settings
-            media_url = getattr(settings, 'MEDIA_URL', '/media/')
-            if media_url.startswith('http'):
-                # Already absolute (e.g., S3/CDN)
-                return url
-            else:
-                # Build absolute URL
-                # Try to get domain from request
-                if request:
-                    scheme = 'https' if request.is_secure() else 'http'
-                    host = request.get_host()
-                    return f"{scheme}://{host}{url}"
-                else:
-                    # Fallback: just return the relative URL
-                    return url
-        
-        return url
-    except Exception:
-        return "-"
+    return (
+        document_view_endpoint(
+            getattr(profile, "user_id", None), getattr(doc, "pk", None), request=request
+        )
+        or "-"
+    )
 
 
 def _format_work_experiences(profile: Any, request: Any = None) -> str:
@@ -565,7 +543,7 @@ def _format_documents(profile: Any, request: Any = None) -> str:
             # File URL
             file_field = getattr(doc, "file", None)
             if file_field:
-                url = _get_file_url(file_field, request)
+                url = _get_document_link(profile, doc, request)
                 parts.append(f"Link: {url}")
             
             # Reviewed by
@@ -1015,7 +993,7 @@ def generate_applicants_excel(applicants: Iterable[Any], request: Any = None) ->
                         doc = doc_map[doc_type_id]
                         file_field = getattr(doc, "file", None)
                         if file_field:
-                            url = _get_file_url(file_field, request)
+                            url = _get_document_link(profile, doc, request)
                             cell.value = url
                         else:
                             cell.value = "-"

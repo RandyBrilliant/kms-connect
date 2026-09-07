@@ -488,6 +488,7 @@ class JobApplicationSerializer(serializers.ModelSerializer):
         return p.passport_expiry_date
 
     def get_passport_file_url(self, obj) -> str | None:
+        from account.document_file_access import document_view_endpoint
         from account.models import ApplicantDocument
 
         p = self._applicant_profile_for_job_app(obj)
@@ -507,14 +508,11 @@ class JobApplicationSerializer(serializers.ModelSerializer):
             )
         if not doc or not doc.file:
             return None
-        request = self.context.get("request")
-        try:
-            url = doc.file.url
-        except (ValueError, AttributeError):
-            return None
-        if request and url.startswith("/"):
-            return request.build_absolute_uri(url)
-        return url
+        # The authenticated endpoint, not doc.file.url: the object URL is a
+        # permanent public link, and these documents are passports.
+        return document_view_endpoint(
+            p.user_id, doc.pk, request=self.context.get("request")
+        )
 
     def get_applicant_user(self, obj) -> int | None:
         applicant = getattr(obj, "applicant", None)
