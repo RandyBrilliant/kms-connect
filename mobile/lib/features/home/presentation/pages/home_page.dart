@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../config/colors.dart';
 import '../../../../core/models/paginated_state.dart';
-import '../../../../core/update/app_update_service.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../auth/data/providers/auth_provider.dart';
 import '../../../notifications/data/providers/notification_provider.dart';
@@ -38,7 +37,6 @@ class _HomePageState extends ConsumerState<HomePage>
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(profileNotifierProvider.notifier).loadProfile();
-      AppUpdateService().checkAndRunPlayStoreUpdate();
     });
   }
 

@@ -8,7 +8,7 @@ from django.test import TestCase
 from PIL import Image
 
 from account.models import ApplicantProfile, CustomUser, UserRole, WorkExperience
-from account.services.cv_pdf import generate_cv_pdf
+from account.services.cv_pdf import cv_pdf_http_response, generate_cv_pdf
 
 
 def _tiny_jpeg() -> ContentFile:
@@ -52,3 +52,35 @@ class CvPdfTests(TestCase):
         self.assertGreater(len(pdf), 20_000)
         # Raster template + photo should keep the file reasonably large.
         self.assertIn(b"/XObject", pdf)
+
+    def test_generate_cv_pdf_uses_template_when_photo_is_unreadable(self):
+        user = CustomUser.objects.create_user(
+            email="cvbadphoto@example.com",
+            password="testpass123",
+            role=UserRole.APPLICANT,
+            full_name="Siti Aminah",
+            is_active=True,
+            email_verified=True,
+        )
+        profile = ApplicantProfile.objects.create(
+            user=user,
+            contact_phone="081298765432",
+        )
+        profile.photo.save(
+            "pasfoto.jpg",
+            ContentFile(b"not-a-valid-image", name="pasfoto.jpg"),
+            save=True,
+        )
+
+        pdf = generate_cv_pdf(profile)
+        self.assertTrue(pdf.startswith(b"%PDF"))
+        self.assertGreater(len(pdf), 20_000)
+
+    def test_cv_pdf_http_response_disables_caching(self):
+        response = cv_pdf_http_response(b"%PDF-1.4 test", "Budi Santoso")
+        self.assertEqual(
+            response["Cache-Control"],
+            "no-store, no-cache, must-revalidate, max-age=0",
+        )
+        self.assertIn("CV_Budi_Santoso_", response["Content-Disposition"])
+        self.assertIn(".pdf", response["Content-Disposition"])

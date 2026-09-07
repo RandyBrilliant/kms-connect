@@ -207,9 +207,13 @@ class ProfileRepository {
 
   /// Official filled CV (daftar riwayat hidup) from biodata + pas foto.
   Future<void> downloadAndOpenCvPdf() async {
+    final cacheBust = DateTime.now().millisecondsSinceEpoch;
     final response = await _apiClient.dio.get<List<int>>(
       ApiEndpoints.myCvPdf,
-      options: Options(responseType: ResponseType.bytes),
+      queryParameters: {'_': cacheBust},
+      options: ApiClient.uncachedBytes(
+        receiveTimeout: const Duration(seconds: 60),
+      ),
     );
 
     final bytes = response.data;
@@ -218,7 +222,8 @@ class ProfileRepository {
     }
 
     final tmpDir = await getTemporaryDirectory();
-    final file = File('${tmpDir.path}/cv_daftar_riwayat_hidup.pdf');
+    // Unique path so PDF viewers cannot reuse a previously opened file.
+    final file = File('${tmpDir.path}/cv_daftar_riwayat_hidup_$cacheBust.pdf');
     await file.writeAsBytes(bytes, flush: true);
 
     final result = await OpenFilex.open(file.path, type: 'application/pdf');

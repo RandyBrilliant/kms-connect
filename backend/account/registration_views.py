@@ -165,7 +165,7 @@ class ApplicantRegistrationView(APIView):
         if _nik_taken_by_other_user(nik):
             return _nik_taken_error_response()
 
-        # Validasi referral code (OPTIONAL - can be filled in via edit profile)
+        # Validasi referral code (OPTIONAL — hanya saat registrasi; pelamar tidak bisa mengubah nanti)
         referrer_user = None
         if referral_code:
             # Verifikasi referral code exists and belongs to staff
@@ -601,7 +601,7 @@ class GoogleCompleteRegistrationView(APIView):
         if _nik_taken_by_other_user(nik, user):
             return _nik_taken_error_response()
 
-        # Validasi referral code (OPTIONAL - can be filled in via edit profile)
+        # Validasi referral code (OPTIONAL — hanya saat registrasi; pelamar tidak bisa mengubah nanti)
         referrer_user = None
         if referral_code:
             try:

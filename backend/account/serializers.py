@@ -581,6 +581,7 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
         if self.context.get("is_own_profile"):
             for f in (
                 "referrer",
+                "referral_code_input",
                 "verified_by",
                 "verification_status",
                 "submitted_at",
@@ -745,16 +746,12 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
                 continue
             if isinstance(val, str):
                 attrs[key] = val.strip().upper()
-        # Pelamar mengubah profil sendiri (mobile self-service / PATCH me): tidak boleh
-        # mengatur staff rujukan lewat kode — hanya petugas/backoffice.
+        # Pelamar mengubah profil sendiri (mobile self-service / PATCH me):
+        # staff rujukan tidak boleh diubah. Ignore rather than 400 so older
+        # mobile clients that still send referral_code_input can save other fields.
         if self.context.get("is_own_profile"):
-            raw = attrs.get("referral_code_input")
-            if raw is not None and str(raw).strip():
-                raise serializers.ValidationError(
-                    {
-                        "referral_code_input": "Staff rujukan hanya dapat diatur oleh petugas atau admin.",
-                    }
-                )
+            attrs.pop("referral_code_input", None)
+            attrs.pop("referrer", None)
 
         # Passport dates (supports partial PATCH — merge with existing instance).
         instance = getattr(self, "instance", None)
@@ -818,8 +815,12 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
         related CustomUser so the change actually persists.
         Also handles referral_code_input → resolves to referrer FK.
         """
-        # Resolve referral_code_input to a referrer FK if provided
+        # Resolve referral_code_input to a referrer FK if provided.
+        # Own-profile updates must never change staff rujukan.
         referral_code_input = validated_data.pop("referral_code_input", None)
+        if self.context.get("is_own_profile"):
+            referral_code_input = None
+            validated_data.pop("referrer", None)
         if referral_code_input:
             code = referral_code_input.strip().upper()
             try:
@@ -1197,6 +1198,10 @@ class ApplicantUserSerializer(serializers.ModelSerializer):
         instance.save()
 
         if profile_data is not None:
+            if self.context.get("is_own_profile"):
+                profile_data.pop("referrer", None)
+                profile_data.pop("referral_code_input", None)
+
             # full_name with source="user.full_name" can appear as nested "user" in validated_data
             user_data = profile_data.pop("user", None)
             if isinstance(user_data, dict) and user_data.get("full_name") is not None:

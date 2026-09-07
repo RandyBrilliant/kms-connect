@@ -65,7 +65,9 @@ Future<void> openCvTemplatePdf(BuildContext context) {
   return _openBundledAsset(
     context,
     assetPath: kCvTemplateAssetPath,
-    tempBaseName: 'template_daftar_riwayat_hidup',
+    // v2 + timestamp: old viewers cached `template_daftar_riwayat_hidup.pdf`.
+    tempBaseName:
+        'template_daftar_riwayat_hidup_v2_${DateTime.now().millisecondsSinceEpoch}',
     mimeType: 'application/pdf',
   );
 }

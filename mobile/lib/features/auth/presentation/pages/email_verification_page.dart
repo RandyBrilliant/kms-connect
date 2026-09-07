@@ -15,6 +15,7 @@ import '../../../../core/widgets/custom_toast.dart';
 import '../../../../core/widgets/professional/professional_gradient_background.dart';
 import '../../../../core/widgets/professional/professional_card.dart';
 import '../../../../core/widgets/professional/professional_button.dart';
+import '../../../../core/widgets/professional_text_field.dart';
 import '../../data/providers/auth_provider.dart';
 
 const _kDigitCount = 6;
@@ -36,22 +37,29 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
   final _controllers =
       List.generate(_kDigitCount, (_) => TextEditingController());
   final _focusNodes = List.generate(_kDigitCount, (_) => FocusNode());
+  final _currentEmailCtrl = TextEditingController();
+  final _newEmailCtrl = TextEditingController();
+  final _passwordCtrl = TextEditingController();
 
   bool _isVerifying = false;
   bool _isResending = false;
   bool _isSuccess = false;
   int _resendCountdown = _kResendSeconds;
   Timer? _countdownTimer;
+  late String _verificationEmail;
 
   late final AnimationController _animCtrl;
   late final Animation<double> _fadeIn;
   late final Animation<double> _slideUp;
 
   String get _code => _controllers.map((c) => c.text).join();
+  static final _emailRx = RegExp(r'^[\w.-]+@([\w-]+\.)+[\w-]{2,}$');
 
   @override
   void initState() {
     super.initState();
+    _verificationEmail = widget.email.trim().toLowerCase();
+    _currentEmailCtrl.text = _verificationEmail;
     _startCountdown();
 
     _animCtrl = AnimationController(
@@ -77,6 +85,9 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
   void dispose() {
     _countdownTimer?.cancel();
     _animCtrl.dispose();
+    _currentEmailCtrl.dispose();
+    _newEmailCtrl.dispose();
+    _passwordCtrl.dispose();
     for (final c in _controllers) {
       c.dispose();
     }
@@ -151,7 +162,7 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
     try {
       final response = await ApiClient().dio.post(
         ApiEndpoints.verifyEmailCode,
-        data: {'email': widget.email, 'code': code},
+        data: {'email': _verificationEmail, 'code': code},
       );
 
       final apiResp = ApiResponse<Map<String, dynamic>>.fromJson(
@@ -213,7 +224,7 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
 
     final ok = await ref
         .read(authStateProvider.notifier)
-        .resendVerificationEmail(widget.email);
+        .resendVerificationEmail(_verificationEmail);
 
     if (!mounted) return;
     setState(() => _isResending = false);
@@ -229,6 +240,189 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
           message: 'Gagal mengirim ulang kode. Silakan coba lagi.',
           type: ToastType.error);
     }
+  }
+
+  Future<void> _showUpdateEmailBottomSheet() async {
+    _currentEmailCtrl.text = _verificationEmail;
+    _newEmailCtrl.clear();
+    _passwordCtrl.clear();
+    var obscurePassword = true;
+    var saving = false;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            final bottomInset = MediaQuery.viewInsetsOf(ctx).bottom;
+            return SafeArea(
+              top: false,
+              child: AnimatedPadding(
+                padding: EdgeInsets.only(bottom: bottomInset),
+                duration: const Duration(milliseconds: 120),
+                curve: Curves.easeOut,
+                child: SingleChildScrollView(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Ubah Email Verifikasi',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.textDark,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Jika ada salah ketik, masukkan email yang benar dan password akun Anda.',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 13,
+                            color: AppColors.textMedium,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        ProfessionalTextField(
+                          controller: _currentEmailCtrl,
+                          label: 'Email saat ini',
+                          hintText: '-',
+                          prefixIcon: Icons.alternate_email_rounded,
+                          readOnly: true,
+                          enabled: false,
+                          upperCase: false,
+                        ),
+                        const SizedBox(height: 12),
+                        ProfessionalTextField(
+                          controller: _newEmailCtrl,
+                          label: 'Email baru',
+                          hintText: 'contoh@email.com',
+                          prefixIcon: Icons.email_outlined,
+                          keyboardType: TextInputType.emailAddress,
+                          textInputAction: TextInputAction.next,
+                          textCapitalization: TextCapitalization.none,
+                          upperCase: false,
+                        ),
+                        const SizedBox(height: 12),
+                        ProfessionalTextField(
+                          controller: _passwordCtrl,
+                          label: 'Password akun',
+                          hintText: 'Masukkan password akun',
+                          prefixIcon: Icons.lock_outline_rounded,
+                          obscureText: obscurePassword,
+                          textInputAction: TextInputAction.done,
+                          upperCase: false,
+                          suffixIcon: IconButton(
+                            onPressed: () => setModalState(
+                              () => obscurePassword = !obscurePassword,
+                            ),
+                            icon: Icon(
+                              obscurePassword
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        ProfessionalButton(
+                          label: saving ? 'Menyimpan...' : 'Simpan Email Baru',
+                          isLoading: saving,
+                          onPressed: saving
+                              ? null
+                              : () async {
+                                  final nextEmail =
+                                      _newEmailCtrl.text.trim().toLowerCase();
+                                  final password = _passwordCtrl.text;
+                                  if (nextEmail.isEmpty || password.isEmpty) {
+                                    CustomToast.show(
+                                      ctx,
+                                      message:
+                                          'Email baru dan password wajib diisi.',
+                                      type: ToastType.error,
+                                    );
+                                    return;
+                                  }
+                                  if (!_emailRx.hasMatch(nextEmail)) {
+                                    CustomToast.show(
+                                      ctx,
+                                      message: 'Format email baru tidak valid.',
+                                      type: ToastType.error,
+                                    );
+                                    return;
+                                  }
+                                  if (nextEmail == _verificationEmail) {
+                                    CustomToast.show(
+                                      ctx,
+                                      message:
+                                          'Email baru harus berbeda dari email saat ini.',
+                                      type: ToastType.error,
+                                    );
+                                    return;
+                                  }
+
+                                  saving = true;
+                                  setModalState(() {});
+
+                                  final error = await ref
+                                      .read(authStateProvider.notifier)
+                                      .updateUnverifiedEmail(
+                                        currentEmail: _verificationEmail,
+                                        newEmail: nextEmail,
+                                        password: password,
+                                      );
+
+                                  if (!ctx.mounted) return;
+                                  saving = false;
+                                  setModalState(() {});
+
+                                  if (error != null) {
+                                    CustomToast.show(
+                                      ctx,
+                                      message: error,
+                                      type: ToastType.error,
+                                    );
+                                    return;
+                                  }
+
+                                  if (!mounted) return;
+                                  setState(() {
+                                    _verificationEmail = nextEmail;
+                                    _currentEmailCtrl.text = nextEmail;
+                                  });
+                                  _clearCode();
+                                  _startCountdown();
+                                  Navigator.of(ctx).pop();
+                                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                                    if (!mounted) return;
+                                    _focusNodes[0].requestFocus();
+                                    context.go(
+                                      '/email-verification?email=${Uri.encodeComponent(nextEmail)}',
+                                    );
+                                  });
+                                  CustomToast.showGlobal(
+                                    message:
+                                        'Email diperbarui. Kode verifikasi baru sudah dikirim.',
+                                    type: ToastType.success,
+                                  );
+                                },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -414,7 +608,7 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
             ),
             const SizedBox(height: 4),
             Text(
-              widget.email,
+              _verificationEmail,
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
@@ -456,6 +650,20 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
 
             // Resend section
             _buildResendSection(),
+            const SizedBox(height: 12),
+            GestureDetector(
+              onTap: _isSuccess ? null : _showUpdateEmailBottomSheet,
+              child: Text(
+                'Email salah? Ubah email',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primaryDarkGreen,
+                  decoration: TextDecoration.underline,
+                  decorationColor: AppColors.primaryDarkGreen,
+                ),
+              ),
+            ),
             const SizedBox(height: 20),
 
             // Tips

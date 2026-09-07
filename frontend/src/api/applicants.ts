@@ -390,7 +390,14 @@ export async function viewBiodataPdf(applicantId: number): Promise<void> {
 export async function viewCvPdf(applicantId: number): Promise<void> {
   const response = await api.get(
     `/api/applicants/${applicantId}/cv-pdf/`,
-    { responseType: "blob" }
+    {
+      responseType: "blob",
+      params: { _: Date.now() },
+      headers: {
+        "Cache-Control": "no-cache",
+        Pragma: "no-cache",
+      },
+    }
   )
   const blob = new Blob([response.data as BlobPart], { type: "application/pdf" })
   const url = URL.createObjectURL(blob)

@@ -11,6 +11,7 @@ import io
 import os
 from datetime import date
 
+from django.http import HttpResponse
 from django.utils import timezone
 from PIL import Image
 from reportlab.lib.utils import ImageReader
@@ -300,21 +301,41 @@ def _draw_debug(c: canvas.Canvas) -> None:
     c.setFillColorRGB(0, 0, 0)
 
 
+def cv_pdf_http_response(
+    pdf_bytes: bytes,
+    full_name: str | None,
+    *,
+    inline: bool = False,
+) -> HttpResponse:
+    """Return a CV PDF response that browsers and HTTP caches must not reuse."""
+    safe_name = (full_name or "cv").replace(" ", "_")
+    stamp = timezone.now().strftime("%Y%m%d%H%M%S")
+    filename = f"CV_{safe_name}_{stamp}.pdf"
+    disposition = "inline" if inline else "attachment"
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
+    response["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response["Pragma"] = "no-cache"
+    response["Expires"] = "0"
+    return response
+
+
 def generate_cv_pdf(profile) -> bytes:
     """Return a one-page filled CV PDF for the given ApplicantProfile."""
+    if not os.path.exists(TEMPLATE_PATH):
+        raise FileNotFoundError(f"CV template missing: {TEMPLATE_PATH}")
+
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=(PAGE_W, PAGE_H))
-
-    if os.path.exists(TEMPLATE_PATH):
-        c.drawImage(
-            TEMPLATE_PATH,
-            0,
-            0,
-            width=PAGE_W,
-            height=PAGE_H,
-            preserveAspectRatio=False,
-            mask="auto",
-        )
+    c.drawImage(
+        TEMPLATE_PATH,
+        0,
+        0,
+        width=PAGE_W,
+        height=PAGE_H,
+        preserveAspectRatio=False,
+        mask="auto",
+    )
 
     user = profile.user
     full_name = _str(user.full_name).upper()
@@ -380,23 +401,33 @@ def generate_cv_pdf(profile) -> bytes:
     _draw_fitted(c, _R_BAHASA[0], "INDONESIA", size=7.0)
     _draw_fitted(c, _R_TGL, _fmt_date(timezone.localdate()), size=7.5)
 
-    photo_data = _photo_bytes(profile)
+    try:
+        photo_data = _photo_bytes(profile)
+    except Exception:
+        photo_data = None
     if photo_data:
-        px, py, pw, ph = _PHOTO
-        c.saveState()
-        clip = c.beginPath()
-        clip.roundRect(px, py, pw, ph, _PHOTO_RADIUS)
-        c.clipPath(clip, stroke=0, fill=0)
-        c.drawImage(
-            ImageReader(_photo_cover(photo_data, pw, ph)),
-            px,
-            py,
-            width=pw,
-            height=ph,
-            preserveAspectRatio=False,
-            mask="auto",
-        )
-        c.restoreState()
+        try:
+            px, py, pw, ph = _PHOTO
+            c.saveState()
+            try:
+                clip = c.beginPath()
+                clip.roundRect(px, py, pw, ph, _PHOTO_RADIUS)
+                c.clipPath(clip, stroke=0, fill=0)
+                c.drawImage(
+                    ImageReader(_photo_cover(photo_data, pw, ph)),
+                    px,
+                    py,
+                    width=pw,
+                    height=ph,
+                    preserveAspectRatio=False,
+                    mask="auto",
+                )
+            finally:
+                c.restoreState()
+        except Exception:
+            # Unreadable pas foto must not abort generation or the app falls
+            # back to a blank/old bundled template.
+            pass
 
     if DEBUG_GRID:
         _draw_debug(c)

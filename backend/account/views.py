@@ -76,7 +76,7 @@ from .services.export import (
     generate_applicants_excel,
 )
 from .services.biodata_pdf import generate_biodata_pdf
-from .services.cv_pdf import generate_cv_pdf
+from .services.cv_pdf import cv_pdf_http_response, generate_cv_pdf
 from .services.inbond_pdf import generate_inbond_pdf
 from .services.pengantar_medical_pdf import generate_pengantar_medical_pdf
 from .services.pengantar_psikologi_pdf import generate_pengantar_psikologi_pdf
@@ -1652,11 +1652,9 @@ class AdminCvPdfView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        safe_name = (applicant.user.full_name or "cv").replace(" ", "_")
-        filename = f"CV_{safe_name}.pdf"
-        response = HttpResponse(pdf_bytes, content_type="application/pdf")
-        response["Content-Disposition"] = f'inline; filename="{filename}"'
-        return response
+        return cv_pdf_http_response(
+            pdf_bytes, applicant.user.full_name, inline=True
+        )
 
 
 # ---------------------------------------------------------------------------

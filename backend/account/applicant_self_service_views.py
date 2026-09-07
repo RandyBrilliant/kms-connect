@@ -31,7 +31,7 @@ from .permissions import IsApplicant
 from .api_responses import success_response, error_response, ApiCode, ApiMessage
 from .document_specs import validate_document_file, compress_image_file, is_image_type
 from .services.biodata_pdf import generate_biodata_pdf
-from .services.cv_pdf import generate_cv_pdf
+from .services.cv_pdf import cv_pdf_http_response, generate_cv_pdf
 from .services.pengantar_medical_pdf import generate_pengantar_medical_pdf
 from .services.pengantar_psikologi_pdf import generate_pengantar_psikologi_pdf
 from .services.applicant_document_access import (
@@ -628,11 +628,7 @@ class ApplicantCvPdfView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        safe_name = (profile.user.full_name or "cv").replace(" ", "_")
-        filename = f"CV_{safe_name}.pdf"
-        response = HttpResponse(pdf_bytes, content_type="application/pdf")
-        response["Content-Disposition"] = f'attachment; filename="{filename}"'
-        return response
+        return cv_pdf_http_response(pdf_bytes, profile.user.full_name)
 
 
 class ApplicantPsychologyReferralPdfView(APIView):

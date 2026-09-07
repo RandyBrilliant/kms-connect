@@ -31,6 +31,19 @@ class ApiClient {
 
   Dio get dio => _dio;
 
+  /// Binary downloads (PDFs) must never be served from the HTTP cache.
+  static Options uncachedBytes({Duration? receiveTimeout}) {
+    return Options(
+      responseType: ResponseType.bytes,
+      receiveTimeout: receiveTimeout,
+      headers: const {'Accept': 'application/pdf'},
+      extra: CacheOptions(
+        store: null,
+        policy: CachePolicy.noCache,
+      ).toExtra(),
+    );
+  }
+
   Future<void> initialize() async {
     // Probe Keychain availability — write+read a test value.
     try {

@@ -382,20 +382,32 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  Future<bool> updateUnverifiedEmail({
+  /// Returns `null` on success, or a user-facing error message.
+  Future<String?> updateUnverifiedEmail({
     required String currentEmail,
     required String newEmail,
     required String password,
   }) async {
     try {
+      final nextEmail = newEmail.trim().toLowerCase();
       await _repository.updateUnverifiedEmail(
         currentEmail: currentEmail,
-        newEmail: newEmail,
+        newEmail: nextEmail,
         password: password,
       );
-      return true;
-    } catch (_) {
-      return false;
+      final user = state.user;
+      if (user != null) {
+        final updated = user.copyWith(email: nextEmail);
+        state = state.copyWith(user: updated);
+        unawaited(_repository.persistCachedUser(updated));
+      }
+      return null;
+    } catch (e) {
+      if (e is DioException) {
+        final msg = e.message?.trim();
+        if (msg != null && msg.isNotEmpty) return msg;
+      }
+      return 'Gagal memperbarui email. Silakan coba lagi.';
     }
   }
 }

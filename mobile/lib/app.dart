@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'config/theme.dart';
+import 'core/update/force_update_gate.dart';
 import 'core/widgets/custom_toast.dart';
 
 import 'features/auth/presentation/pages/splash_page.dart';
@@ -302,6 +303,11 @@ class App extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       routerConfig: router,
+      builder: (context, child) {
+        return ForceUpdateGate(
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
     );
   }
 }
