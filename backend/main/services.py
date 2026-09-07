@@ -542,12 +542,30 @@ class ApplicationService:
             return {"items": items, "done_count": 0, "total_count": len(items), "is_complete": False}
 
         required_post_doc_ids = cls._required_post_interview_document_type_ids()
-        uploaded_required_ids = set(
-            ApplicantDocument.objects.filter(
-                applicant_profile=profile,
-                document_type_id__in=required_post_doc_ids,
-            ).values_list("document_type_id", flat=True)
-        )
+        uploaded_required_ids = set()
+        prefetched = getattr(profile, "_prefetched_all_docs", None)
+        if prefetched is not None:
+            uploaded_required_ids = {
+                d.document_type_id
+                for d in prefetched
+                if d.document_type_id in required_post_doc_ids
+            }
+        elif (
+            hasattr(profile, "_prefetched_objects_cache")
+            and "documents" in profile._prefetched_objects_cache
+        ):
+            uploaded_required_ids = {
+                d.document_type_id
+                for d in profile.documents.all()
+                if d.document_type_id in required_post_doc_ids
+            }
+        else:
+            uploaded_required_ids = set(
+                ApplicantDocument.objects.filter(
+                    applicant_profile=profile,
+                    document_type_id__in=required_post_doc_ids,
+                ).values_list("document_type_id", flat=True)
+            )
         post_docs_complete = all(doc_id in uploaded_required_ids for doc_id in required_post_doc_ids)
         medical_result = (getattr(profile, "hasil_medical", "") or "").strip().upper()
 

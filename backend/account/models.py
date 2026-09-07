@@ -1781,6 +1781,7 @@ class ApplicantDocument(models.Model):
     file = models.FileField(
         _("berkas"),
         upload_to=applicant_document_upload_to,
+        max_length=255,
         # Private storage: these are KTP, passports, and medical records, and
         # they are served only through the authenticated file/ endpoint.
         storage=private_document_storage,

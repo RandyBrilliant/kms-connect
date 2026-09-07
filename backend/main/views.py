@@ -25,9 +25,22 @@ from account.permissions import (
     IsStaff,
 )
 from account.api_responses import success_response, error_response, ApiCode
-from account.models import ApplicantDocument, ApplicantProfile, ApplicantVerificationStatus, CustomUser, UserRole
+from account.models import ApplicantDocument, ApplicantProfile, ApplicantVerificationStatus, CompanyProfile, CustomUser, UserRole
 from account.serializers import _staff_rujukan_display_name
 from account.pagination import StandardResultsSetPagination
+
+_DOCUMENTS_PREFETCH = Prefetch(
+    "applicant__documents",
+    queryset=ApplicantDocument.objects.select_related("document_type"),
+    to_attr="_prefetched_all_docs",
+)
+
+
+def _company_profile_or_none(user):
+    try:
+        return user.company_profile
+    except (CompanyProfile.DoesNotExist, AttributeError):
+        return None
 from account.services.export import (
     EXPORT_SELECT_RELATED_APPLICANT_PROFILE_REGIONS,
     generate_applicants_excel,
@@ -1713,17 +1726,14 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
                 "assigned_by",
             )
             .prefetch_related(
+                "status_history__changed_by",
                 Prefetch(
                     "applicant__documents",
-                    queryset=ApplicantDocument.objects.filter(
-                        document_type__code="paspor",
-                    ).select_related("document_type"),
-                    to_attr="_prefetched_paspor_docs",
+                    queryset=ApplicantDocument.objects.select_related("document_type"),
+                    to_attr="_prefetched_all_docs",
                 ),
             )
         )
-        if self.action == "retrieve":
-            qs = qs.prefetch_related("status_history__changed_by")
         return qs
 
     def _parse_diterima_step_param(self, request) -> str | None:
@@ -2155,7 +2165,7 @@ class ApplicantJobApplicationViewSet(viewsets.ReadOnlyModelViewSet):
             return JobApplication.objects.none()
         try:
             applicant_profile = self.request.user.applicant_profile
-        except Exception:
+        except (ApplicantProfile.DoesNotExist, AttributeError):
             return JobApplication.objects.none()
         return (
             JobApplication.objects
@@ -2170,7 +2180,7 @@ class ApplicantJobApplicationViewSet(viewsets.ReadOnlyModelViewSet):
                 "interview_cohort",
                 "assigned_by",
             )
-            .prefetch_related("status_history__changed_by")
+            .prefetch_related("status_history__changed_by", _DOCUMENTS_PREFETCH)
         )
 
     @action(detail=True, methods=["post"], url_path="confirm")
@@ -2394,9 +2404,8 @@ class CompanyJobListingsViewSet(viewsets.ReadOnlyModelViewSet):
         """Return job listings for the company's profile."""
         if not self.request.user.is_authenticated:
             return LowonganKerja.objects.none()
-        try:
-            company_profile = self.request.user.company_profile
-        except:
+        company_profile = _company_profile_or_none(self.request.user)
+        if company_profile is None:
             return LowonganKerja.objects.none()
         return (
             LowonganKerja.objects.filter(company=company_profile)
@@ -2425,9 +2434,8 @@ class CompanyApplicantsViewSet(viewsets.ReadOnlyModelViewSet):
         if not self.request.user.is_authenticated:
             from account.models import CustomUser
             return CustomUser.objects.none()
-        try:
-            company_profile = self.request.user.company_profile
-        except:
+        company_profile = _company_profile_or_none(self.request.user)
+        if company_profile is None:
             from account.models import CustomUser
             return CustomUser.objects.none()
         
@@ -2469,14 +2477,13 @@ class CompanyJobApplicationsViewSet(viewsets.ReadOnlyModelViewSet):
         """Return applications for this company's job listings."""
         if not self.request.user.is_authenticated:
             return JobApplication.objects.none()
-        try:
-            company_profile = self.request.user.company_profile
-        except:
+        company_profile = _company_profile_or_none(self.request.user)
+        if company_profile is None:
             return JobApplication.objects.none()
         return (
             JobApplication.objects.filter(job__company=company_profile)
             .select_related("applicant", "applicant__user", "job", "job__company", "batch", "assigned_by")
-            .prefetch_related("status_history__changed_by")
+            .prefetch_related("status_history__changed_by", _DOCUMENTS_PREFETCH)
         )
 
 
@@ -2498,9 +2505,8 @@ class CompanyDashboardStatsView(APIView):
         from django.db.models import Count, Q
         from django.utils import timezone
         
-        try:
-            company_profile = request.user.company_profile
-        except:
+        company_profile = _company_profile_or_none(request.user)
+        if company_profile is None:
             return Response(
                 error_response(
                     detail="Profil perusahaan tidak ditemukan.",
@@ -2529,6 +2535,9 @@ class CompanyDashboardStatsView(APIView):
         # Recent applications
         recent_applications = applications_qs.select_related(
             'applicant', 'applicant__user', 'job'
+        ).prefetch_related(
+            "status_history__changed_by",
+            _DOCUMENTS_PREFETCH,
         ).order_by('-applied_at')[:5]
         
         recent_apps_data = JobApplicationSerializer(
@@ -2625,7 +2634,7 @@ class StaffReferredApplicantsViewSet(viewsets.ReadOnlyModelViewSet):
                         "batch",
                         "interview_cohort",
                     )
-                    .prefetch_related("status_history")
+                    .prefetch_related("status_history__changed_by")
                     .order_by("-applied_at"),
                     to_attr="_job_apps_summary_prefetch",
                 ),
@@ -2693,7 +2702,7 @@ class StaffDashboardStatsView(APIView):
                         "batch",
                         "interview_cohort",
                     )
-                    .prefetch_related("status_history")
+                    .prefetch_related("status_history__changed_by")
                     .order_by("-applied_at"),
                     to_attr="_job_apps_summary_prefetch",
                 ),

@@ -495,17 +495,28 @@ class JobApplicationSerializer(serializers.ModelSerializer):
         if not p:
             return None
         doc = None
-        pref = getattr(p, "_prefetched_paspor_docs", None)
-        if pref is not None:
-            doc = pref[0] if pref else None
-        else:
-            doc = (
-                ApplicantDocument.objects.filter(
-                    applicant_profile=p, document_type__code="paspor"
-                )
-                .only("file")
-                .first()
+        all_docs = getattr(p, "_prefetched_all_docs", None)
+        if all_docs is not None:
+            doc = next(
+                (
+                    d
+                    for d in all_docs
+                    if getattr(getattr(d, "document_type", None), "code", None) == "paspor"
+                ),
+                None,
             )
+        else:
+            pref = getattr(p, "_prefetched_paspor_docs", None)
+            if pref is not None:
+                doc = pref[0] if pref else None
+            else:
+                doc = (
+                    ApplicantDocument.objects.filter(
+                        applicant_profile=p, document_type__code="paspor"
+                    )
+                    .only("file")
+                    .first()
+                )
         if not doc or not doc.file:
             return None
         # The authenticated endpoint, not doc.file.url: the object URL is a
@@ -682,14 +693,20 @@ class JobApplicationSerializer(serializers.ModelSerializer):
         return {code: bool(marked_at.get(code)) for code in JobApplication.ATTENDANCE_TRACKED_STATUSES}
 
     def get_document_collection_progress(self, obj) -> dict:
+        cached = getattr(obj, "_job_app_doc_progress", None)
+        if cached is not None:
+            return cached
         if obj.status != ApplicationStatus.DITERIMA:
-            return {
+            result = {
                 "items": [],
                 "done_count": 0,
                 "total_count": 0,
                 "is_complete": False,
             }
-        return ApplicationService.get_document_collection_progress(obj)
+        else:
+            result = ApplicationService.get_document_collection_progress(obj)
+        obj._job_app_doc_progress = result
+        return result
 
     def get_pengumpulan_dokumen_complete(self, obj) -> bool:
         return bool(self.get_document_collection_progress(obj).get("is_complete"))

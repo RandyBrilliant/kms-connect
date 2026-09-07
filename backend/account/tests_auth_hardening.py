@@ -8,8 +8,11 @@ from rest_framework.test import APIClient
 from account.models import CustomUser, UserRole
 from backend.settings import (
     COMMITTED_INSECURE_SECRET_KEY,
+    build_caches,
     debug_from_env,
+    hsts_seconds,
     require_secret_key,
+    secure_flag,
 )
 
 
@@ -106,3 +109,39 @@ class RefreshTokenBlacklistTests(TestCase):
             format="json",
         )
         self.assertEqual(replay.status_code, 401)
+
+
+class SecureDefaultsTests(TestCase):
+    def test_unset_follows_debug(self):
+        self.assertTrue(secure_flag(None, debug=False))
+        self.assertTrue(secure_flag("", debug=False))
+        self.assertFalse(secure_flag(None, debug=True))
+        self.assertFalse(secure_flag("0", debug=False))
+        self.assertTrue(secure_flag("1", debug=True))
+
+    def test_hsts_off_in_debug(self):
+        self.assertEqual(hsts_seconds(debug=True), 0)
+        self.assertEqual(hsts_seconds(debug=False), 31536000)
+        self.assertEqual(hsts_seconds(debug=False, raw="0"), 0)
+
+    def test_redis_broker_uses_redis_cache_without_a_silent_fallback(self):
+        conf = build_caches("redis://localhost:6379/0", debug=False)
+        self.assertEqual(
+            conf["default"]["BACKEND"],
+            "django.core.cache.backends.redis.RedisCache",
+        )
+        self.assertTrue(str(conf["default"]["LOCATION"]).endswith("/2"))
+
+    def test_debug_keeps_locmem_even_when_redis_is_configured(self):
+        conf = build_caches("redis://localhost:6379/0", debug=True)
+        self.assertEqual(
+            conf["default"]["BACKEND"],
+            "django.core.cache.backends.locmem.LocMemCache",
+        )
+
+    def test_non_redis_broker_uses_locmem(self):
+        conf = build_caches("", debug=False)
+        self.assertEqual(
+            conf["default"]["BACKEND"],
+            "django.core.cache.backends.locmem.LocMemCache",
+        )

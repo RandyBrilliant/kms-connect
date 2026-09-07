@@ -52,21 +52,87 @@ def debug_from_env(value) -> bool:
     return str(value or "").strip().lower() in ("true", "1", "yes")
 
 
+def truthy_env(value) -> bool:
+    return str(value or "").strip().lower() in ("true", "1", "yes")
+
+
+def secure_flag(raw, *, debug: bool) -> bool:
+    """
+    SSL cookie / redirect flags.
+
+    Unset follows DEBUG (on in production). An explicit 0/false stays off so
+    a local DEBUG=False process without TLS can still boot.
+    """
+    if raw is None or str(raw).strip() == "":
+        return not debug
+    return truthy_env(raw)
+
+
+def hsts_seconds(*, debug: bool, raw=None) -> int:
+    """HSTS is off in DEBUG. Production defaults to one year."""
+    if debug:
+        return 0
+    if raw is None or str(raw).strip() == "":
+        return 31536000
+    try:
+        return max(0, int(raw))
+    except (TypeError, ValueError):
+        return 31536000
+
+
+def build_caches(broker_url: str, *, debug: bool) -> dict:
+    """
+    Redis DB 2 when the Celery broker is Redis and DEBUG is off.
+
+    DEBUG (including the test runner) stays on LocMem so a laptop without
+    Redis still runs. Production must not swallow a down Redis into per-worker
+    memory — that would multiply every throttle by the gunicorn worker count.
+    """
+    locmem = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "OPTIONS": {},
+            "KEY_PREFIX": "kms",
+            "TIMEOUT": 300,
+        }
+    }
+    if debug:
+        return locmem
+    broker = (broker_url or "").strip()
+    if not broker.startswith("redis"):
+        return locmem
+    location = (
+        broker.rsplit("/", 1)[0] + "/2" if "/" in broker else broker + "/2"
+    )
+    return {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": location,
+            "KEY_PREFIX": "kms",
+            "TIMEOUT": 300,
+        }
+    }
+
+
 SECRET_KEY = require_secret_key(_env("SECRET_KEY", ""))
 DEBUG = debug_from_env(_env("DEBUG", "False"))
 
 ALLOWED_HOSTS = _env("ALLOWED_HOSTS", "").split(",") if _env("ALLOWED_HOSTS") else []
 
-# Production SSL / secure cookies (set in .env after SSL setup)
-SECURE_SSL_REDIRECT = _env("SECURE_SSL_REDIRECT", "0") == "1"
+# Production SSL / secure cookies. Unset follows DEBUG so a missed env var
+# cannot send session/CSRF cookies over HTTP. Explicit 0/false still disables.
+SECURE_SSL_REDIRECT = secure_flag(_env("SECURE_SSL_REDIRECT"), debug=DEBUG)
 # Allow Docker/load-balancer health probes over HTTP inside the container network
 SECURE_REDIRECT_EXEMPT = [r"^/health/?$"]
-SESSION_COOKIE_SECURE = _env("SESSION_COOKIE_SECURE", "0") == "1"
-CSRF_COOKIE_SECURE = _env("CSRF_COOKIE_SECURE", "0") == "1"
+SESSION_COOKIE_SECURE = secure_flag(_env("SESSION_COOKIE_SECURE"), debug=DEBUG)
+CSRF_COOKIE_SECURE = secure_flag(_env("CSRF_COOKIE_SECURE"), debug=DEBUG)
 CSRF_TRUSTED_ORIGINS = _env("CSRF_TRUSTED_ORIGINS", "").split(",") if _env("CSRF_TRUSTED_ORIGINS") else []
 
 # Trust X-Forwarded-Proto header from Nginx (required when behind a reverse proxy)
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SECURE_HSTS_SECONDS = hsts_seconds(debug=DEBUG, raw=_env("SECURE_HSTS_SECONDS"))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = SECURE_HSTS_SECONDS > 0
+SECURE_HSTS_PRELOAD = SECURE_HSTS_SECONDS > 0
 
 
 # Application definition
@@ -253,40 +319,9 @@ LOGO_URL = _env("LOGO_URL", "")
 EMAIL_VERIFICATION_MAX_AGE_DAYS = 7
 
 # -----------------------------------------------------------------------------
-# Cache (for document types list, rate limiting; Redis when broker is Redis)
+# Cache (document types list, rate limiting). Redis DB 2 when the broker is Redis.
 # -----------------------------------------------------------------------------
-_cache_backend = "django.core.cache.backends.locmem.LocMemCache"
-_cache_location = None
-if _env("CELERY_BROKER_URL", "").strip().startswith("redis"):
-    _redis_base = _env("CELERY_BROKER_URL", "redis://localhost:6379/0").strip()
-    # Use DB 2 for cache to avoid clash with Celery (DB 0)
-    _cache_location = _redis_base.rsplit("/", 1)[0] + "/2" if "/" in _redis_base else _redis_base + "/2"
-    try:
-        from django.core.cache.backends.redis import RedisCache
-        _cache_backend = "django.core.cache.backends.redis.RedisCache"
-    except ImportError:
-        _cache_location = None
-if _cache_location:
-    try:
-        CACHES = {
-            "default": {
-                "BACKEND": "django.core.cache.backends.redis.RedisCache",
-                "LOCATION": _cache_location,
-                "KEY_PREFIX": "kms",
-                "TIMEOUT": 300,
-            }
-        }
-    except Exception:
-        CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "OPTIONS": {}, "KEY_PREFIX": "kms", "TIMEOUT": 300}}
-else:
-    CACHES = {
-        "default": {
-            "BACKEND": _cache_backend,
-            "OPTIONS": {},
-            "KEY_PREFIX": "kms",
-            "TIMEOUT": 300,
-        }
-    }
+CACHES = build_caches(_env("CELERY_BROKER_URL", ""), debug=DEBUG)
 
 # Document types public list cache TTL (seconds)
 DOCUMENT_TYPES_CACHE_TIMEOUT = int(_env("DOCUMENT_TYPES_CACHE_TIMEOUT", "900"))  # 15 min default

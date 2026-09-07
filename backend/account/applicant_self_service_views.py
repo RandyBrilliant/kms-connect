@@ -33,6 +33,7 @@ from .document_file_access import DocumentFileAccessMixin
 from .document_specs import validate_document_file, compress_image_file, is_image_type
 from .services.biodata_pdf import generate_biodata_pdf
 from .services.cv_pdf import cv_pdf_http_response, generate_cv_pdf
+from .services.pdf_cache import cached_pdf_bytes
 from .services.pengantar_medical_pdf import generate_pengantar_medical_pdf
 from .services.pengantar_psikologi_pdf import generate_pengantar_psikologi_pdf
 from .services.applicant_document_access import (
@@ -571,7 +572,7 @@ class ApplicantBiodataPdfView(APIView):
             )
 
         try:
-            pdf_bytes = generate_biodata_pdf(profile)
+            pdf_bytes = cached_pdf_bytes("biodata", profile, generate_biodata_pdf)
         except Exception as e:
             return Response(
                 error_response(
@@ -622,7 +623,7 @@ class ApplicantCvPdfView(APIView):
             )
 
         try:
-            pdf_bytes = generate_cv_pdf(profile)
+            pdf_bytes = cached_pdf_bytes("cv", profile, generate_cv_pdf)
         except Exception as e:
             return Response(
                 error_response(

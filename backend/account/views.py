@@ -78,6 +78,7 @@ from .services.export import (
 )
 from .services.biodata_pdf import generate_biodata_pdf
 from .services.cv_pdf import cv_pdf_http_response, generate_cv_pdf
+from .services.pdf_cache import cached_pdf_bytes
 from .services.inbond_pdf import generate_inbond_pdf
 from .services.pengantar_medical_pdf import generate_pengantar_medical_pdf
 from .services.pengantar_psikologi_pdf import generate_pengantar_psikologi_pdf
@@ -492,7 +493,7 @@ class ApplicantUserViewSet(AuditedMixin, DeactivateActivateMixin, viewsets.Model
             excel_file = generate_applicants_excel(queryset, request)
             
             # Generate filename with timestamp
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = timezone.localtime().strftime("%Y%m%d_%H%M%S")
             filename = f"pelamar_export_{timestamp}.xlsx"
             
             # Create HTTP response with Excel content
@@ -1605,7 +1606,7 @@ class AdminBiodataPdfView(APIView):
             user__id=pk,
         )
         try:
-            pdf_bytes = generate_biodata_pdf(applicant)
+            pdf_bytes = cached_pdf_bytes("biodata", applicant, generate_biodata_pdf)
         except Exception as e:
             return Response(
                 error_response(
@@ -1646,7 +1647,7 @@ class AdminCvPdfView(APIView):
             user__id=pk,
         )
         try:
-            pdf_bytes = generate_cv_pdf(applicant)
+            pdf_bytes = cached_pdf_bytes("cv", applicant, generate_cv_pdf)
         except Exception as e:
             return Response(
                 error_response(
