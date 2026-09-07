@@ -29,6 +29,7 @@ from .serializers import (
 from django.http import HttpResponse
 from .permissions import IsApplicant
 from .api_responses import success_response, error_response, ApiCode, ApiMessage
+from .document_file_access import DocumentFileAccessMixin
 from .document_specs import validate_document_file, compress_image_file, is_image_type
 from .services.biodata_pdf import generate_biodata_pdf
 from .services.cv_pdf import cv_pdf_http_response, generate_cv_pdf
@@ -257,7 +258,9 @@ class ApplicantWorkExperienceSelfServiceViewSet(ApplicantSelfServiceMixin, views
         )
 
 
-class ApplicantDocumentSelfServiceViewSet(ApplicantSelfServiceMixin, viewsets.ModelViewSet):
+class ApplicantDocumentSelfServiceViewSet(
+    DocumentFileAccessMixin, ApplicantSelfServiceMixin, viewsets.ModelViewSet
+):
     """
     Self-service untuk dokumen pelamar sendiri.
     GET /api/applicants/me/documents/ - List own documents
@@ -597,6 +600,7 @@ class ApplicantCvPdfView(APIView):
         try:
             profile = ApplicantProfile.objects.select_related(
                 "user",
+                "referrer",
                 "birth_place",
                 "province",
                 "district",

@@ -75,6 +75,19 @@ nested_applicant = [
         ),
         name="applicant-document-detail",
     ),
+    # Authenticated access to the stored file. These routes are declared by hand
+    # because this viewset is wired with path() rather than a router, so @action
+    # does not generate them.
+    path(
+        "applicants/<int:applicant_pk>/documents/<int:pk>/file/",
+        views.ApplicantDocumentViewSet.as_view({"get": "file_redirect"}),
+        name="applicant-document-file",
+    ),
+    path(
+        "applicants/<int:applicant_pk>/documents/<int:pk>/file-url/",
+        views.ApplicantDocumentViewSet.as_view({"get": "file_url"}),
+        name="applicant-document-file-url",
+    ),
     # Next of kin (ahli waris) fields are now part of ApplicantProfile;
     # update via PATCH /api/applicants/<pk>/ (heir_name, heir_relationship, heir_contact_phone).
 ]

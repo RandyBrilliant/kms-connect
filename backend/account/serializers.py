@@ -8,6 +8,7 @@ Serializers for account API (admin-side CRUD: Admin, Staff, Company, Applicant).
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
 
 from .models import (
@@ -1413,6 +1414,7 @@ class ApplicantDocumentSerializer(serializers.ModelSerializer):
         allow_null=True,
     )
     reviewed_by_name = serializers.SerializerMethodField(read_only=True)
+    file_access_url = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = ApplicantDocument
@@ -1420,6 +1422,7 @@ class ApplicantDocumentSerializer(serializers.ModelSerializer):
             "id",
             "document_type",
             "file",
+            "file_access_url",
             "uploaded_at",
             "ocr_text",
             "ocr_data",
@@ -1455,6 +1458,37 @@ class ApplicantDocumentSerializer(serializers.ModelSerializer):
         if not user:
             return None
         return user.full_name or user.email
+
+    def get_file_access_url(self, obj) -> str | None:
+        """
+        Endpoint that hands back a short-lived signed URL for this document.
+
+        Unlike `file`, this URL never expires and is safe to keep in an export,
+        because it only serves the document to an authenticated caller who is
+        allowed to see it. Clients should request it and use the `url` it
+        returns rather than storing that signed URL.
+        """
+        request = self.context.get("request")
+        file_field = getattr(obj, "file", None)
+        if not request or not file_field or not file_field.name:
+            return None
+
+        view = self.context.get("view")
+        applicant_pk = (getattr(view, "kwargs", None) or {}).get("applicant_pk")
+        try:
+            if applicant_pk:
+                path = reverse(
+                    "account:applicant-document-file-url",
+                    kwargs={"applicant_pk": applicant_pk, "pk": obj.pk},
+                )
+            else:
+                path = reverse(
+                    "account:applicant-me-documents-file-url",
+                    kwargs={"pk": obj.pk},
+                )
+        except NoReverseMatch:
+            return None
+        return request.build_absolute_uri(path)
 
     def validate(self, attrs):
         """

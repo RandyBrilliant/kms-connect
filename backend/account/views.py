@@ -13,6 +13,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from .filters import ApplicantUserFilterSet
+from .document_file_access import DocumentFileAccessMixin
 from audit.mixins import AuditedMixin
 from audit.models import AuditResourceType
 
@@ -1273,7 +1274,9 @@ class WorkExperienceViewSet(viewsets.ModelViewSet):
 # ApplicantDocument (nested under applicant, file upload)
 # ---------------------------------------------------------------------------
 
-class ApplicantDocumentViewSet(AuditedMixin, viewsets.ModelViewSet):
+class ApplicantDocumentViewSet(
+    DocumentFileAccessMixin, AuditedMixin, viewsets.ModelViewSet
+):
     """
     CRUD dokumen pelamar (file upload). Nested: /api/applicants/<applicant_pk>/documents/
     """
@@ -1631,6 +1634,7 @@ class AdminCvPdfView(APIView):
         applicant = get_object_or_404(
             ApplicantProfile.objects.select_related(
                 "user",
+                "referrer",
                 "birth_place",
                 "province",
                 "district",

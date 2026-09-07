@@ -204,6 +204,11 @@ if _do_spaces_bucket and not DEBUG:
     except ImportError:
         pass
 
+# Lifetime of signed document URLs handed out by the document file endpoints.
+# Short by default: these point at KTP, passports, and medical records, and an
+# authenticated view re-issues them on demand.
+MEDIA_SIGNED_URL_TTL = int(_env("MEDIA_SIGNED_URL_TTL", "900"))
+
 # -----------------------------------------------------------------------------
 # Env-based (isi di .env; lihat env.example)
 # -----------------------------------------------------------------------------
