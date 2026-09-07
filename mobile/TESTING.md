@@ -8,16 +8,16 @@ cd backend
 python manage.py runserver
 ```
 
-2. **Update .env for your platform:**
-   - **Android Emulator:** `API_BASE_URL=http://10.0.2.2:8000`
-   - **iOS Simulator:** `API_BASE_URL=http://localhost:8000`
-   - **Physical Device:** `API_BASE_URL=http://YOUR_COMPUTER_IP:8000`
+2. **Point the app at your backend** (defaults to production if omitted):
+   - **Android Emulator:** `flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000`
+   - **iOS Simulator:** `flutter run --dart-define=API_BASE_URL=http://localhost:8000`
+   - **Physical Device:** `flutter run --dart-define=API_BASE_URL=http://YOUR_COMPUTER_IP:8000`
 
 3. **Run Flutter App:**
 ```bash
 cd mobile
 flutter pub get
-flutter run
+flutter run --dart-define=API_BASE_URL=http://localhost:8000
 ```
 
 ## Test Registration
@@ -45,12 +45,11 @@ flutter run
 
 **"Connection refused":**
 - Check backend is running
-- Update `.env` with correct URL (see Quick Start #2)
+- Pass `--dart-define=API_BASE_URL=...` for your platform (see Quick Start #2)
 
 **"Token expired":**
 - Logout and login again
 
 **App crashes:**
 - Run `flutter pub get`
-- Check `.env` file exists
 - Check console for error messages

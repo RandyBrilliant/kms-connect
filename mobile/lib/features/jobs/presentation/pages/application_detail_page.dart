@@ -5,6 +5,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../config/colors.dart';
+import '../../../../core/widgets/custom_toast.dart';
+import '../../../profile/data/providers/profile_provider.dart';
 import '../../data/providers/job_provider.dart';
 import '../../domain/models/batch_announcement.dart';
 import '../../domain/models/job_application.dart';
@@ -119,6 +121,22 @@ class _ApplicationDetailPageState extends ConsumerState<ApplicationDetailPage>
     } finally {
       if (mounted) setState(() => _confirmingStepCode = null);
     }
+  }
+
+  Future<void> _openReferralPdf({required bool medical}) async {
+    final ok = medical
+        ? await ref.read(medicalReferralPdfProvider.notifier).open()
+        : await ref.read(psychologyReferralPdfProvider.notifier).open();
+    if (!mounted) return;
+    if (ok) return;
+    final err = medical
+        ? ref.read(medicalReferralPdfProvider).error
+        : ref.read(psychologyReferralPdfProvider).error;
+    CustomToast.show(
+      context,
+      message: err ?? 'Gagal membuka surat pengantar.',
+      type: ToastType.error,
+    );
   }
 
   Future<void> _confirmCompletedPlacement() async {
@@ -279,6 +297,21 @@ class _ApplicationDetailPageState extends ConsumerState<ApplicationDetailPage>
                         onConfirmDocumentStep: (stepCode) =>
                             _confirmDocumentStep(stepCode: stepCode),
                         confirmingStepCode: _confirmingStepCode,
+                        onOpenDocuments: () async {
+                          await context.push('/documents');
+                          if (!mounted) return;
+                          ref.invalidate(
+                            applicationDetailProvider(widget.applicationId),
+                          );
+                        },
+                        onOpenPsychologyReferral: () =>
+                            _openReferralPdf(medical: false),
+                        onOpenMedicalReferral: () =>
+                            _openReferralPdf(medical: true),
+                        psychologyPdfLoading:
+                            ref.watch(psychologyReferralPdfProvider).isLoading,
+                        medicalPdfLoading:
+                            ref.watch(medicalReferralPdfProvider).isLoading,
                       ),
                       const SizedBox(height: 16),
                       // Batch + interview cohort broadcasts (merged on the server).
@@ -415,6 +448,11 @@ class _InfoCard extends StatelessWidget {
     this.isCompletingPlacement = false,
     this.onConfirmDocumentStep,
     this.confirmingStepCode,
+    this.onOpenDocuments,
+    this.onOpenPsychologyReferral,
+    this.onOpenMedicalReferral,
+    this.psychologyPdfLoading = false,
+    this.medicalPdfLoading = false,
   });
 
   final JobApplication application;
@@ -426,6 +464,11 @@ class _InfoCard extends StatelessWidget {
   final ValueChanged<String>? onConfirmDocumentStep;
   /// The step code currently being confirmed (shows loading indicator).
   final String? confirmingStepCode;
+  final VoidCallback? onOpenDocuments;
+  final VoidCallback? onOpenPsychologyReferral;
+  final VoidCallback? onOpenMedicalReferral;
+  final bool psychologyPdfLoading;
+  final bool medicalPdfLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -639,6 +682,11 @@ class _InfoCard extends StatelessWidget {
                 currentStepCode: application.diterimaCurrentStep,
                 onConfirmStep: onConfirmDocumentStep,
                 confirmingStepCode: confirmingStepCode,
+                onOpenDocuments: onOpenDocuments,
+                onOpenPsychologyReferral: onOpenPsychologyReferral,
+                onOpenMedicalReferral: onOpenMedicalReferral,
+                psychologyPdfLoading: psychologyPdfLoading,
+                medicalPdfLoading: medicalPdfLoading,
               ),
             ],
             if (application.status == 'BERANGKAT' &&
@@ -706,6 +754,11 @@ class _DocumentCollectionSection extends StatelessWidget {
     this.currentStepCode,
     this.onConfirmStep,
     this.confirmingStepCode,
+    this.onOpenDocuments,
+    this.onOpenPsychologyReferral,
+    this.onOpenMedicalReferral,
+    this.psychologyPdfLoading = false,
+    this.medicalPdfLoading = false,
   });
 
   final DocumentCollectionProgress progress;
@@ -714,6 +767,11 @@ class _DocumentCollectionSection extends StatelessWidget {
   final ValueChanged<String>? onConfirmStep;
   /// Step code currently being confirmed (shows a loading spinner).
   final String? confirmingStepCode;
+  final VoidCallback? onOpenDocuments;
+  final VoidCallback? onOpenPsychologyReferral;
+  final VoidCallback? onOpenMedicalReferral;
+  final bool psychologyPdfLoading;
+  final bool medicalPdfLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -791,6 +849,56 @@ class _DocumentCollectionSection extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 8),
+        if (onOpenDocuments != null ||
+            onOpenPsychologyReferral != null ||
+            onOpenMedicalReferral != null) ...[
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (onOpenDocuments != null)
+                OutlinedButton.icon(
+                  onPressed: onOpenDocuments,
+                  icon: const Icon(Icons.folder_open_outlined, size: 16),
+                  label: const Text('Unggah dokumen'),
+                ),
+              if (onOpenPsychologyReferral != null)
+                OutlinedButton.icon(
+                  onPressed: psychologyPdfLoading
+                      ? null
+                      : onOpenPsychologyReferral,
+                  icon: psychologyPdfLoading
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.picture_as_pdf_outlined, size: 16),
+                  label: Text(
+                    psychologyPdfLoading
+                        ? 'Menyiapkan...'
+                        : 'Pengantar psikologi',
+                  ),
+                ),
+              if (onOpenMedicalReferral != null)
+                OutlinedButton.icon(
+                  onPressed:
+                      medicalPdfLoading ? null : onOpenMedicalReferral,
+                  icon: medicalPdfLoading
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.picture_as_pdf_outlined, size: 16),
+                  label: Text(
+                    medicalPdfLoading ? 'Menyiapkan...' : 'Pengantar medical',
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+        ],
         ...progress.items.map((item) {
           final isConfirming = confirmingStepCode == item.code;
           final isCurrentStep = currentStepCode == item.code;

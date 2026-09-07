@@ -190,7 +190,7 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage>
             message: 'Email berhasil diverifikasi! Selamat datang.',
             type: ToastType.success,
             duration: const Duration(seconds: 3));
-        context.go('/home');
+        context.go('/profile/complete');
       } else {
         setState(() => _isVerifying = false);
         _clearCode();

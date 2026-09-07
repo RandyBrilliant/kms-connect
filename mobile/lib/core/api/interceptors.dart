@@ -1,8 +1,11 @@
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
+
 import 'api_client.dart';
 import 'endpoints.dart';
+import 'log_sanitizer.dart';
 
 /// Authentication interceptor - adds JWT token to requests and handles refresh.
 ///
@@ -85,8 +88,8 @@ class AuthInterceptor extends Interceptor {
   ) async {
     // Skip auth for public endpoints
     if (_isPublicEndpoint(options.path)) {
-      if (const bool.fromEnvironment('dart.vm.product') == false) {
-        print('PUBLIC ENDPOINT: ${options.path} - skipping auth header');
+      if (kDebugMode) {
+        debugPrint('PUBLIC ENDPOINT: ${options.path} - skipping auth header');
       }
       handler.next(options);
       return;
@@ -97,24 +100,26 @@ class AuthInterceptor extends Interceptor {
       // Proactively refresh if the access token is about to expire,
       // avoiding a 401 round-trip entirely.
       if (_isTokenExpiringSoon(token)) {
-        if (const bool.fromEnvironment('dart.vm.product') == false) {
-          print('TOKEN EXPIRING SOON — proactive refresh for: ${options.path}');
+        if (kDebugMode) {
+          debugPrint(
+            'TOKEN EXPIRING SOON — proactive refresh for: ${options.path}',
+          );
         }
         final refreshed = await _tryProactiveRefresh();
         if (refreshed != null) token = refreshed;
       }
 
       options.headers['Authorization'] = 'Bearer $token';
-      if (const bool.fromEnvironment('dart.vm.product') == false) {
-        print('AUTH HEADER ADDED for: ${options.path}');
+      if (kDebugMode) {
+        debugPrint('AUTH HEADER ADDED for: ${options.path}');
       }
       handler.next(options);
     } else {
       // No token for a protected endpoint — reject immediately and force the
       // user back to the login screen rather than sending an unauthenticated
       // request that will just bounce back as a 401 we cannot recover from.
-      if (const bool.fromEnvironment('dart.vm.product') == false) {
-        print('NO TOKEN — forcing logout for: ${options.path}');
+      if (kDebugMode) {
+        debugPrint('NO TOKEN — forcing logout for: ${options.path}');
       }
       _dispatchForceLogout();
       handler.reject(
@@ -295,14 +300,15 @@ class AuthInterceptor extends Interceptor {
   }
 }
 
-/// Logging interceptor - logs requests and responses in debug mode
+/// Logging interceptor — debug only. Request/response bodies are sanitized
+/// so passwords, tokens, and binary uploads never reach logcat.
 class LoggingInterceptor extends Interceptor {
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
-    if (const bool.fromEnvironment('dart.vm.product') == false) {
-      print('REQUEST[${options.method}] => PATH: ${options.path}');
+    if (kDebugMode) {
+      debugPrint('REQUEST[${options.method}] => PATH: ${options.path}');
       if (options.data != null) {
-        print('DATA: ${options.data}');
+        debugPrint('DATA: ${sanitizeForLog(options.data)}');
       }
     }
     handler.next(options);
@@ -310,8 +316,8 @@ class LoggingInterceptor extends Interceptor {
 
   @override
   void onResponse(Response response, ResponseInterceptorHandler handler) {
-    if (const bool.fromEnvironment('dart.vm.product') == false) {
-      print(
+    if (kDebugMode) {
+      debugPrint(
         'RESPONSE[${response.statusCode}] => PATH: ${response.requestOptions.path}',
       );
     }
@@ -320,34 +326,16 @@ class LoggingInterceptor extends Interceptor {
 
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
-    if (const bool.fromEnvironment('dart.vm.product') == false) {
-      print(
+    if (kDebugMode) {
+      debugPrint(
         'ERROR[${err.response?.statusCode}] => PATH: ${err.requestOptions.path}',
       );
-      print('MESSAGE: ${err.message}');
-      // Try to extract backend error detail
-      if (err.response?.data != null) {
-        try {
-          final data = err.response!.data;
-          print('RESPONSE DATA TYPE: ${data.runtimeType}');
-          print('RESPONSE DATA: $data');
-          if (data is Map<String, dynamic>) {
-            final detail = data['detail'] as String?;
-            if (detail != null) {
-              print('BACKEND ERROR: $detail');
-            }
-            final errors = data['errors'] as Map<String, dynamic>?;
-            if (errors != null && errors.isNotEmpty) {
-              print('VALIDATION ERRORS: $errors');
-            }
-          } else if (data is String) {
-            print('BACKEND ERROR (string): $data');
-          }
-        } catch (e) {
-          print('Error parsing response: $e');
-        }
-      } else {
-        print('No response data available');
+      if (err.message != null) {
+        debugPrint('MESSAGE: ${err.message}');
+      }
+      final data = err.response?.data;
+      if (data != null) {
+        debugPrint('RESPONSE DATA: ${sanitizeForLog(data)}');
       }
     }
     handler.next(err);

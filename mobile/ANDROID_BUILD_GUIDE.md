@@ -51,20 +51,15 @@ flutter doctor -v
 
 ## 2. Konfigurasi Sebelum Build
 
-### 2.1 Pastikan `.env` mengarah ke backend yang benar
+### 2.1 API URL
 
-File: `mobile/.env`
+Release builds default to `https://data.kms-connect.com`. Override only if needed:
 
-```dotenv
-# Untuk build client testing, pastikan URL ini adalah URL backend yang bisa diakses klien
-API_BASE_URL=https://data.kms-connect.com
-
-# Google Sign-In (isi jika sudah punya client ID dari Google Cloud Console)
-GOOGLE_CLIENT_ID_ANDROID=your-android-client-id.apps.googleusercontent.com
-GOOGLE_CLIENT_ID_IOS=your-ios-client-id.apps.googleusercontent.com
+```powershell
+flutter build apk --release --dart-define=API_BASE_URL=https://data.kms-connect.com
 ```
 
-> ⚠️ Jangan gunakan `http://localhost:8000` untuk APK yang dikirim ke klien — klien tidak memiliki server tersebut di perangkatnya.
+Do **not** list `.env` under `pubspec.yaml` `assets:` — that file would ship inside the APK.
 
 ### 2.2 Perbarui versi aplikasi
 
@@ -476,7 +471,7 @@ Copy SHA-1 → Firebase Console → Project Settings → Android app → Add fin
 ## Ringkasan Quick Build
 
 ```powershell
-# 1. Pastikan .env sudah benar
+# 1. Release defaults to https://data.kms-connect.com (override with --dart-define if needed)
 # 2. Update versi di pubspec.yaml jika perlu
 # 3. Build
 cd C:\Users\randy\Documents\programming\kms-connect\mobile
@@ -706,7 +701,7 @@ Setiap kali merilis update:
 
 ```
 [ ] versionCode di pubspec.yaml sudah dinaikkan
-[ ] API_BASE_URL di .env mengarah ke backend production
+[ ] API_BASE_URL defaults to production (or pass --dart-define=API_BASE_URL=...)
 [ ] google-services.json sudah berisi SHA-1 dari release keystore
 [ ] App icon 512×512 sudah disiapkan
 [ ] Minimal 2 screenshot phone sudah disiapkan
@@ -722,7 +717,7 @@ Setiap kali merilis update:
 
 ```powershell
 # 1. Naikkan versionCode di pubspec.yaml (misal: 1.0.0+1 → 1.0.1+2)
-# 2. Pastikan .env → API_BASE_URL ke production
+# 2. Release defaults to production API (pass --dart-define=API_BASE_URL=... only to override)
 # 3. Build AAB
 cd C:\Users\randy\Documents\programming\kms-connect\mobile
 flutter clean ; flutter pub get

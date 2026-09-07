@@ -19,6 +19,7 @@ import '../../../../../core/widgets/ktp_camera_screen.dart';
 import '../../../../../core/widgets/professional_text_field.dart';
 import '../../../../../core/widgets/professional_dropdown_field.dart';
 import '../../../../../core/widgets/professional/professional_button.dart';
+import '../../../data/providers/auth_provider.dart';
 import '../../../data/providers/regions_provider.dart';
 import '../../../domain/models/ktp_data.dart';
 import '../../providers/registration_provider.dart';
@@ -570,24 +571,23 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
           dataDeclarationConfirmed: _dataDeclarationChecked,
         );
 
-    final email = ref.read(registrationProvider).email;
-
     try {
       setState(() => _isRegistering = true);
 
-      await ref
+      final authResponse = await ref
           .read(registrationProvider.notifier)
           .completeRegistration();
 
       if (!mounted) return;
 
-      ref.read(registrationProvider.notifier).reset();
+      await ref
+          .read(authStateProvider.notifier)
+          .applyAuthResponse(authResponse);
 
-      // Email registration — do NOT set authenticated user yet.
-      // Auth tokens are stored; the user must verify email first.
-      if (mounted && email != null) {
-        context.go('/email-verification?email=${Uri.encodeComponent(email)}');
-      }
+      if (!mounted) return;
+
+      ref.read(registrationProvider.notifier).reset();
+      context.go('/profile/complete');
     } catch (e) {
       if (!mounted) return;
       setState(() => _isRegistering = false);

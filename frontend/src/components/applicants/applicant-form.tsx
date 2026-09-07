@@ -597,6 +597,21 @@ export function ApplicantForm({
         </CardHeader>
         <CardContent className="space-y-6">
           <FieldGroup>
+            <form.Field name="father_almarhum">
+              {(field) => (
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id={field.name}
+                    checked={field.state.value}
+                    onCheckedChange={(c) => field.handleChange(!!c)}
+                    disabled={isSubmitting}
+                  />
+                  <FieldLabel htmlFor={field.name} className="cursor-pointer font-normal">
+                    Ayah Almarhum
+                  </FieldLabel>
+                </div>
+              )}
+            </form.Field>
             <div className="grid gap-6 sm:grid-cols-3">
               <form.Field name="father_name">
                 {(field) => (

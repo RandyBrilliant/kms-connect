@@ -135,6 +135,7 @@ class JobRepository {
     try {
       final response = await _apiClient.dio.get(
         ApiEndpoints.applicationDetail(id),
+        options: ApiClient.noCache(),
       );
       final data = response.data;
       if (data is Map<String, dynamic>) {

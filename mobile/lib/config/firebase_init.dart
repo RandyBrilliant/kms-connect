@@ -8,7 +8,7 @@ import 'firebase_config.dart';
 /// Android and iOS read configuration from [google-services.json] and
 /// [GoogleService-Info.plist] (standard FlutterFire setup).
 ///
-/// Web and desktop builds must set the `FIREBASE_*` variables in `.env`
+/// Web and desktop builds must pass the `FIREBASE_*` values via `--dart-define`
 /// (see `.env.example`).
 Future<void> initializeFirebaseApp() async {
   if (Firebase.apps.isNotEmpty) {
@@ -22,7 +22,7 @@ Future<void> initializeFirebaseApp() async {
       return;
     default:
       await Firebase.initializeApp(
-        options: FirebaseConfig.optionsFromEnv(),
+        options: FirebaseConfig.optionsFromDefines(),
       );
   }
 }

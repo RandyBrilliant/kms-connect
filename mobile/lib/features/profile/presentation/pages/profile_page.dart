@@ -33,7 +33,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
       duration: const Duration(milliseconds: 900),
     )..forward();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(profileNotifierProvider.notifier).loadProfile();
+      ref.read(profileNotifierProvider.notifier).loadProfile(force: true);
       ref.read(workExperienceNotifierProvider.notifier).reload();
     });
   }
@@ -114,10 +114,54 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
     if (mounted) context.go('/login');
   }
 
+  Future<void> _openBuktiPenyerahanUpload() async {
+    try {
+      final types = await ref.read(documentTypesProvider.future);
+      if (!mounted) return;
+      final match = types
+          .where((t) => t.code == 'bukti-penyerahan-dokumen')
+          .firstOrNull;
+      if (match != null) {
+        context.push('/documents/upload?type=${match.id}');
+      } else {
+        context.push('/documents');
+      }
+    } catch (_) {
+      if (!mounted) return;
+      context.push('/documents');
+    }
+  }
+
   Future<void> _handleViewBiodataPdf() async {
     final ok = await ref.read(biodataPdfProvider.notifier).open();
     if (!ok && mounted) {
       final err = ref.read(biodataPdfProvider).error ?? 'Gagal membuka PDF.';
+      CustomToast.show(
+        context,
+        message: err,
+        type: ToastType.error,
+      );
+    }
+  }
+
+  Future<void> _handleViewPsychologyReferralPdf() async {
+    final ok = await ref.read(psychologyReferralPdfProvider.notifier).open();
+    if (!ok && mounted) {
+      final err =
+          ref.read(psychologyReferralPdfProvider).error ?? 'Gagal membuka PDF.';
+      CustomToast.show(
+        context,
+        message: err,
+        type: ToastType.error,
+      );
+    }
+  }
+
+  Future<void> _handleViewMedicalReferralPdf() async {
+    final ok = await ref.read(medicalReferralPdfProvider.notifier).open();
+    if (!ok && mounted) {
+      final err =
+          ref.read(medicalReferralPdfProvider).error ?? 'Gagal membuka PDF.';
       CustomToast.show(
         context,
         message: err,
@@ -134,6 +178,8 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
     final notifState = ref.watch(notificationProvider);
     final workExpState = ref.watch(workExperienceNotifierProvider);
     final pdfState = ref.watch(biodataPdfProvider);
+    final psychPdfState = ref.watch(psychologyReferralPdfProvider);
+    final medicalPdfState = ref.watch(medicalReferralPdfProvider);
 
     final profile = profileState.profile;
     final fullName = profile?.fullName?.isNotEmpty == true
@@ -224,6 +270,42 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                           subtitle: '$docCount dokumen terunggah',
                           onTap: () => context.push('/documents'),
                         ),
+                        if (profile != null)
+                          _ProfessionalMenuItem(
+                            icon: Icons.picture_as_pdf_outlined,
+                            color: AppColors.error,
+                            title: 'Biodata PDF',
+                            subtitle: 'Lihat biodata dalam format PDF',
+                            onTap: _handleViewBiodataPdf,
+                            isLoading: pdfState.isLoading,
+                          ),
+                        if (profile?.hasInterviewLamaran == true)
+                          _ProfessionalMenuItem(
+                            icon: Icons.assignment_outlined,
+                            color: const Color(0xFF2563EB),
+                            title: 'Bukti Penyerahan Dokumen',
+                            subtitle:
+                                'Unduh template, lengkapi, lalu unggah PDF',
+                            onTap: _openBuktiPenyerahanUpload,
+                          ),
+                        if (profile?.hasDiterimaLamaran == true)
+                          _ProfessionalMenuItem(
+                            icon: Icons.psychology_outlined,
+                            color: const Color(0xFF0D9488),
+                            title: 'Surat pengantar tes psikologi',
+                            subtitle: 'PDF untuk klinik (tahap Diterima)',
+                            onTap: _handleViewPsychologyReferralPdf,
+                            isLoading: psychPdfState.isLoading,
+                          ),
+                        if (profile?.hasDiterimaLamaran == true)
+                          _ProfessionalMenuItem(
+                            icon: Icons.medical_services_outlined,
+                            color: const Color(0xFFDC2626),
+                            title: 'Surat pengantar medical',
+                            subtitle: 'PDF medical check up (tahap Diterima)',
+                            onTap: _handleViewMedicalReferralPdf,
+                            isLoading: medicalPdfState.isLoading,
+                          ),
                         _ProfessionalMenuItem(
                           icon: Icons.notifications_outlined,
                           color: const Color(0xFF3B82F6),
@@ -244,29 +326,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                   ),
 
                   const SizedBox(height: 20),
-
-                  // PDF Biodata (only visible when application accepted)
-                  if (profile?.verificationStatus == 'ACCEPTED')
-                    _animated(
-                      _ProfessionalMenuSection(
-                        title: 'Dokumen Saya',
-                        items: [
-                          _ProfessionalMenuItem(
-                            icon: Icons.picture_as_pdf_outlined,
-                            color: AppColors.error,
-                            title: 'Biodata PDF',
-                            subtitle: 'Lihat biodata dalam format PDF',
-                            onTap: _handleViewBiodataPdf,
-                            isLoading: pdfState.isLoading,
-                          ),
-                        ],
-                      ),
-                      0.50,
-                      0.78,
-                    ),
-
-                  if (profile?.verificationStatus == 'ACCEPTED')
-                    const SizedBox(height: 20),
 
                   // Account
                   _animated(

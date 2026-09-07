@@ -36,7 +36,7 @@ class _HomePageState extends ConsumerState<HomePage>
     )..forward();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(profileNotifierProvider.notifier).loadProfile();
+      ref.read(profileNotifierProvider.notifier).loadProfile(force: true);
     });
   }
 
@@ -175,7 +175,8 @@ class _HomePageState extends ConsumerState<HomePage>
                                   icon: Icons.work_outline_rounded,
                                   color: statusColor,
                                   isLoading: profileState.isLoading,
-                                  onTap: () => context.push('/profile'),
+                                  onTap: () =>
+                                      context.push('/jobs/my-applications'),
                                 ),
                               ),
                             ],

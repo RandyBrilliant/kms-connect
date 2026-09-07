@@ -99,6 +99,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   DateTime? _pickedFatherBirthDate;
   DateTime? _pickedMotherBirthDate;
   DateTime? _pickedSpouseBirthDate;
+  bool _fatherAlmarhum = false;
+  bool _motherAlmarhum = false;
+  bool _spouseAlmarhum = false;
   bool _populated = false;
 
   // ── New: dropdown state ───────────────────────────────────────────────
@@ -115,20 +118,18 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   @override
   void initState() {
     super.initState();
-    // Populate form once profile is available — outside build() to avoid
-    // triggering rebuilds inside the build phase.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final profile = ref.read(profileNotifierProvider).profile;
-      if (profile != null) {
-        _populate(profile);
-        // Kecamatan is not persisted in the profile model; derive it from
-        // the saved village via the detail endpoint.
-        if (profile.villageId != null) {
-          _loadKecamatan(profile.villageId!, isFamily: false);
-        }
-        if (profile.familyVillageId != null) {
-          _loadKecamatan(profile.familyVillageId!, isFamily: true);
-        }
+    // Show cached values immediately, then refetch so orang tua / other
+    // fields match the server (not a 5-minute in-memory snapshot).
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final cached = ref.read(profileNotifierProvider).profile;
+      if (cached != null) {
+        _applyProfile(cached);
+      }
+      await ref.read(profileNotifierProvider.notifier).loadProfile(force: true);
+      if (!mounted) return;
+      final fresh = ref.read(profileNotifierProvider).profile;
+      if (fresh != null) {
+        _applyProfile(fresh);
       }
     });
   }
@@ -173,6 +174,23 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
       c.dispose();
     }
     super.dispose();
+  }
+
+  void _applyProfile(ApplicantProfile profile) {
+    _populated = false;
+    _populate(profile);
+    if (profile.villageId != null) {
+      _loadKecamatan(profile.villageId!, isFamily: false);
+    }
+    if (profile.familyVillageId != null) {
+      _loadKecamatan(profile.familyVillageId!, isFamily: true);
+    }
+  }
+
+  DateTime? _approxBirthDateFromAge(String rawAge) {
+    final age = int.tryParse(rawAge.trim());
+    if (age == null || age <= 0) return null;
+    return DateTime(DateTime.now().year - age, 7, 1);
   }
 
   /// Maps backend strings to dropdown keys (case/spacing tolerant).
@@ -248,32 +266,31 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     _bpjsNumber.text = p.bpjsNumber ?? '';
 
     // ── Keluarga ────────────────────────────────────────────────────────
+    _fatherAlmarhum = p.fatherAlmarhum;
+    _motherAlmarhum = p.motherAlmarhum;
+    _spouseAlmarhum = p.spouseAlmarhum;
     _fatherName.text = (p.fatherName ?? '').toUpperCase();
     _fatherAge.text = p.fatherAge?.toString() ?? '';
-    if (p.fatherAge != null) {
-      _pickedFatherBirthDate = DateTime(DateTime.now().year - p.fatherAge!);
-      _fatherBirthDateCtrl.text =
-          DateFormat('dd MMMM yyyy', 'id').format(_pickedFatherBirthDate!);
-    }
+    // Backend stores age only — do not invent a fake 1 Jan birth date or the
+    // picker will show the wrong day and look like the save did not stick.
+    _pickedFatherBirthDate = null;
+    _fatherBirthDateCtrl.text =
+        p.fatherAge != null ? 'Usia ${p.fatherAge} tahun' : '';
     _fatherOccupation.text = (p.fatherOccupation ?? '').toUpperCase();
     _motherName.text = (p.motherName ?? '').toUpperCase();
     _motherAge.text = p.motherAge?.toString() ?? '';
-    if (p.motherAge != null) {
-      _pickedMotherBirthDate = DateTime(DateTime.now().year - p.motherAge!);
-      _motherBirthDateCtrl.text =
-          DateFormat('dd MMMM yyyy', 'id').format(_pickedMotherBirthDate!);
-    }
+    _pickedMotherBirthDate = null;
+    _motherBirthDateCtrl.text =
+        p.motherAge != null ? 'Usia ${p.motherAge} tahun' : '';
     _motherOccupation.text = (p.motherOccupation ?? '').toUpperCase();
     _familyAddress.text = (p.familyAddress ?? '').toUpperCase();
     _fatherPhone.text = p.fatherPhone ?? '';
     _motherPhone.text = p.motherPhone ?? '';
     _spouseName.text = (p.spouseName ?? '').toUpperCase();
     _spouseAge.text = p.spouseAge?.toString() ?? '';
-    if (p.spouseAge != null) {
-      _pickedSpouseBirthDate = DateTime(DateTime.now().year - p.spouseAge!);
-      _spouseBirthDateCtrl.text =
-          DateFormat('dd MMMM yyyy', 'id').format(_pickedSpouseBirthDate!);
-    }
+    _pickedSpouseBirthDate = null;
+    _spouseBirthDateCtrl.text =
+        p.spouseAge != null ? 'Usia ${p.spouseAge} tahun' : '';
     _spouseOccupation.text = (p.spouseOccupation ?? '').toUpperCase();
 
     // Ahli Waris
@@ -317,6 +334,12 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
 
     // Trigger a single rebuild for the non-controller state (_gender, regions).
     if (mounted) setState(() {});
+  }
+
+  int? _parseOptionalInt(String raw) {
+    final t = raw.trim();
+    if (t.isEmpty) return null;
+    return int.tryParse(t);
   }
 
   int _computeAge(DateTime birthDate) {
@@ -393,107 +416,89 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
 
   Future<void> _handleSave() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
+    // Text/number controllers are always sent so edits and clears persist.
+    // Dropdowns, dates, and region FKs are omitted when null so a failed
+    // hydrate cannot wipe a stored value.
     final data = <String, dynamic>{
-      if (_fullName.text.trim().isNotEmpty)
-        'full_name': _fullName.text.trim(),
-      if (_nik.text.trim().isNotEmpty) 'nik': _nik.text.trim(),
-      if (_birthPlaceCtrl.text.trim().isNotEmpty)
-        'birth_place_text': _birthPlaceCtrl.text.trim().toUpperCase(),
+      'full_name': _fullName.text.trim(),
+      'nik': _nik.text.trim(),
+      'birth_place_text': _birthPlaceCtrl.text.trim().toUpperCase(),
       if (_pickedDate != null)
         'birth_date': DateFormat('yyyy-MM-dd').format(_pickedDate!),
       if (_gender != null) 'gender': _gender,
-      if (_address.text.trim().isNotEmpty)
-        'address': _address.text.trim(),
+      'address': _address.text.trim(),
       if (_province != null) 'province': _province!.id,
       if (_kabupaten != null) 'district': _kabupaten!.id,
       if (_kelurahan != null) 'village': _kelurahan!.id,
-      if (_phone.text.trim().isNotEmpty)
-        'contact_phone': _phone.text.trim(),
+      'contact_phone': _phone.text.trim(),
 
-      // ── New: Data Pribadi dropdowns ──────────────────────────────────
       if (_religion != null) 'religion': _religion,
       if (_educationLevel != null) 'education_level': _educationLevel,
-      if (_educationMajor.text.trim().isNotEmpty)
-        'education_major': _educationMajor.text.trim(),
+      'education_major': _educationMajor.text.trim(),
       if (_maritalStatus != null) 'marital_status': _maritalStatus,
 
-      // ── New: Data Fisik ──────────────────────────────────────────────
-      if (_heightCm.text.trim().isNotEmpty)
-        'height_cm': int.tryParse(_heightCm.text.trim()),
-      if (_weightKg.text.trim().isNotEmpty)
-        'weight_kg': int.tryParse(_weightKg.text.trim()),
+      'height_cm': _parseOptionalInt(_heightCm.text),
+      'weight_kg': _parseOptionalInt(_weightKg.text),
       if (_wearsGlasses != null) 'wears_glasses': _wearsGlasses,
       if (_writingHand != null) 'writing_hand': _writingHand,
-      if (_shoeSize.text.trim().isNotEmpty)
-        'shoe_size': int.tryParse(_shoeSize.text.trim()),
+      'shoe_size': _parseOptionalInt(_shoeSize.text),
       if (_shirtSize != null) 'shirt_size': _shirtSize,
 
-      // ── New: Data Paspor ─────────────────────────────────────────────
       if (_hasPassport != null) 'has_passport': _hasPassport,
-      if (_passportNumber.text.trim().isNotEmpty)
-        'passport_number': _passportNumber.text.trim(),
+      'passport_number': _passportNumber.text.trim(),
       if (_pickedPassportIssueDate != null)
-        'passport_issue_date': DateFormat('yyyy-MM-dd').format(_pickedPassportIssueDate!),
-      if (_passportIssuePlace.text.trim().isNotEmpty)
-        'passport_issue_place': _passportIssuePlace.text.trim(),
+        'passport_issue_date':
+            DateFormat('yyyy-MM-dd').format(_pickedPassportIssueDate!),
+      'passport_issue_place': _passportIssuePlace.text.trim(),
       if (_pickedPassportExpiryDate != null)
-        'passport_expiry_date': DateFormat('yyyy-MM-dd').format(_pickedPassportExpiryDate!),
+        'passport_expiry_date':
+            DateFormat('yyyy-MM-dd').format(_pickedPassportExpiryDate!),
 
-      // ── New: Data Dokumen ────────────────────────────────────────────
-      if (_familyCardNumber.text.trim().isNotEmpty)
-        'family_card_number': _familyCardNumber.text.trim(),
-      if (_diplomaNumber.text.trim().isNotEmpty)
-        'diploma_number': _diplomaNumber.text.trim(),
-      if (_bpjsNumber.text.trim().isNotEmpty)
-        'bpjs_number': _bpjsNumber.text.trim(),
+      'family_card_number': _familyCardNumber.text.trim(),
+      'diploma_number': _diplomaNumber.text.trim(),
+      'bpjs_number': _bpjsNumber.text.trim(),
 
-      // ── Keluarga ────────────────────────────────────────────────────
-      if (_siblingCount.text.trim().isNotEmpty)
-        'sibling_count': int.tryParse(_siblingCount.text.trim()),
-      if (_birthOrder.text.trim().isNotEmpty)
-        'birth_order': int.tryParse(_birthOrder.text.trim()),
-      if (_fatherName.text.trim().isNotEmpty)
-        'father_name': _fatherName.text.trim(),
-      if (_pickedFatherBirthDate != null)
-        'father_age': _computeAge(_pickedFatherBirthDate!),
-      if (_fatherOccupation.text.trim().isNotEmpty)
-        'father_occupation': _fatherOccupation.text.trim(),
-      if (_motherName.text.trim().isNotEmpty)
-        'mother_name': _motherName.text.trim(),
-      if (_pickedMotherBirthDate != null)
-        'mother_age': _computeAge(_pickedMotherBirthDate!),
-      if (_motherOccupation.text.trim().isNotEmpty)
-        'mother_occupation': _motherOccupation.text.trim(),
-      if (_familyAddress.text.trim().isNotEmpty)
-        'family_address': _familyAddress.text.trim(),
+      'sibling_count': _parseOptionalInt(_siblingCount.text),
+      'birth_order': _parseOptionalInt(_birthOrder.text),
+      'father_almarhum': _fatherAlmarhum,
+      'father_name': _fatherName.text.trim(),
+      'father_age': _pickedFatherBirthDate != null
+          ? _computeAge(_pickedFatherBirthDate!)
+          : _parseOptionalInt(_fatherAge.text),
+      'father_occupation': _fatherOccupation.text.trim(),
+      'mother_almarhum': _motherAlmarhum,
+      'mother_name': _motherName.text.trim(),
+      'mother_age': _pickedMotherBirthDate != null
+          ? _computeAge(_pickedMotherBirthDate!)
+          : _parseOptionalInt(_motherAge.text),
+      'mother_occupation': _motherOccupation.text.trim(),
+      'family_address': _familyAddress.text.trim(),
       if (_familyProvince != null) 'family_province': _familyProvince!.id,
       if (_familyKabupaten != null) 'family_district': _familyKabupaten!.id,
       if (_familyKelurahan != null) 'family_village': _familyKelurahan!.id,
-      if (_fatherPhone.text.trim().isNotEmpty)
-        'father_phone': _fatherPhone.text.trim(),
-      if (_motherPhone.text.trim().isNotEmpty)
-        'mother_phone': _motherPhone.text.trim(),
-      if (_spouseName.text.trim().isNotEmpty)
-        'spouse_name': _spouseName.text.trim(),
-      if (_pickedSpouseBirthDate != null)
-        'spouse_age': _computeAge(_pickedSpouseBirthDate!),
-      if (_spouseOccupation.text.trim().isNotEmpty)
-        'spouse_occupation': _spouseOccupation.text.trim(),
-      if (_heirName.text.trim().isNotEmpty)
-        'heir_name': _heirName.text.trim(),
-      if (_heirRelationship != null)
-        'heir_relationship': _heirRelationship,
-      if (_heirContactPhone.text.trim().isNotEmpty)
-        'heir_contact_phone': _heirContactPhone.text.trim(),
+      'father_phone': _fatherPhone.text.trim(),
+      'mother_phone': _motherPhone.text.trim(),
+      'spouse_almarhum': _spouseAlmarhum,
+      'spouse_name': _spouseName.text.trim(),
+      'spouse_age': _pickedSpouseBirthDate != null
+          ? _computeAge(_pickedSpouseBirthDate!)
+          : _parseOptionalInt(_spouseAge.text),
+      'spouse_occupation': _spouseOccupation.text.trim(),
+      'heir_name': _heirName.text.trim(),
+      if (_heirRelationship != null) 'heir_relationship': _heirRelationship,
+      'heir_contact_phone': _heirContactPhone.text.trim(),
     };
 
     final success =
         await ref.read(profileNotifierProvider.notifier).updateProfile(data);
     if (!mounted) return;
     if (success) {
-      // Capture container before pop — [ref] is unsafe after [dispose].
-      // Sync [ref.invalidate] + toast overlay could rebuild go_router's
-      // [Navigator] while it is locked.
+      // Reload from the server before leaving so Profile / Edit show the
+      // saved orang tua fields, not a 5-minute in-memory or HTTP cache.
+      await ref
+          .read(profileNotifierProvider.notifier)
+          .loadProfile(force: true);
+      if (!mounted) return;
       final container = ProviderScope.containerOf(context);
       CustomToast.showGlobal(
         message: 'Profil berhasil diperbarui',
@@ -619,7 +624,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                               FilledButton.icon(
                                 onPressed: () => ref
                                     .read(profileNotifierProvider.notifier)
-                                    .loadProfile(),
+                                    .loadProfile(force: true),
                                 icon:
                                     const Icon(Icons.refresh_rounded),
                                 label: const Text('Coba lagi'),
@@ -1236,6 +1241,13 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                         const SizedBox(height: 18),
                         _SubLabel('Ayah'),
                         const SizedBox(height: 8),
+                        _AlmarhumCheckbox(
+                          value: _fatherAlmarhum,
+                          label: 'Ayah Almarhum',
+                          onChanged: (v) =>
+                              setState(() => _fatherAlmarhum = v),
+                        ),
+                        const SizedBox(height: 8),
                         M3TextField(
                           controller: _fatherName,
                           label: 'Nama Ayah',
@@ -1246,15 +1258,18 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                         const SizedBox(height: 14),
                         M3TextField(
                           controller: _fatherBirthDateCtrl,
-                          label: 'Tanggal Lahir Ayah',
-                          hint: 'Pilih tanggal',
+                          label: 'Tanggal Lahir / Usia Ayah',
+                          hint: 'Pilih tanggal — disimpan sebagai usia',
                           prefixIcon: Icons.calendar_today_outlined,
                           readOnly: true,
                           onTap: () => _pickFamilyMemberDate(
                             controller: _fatherBirthDateCtrl,
-                            current: _pickedFatherBirthDate,
-                            onPicked: (d) =>
-                                setState(() => _pickedFatherBirthDate = d),
+                            current: _pickedFatherBirthDate ??
+                                _approxBirthDateFromAge(_fatherAge.text),
+                            onPicked: (d) => setState(() {
+                              _pickedFatherBirthDate = d;
+                              _fatherAge.text = _computeAge(d).toString();
+                            }),
                           ),
                         ),
                         const SizedBox(height: 14),
@@ -1278,6 +1293,13 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                         const SizedBox(height: 18),
                         _SubLabel('Ibu'),
                         const SizedBox(height: 8),
+                        _AlmarhumCheckbox(
+                          value: _motherAlmarhum,
+                          label: 'Ibu Almarhumah',
+                          onChanged: (v) =>
+                              setState(() => _motherAlmarhum = v),
+                        ),
+                        const SizedBox(height: 8),
                         M3TextField(
                           controller: _motherName,
                           label: 'Nama Ibu',
@@ -1288,15 +1310,18 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                         const SizedBox(height: 14),
                         M3TextField(
                           controller: _motherBirthDateCtrl,
-                          label: 'Tanggal Lahir Ibu',
-                          hint: 'Pilih tanggal',
+                          label: 'Tanggal Lahir / Usia Ibu',
+                          hint: 'Pilih tanggal — disimpan sebagai usia',
                           prefixIcon: Icons.calendar_today_outlined,
                           readOnly: true,
                           onTap: () => _pickFamilyMemberDate(
                             controller: _motherBirthDateCtrl,
-                            current: _pickedMotherBirthDate,
-                            onPicked: (d) =>
-                                setState(() => _pickedMotherBirthDate = d),
+                            current: _pickedMotherBirthDate ??
+                                _approxBirthDateFromAge(_motherAge.text),
+                            onPicked: (d) => setState(() {
+                              _pickedMotherBirthDate = d;
+                              _motherAge.text = _computeAge(d).toString();
+                            }),
                           ),
                         ),
                         const SizedBox(height: 14),
@@ -1459,6 +1484,13 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                       label: 'Data Pasangan',
                       subtitle: 'Isi jika sudah menikah',
                       children: [
+                        _AlmarhumCheckbox(
+                          value: _spouseAlmarhum,
+                          label: 'Suami/Istri Almarhum / Almarhumah',
+                          onChanged: (v) =>
+                              setState(() => _spouseAlmarhum = v),
+                        ),
+                        const SizedBox(height: 8),
                         M3TextField(
                           controller: _spouseName,
                           label: 'Nama Pasangan',
@@ -1469,15 +1501,18 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                         const SizedBox(height: 14),
                         M3TextField(
                           controller: _spouseBirthDateCtrl,
-                          label: 'Tanggal Lahir Pasangan',
-                          hint: 'Pilih tanggal',
+                          label: 'Tanggal Lahir / Usia Pasangan',
+                          hint: 'Pilih tanggal — disimpan sebagai usia',
                           prefixIcon: Icons.calendar_today_outlined,
                           readOnly: true,
                           onTap: () => _pickFamilyMemberDate(
                             controller: _spouseBirthDateCtrl,
-                            current: _pickedSpouseBirthDate,
-                            onPicked: (d) =>
-                                setState(() => _pickedSpouseBirthDate = d),
+                            current: _pickedSpouseBirthDate ??
+                                _approxBirthDateFromAge(_spouseAge.text),
+                            onPicked: (d) => setState(() {
+                              _pickedSpouseBirthDate = d;
+                              _spouseAge.text = _computeAge(d).toString();
+                            }),
                           ),
                         ),
                         const SizedBox(height: 14),
@@ -2002,6 +2037,37 @@ class _RegionPickerSheetState extends State<_RegionPickerSheet> {
           ),
         );
       },
+    );
+  }
+}
+
+/// Tick for deceased parent / spouse (almarhum).
+class _AlmarhumCheckbox extends StatelessWidget {
+  const _AlmarhumCheckbox({
+    required this.value,
+    required this.label,
+    required this.onChanged,
+  });
+
+  final bool value;
+  final String label;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return CheckboxListTile(
+      value: value,
+      onChanged: (v) => onChanged(v ?? false),
+      title: Text(
+        label,
+        style: GoogleFonts.plusJakartaSans(
+          fontSize: 15,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      controlAffinity: ListTileControlAffinity.leading,
+      contentPadding: EdgeInsets.zero,
+      dense: true,
     );
   }
 }

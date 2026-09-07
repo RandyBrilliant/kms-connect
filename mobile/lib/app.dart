@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'config/theme.dart';
+import 'core/navigation/onboarding_resolver.dart';
+import 'core/navigation/root_scaffold_messenger.dart';
 import 'core/update/force_update_gate.dart';
 import 'core/widgets/custom_toast.dart';
 
@@ -12,9 +14,11 @@ import 'features/auth/presentation/pages/registration_page_new.dart';
 import 'features/auth/presentation/pages/email_verification_page.dart';
 import 'features/auth/presentation/pages/forgot_password_page.dart';
 import 'features/auth/presentation/pages/reset_password_page.dart';
+import 'features/auth/presentation/pages/social_complete_profile_page.dart';
 import 'features/home/presentation/pages/home_page.dart';
 import 'features/profile/presentation/pages/profile_page.dart';
 import 'features/profile/presentation/pages/edit_profile_page.dart';
+import 'features/profile/presentation/pages/profile_complete_page.dart';
 import 'features/profile/presentation/pages/work_experiences_page.dart';
 import 'features/profile/presentation/pages/change_password_page.dart';
 import 'features/profile/presentation/pages/account_deletion_request_page.dart';
@@ -29,6 +33,7 @@ import 'features/chat/presentation/pages/chat_thread_page.dart';
 import 'features/news/presentation/pages/news_list_page.dart';
 import 'features/news/presentation/pages/news_detail_page.dart';
 import 'features/notifications/presentation/pages/notifications_page.dart';
+import 'features/notifications/presentation/pages/notification_detail_page.dart';
 import 'features/notifications/presentation/pages/notification_settings_page.dart';
 import 'features/auth/data/providers/auth_provider.dart';
 import 'features/profile/data/providers/profile_provider.dart';
@@ -79,6 +84,12 @@ final routerProvider = Provider<GoRouter>((ref) {
     authNotifier.notify();
   });
 
+  // When biodata finishes loading, send incomplete applicants to
+  // /profile/complete instead of leaving them on Home.
+  ref.listen<ProfileState>(profileNotifierProvider, (previous, next) {
+    authNotifier.notify();
+  });
+
   ref.onDispose(authNotifier.dispose);
 
   return GoRouter(
@@ -86,42 +97,11 @@ final routerProvider = Provider<GoRouter>((ref) {
     initialLocation: '/splash',
     refreshListenable: authNotifier,
     redirect: (context, state) {
-      final loc = state.matchedLocation;
-
-      // Splash handles its own auth-aware navigation — never redirect away.
-      if (loc == '/splash') return null;
-
-      // Read current auth state at redirect-evaluation time.
-      final authState = ref.read(authStateProvider);
-      final isAuthenticated = authState.isAuthenticated;
-
-      // Pre-auth routes: login, register, email verification, and password reset.
-      final isPreAuthRoute = loc == '/login' || 
-                            loc == '/register' || 
-                            loc.startsWith('/email-verification') ||
-                            loc == '/forgot-password' ||
-                            loc.startsWith('/reset-password');
-
-      if (!isAuthenticated) {
-        // Unauthenticated users can only access pre-auth routes.
-        return isPreAuthRoute ? null : '/login';
-      }
-
-      // Authenticated but email not verified — must verify before accessing app.
-      final emailVerified = authState.user?.emailVerified ?? true;
-      if (!emailVerified) {
-        final userEmail = Uri.encodeComponent(authState.user!.email);
-        return loc.startsWith('/email-verification')
-            ? null
-            : '/email-verification?email=$userEmail';
-      }
-
-      // Authenticated & complete — send away from pre-auth routes.
-      if (isPreAuthRoute) {
-        return '/home';
-      }
-
-      return null;
+      return resolveOnboardingRedirect(
+        currentLocation: state.matchedLocation,
+        authState: ref.read(authStateProvider),
+        profileState: ref.read(profileNotifierProvider),
+      );
     },
     routes: [
       GoRoute(
@@ -183,6 +163,16 @@ final routerProvider = Provider<GoRouter>((ref) {
         name: 'home',
         builder: (context, state) => const HomePage(),
       ),
+      // Must come before /notifications so ":notificationId" is not swallowed.
+      GoRoute(
+        path: '/notifications/:notificationId',
+        name: 'notification-detail',
+        builder: (context, state) {
+          final id =
+              int.tryParse(state.pathParameters['notificationId'] ?? '') ?? 0;
+          return NotificationDetailPage(notificationId: id);
+        },
+      ),
       GoRoute(
         path: '/notifications',
         name: 'notifications',
@@ -194,9 +184,19 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const NotificationSettingsPage(),
       ),
       GoRoute(
+        path: '/social-complete',
+        name: 'social-complete',
+        builder: (context, state) => const SocialCompleteProfilePage(),
+      ),
+      GoRoute(
         path: '/profile',
         name: 'profile',
         builder: (context, state) => const ProfilePage(),
+      ),
+      GoRoute(
+        path: '/profile/complete',
+        name: 'profile-complete',
+        builder: (context, state) => const ProfileCompletePage(),
       ),
       GoRoute(
         path: '/profile/edit',
@@ -302,6 +302,7 @@ class App extends ConsumerWidget {
       title: AppStrings.appName,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
+      scaffoldMessengerKey: rootScaffoldMessengerKey,
       routerConfig: router,
       builder: (context, child) {
         return ForceUpdateGate(

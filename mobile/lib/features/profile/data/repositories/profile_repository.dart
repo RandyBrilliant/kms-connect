@@ -24,7 +24,10 @@ class ProfileRepository {
   /// Get current user's profile
   Future<ApplicantProfile> getProfile() async {
     try {
-      final response = await _apiClient.dio.get(ApiEndpoints.myProfile);
+      final response = await _apiClient.dio.get(
+        ApiEndpoints.myProfile,
+        options: ApiClient.noCache(),
+      );
       final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
         response.data,
         (data) => data as Map<String, dynamic>,
@@ -51,6 +54,7 @@ class ProfileRepository {
       final response = await _apiClient.dio.patch(
         '${ApiEndpoints.myProfile}$profileId/',
         data: data,
+        options: ApiClient.noCache(),
       );
       final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
         response.data,
@@ -185,9 +189,13 @@ class ProfileRepository {
   /// Downloads the applicant's biodata PDF from the server, saves it to the
   /// device's temp directory, and opens it with the system PDF viewer.
   Future<void> downloadAndOpenBiodataPdf() async {
+    final cacheBust = DateTime.now().millisecondsSinceEpoch;
     final response = await _apiClient.dio.get<List<int>>(
       ApiEndpoints.myBiodataPdf,
-      options: Options(responseType: ResponseType.bytes),
+      queryParameters: {'_': cacheBust},
+      options: ApiClient.uncachedBytes(
+        receiveTimeout: const Duration(seconds: 60),
+      ),
     );
 
     final bytes = response.data;
@@ -196,7 +204,7 @@ class ProfileRepository {
     }
 
     final tmpDir = await getTemporaryDirectory();
-    final file = File('${tmpDir.path}/biodata_cpmi.pdf');
+    final file = File('${tmpDir.path}/biodata_cpmi_$cacheBust.pdf');
     await file.writeAsBytes(bytes, flush: true);
 
     final result = await OpenFilex.open(file.path, type: 'application/pdf');
@@ -234,9 +242,13 @@ class ProfileRepository {
 
   /// Surat Pengantar Tes Psikologi — same flow as biodata PDF (requires DITERIMA lamaran).
   Future<void> downloadAndOpenPsychologyReferralPdf() async {
+    final cacheBust = DateTime.now().millisecondsSinceEpoch;
     final response = await _apiClient.dio.get<List<int>>(
       ApiEndpoints.myPsychologyReferralPdf,
-      options: Options(responseType: ResponseType.bytes),
+      queryParameters: {'_': cacheBust},
+      options: ApiClient.uncachedBytes(
+        receiveTimeout: const Duration(seconds: 60),
+      ),
     );
 
     final bytes = response.data;
@@ -245,7 +257,7 @@ class ProfileRepository {
     }
 
     final tmpDir = await getTemporaryDirectory();
-    final file = File('${tmpDir.path}/pengantar_psikologi_cpmi.pdf');
+    final file = File('${tmpDir.path}/pengantar_psikologi_cpmi_$cacheBust.pdf');
     await file.writeAsBytes(bytes, flush: true);
 
     final result = await OpenFilex.open(file.path, type: 'application/pdf');
@@ -255,9 +267,13 @@ class ProfileRepository {
   }
 
   Future<void> downloadAndOpenMedicalReferralPdf() async {
+    final cacheBust = DateTime.now().millisecondsSinceEpoch;
     final response = await _apiClient.dio.get<List<int>>(
       ApiEndpoints.myMedicalReferralPdf,
-      options: Options(responseType: ResponseType.bytes),
+      queryParameters: {'_': cacheBust},
+      options: ApiClient.uncachedBytes(
+        receiveTimeout: const Duration(seconds: 60),
+      ),
     );
 
     final bytes = response.data;
@@ -266,7 +282,7 @@ class ProfileRepository {
     }
 
     final tmpDir = await getTemporaryDirectory();
-    final file = File('${tmpDir.path}/pengantar_medical_cpmi.pdf');
+    final file = File('${tmpDir.path}/pengantar_medical_cpmi_$cacheBust.pdf');
     await file.writeAsBytes(bytes, flush: true);
 
     final result = await OpenFilex.open(file.path, type: 'application/pdf');

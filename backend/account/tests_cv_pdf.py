@@ -8,7 +8,7 @@ from django.test import TestCase
 from PIL import Image
 
 from account.models import ApplicantProfile, CustomUser, UserRole, WorkExperience
-from account.services.cv_pdf import cv_pdf_http_response, generate_cv_pdf
+from account.services.cv_pdf import cv_pdf_http_response, generate_cv_pdf, _sr_staff_name
 
 
 def _tiny_jpeg() -> ContentFile:
@@ -84,3 +84,29 @@ class CvPdfTests(TestCase):
         )
         self.assertIn("CV_Budi_Santoso_", response["Content-Disposition"])
         self.assertIn(".pdf", response["Content-Disposition"])
+
+    def test_sr_field_uses_staff_rujukan_name_not_id(self):
+        staff = CustomUser.objects.create_user(
+            email="rujukan.staff@example.com",
+            password="testpass123",
+            role=UserRole.STAFF,
+            full_name="Sari Wijaya",
+            is_active=True,
+        )
+        user = CustomUser.objects.create_user(
+            email="cvrujukan@example.com",
+            password="testpass123",
+            role=UserRole.APPLICANT,
+            full_name="Andi Pratama",
+            is_active=True,
+            email_verified=True,
+        )
+        profile = ApplicantProfile.objects.create(user=user, referrer=staff)
+        self.assertEqual(_sr_staff_name(profile), "SARI WIJAYA")
+        self.assertNotIn(str(staff.pk), _sr_staff_name(profile))
+        self.assertTrue(generate_cv_pdf(profile).startswith(b"%PDF"))
+
+        staff.full_name = ""
+        staff.save(update_fields=["full_name"])
+        profile.referrer = staff
+        self.assertEqual(_sr_staff_name(profile), "RUJUKAN STAFF")

@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -90,9 +89,6 @@ void main() async {
 
   // Initialize locale data for intl date formatting (e.g. 'id_ID')
   await initializeDateFormatting('id_ID', null);
-
-  // Load environment variables
-  await dotenv.load(fileName: '.env');
 
   // Initialize API client before Firebase / notifications — FCM registration calls Dio.
   await ApiClient().initialize();

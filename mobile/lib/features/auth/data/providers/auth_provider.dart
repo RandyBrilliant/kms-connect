@@ -195,6 +195,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
+  /// Apply tokens already stored by register/social and mark the user signed in.
+  Future<void> applyAuthResponse(AuthResponse authResponse) async {
+    await _repository.persistCachedUser(authResponse.user);
+    state = state.copyWith(user: authResponse.user, isLoading: false);
+    NotificationService().registerToken();
+  }
+
   Future<bool> register({
     required String email,
     required String password,

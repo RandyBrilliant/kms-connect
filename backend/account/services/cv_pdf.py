@@ -112,6 +112,22 @@ def _place_name(obj) -> str:
     return _str(getattr(obj, "name", ""))
 
 
+def _sr_staff_name(profile) -> str:
+    """SR field: staff rujukan display name, never numeric id or referral code."""
+    referrer = getattr(profile, "referrer", None)
+    if referrer is None:
+        return ""
+    name = _str(getattr(referrer, "full_name", None))
+    if name:
+        return name.upper()
+    email = _str(getattr(referrer, "email", None))
+    if "@" in email:
+        local = email.split("@", 1)[0].strip()
+        if local:
+            return " ".join(local.replace("_", " ").replace(".", " ").split()).upper()
+    return ""
+
+
 def _wrap(text: str, max_width: float, font: str, size: float, max_lines: int) -> list[str]:
     text = _str(text)
     if not text:
@@ -363,7 +379,7 @@ def generate_cv_pdf(profile) -> bytes:
     family_in_medan = _mentions_medan(*family_bits)
     saudara_addr = ", ".join(p for p in family_bits if p) if family_in_medan else ""
 
-    _draw_fitted(c, _R_SR, _str(profile.register_number), font=FONT_BOLD, size=8)
+    _draw_fitted(c, _R_SR, _sr_staff_name(profile), font=FONT_BOLD, size=8)
     _draw_fitted(c, _R_NAMA, full_name, font=FONT_BOLD, size=11)
     _draw_fitted(c, _R_TTL, ttl.upper() if ttl else "", size=8)
     _draw_fitted(c, _R_SEKOLAH, school, size=8)

@@ -238,6 +238,13 @@ class _ProfileCompletePageState extends ConsumerState<ProfileCompletePage> {
                                             ? AppColors.primaryDarkGreen
                                             : AppColors.textMedium,
                                       ),
+                                      onTap: () async {
+                                        await context.push('/profile/edit');
+                                        if (!mounted) return;
+                                        await ref
+                                            .read(profileNotifierProvider.notifier)
+                                            .loadProfile(force: true);
+                                      },
                                     ),
                                   ),
                                 );

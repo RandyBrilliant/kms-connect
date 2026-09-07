@@ -339,6 +339,8 @@ class ProfileNotifier extends StateNotifier<ProfileState> {
   /// re-fetch is attempted.
   static const _cacheTtl = Duration(minutes: 5);
 
+  Future<void>? _loadFuture;
+
   ProfileNotifier(this._repository) : super(ProfileState());
 
   /// Load profile data, skipping the network call if the cache is fresh.
@@ -346,16 +348,28 @@ class ProfileNotifier extends StateNotifier<ProfileState> {
   /// Pass [force] = true to bypass the TTL and always hit the server
   /// (e.g. after the user edits their profile).
   Future<void> loadProfile({bool force = false}) async {
-    if (state.isLoading) return;
+    if (!force && _isFresh) return;
 
-    // Return cached data if it's still within the TTL window.
-    if (!force &&
-        state.profile != null &&
-        state.lastFetchedAt != null &&
-        DateTime.now().difference(state.lastFetchedAt!) < _cacheTtl) {
-      return;
+    if (_loadFuture != null) {
+      await _loadFuture;
+      if (!force && _isFresh) return;
+      if (!force) return;
     }
 
+    _loadFuture = _fetchProfile();
+    try {
+      await _loadFuture;
+    } finally {
+      _loadFuture = null;
+    }
+  }
+
+  bool get _isFresh =>
+      state.profile != null &&
+      state.lastFetchedAt != null &&
+      DateTime.now().difference(state.lastFetchedAt!) < _cacheTtl;
+
+  Future<void> _fetchProfile() async {
     state = state.copyWith(isLoading: true, error: null);
     try {
       final profile = await _repository.getProfile();

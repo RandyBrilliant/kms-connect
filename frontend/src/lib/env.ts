@@ -3,7 +3,7 @@ import { z } from "zod"
 const envSchema = z.object({
   /**
    * API base URL. Set in .env, e.g. http://localhost:8000
-   * Production: https://api.yourdomain.com
+   * Production: https://data.kms-connect.com
    */
   VITE_API_URL: z.string().url().optional().default("http://localhost:8000"),
 })

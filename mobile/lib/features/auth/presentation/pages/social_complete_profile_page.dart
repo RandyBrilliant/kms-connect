@@ -393,7 +393,7 @@ class _SocialCompleteProfilePageState
       ref.read(socialCompleteProvider.notifier).reset();
       ref.read(authStateProvider.notifier).setAuthenticatedUser(user);
 
-      context.go('/home');
+      context.go('/profile/complete');
     } catch (e) {
       if (!mounted) return;
       setState(() => _isSubmitting = false);

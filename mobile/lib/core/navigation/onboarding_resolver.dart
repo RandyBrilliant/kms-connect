@@ -40,14 +40,26 @@ String? resolveOnboardingRedirect({
   final isApplicant = user.role.toUpperCase() == 'APPLICANT';
 
   if (isApplicant && profileState != null) {
-    if (profileState.isLoading && profileState.profile == null) {
-      return null;
-    }
-    if (profileState.error != null && profileState.profile == null) {
+    final profile = profileState.profile;
+
+    // Profile not loaded yet: new (unverified) users go to the checklist,
+    // returning users stay put until biodata arrives.
+    if (profile == null && profileState.error == null) {
+      if (kOnboardingProfileRoutes.contains(currentLocation) ||
+          currentLocation.startsWith('/email-verification') ||
+          currentLocation == '/social-complete') {
+        return null;
+      }
+      if (!user.emailVerified) {
+        return '/profile/complete';
+      }
       return null;
     }
 
-    final profile = profileState.profile;
+    if (profileState.error != null && profile == null) {
+      return null;
+    }
+
     if (shouldBlockForIncompleteProfile(profile)) {
       if (!kOnboardingProfileRoutes.contains(currentLocation)) {
         return '/profile/complete';

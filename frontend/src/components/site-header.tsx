@@ -61,7 +61,8 @@ const PAGE_TITLES: Record<string, string> = {
   
   // Notifications
   "/notifikasi": "Notifikasi",
-  "/staff/notifikasi": "Notifikasi",
+  "/admin-portal/notifikasi": "Notifikasi",
+  "/staff-portal/notifikasi": "Notifikasi",
   "/company/notifikasi": "Notifikasi",
   
   // Profile & Settings
@@ -73,8 +74,10 @@ const PAGE_TITLES: Record<string, string> = {
   "/company/pelamar": "Daftar Pelamar",
   
   // Staff routes
-  "/staff/pelamar": "Daftar Pelamar",
-  "/staff/rujukan": "Rujukan Saya",
+  "/staff-portal/pelamar": "Daftar Pelamar",
+  "/staff-portal/laporan": "Laporan",
+  "/staff-portal/lowongan-kerja": "Lowongan Kerja",
+  "/staff-portal/profil": "Profil Saya",
 }
 
 /**
@@ -196,9 +199,11 @@ export function SiteHeader() {
   const getNotificationPath = () => {
     switch (user?.role) {
       case "STAFF":
-        return "/staff/notifikasi"
+        return "/staff-portal/notifikasi"
       case "COMPANY":
         return "/company/notifikasi"
+      case "ADMIN":
+        return "/admin-portal/notifikasi"
       default:
         return "/notifikasi"
     }

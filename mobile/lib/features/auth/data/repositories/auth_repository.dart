@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../core/api/api_client.dart';
@@ -85,8 +86,8 @@ class AuthRepository {
           authResponse.refreshToken,
         );
       } catch (storageErr) {
-        if (const bool.fromEnvironment('dart.vm.product') == false) {
-          print('TOKEN STORAGE FAILED: $storageErr');
+        if (kDebugMode) {
+          debugPrint('TOKEN STORAGE FAILED: $storageErr');
         }
         throw DioException(
           requestOptions: response.requestOptions,
@@ -160,8 +161,8 @@ class AuthRepository {
           authResponse.refreshToken,
         );
       } catch (storageErr) {
-        if (const bool.fromEnvironment('dart.vm.product') == false) {
-          print('TOKEN STORAGE FAILED (register): $storageErr');
+        if (kDebugMode) {
+          debugPrint('TOKEN STORAGE FAILED (register): $storageErr');
         }
         throw DioException(
           requestOptions: response.requestOptions,
@@ -260,8 +261,8 @@ class AuthRepository {
           authResponse.refreshToken,
         );
       } catch (storageErr) {
-        if (const bool.fromEnvironment('dart.vm.product') == false) {
-          print('TOKEN STORAGE FAILED (registerComplete): $storageErr');
+        if (kDebugMode) {
+          debugPrint('TOKEN STORAGE FAILED (registerComplete): $storageErr');
         }
         throw DioException(
           requestOptions: response.requestOptions,

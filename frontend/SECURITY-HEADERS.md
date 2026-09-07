@@ -75,9 +75,9 @@ img-src 'self' data: https: blob:
 font-src 'self' data:
   └─ Fonts from same origin and data URLs
 
-connect-src 'self' http://localhost:8000 https://api.kms-connect.com https://*.kms-connect.com
-  └─ API calls to same origin, local dev server, and production API
-  └─ TODO: Update with your actual API domain
+connect-src 'self' https://data.kms-connect.com wss://data.kms-connect.com https://*.kms-connect.com
+  └─ API and WebSocket calls to the production backend (data.kms-connect.com)
+  └─ Local Vite (`npm run dev`) is not gated by these headers — localhost is omitted on purpose
 
 frame-ancestors 'self'
   └─ Only allow framing by same origin
@@ -91,17 +91,14 @@ form-action 'self'
 
 ## 📝 Production Checklist
 
-Before deploying to production, update `vercel.json`:
+Before deploying to production, confirm:
 
-1. **Update CSP `connect-src`** with your actual API domain:
-   ```json
-   "connect-src 'self' https://api.yourdomain.com"
+1. **CSP `connect-src`** already allows the production API:
+   ```
+   connect-src 'self' https://data.kms-connect.com wss://data.kms-connect.com https://*.kms-connect.com
    ```
 
-2. **Remove localhost** from `connect-src`:
-   ```json
-   // Remove: http://localhost:8000
-   ```
+2. **Localhost is not in production CSP.** Vite dev does not use `vercel.json` headers.
 
 3. **Consider stricter CSP** (if possible):
    - Remove `'unsafe-inline'` and `'unsafe-eval'`

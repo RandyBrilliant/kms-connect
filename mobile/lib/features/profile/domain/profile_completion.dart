@@ -65,9 +65,8 @@ ProfileCompletionReport evaluateProfileCompletion(ApplicantProfile p) {
       p.shoeSize! > 0 &&
       _nonEmpty(p.shirtSize);
 
-  // ── Alamat KTP
+  // ── Alamat KTP (kode pos is not on Edit Profil)
   final addressKtp = _nonEmpty(p.address) &&
-      _nonEmpty(p.postalCode) &&
       p.provinceId != null &&
       p.districtId != null &&
       p.villageId != null;
@@ -88,7 +87,6 @@ ProfileCompletionReport evaluateProfileCompletion(ApplicantProfile p) {
   final family = p.siblingCount != null &&
       p.birthOrder != null &&
       _nonEmpty(p.familyAddress) &&
-      _nonEmpty(p.familyPostalCode) &&
       p.familyProvinceId != null &&
       p.familyDistrictId != null &&
       p.familyVillageId != null &&

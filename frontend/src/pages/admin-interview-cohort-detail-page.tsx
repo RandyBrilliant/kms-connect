@@ -436,6 +436,33 @@ function CohortStatusTab({
     )
   }
 
+  return (
+    <CohortStatusTabBody
+      cohortId={cohortId}
+      jobId={jobId}
+      batchBase={batchBase}
+      pelamarBase={pelamarBase}
+      status={status}
+      apps={apps}
+    />
+  )
+}
+
+function CohortStatusTabBody({
+  cohortId,
+  jobId,
+  batchBase,
+  pelamarBase,
+  status,
+  apps,
+}: {
+  cohortId: number
+  jobId: number
+  batchBase: string
+  pelamarBase: string
+  status: ApplicationStatus
+  apps: JobApplication[]
+}) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const [note, setNote] = useState("")
