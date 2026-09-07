@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../core/api/api_client.dart';
@@ -13,33 +14,68 @@ import '../../../../core/widgets/professional_phone_field.dart';
 import '../../domain/models/user.dart';
 import '../../domain/models/auth_response.dart';
 import '../../domain/models/ktp_data.dart';
+import '../user_session_cache.dart';
 
 class AuthRepository {
   final ApiClient _apiClient = ApiClient();
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    iOptions: IOSOptions(
+      accessibility: KeychainAccessibility.first_unlock_this_device,
+    ),
+  );
 
   static const String _cachedUserKey = 'auth_cached_user_json';
 
   /// Last known user from a successful `/me` (or login) — used to restore the
   /// session UI when the network is unavailable on cold start.
   Future<void> persistCachedUser(User user) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_cachedUserKey, jsonEncode(user.toJson()));
+    final payload = jsonEncode(sessionCachePayload(user));
+    try {
+      await _secureStorage.write(key: _cachedUserKey, value: payload);
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('Failed to persist cached user: $e');
+      }
+    }
+    await _wipePrefsCachedUser();
   }
 
   Future<User?> loadCachedUser() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_cachedUserKey);
-    if (raw == null || raw.isEmpty) return null;
     try {
-      return User.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+      final raw = await _secureStorage.read(key: _cachedUserKey);
+      if (raw != null && raw.isNotEmpty) {
+        await _wipePrefsCachedUser();
+        return userFromSessionCache(jsonDecode(raw));
+      }
+    } catch (_) {}
+
+    // One-time migrate leftover plaintext prefs, then wipe them.
+    final prefs = await SharedPreferences.getInstance();
+    final leftover = prefs.getString(_cachedUserKey);
+    await prefs.remove(_cachedUserKey);
+    if (leftover == null || leftover.isEmpty) return null;
+    try {
+      final user = userFromSessionCache(jsonDecode(leftover));
+      await persistCachedUser(user);
+      return user;
     } catch (_) {
       return null;
     }
   }
 
   Future<void> clearCachedUser() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_cachedUserKey);
+    try {
+      await _secureStorage.delete(key: _cachedUserKey);
+    } catch (_) {}
+    await _wipePrefsCachedUser();
+  }
+
+  Future<void> _wipePrefsCachedUser() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_cachedUserKey);
+    } catch (_) {}
   }
 
   /// Login with email and password

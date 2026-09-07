@@ -16,6 +16,7 @@ import '../../../../core/widgets/professional_phone_field.dart';
 import '../../../../core/widgets/professional_dropdown_field.dart';
 import '../../../auth/data/providers/regions_provider.dart';
 import '../../data/providers/profile_provider.dart';
+import '../../data/profile_patch.dart';
 import '../../domain/models/applicant_profile.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -114,6 +115,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   bool? _hasPassport;
   DateTime? _pickedPassportIssueDate;
   DateTime? _pickedPassportExpiryDate;
+  Map<String, dynamic>? _baselinePatch;
 
   @override
   void initState() {
@@ -334,6 +336,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
 
     // Trigger a single rebuild for the non-controller state (_gender, regions).
     if (mounted) setState(() {});
+    _baselinePatch = _formPatchPayload();
   }
 
   int? _parseOptionalInt(String raw) {
@@ -350,6 +353,73 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
       age--;
     }
     return age.clamp(0, 120);
+  }
+
+  Map<String, dynamic> _formPatchPayload() {
+    return <String, dynamic>{
+      'full_name': _fullName.text.trim(),
+      'nik': _nik.text.trim(),
+      'birth_place_text': _birthPlaceCtrl.text.trim().toUpperCase(),
+      if (_pickedDate != null)
+        'birth_date': DateFormat('yyyy-MM-dd').format(_pickedDate!),
+      if (_gender != null) 'gender': _gender,
+      'address': _address.text.trim(),
+      if (_province != null) 'province': _province!.id,
+      if (_kabupaten != null) 'district': _kabupaten!.id,
+      if (_kelurahan != null) 'village': _kelurahan!.id,
+      'contact_phone': _phone.text.trim(),
+      if (_religion != null) 'religion': _religion,
+      if (_educationLevel != null) 'education_level': _educationLevel,
+      'education_major': _educationMajor.text.trim(),
+      if (_maritalStatus != null) 'marital_status': _maritalStatus,
+      'height_cm': _parseOptionalInt(_heightCm.text),
+      'weight_kg': _parseOptionalInt(_weightKg.text),
+      if (_wearsGlasses != null) 'wears_glasses': _wearsGlasses,
+      if (_writingHand != null) 'writing_hand': _writingHand,
+      'shoe_size': _parseOptionalInt(_shoeSize.text),
+      if (_shirtSize != null) 'shirt_size': _shirtSize,
+      if (_hasPassport != null) 'has_passport': _hasPassport,
+      'passport_number': _passportNumber.text.trim(),
+      if (_pickedPassportIssueDate != null)
+        'passport_issue_date':
+            DateFormat('yyyy-MM-dd').format(_pickedPassportIssueDate!),
+      'passport_issue_place': _passportIssuePlace.text.trim(),
+      if (_pickedPassportExpiryDate != null)
+        'passport_expiry_date':
+            DateFormat('yyyy-MM-dd').format(_pickedPassportExpiryDate!),
+      'family_card_number': _familyCardNumber.text.trim(),
+      'diploma_number': _diplomaNumber.text.trim(),
+      'bpjs_number': _bpjsNumber.text.trim(),
+      'sibling_count': _parseOptionalInt(_siblingCount.text),
+      'birth_order': _parseOptionalInt(_birthOrder.text),
+      'father_almarhum': _fatherAlmarhum,
+      'father_name': _fatherName.text.trim(),
+      'father_age': _pickedFatherBirthDate != null
+          ? _computeAge(_pickedFatherBirthDate!)
+          : _parseOptionalInt(_fatherAge.text),
+      'father_occupation': _fatherOccupation.text.trim(),
+      'mother_almarhum': _motherAlmarhum,
+      'mother_name': _motherName.text.trim(),
+      'mother_age': _pickedMotherBirthDate != null
+          ? _computeAge(_pickedMotherBirthDate!)
+          : _parseOptionalInt(_motherAge.text),
+      'mother_occupation': _motherOccupation.text.trim(),
+      'family_address': _familyAddress.text.trim(),
+      if (_familyProvince != null) 'family_province': _familyProvince!.id,
+      if (_familyKabupaten != null) 'family_district': _familyKabupaten!.id,
+      if (_familyKelurahan != null) 'family_village': _familyKelurahan!.id,
+      'father_phone': _fatherPhone.text.trim(),
+      'mother_phone': _motherPhone.text.trim(),
+      'spouse_almarhum': _spouseAlmarhum,
+      'spouse_name': _spouseName.text.trim(),
+      'spouse_age': _pickedSpouseBirthDate != null
+          ? _computeAge(_pickedSpouseBirthDate!)
+          : _parseOptionalInt(_spouseAge.text),
+      'spouse_occupation': _spouseOccupation.text.trim(),
+      'heir_name': _heirName.text.trim(),
+      if (_heirRelationship != null) 'heir_relationship': _heirRelationship,
+      'heir_contact_phone': _heirContactPhone.text.trim(),
+    };
   }
 
   Future<void> _pickFamilyMemberDate({
@@ -416,78 +486,31 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
 
   Future<void> _handleSave() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
-    // Text/number controllers are always sent so edits and clears persist.
-    // Dropdowns, dates, and region FKs are omitted when null so a failed
-    // hydrate cannot wipe a stored value.
-    final data = <String, dynamic>{
-      'full_name': _fullName.text.trim(),
-      'nik': _nik.text.trim(),
-      'birth_place_text': _birthPlaceCtrl.text.trim().toUpperCase(),
-      if (_pickedDate != null)
-        'birth_date': DateFormat('yyyy-MM-dd').format(_pickedDate!),
-      if (_gender != null) 'gender': _gender,
-      'address': _address.text.trim(),
-      if (_province != null) 'province': _province!.id,
-      if (_kabupaten != null) 'district': _kabupaten!.id,
-      if (_kelurahan != null) 'village': _kelurahan!.id,
-      'contact_phone': _phone.text.trim(),
+    final baseline = _baselinePatch;
+    if (baseline == null) {
+      CustomToast.show(
+        context,
+        message: 'Profil belum dimuat. Coba lagi.',
+        type: ToastType.error,
+      );
+      return;
+    }
+    // PATCH only keys the user actually changed. Blank optional fields that
+    // were never hydrated must not be sent — the serializer treats "" as clear.
+    final data = changedProfileFields(
+      baseline: baseline,
+      current: _formPatchPayload(),
+    );
 
-      if (_religion != null) 'religion': _religion,
-      if (_educationLevel != null) 'education_level': _educationLevel,
-      'education_major': _educationMajor.text.trim(),
-      if (_maritalStatus != null) 'marital_status': _maritalStatus,
-
-      'height_cm': _parseOptionalInt(_heightCm.text),
-      'weight_kg': _parseOptionalInt(_weightKg.text),
-      if (_wearsGlasses != null) 'wears_glasses': _wearsGlasses,
-      if (_writingHand != null) 'writing_hand': _writingHand,
-      'shoe_size': _parseOptionalInt(_shoeSize.text),
-      if (_shirtSize != null) 'shirt_size': _shirtSize,
-
-      if (_hasPassport != null) 'has_passport': _hasPassport,
-      'passport_number': _passportNumber.text.trim(),
-      if (_pickedPassportIssueDate != null)
-        'passport_issue_date':
-            DateFormat('yyyy-MM-dd').format(_pickedPassportIssueDate!),
-      'passport_issue_place': _passportIssuePlace.text.trim(),
-      if (_pickedPassportExpiryDate != null)
-        'passport_expiry_date':
-            DateFormat('yyyy-MM-dd').format(_pickedPassportExpiryDate!),
-
-      'family_card_number': _familyCardNumber.text.trim(),
-      'diploma_number': _diplomaNumber.text.trim(),
-      'bpjs_number': _bpjsNumber.text.trim(),
-
-      'sibling_count': _parseOptionalInt(_siblingCount.text),
-      'birth_order': _parseOptionalInt(_birthOrder.text),
-      'father_almarhum': _fatherAlmarhum,
-      'father_name': _fatherName.text.trim(),
-      'father_age': _pickedFatherBirthDate != null
-          ? _computeAge(_pickedFatherBirthDate!)
-          : _parseOptionalInt(_fatherAge.text),
-      'father_occupation': _fatherOccupation.text.trim(),
-      'mother_almarhum': _motherAlmarhum,
-      'mother_name': _motherName.text.trim(),
-      'mother_age': _pickedMotherBirthDate != null
-          ? _computeAge(_pickedMotherBirthDate!)
-          : _parseOptionalInt(_motherAge.text),
-      'mother_occupation': _motherOccupation.text.trim(),
-      'family_address': _familyAddress.text.trim(),
-      if (_familyProvince != null) 'family_province': _familyProvince!.id,
-      if (_familyKabupaten != null) 'family_district': _familyKabupaten!.id,
-      if (_familyKelurahan != null) 'family_village': _familyKelurahan!.id,
-      'father_phone': _fatherPhone.text.trim(),
-      'mother_phone': _motherPhone.text.trim(),
-      'spouse_almarhum': _spouseAlmarhum,
-      'spouse_name': _spouseName.text.trim(),
-      'spouse_age': _pickedSpouseBirthDate != null
-          ? _computeAge(_pickedSpouseBirthDate!)
-          : _parseOptionalInt(_spouseAge.text),
-      'spouse_occupation': _spouseOccupation.text.trim(),
-      'heir_name': _heirName.text.trim(),
-      if (_heirRelationship != null) 'heir_relationship': _heirRelationship,
-      'heir_contact_phone': _heirContactPhone.text.trim(),
-    };
+    if (data.isEmpty) {
+      if (!mounted) return;
+      CustomToast.showGlobal(
+        message: 'Profil berhasil diperbarui',
+        type: ToastType.success,
+      );
+      Navigator.pop(context);
+      return;
+    }
 
     final success =
         await ref.read(profileNotifierProvider.notifier).updateProfile(data);

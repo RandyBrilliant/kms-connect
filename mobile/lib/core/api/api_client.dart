@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
 import 'package:dio_cache_interceptor/dio_cache_interceptor.dart';
 import 'package:dio_cache_interceptor_hive_store/dio_cache_interceptor_hive_store.dart';
 import 'package:flutter/foundation.dart';
@@ -8,6 +9,7 @@ import 'package:path/path.dart' as path;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../config/env.dart';
+import 'certificate_pinning.dart';
 import 'interceptors.dart';
 import 'token_storage_policy.dart';
 
@@ -89,6 +91,13 @@ class ApiClient {
           'Accept': 'application/json',
           'X-Client-Type': 'mobile',
         },
+      ),
+    );
+
+    _dio.httpClientAdapter = IOHttpClientAdapter(
+      validateCertificate: createCertificateValidator(
+        apiBaseUrl: Env.apiBaseUrl,
+        debugMode: kDebugMode,
       ),
     );
 
