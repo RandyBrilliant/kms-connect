@@ -342,7 +342,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
     // Unregister FCM token before clearing auth tokens
     try {
       await NotificationService().unregisterToken();
-    } catch (_) {}
+    } catch (e) {
+      if (kDebugMode) debugPrint('FCM unregister on logout failed: $e');
+    }
     await _repository.logout();
     state = const AuthState(initialized: true);
   }

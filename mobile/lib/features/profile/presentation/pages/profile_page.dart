@@ -33,7 +33,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
       duration: const Duration(milliseconds: 900),
     )..forward();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(profileNotifierProvider.notifier).loadProfile(force: true);
+      ref.read(profileNotifierProvider.notifier).loadProfile();
       ref.read(workExperienceNotifierProvider.notifier).reload();
     });
   }

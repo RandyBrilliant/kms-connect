@@ -759,8 +759,8 @@ class _WorkExperienceFormSheetState
         ? await notifier.create(data)
         : await notifier.update(widget.existing!.id, data);
 
-    setState(() => _isLoading = false);
     if (!mounted) return;
+    setState(() => _isLoading = false);
     if (ok) {
       CustomToast.showGlobal(
         message: widget.existing == null

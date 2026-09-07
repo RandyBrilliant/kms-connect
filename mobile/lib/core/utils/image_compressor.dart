@@ -5,6 +5,12 @@ import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+/// Isolate entry: write [bytes] to [path] without blocking the UI isolate.
+@visibleForTesting
+void writeBytesToPath(({String path, Uint8List bytes}) message) {
+  File(message.path).writeAsBytesSync(message.bytes);
+}
+
 /// Utility for compressing images before upload.
 ///
 /// Reduces camera photos (often 5-10 MB) to a reasonable size while
@@ -67,10 +73,11 @@ class ImageCompressor {
         return file;
       }
 
-      final compressedFile = File(targetPath)..writeAsBytesSync(result);
+      await compute(writeBytesToPath, (path: targetPath, bytes: result));
+      final compressedFile = File(targetPath);
 
       if (kDebugMode) {
-        final compressedSize = compressedFile.lengthSync();
+        final compressedSize = await compressedFile.length();
         final ratio = ((1 - compressedSize / originalSize) * 100).toStringAsFixed(0);
         debugPrint(
           'ImageCompressor: '

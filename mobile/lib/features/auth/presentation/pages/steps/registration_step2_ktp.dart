@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -149,6 +150,7 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
       },
     );
 
+    if (!mounted) return;
     if (source != null) await _pickAndProcessImage(source);
   }
 
@@ -363,7 +365,9 @@ class _RegistrationStep2KtpState extends ConsumerState<RegistrationStep2Ktp> {
         _selectedDate = DateTime(y, m, d);
         _birthDateCtrl.text = _formattedDate;
       }
-    } catch (_) {}
+    } catch (e) {
+      if (kDebugMode) debugPrint('KTP date parse failed: $e');
+    }
   }
 
   void _clearFields() {

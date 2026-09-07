@@ -40,6 +40,7 @@ class _ChatThreadPageState extends ConsumerState<ChatThreadPage> {
   // Local messages list (populated from initial REST fetch + WS updates)
   List<ChatMessage> _messages = [];
   bool _initialLoaded = false;
+  bool _wsDegraded = false;
 
   @override
   void initState() {
@@ -110,10 +111,14 @@ class _ChatThreadPageState extends ConsumerState<ChatThreadPage> {
         });
 
       case ChatWsConnectionState(:final connected):
+        setState(() => _wsDegraded = !connected);
         if (connected) {
           // Re-fetch messages on reconnect to catch anything missed
           ref.invalidate(chatMessagesProvider(widget.applicationId));
         }
+
+      case ChatWsDegraded():
+        setState(() => _wsDegraded = true);
     }
   }
 
@@ -153,6 +158,7 @@ class _ChatThreadPageState extends ConsumerState<ChatThreadPage> {
       _textCtrl.clear();
 
       // Add sent message to local list (WS will also deliver it but dedup handles it)
+      if (!mounted) return;
       final exists = _messages.any((m) => m.id == msg.id);
       if (!exists) {
         setState(() {
@@ -243,6 +249,15 @@ class _ChatThreadPageState extends ConsumerState<ChatThreadPage> {
                   fontStyle: FontStyle.italic,
                 ),
               )
+            else if (_wsDegraded)
+              Text(
+                'Koneksi chat terganggu',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.warning,
+                ),
+              )
             else
               Text(
                 'Pesan akan dibalas secepatnya',
@@ -264,6 +279,34 @@ class _ChatThreadPageState extends ConsumerState<ChatThreadPage> {
       ),
       body: Column(
         children: [
+          if (_wsDegraded)
+            Material(
+              color: const Color(0xFFFFF4E5),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.wifi_off_rounded,
+                      size: 16,
+                      color: AppColors.warning,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Koneksi chat terganggu. Mencoba menyambung kembali…',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.textDark,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           // ── Message list ─────────────────────────────────────────
           Expanded(
             child: _initialLoaded

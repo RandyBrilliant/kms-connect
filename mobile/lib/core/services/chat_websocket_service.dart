@@ -39,6 +39,13 @@ class ChatWsConnectionState extends ChatWsEvent {
   const ChatWsConnectionState(this.connected);
 }
 
+/// An in-band send (ping / typing / mark_read) failed while we thought
+/// the socket was open. The UI should show a degraded connection.
+class ChatWsDegraded extends ChatWsEvent {
+  final String reason;
+  const ChatWsDegraded(this.reason);
+}
+
 /// Manages a single WebSocket connection to a chat thread.
 ///
 /// Usage:
@@ -191,11 +198,7 @@ class ChatWebSocketService {
   void _startPing() {
     _pingTimer?.cancel();
     _pingTimer = Timer.periodic(_pingInterval, (_) {
-      if (_connected && _channel != null) {
-        try {
-          _channel!.sink.add(jsonEncode({'type': 'ping'}));
-        } catch (_) {}
-      }
+      _sendEvent({'type': 'ping'}, action: 'ping');
     });
   }
 
@@ -206,18 +209,23 @@ class ChatWebSocketService {
 
   /// Send a typing indicator to the server.
   void sendTyping() {
-    if (!_connected || _channel == null) return;
-    try {
-      _channel!.sink.add(jsonEncode({'type': 'typing'}));
-    } catch (_) {}
+    _sendEvent({'type': 'typing'}, action: 'typing');
   }
 
   /// Send a mark_read event to the server.
   void sendMarkRead() {
+    _sendEvent({'type': 'mark_read'}, action: 'mark_read');
+  }
+
+  void _sendEvent(Map<String, dynamic> payload, {required String action}) {
     if (!_connected || _channel == null) return;
     try {
-      _channel!.sink.add(jsonEncode({'type': 'mark_read'}));
-    } catch (_) {}
+      _channel!.sink.add(jsonEncode(payload));
+    } catch (e) {
+      if (kDebugMode) debugPrint('[ChatWS] $action failed: $e');
+      if (_disposed) return;
+      _eventController.add(ChatWsDegraded(action));
+    }
   }
 
   /// Whether the WebSocket is currently connected.

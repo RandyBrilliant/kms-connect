@@ -69,7 +69,7 @@ class _ProfileCompletePageState extends ConsumerState<ProfileCompletePage> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(profileNotifierProvider.notifier).loadProfile(force: true);
+      ref.read(profileNotifierProvider.notifier).loadProfile();
     });
   }
 

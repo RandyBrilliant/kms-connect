@@ -36,7 +36,7 @@ class _HomePageState extends ConsumerState<HomePage>
     )..forward();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(profileNotifierProvider.notifier).loadProfile(force: true);
+      ref.read(profileNotifierProvider.notifier).loadProfile();
     });
   }
 

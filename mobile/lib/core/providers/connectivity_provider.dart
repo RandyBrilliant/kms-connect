@@ -1,7 +1,14 @@
 import 'dart:async';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+/// True when [results] include any non-[ConnectivityResult.none] interface.
+@visibleForTesting
+bool isOnlineFromResults(List<ConnectivityResult> results) {
+  return !results.contains(ConnectivityResult.none);
+}
 
 /// Emits `true` when the device has an active connection, `false` when offline.
 ///
@@ -19,26 +26,36 @@ final connectivityProvider = StateNotifierProvider<ConnectivityNotifier, bool>(
 );
 
 class ConnectivityNotifier extends StateNotifier<bool> {
-  late final StreamSubscription<List<ConnectivityResult>> _sub;
+  StreamSubscription<List<ConnectivityResult>>? _sub;
+  final Connectivity _connectivity;
 
-  ConnectivityNotifier() : super(true) {
-    _init();
+  ConnectivityNotifier({Connectivity? connectivity})
+      : _connectivity = connectivity ?? Connectivity(),
+        super(true) {
+    try {
+      _sub = _connectivity.onConnectivityChanged.listen((results) {
+        if (!mounted) return;
+        state = isOnlineFromResults(results);
+      });
+    } catch (e) {
+      if (kDebugMode) debugPrint('Connectivity listen failed: $e');
+    }
+    unawaited(_prime());
   }
 
-  Future<void> _init() async {
-    // Check current status
-    final result = await Connectivity().checkConnectivity();
-    state = !result.contains(ConnectivityResult.none);
-
-    // Listen for changes
-    _sub = Connectivity().onConnectivityChanged.listen((results) {
-      state = !results.contains(ConnectivityResult.none);
-    });
+  Future<void> _prime() async {
+    try {
+      final result = await _connectivity.checkConnectivity();
+      if (!mounted) return;
+      state = isOnlineFromResults(result);
+    } catch (e) {
+      if (kDebugMode) debugPrint('Connectivity check failed: $e');
+    }
   }
 
   @override
   void dispose() {
-    _sub.cancel();
+    _sub?.cancel();
     super.dispose();
   }
 }

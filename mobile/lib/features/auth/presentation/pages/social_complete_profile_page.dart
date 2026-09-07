@@ -130,6 +130,7 @@ class _SocialCompleteProfilePageState
         );
       },
     );
+    if (!mounted) return;
     if (source != null) await _pickAndProcessImage(source);
   }
 
@@ -140,6 +141,7 @@ class _SocialCompleteProfilePageState
       final imageFile = await _pickImage(source);
       if (imageFile == null || !mounted) return;
       final persistentFile = await _persistKtpImage(imageFile);
+      if (!mounted) return;
       setState(() => _isPickingImage = false);
       _clearFields();
       ref.read(socialCompleteProvider.notifier).setKtpImage(persistentFile);
@@ -340,6 +342,7 @@ class _SocialCompleteProfilePageState
 
     final selectedKtpFile = ref.read(socialCompleteProvider).ktpImage;
     if (selectedKtpFile == null || !await selectedKtpFile.exists()) {
+      if (!mounted) return;
       CustomToast.show(
         context,
         message: 'File KTP tidak ditemukan. Silakan upload ulang foto KTP.',
@@ -347,6 +350,7 @@ class _SocialCompleteProfilePageState
       );
       return;
     }
+    if (!mounted) return;
 
     if (_selectedDate != null) {
       final now = DateTime.now();

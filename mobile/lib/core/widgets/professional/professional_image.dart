@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../config/colors.dart';
+import '../optimized_network_image.dart';
 
 /// Professional image widget with overlay and fallback
 /// Handles loading states and errors gracefully
@@ -132,46 +133,15 @@ class ProfessionalNetworkImage extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // Network image with loading and error states
-            Image.network(
-              imageUrl,
+            OptimizedNetworkImage(
+              imageUrl: imageUrl,
+              height: height,
+              width: double.infinity,
               fit: fit,
-              loadingBuilder: (context, child, loadingProgress) {
-                if (loadingProgress == null) return child;
-                return Container(
-                  color: AppColors.backgroundOffWhite,
-                  child: Center(
-                    child: CircularProgressIndicator(
-                      value: loadingProgress.expectedTotalBytes != null
-                          ? loadingProgress.cumulativeBytesLoaded /
-                              loadingProgress.expectedTotalBytes!
-                          : null,
-                      color: AppColors.primaryDarkGreen,
-                    ),
-                  ),
-                );
-              },
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        Color(0xFF2B6E36),
-                        Color(0xFF4E9F3D),
-                      ],
-                    ),
-                  ),
-                  child: Center(
-                    child: Icon(
-                      Icons.business_center_rounded,
-                      size: 64,
-                      color: Colors.white.withValues(alpha: 0.5),
-                    ),
-                  ),
-                );
-              },
+              borderRadius: 0,
+              memCacheWidth: 800,
+              placeholderIcon: Icons.business_center_rounded,
+              errorIcon: Icons.business_center_rounded,
             ),
             
             // Gradient overlay
