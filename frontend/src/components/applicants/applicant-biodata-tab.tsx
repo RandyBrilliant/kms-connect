@@ -87,6 +87,7 @@ type BiodataFormValues = {
   family_village: number | null
   religion: string
   education_level: string
+  education_school: string
   education_major: string
   diploma_number: string
   marital_status: string
@@ -141,6 +142,7 @@ function toFormValues(p: ApplicantProfile): BiodataFormValues {
     family_village: p.family_village ?? null,
     religion: p.religion || "",
     education_level: p.education_level || "",
+    education_school: p.education_school || "",
     education_major: p.education_major || "",
     diploma_number: p.diploma_number || "",
     marital_status: p.marital_status || "",
@@ -215,6 +217,7 @@ export function ApplicantBiodataTab({
         family_village: value.family_village ?? undefined,
         religion: value.religion || undefined,
         education_level: value.education_level || undefined,
+        education_school: value.education_school || undefined,
         education_major: value.education_major || undefined,
         diploma_number: value.diploma_number || undefined,
         marital_status: value.marital_status || undefined,
@@ -555,6 +558,22 @@ export function ApplicantBiodataTab({
                         ))}
                       </SelectContent>
                     </Select>
+                  </Field>
+                )}
+              </form.Field>
+
+              <form.Field name="education_school">
+                {(field) => (
+                  <Field>
+                    <FieldLabel htmlFor={field.name}>Nama Sekolah</FieldLabel>
+                    <Input
+                      id={field.name}
+                      value={field.state.value}
+                      onChange={(e) => field.handleChange(e.target.value.toUpperCase())}
+                      onBlur={field.handleBlur}
+                      placeholder="Contoh: SMK Negeri 1 Medan"
+                      className="uppercase"
+                    />
                   </Field>
                 )}
               </form.Field>

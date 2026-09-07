@@ -710,6 +710,12 @@ class ApplicantProfile(models.Model):
         choices=EducationLevel.choices,
         blank=True,
     )
+    education_school = models.CharField(
+        _("nama sekolah"),
+        max_length=255,
+        blank=True,
+        help_text=_("Nama sekolah atau institusi pendidikan terakhir."),
+    )
     education_major = models.CharField(
         _("jurusan pendidikan"),
         max_length=255,

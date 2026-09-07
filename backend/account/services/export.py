@@ -72,6 +72,7 @@ EXPORT_COLUMNS = [
     ("Email Keluarga", "family_email"),
     ("AGAMA", "religion"),
     ("Pendidikan", "education_level"),
+    ("Nama Sekolah", "education_school"),
     ("Jurusan", "education_major"),
     ("TINGGI", "height_cm"),
     ("BERAT", "weight_kg"),
@@ -732,7 +733,9 @@ def generate_applicants_excel(applicants: Iterable[Any], request: Any = None) ->
                 level = _get_nested_value(profile, "education_level", "")
                 value = _format_education_level(level) if level != "-" else "-"
             elif field_path == "education_institution":
-                value = _get_nested_value(profile, "education_institution")
+                value = _get_nested_value(profile, "education_school")
+            elif field_path == "education_school":
+                value = _get_nested_value(profile, "education_school")
             elif field_path == "education_major":
                 value = _get_nested_value(profile, "education_major")
             elif field_path == "sibling_count":

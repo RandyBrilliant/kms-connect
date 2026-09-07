@@ -17,6 +17,7 @@ export const APPLICANT_UPPERCASE_TEXT_FIELDS = new Set([
   "heir_name",
   "notes",
   "education_major",
+  "education_school",
   "passport_number",
   "passport_issue_place",
   "diploma_number",

@@ -74,7 +74,7 @@ const PROFILE_KEYS = [
   "father_almarhum", "mother_name", "mother_age", "mother_occupation", "mother_almarhum", "spouse_name", "spouse_age", "spouse_occupation", "spouse_almarhum",
   "family_address", "family_postal_code", "family_province", "family_district", "family_village", "father_phone", "mother_phone",
   "heir_name", "heir_relationship", "heir_contact_phone",
-  "religion", "education_level", "education_major", "marital_status", "height_cm", "weight_kg", "wears_glasses", "writing_hand",
+  "religion", "education_level", "education_school", "education_major", "marital_status", "height_cm", "weight_kg", "wears_glasses", "writing_hand",
   "passport_number", "passport_issue_date", "passport_issue_place", "passport_expiry_date",
   "referrer", "notes",
 ] as const
@@ -164,6 +164,7 @@ const defaultBiodata = {
   family_village: null as number | null,
   religion: "",
   education_level: "",
+  education_school: "",
   education_major: "",
   marital_status: "",
   height_cm: "",
@@ -226,6 +227,7 @@ export function ApplicantForm({
               : null,
         religion: value.religion || undefined,
         education_level: value.education_level || undefined,
+        education_school: value.education_school || undefined,
         education_major: value.education_major || undefined,
         marital_status: value.marital_status || undefined,
         writing_hand: value.writing_hand || undefined,
@@ -823,6 +825,14 @@ export function ApplicantForm({
                         {Object.entries(EDUCATION_LEVEL_LABELS).map(([key, label]) => (<SelectItem key={key} value={key}>{label}</SelectItem>))}
                       </SelectContent>
                     </Select>
+                  </Field>
+                )}
+              </form.Field>
+              <form.Field name="education_school">
+                {(field) => (
+                  <Field>
+                    <FieldLabel htmlFor={field.name}>Nama Sekolah</FieldLabel>
+                    <Input id={field.name} value={field.state.value} onChange={applicantTextChange(field.name, field.handleChange)} onBlur={field.handleBlur} placeholder="Contoh: SMK Negeri 1 Medan" />
                   </Field>
                 )}
               </form.Field>

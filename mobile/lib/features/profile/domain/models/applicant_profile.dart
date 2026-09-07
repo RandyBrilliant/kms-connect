@@ -76,6 +76,7 @@ class ApplicantProfile {
   final String? nik;
   final String? religion;
   final String? educationLevel;
+  final String? educationSchool;
   final String? educationMajor;
   final int? heightCm;
   final int? weightKg;
@@ -168,6 +169,7 @@ class ApplicantProfile {
     this.nik,
     this.religion,
     this.educationLevel,
+    this.educationSchool,
     this.educationMajor,
     this.heightCm,
     this.weightKg,
@@ -281,6 +283,7 @@ class ApplicantProfile {
       nik: _str(json['nik']),
       religion: _str(json['religion']),
       educationLevel: _str(json['education_level']),
+      educationSchool: _str(json['education_school']),
       educationMajor: _str(json['education_major']),
       heightCm: _parseId(json['height_cm']),
       weightKg: _parseId(json['weight_kg']),

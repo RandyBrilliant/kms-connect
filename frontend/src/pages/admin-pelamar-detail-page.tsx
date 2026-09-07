@@ -287,6 +287,7 @@ function ApplicantSidebar({
     sibling_count: "Jumlah Saudara",
     birth_order: "Anak ke-",
     religion: "Agama",
+    education_school: "Nama Sekolah",
     education_major: "Jurusan Pendidikan",
     data_declaration_confirmed: "Pernyataan Data Benar",
     // Ciri fisik

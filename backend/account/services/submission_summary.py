@@ -22,6 +22,7 @@ PROFILE_FIELD_LABELS: dict[str, str] = {
     "birth_order": "Anak ke-",
     "religion": "Agama",
     "education_major": "Jurusan Pendidikan",
+    "education_school": "Nama Sekolah",
     "data_declaration_confirmed": "Pernyataan Data Benar",
     "height_cm": "Tinggi Badan (cm)",
     "weight_kg": "Berat Badan (kg)",

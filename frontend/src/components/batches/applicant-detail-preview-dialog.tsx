@@ -135,6 +135,7 @@ export function ApplicantDetailPreviewDialog({
                 <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   <FieldItem label="Agama" value={profile.religion} />
                   <FieldItem label="Pendidikan" value={profile.education_level} />
+                  <FieldItem label="Nama Sekolah" value={profile.education_school} />
                   <FieldItem label="Jurusan" value={profile.education_major} />
                   <FieldItem label="Status Pernikahan" value={profile.marital_status} />
                   <FieldItem label="Tinggi Badan (cm)" value={profile.height_cm} />

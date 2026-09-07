@@ -34,6 +34,7 @@ class CvPdfTests(TestCase):
             birth_date=date(1998, 5, 17),
             address="JL. MERDEKA NO. 10",
             education_level="SMK",
+            education_school="SMK NEGERI 1 MEDAN",
             education_major="TEKNIK MESIN",
             has_passport=True,
         )
@@ -52,6 +53,8 @@ class CvPdfTests(TestCase):
         self.assertGreater(len(pdf), 20_000)
         # Raster template + photo should keep the file reasonably large.
         self.assertIn(b"/XObject", pdf)
+        # Kemampuan / bahasa are left blank for the pelamar to complete later.
+        self.assertNotIn(b"INDONESIA", pdf)
 
     def test_generate_cv_pdf_uses_template_when_photo_is_unreadable(self):
         user = CustomUser.objects.create_user(

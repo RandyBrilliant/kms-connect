@@ -66,6 +66,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
 
   // ── New: Data Fisik / Pendidikan / Dokumen ─────────────────────────────
   final _educationMajor = TextEditingController();
+  final _educationSchool = TextEditingController();
   final _heightCm = TextEditingController();
   final _weightKg = TextEditingController();
   final _shoeSize = TextEditingController();
@@ -168,7 +169,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
       _spouseName, _spouseAge, _spouseOccupation,
       _heirName, _heirContactPhone,
       _fatherBirthDateCtrl, _motherBirthDateCtrl, _spouseBirthDateCtrl,
-      _educationMajor, _heightCm, _weightKg, _shoeSize,
+      _educationMajor, _educationSchool, _heightCm, _weightKg, _shoeSize,
       _passportNumber, _passportIssuePlace, _passportIssueDateCtrl,
       _passportExpiryDateCtrl,
       _familyCardNumber, _diplomaNumber, _bpjsNumber, _staffReferrerCtrl,
@@ -236,6 +237,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     // ── New: Data Pribadi dropdowns (normalize to API keys / item keys) ─
     _religion = _normalizeDropdownKey(p.religion);
     _educationLevel = _normalizeDropdownKey(p.educationLevel);
+    _educationSchool.text = (p.educationSchool ?? '').toUpperCase();
     _educationMajor.text = (p.educationMajor ?? '').toUpperCase();
     _maritalStatus = _normalizeDropdownKey(p.maritalStatus);
 
@@ -370,6 +372,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
       'contact_phone': _phone.text.trim(),
       if (_religion != null) 'religion': _religion,
       if (_educationLevel != null) 'education_level': _educationLevel,
+      'education_school': _educationSchool.text.trim(),
       'education_major': _educationMajor.text.trim(),
       if (_maritalStatus != null) 'marital_status': _maritalStatus,
       'height_cm': _parseOptionalInt(_heightCm.text),
@@ -866,6 +869,14 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                             ('S1', 'S1'),
                           ],
                           onChanged: (v) => setState(() => _educationLevel = v),
+                        ),
+                        const SizedBox(height: 14),
+                        M3TextField(
+                          controller: _educationSchool,
+                          label: 'Nama Sekolah',
+                          hint: 'Contoh: SMK Negeri 1 Medan',
+                          prefixIcon: Icons.apartment_outlined,
+                          upperCase: true,
                         ),
                         const SizedBox(height: 14),
                         M3TextField(

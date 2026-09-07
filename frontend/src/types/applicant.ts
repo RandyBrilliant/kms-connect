@@ -153,6 +153,7 @@ export interface ApplicantProfile {
   gender: Gender
   religion: Religion
   education_level: EducationLevel
+  education_school?: string
   education_major: string
   height_cm: number | null
   weight_kg: number | null

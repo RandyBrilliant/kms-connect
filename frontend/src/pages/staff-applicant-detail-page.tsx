@@ -227,6 +227,7 @@ export function StaffApplicantDetailPage() {
         </CardHeader>
         <CardContent className="space-y-3">
           <InfoRow label="Pendidikan Terakhir" value={profile?.education_level} />
+          <InfoRow label="Nama Sekolah" value={profile?.education_school} />
           <InfoRow label="Jurusan" value={profile?.education_major} />
         </CardContent>
       </Card>

@@ -55,6 +55,7 @@ export const applicantCreateSchema = z
     // Data pribadi
     religion: z.string().optional(),
     education_level: z.string().optional(),
+    education_school: z.string().optional(),
     education_major: z.string().optional(),
     marital_status: z.string().optional(),
     height_cm: z.number().int().min(0).nullable().optional(),
@@ -114,6 +115,7 @@ export const applicantProfileUpdateSchema = z.object({
   heir_contact_phone: z.string().optional(),
   religion: z.string().optional(),
   education_level: z.string().optional(),
+  education_school: z.string().optional(),
   education_major: z.string().optional(),
   diploma_number: z.string().optional(),
   marital_status: z.string().optional(),

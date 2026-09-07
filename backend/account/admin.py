@@ -180,6 +180,7 @@ class ApplicantProfileAdmin(admin.ModelAdmin):
                     "gender",
                     "religion",
                     "education_level",
+                    "education_school",
                     "education_major",
                     "height_cm",
                     "weight_kg",

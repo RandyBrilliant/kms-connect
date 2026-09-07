@@ -233,20 +233,6 @@ def _ktp_text(profile) -> str:
     return ", ".join(ordered)
 
 
-def _skills(profile, work_exps) -> list[str]:
-    skills: list[str] = []
-    major = _str(profile.education_major)
-    if major:
-        skills.append(major)
-    for exp in work_exps:
-        for part in (_str(exp.department), _str(exp.position)):
-            if part and part.upper() not in {s.upper() for s in skills}:
-                skills.append(part)
-        if len(skills) >= 3:
-            break
-    return skills[:3]
-
-
 def _photo_cover(data: bytes, width_pt: float, height_pt: float) -> io.BytesIO:
     """Center-crop the pas foto to fill the template well."""
     src = Image.open(io.BytesIO(data)).convert("RGB")
@@ -362,7 +348,9 @@ def generate_cv_pdf(profile) -> bytes:
         or _place_name(getattr(profile, "birth_place", None))
     )
     ttl = ", ".join(p for p in (birth_place, _fmt_date(profile.birth_date)) if p)
-    school = _str(profile.get_education_level_display() if profile.education_level else "")
+    school = _str(getattr(profile, "education_school", None)) or _str(
+        profile.get_education_level_display() if profile.education_level else ""
+    )
     major = _str(profile.education_major)
 
     work_exps = list(profile.work_experiences.all()[:3])
@@ -411,10 +399,7 @@ def generate_cv_pdf(profile) -> bytes:
     for rect, line in zip(_R_ALAMAT_SEKARANG, ktp_lines[:2]):
         _draw_fitted(c, rect, line, size=7.0)
 
-    for rect, skill in zip(_R_KEMAMPUAN, _skills(profile, work_exps)):
-        _draw_fitted(c, rect, skill, size=7.0)
-
-    _draw_fitted(c, _R_BAHASA[0], "INDONESIA", size=7.0)
+    # Kemampuan and bahasa stay blank so the pelamar can fill them by hand.
     _draw_fitted(c, _R_TGL, _fmt_date(timezone.localdate()), size=7.5)
 
     try:
