@@ -27,6 +27,7 @@ from .managers import (
     CustomUserManager,
 )
 from .document_specs import validate_document_file
+from .document_storage import private_document_storage
 from .inbound_transport_stages import (
     INBOUND_TRANSPORT_STAGE_CHOICES,
     INBOUND_TRANSPORT_STAGE_CODE_MAX_LENGTH,
@@ -1780,6 +1781,9 @@ class ApplicantDocument(models.Model):
     file = models.FileField(
         _("berkas"),
         upload_to=applicant_document_upload_to,
+        # Private storage: these are KTP, passports, and medical records, and
+        # they are served only through the authenticated file/ endpoint.
+        storage=private_document_storage,
         help_text=_("Berkas dokumen yang diunggah."),
     )
     uploaded_at = models.DateTimeField(_("diunggah pada"), auto_now_add=True)

@@ -4,12 +4,18 @@ import tempfile
 from io import BytesIO
 
 from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from PIL import Image
 from rest_framework.test import APIClient
 
 from account.document_file_access import document_view_endpoint
+from account.document_storage import (
+    private_document_storage,
+    remote_storage_configured,
+    reset_storage_cache,
+)
 from account.models import (
     ApplicantDocument,
     ApplicantProfile,
@@ -246,6 +252,54 @@ class DocumentFileAccessTests(TestCase):
 
         self.assertTrue(row["file_view_url"].endswith(self._admin_file_path()))
         self.assertNotEqual(row["file_view_url"], row["file_access_url"])
+
+
+class PrivateDocumentStorageTests(TestCase):
+    """
+    How new document uploads are stored.
+
+    Asserted on the configuration rather than a real upload, because the point
+    of these settings is what they tell Spaces to do; constructing the storage
+    does not open a connection.
+    """
+
+    def tearDown(self):
+        reset_storage_cache()
+
+    def test_local_disk_uses_the_default_storage(self):
+        """Development and this suite must not be pushed onto S3."""
+        self.assertFalse(remote_storage_configured())
+        self.assertIs(private_document_storage(), default_storage)
+
+    @override_settings(AWS_STORAGE_BUCKET_NAME="kms-data")
+    def test_new_uploads_are_private(self):
+        reset_storage_cache()
+        self.assertEqual(private_document_storage().default_acl, "private")
+
+    @override_settings(AWS_STORAGE_BUCKET_NAME="kms-data")
+    def test_urls_are_signed_against_the_origin(self):
+        """
+        A signature is computed over the request host, and the CDN would keep
+        serving a cached copy of an object that has since become private.
+        """
+        reset_storage_cache()
+        storage = private_document_storage()
+        self.assertIsNone(storage.custom_domain)
+        self.assertTrue(storage.querystring_auth)
+        self.assertEqual(storage.querystring_expire, signed_url_ttl())
+
+    @override_settings(AWS_STORAGE_BUCKET_NAME="kms-data")
+    def test_documents_are_not_cached_at_the_edge(self):
+        """Overrides the global max-age=86400, which is wrong for private files."""
+        reset_storage_cache()
+        cache_control = private_document_storage().object_parameters["CacheControl"]
+        self.assertIn("no-store", cache_control)
+        self.assertNotIn("86400", cache_control)
+
+    @override_settings(AWS_STORAGE_BUCKET_NAME="kms-data")
+    def test_storage_is_reused(self):
+        reset_storage_cache()
+        self.assertIs(private_document_storage(), private_document_storage())
 
 
 @local_media
