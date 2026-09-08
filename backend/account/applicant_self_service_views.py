@@ -28,6 +28,7 @@ from .serializers import (
 )
 from django.http import HttpResponse
 from .permissions import IsApplicant
+from .pdf_renderers import PdfBinaryViewMixin
 from .api_responses import success_response, error_response, ApiCode, ApiMessage
 from .document_file_access import DocumentFileAccessMixin
 from .document_specs import validate_document_file, compress_image_file, is_image_type
@@ -542,7 +543,7 @@ class ApplicantChangePasswordView(APIView):
         )
 
 
-class ApplicantBiodataPdfView(APIView):
+class ApplicantBiodataPdfView(PdfBinaryViewMixin, APIView):
     """
     GET /api/applicants/me/biodata-pdf/
     Generates and downloads the Biodata CPMI PDF for the logged-in applicant.
@@ -589,7 +590,7 @@ class ApplicantBiodataPdfView(APIView):
         return response
 
 
-class ApplicantCvPdfView(APIView):
+class ApplicantCvPdfView(PdfBinaryViewMixin, APIView):
     """
     GET /api/applicants/me/cv-pdf/
     Generates the official CPMI CV PDF for the logged-in applicant.
@@ -636,7 +637,7 @@ class ApplicantCvPdfView(APIView):
         return cv_pdf_http_response(pdf_bytes, profile.user.full_name)
 
 
-class ApplicantPsychologyReferralPdfView(APIView):
+class ApplicantPsychologyReferralPdfView(PdfBinaryViewMixin, APIView):
     """
     GET /api/applicants/me/psychology-referral-pdf/
 
@@ -695,7 +696,7 @@ class ApplicantPsychologyReferralPdfView(APIView):
         return response
 
 
-class ApplicantMedicalReferralPdfView(APIView):
+class ApplicantMedicalReferralPdfView(PdfBinaryViewMixin, APIView):
     """
     GET /api/applicants/me/medical-referral-pdf/
 

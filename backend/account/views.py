@@ -44,6 +44,7 @@ from .models import (
     AccountDeletionRequest,
 )
 from .permissions import IsBackofficeAdmin, IsMasterAdmin, IsApplicant
+from .pdf_renderers import PdfBinaryViewMixin
 from .throttles import AuthPublicRateThrottle
 from .email_utils import (
     send_verification_email,
@@ -1583,7 +1584,7 @@ class AdminReportView(APIView):
 # Biodata PDF
 # ---------------------------------------------------------------------------
 
-class AdminBiodataPdfView(APIView):
+class AdminBiodataPdfView(PdfBinaryViewMixin, APIView):
     """
     Generate and download a Biodata CPMI PDF for a single applicant.
     GET /api/applicants/<pk>/biodata-pdf/
@@ -1623,7 +1624,7 @@ class AdminBiodataPdfView(APIView):
         return response
 
 
-class AdminCvPdfView(APIView):
+class AdminCvPdfView(PdfBinaryViewMixin, APIView):
     """
     Generate the official CPMI CV (daftar riwayat hidup) PDF.
     GET /api/applicants/<pk>/cv-pdf/
@@ -1666,7 +1667,7 @@ class AdminCvPdfView(APIView):
 # Inbond Cost PDF
 # ---------------------------------------------------------------------------
 
-class AdminInbondPdfView(APIView):
+class AdminInbondPdfView(PdfBinaryViewMixin, APIView):
     """
     Generate the Tanda Terima Pengembalian Biaya Transportasi CPMI (Inbond Cost) PDF.
     Admin-only.
@@ -1705,7 +1706,7 @@ class AdminInbondPdfView(APIView):
         return response
 
 
-class AdminPsychologyReferralPdfView(APIView):
+class AdminPsychologyReferralPdfView(PdfBinaryViewMixin, APIView):
     """
     Surat Pengantar Tes Psikologi CPMI (overlay pada template JPG/PNG).
     GET /api/applicants/<pk>/psychology-referral-pdf/
@@ -1742,7 +1743,7 @@ class AdminPsychologyReferralPdfView(APIView):
         return response
 
 
-class AdminMedicalReferralPdfView(APIView):
+class AdminMedicalReferralPdfView(PdfBinaryViewMixin, APIView):
     """
     Surat Pengantar Medical Check Up CPMI.
     GET /api/applicants/<pk>/medical-referral-pdf/
@@ -1785,7 +1786,7 @@ _REFERRAL_PDF_GENERATORS = {
 }
 
 
-class AdminBulkReferralPdfView(APIView):
+class AdminBulkReferralPdfView(PdfBinaryViewMixin, APIView):
     """
     Generate surat pengantar medical or psikologi for one or more pelamar.
 
