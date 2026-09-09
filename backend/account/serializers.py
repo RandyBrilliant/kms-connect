@@ -521,7 +521,6 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
             "register_number",
             "shoe_size",
             "shirt_size",
-            "photo",
             "notes",
             "verification_status",
             "submitted_at",

@@ -413,6 +413,8 @@ export function ApplicantForm({
                       type="text"
                       placeholder="Contoh: JAKARTA"
                       maxLength={200}
+                      autoCapitalize="characters"
+                      className="uppercase"
                       value={field.state.value}
                       onChange={applicantTextChange(field.name, field.handleChange)}
                       onBlur={field.handleBlur}

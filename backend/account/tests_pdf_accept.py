@@ -40,6 +40,19 @@ class BiodataPdfAcceptHeaderTests(TestCase):
 
     @patch(
         "account.applicant_self_service_views.cached_pdf_bytes",
+        return_value=b"%PDF-1.4 mock-biodata",
+    )
+    def test_mobile_fallback_accept_returns_the_file(self, _mock):
+        url = reverse("account:applicant-me-biodata-pdf")
+        response = self.client.get(
+            url,
+            HTTP_ACCEPT="application/pdf, application/json;q=0.9",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.content.startswith(b"%PDF"))
+
+    @patch(
+        "account.applicant_self_service_views.cached_pdf_bytes",
         return_value=b"%PDF-1.4 mock-cv",
     )
     def test_cv_pdf_accept_pdf_returns_the_file_instead_of_406(self, _mock):

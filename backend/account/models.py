@@ -819,13 +819,6 @@ class ApplicantProfile(models.Model):
         blank=True,
         help_text=_("Contoh: S, M, L, XL, XXL."),
     )
-    photo = models.ImageField(
-        _("pas photo PMI"),
-        upload_to="account/applicants/%Y/%m/",
-        blank=True,
-        null=True,
-        help_text=_("Pas photo berwarna background putih ukuran 3x4."),
-    )
     notes = models.TextField(
         _("keterangan"),
         blank=True,

@@ -13,6 +13,7 @@ class ProfessionalDropdownField extends StatelessWidget {
     required this.prefixIcon,
     required this.onTap,
     this.validator,
+    this.emptyErrorText,
   }) : assert(
           controller != null || valueText != null,
           'Either controller or valueText must be provided.',
@@ -25,10 +26,16 @@ class ProfessionalDropdownField extends StatelessWidget {
   final IconData prefixIcon;
   final VoidCallback onTap;
   final String? Function(String?)? validator;
+  /// When set, an empty value is shown in the error (red) state.
+  final String? emptyErrorText;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final currentText = controller?.text ?? valueText ?? '';
+    final emptyError = emptyErrorText != null && currentText.trim().isEmpty
+        ? emptyErrorText
+        : null;
     return TextFormField(
       key: controller == null ? ValueKey(valueText ?? '') : null,
       controller: controller,
@@ -39,6 +46,7 @@ class ProfessionalDropdownField extends StatelessWidget {
         runWhenNavigatorUnlocked(onTap);
       },
       validator: validator,
+      forceErrorText: emptyError,
       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
             fontWeight: FontWeight.w600,
             color: cs.onSurface,

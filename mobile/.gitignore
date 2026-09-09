@@ -57,6 +57,14 @@ app.*.map.json
 /android/app/release
 key.properties
 
+# Fastlane / CI signing artifacts (never commit)
+android/play-store-key.json
+**/fastlane/report.xml
+**/fastlane/Preview.html
+**/fastlane/screenshots
+**/fastlane/test_output
+**/fastlane/readme.md
+
 # Gradle
 .gradle/
 .kotlin/

@@ -130,8 +130,7 @@ class ApplicantProfile {
   final String? heirRelationship;
   final String? heirContactPhone;
 
-  // Photo & notes
-  final String? photo;
+  // Notes
   final String? notes;
 
   /// Biaya transport per sub-tahapan Diterima (admin; optional on API).
@@ -216,7 +215,6 @@ class ApplicantProfile {
     this.heirName,
     this.heirRelationship,
     this.heirContactPhone,
-    this.photo,
     this.notes,
     this.inboundTransportStageCosts,
     this.hasDiterimaLamaran = false,
@@ -333,7 +331,6 @@ class ApplicantProfile {
       heirName: _str(json['heir_name']),
       heirRelationship: _str(json['heir_relationship']),
       heirContactPhone: _str(json['heir_contact_phone']),
-      photo: _str(json['photo']),
       notes: _str(json['notes']),
       inboundTransportStageCosts: inboundCosts,
       hasDiterimaLamaran: json['has_diterima_lamaran'] == true,

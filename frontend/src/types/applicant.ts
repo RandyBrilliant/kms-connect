@@ -196,7 +196,6 @@ export interface ApplicantProfile {
   has_diterima_lamaran?: boolean
   shoe_size: string
   shirt_size: string
-  photo: string | null
   notes: string
   verification_status: ApplicantVerificationStatus
   submitted_at: string | null

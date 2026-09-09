@@ -17,6 +17,7 @@ class ProfessionalPhoneField extends StatefulWidget {
     this.onCountryTap,
     this.enabled = true,
     this.validator,
+    this.emptyErrorText,
   });
 
   final TextEditingController controller;
@@ -29,6 +30,8 @@ class ProfessionalPhoneField extends StatefulWidget {
   final VoidCallback? onCountryTap;
   final bool enabled;
   final String? Function(String?)? validator;
+  /// When set, an empty value is shown in the error (red) state.
+  final String? emptyErrorText;
 
   static String normalizeIndonesiaNumber(String input) {
     var digits = input.replaceAll(RegExp(r'[^0-9]'), '');
@@ -106,6 +109,11 @@ class _ProfessionalPhoneFieldState extends State<ProfessionalPhoneField> {
     _selectedDial = _resolveDialFromWidget();
     _listenedNode = _focusNode;
     _listenedNode?.addListener(_handleFocusChange);
+    widget.controller.addListener(_onTextChanged);
+  }
+
+  void _onTextChanged() {
+    if (widget.emptyErrorText != null && mounted) setState(() {});
   }
 
   @override
@@ -116,6 +124,10 @@ class _ProfessionalPhoneFieldState extends State<ProfessionalPhoneField> {
       _listenedNode = _focusNode;
       _listenedNode?.addListener(_handleFocusChange);
     }
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_onTextChanged);
+      widget.controller.addListener(_onTextChanged);
+    }
     if (oldWidget.countryCode != widget.countryCode ||
         oldWidget.countryFlag != widget.countryFlag) {
       _selectedDial = _resolveDialFromWidget();
@@ -124,6 +136,7 @@ class _ProfessionalPhoneFieldState extends State<ProfessionalPhoneField> {
 
   @override
   void dispose() {
+    widget.controller.removeListener(_onTextChanged);
     _listenedNode?.removeListener(_handleFocusChange);
     _internalNode?.dispose();
     super.dispose();
@@ -139,6 +152,13 @@ class _ProfessionalPhoneFieldState extends State<ProfessionalPhoneField> {
     final fieldHintColor =
         enabled ? cs.onSurfaceVariant.withValues(alpha: 0.7) : cs.onSurfaceVariant.withValues(alpha: 0.45);
 
+    final emptyError = widget.emptyErrorText != null &&
+            ProfessionalPhoneField.normalizeIndonesiaNumber(
+                    widget.controller.text)
+                .isEmpty
+        ? widget.emptyErrorText
+        : null;
+
     return TextFormField(
       controller: widget.controller,
       focusNode: _focusNode,
@@ -150,6 +170,7 @@ class _ProfessionalPhoneFieldState extends State<ProfessionalPhoneField> {
         const _IndonesiaPhoneInputFormatter(maxDigits: 13),
       ],
       style: TextStyle(color: fieldTextColor),
+      forceErrorText: emptyError,
       decoration: InputDecoration(
         labelText: widget.label,
         hintText: widget.hintText,
@@ -208,6 +229,14 @@ class _ProfessionalPhoneFieldState extends State<ProfessionalPhoneField> {
         focusedBorder: OutlineInputBorder(
           borderRadius: radius,
           borderSide: BorderSide(color: cs.primary, width: 1.6),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: radius,
+          borderSide: BorderSide(color: cs.error),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: radius,
+          borderSide: BorderSide(color: cs.error, width: 1.6),
         ),
       ),
       validator: widget.validator ??

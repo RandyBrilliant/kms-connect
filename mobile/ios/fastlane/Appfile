@@ -1,0 +1,9 @@
+# frozen_string_literal: true
+
+app_identifier("id.kmsconnect.app")
+team_id("RLQHLFX576")
+
+# Auth uses App Store Connect API key from CI env (see Fastfile).
+# Optional Apple ID / ITC team only if you run Fastlane locally with Apple ID auth:
+#   apple_id(ENV["FASTLANE_APPLE_ID"])
+#   itc_team_id(ENV["ITC_TEAM_ID"])

@@ -25,6 +25,7 @@ from account.permissions import (
     IsStaff,
 )
 from account.api_responses import success_response, error_response, ApiCode
+from account.pdf_renderers import BINARY_DOWNLOAD_ACTION
 from account.models import ApplicantDocument, ApplicantProfile, ApplicantVerificationStatus, CompanyProfile, CustomUser, UserRole
 from account.serializers import _staff_rujukan_display_name
 from account.pagination import StandardResultsSetPagination
@@ -1116,7 +1117,12 @@ class LamaranBatchViewSet(AuditedMixin, viewsets.ModelViewSet):
             )
         )
 
-    @action(detail=True, methods=["get"], url_path="export-excel")
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="export-excel",
+        **BINARY_DOWNLOAD_ACTION,
+    )
     def export_excel(self, request, pk=None):
         """
         GET /api/batches/{id}/export-excel/
@@ -1586,7 +1592,12 @@ class InterviewCohortViewSet(AuditedMixin, viewsets.ModelViewSet):
             )
         )
 
-    @action(detail=True, methods=["get"], url_path="export-excel")
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="export-excel",
+        **BINARY_DOWNLOAD_ACTION,
+    )
     def export_excel(self, request, pk=None):
         """Export applicants in this cohort to Excel (optionally filtered by status)."""
         from django.http import HttpResponse
@@ -1783,7 +1794,12 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
-    @action(detail=False, methods=["get"], url_path="export-excel")
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="export-excel",
+        **BINARY_DOWNLOAD_ACTION,
+    )
     def export_excel(self, request):
         """
         GET /api/applications/export-excel/
@@ -1862,7 +1878,12 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response
 
-    @action(detail=False, methods=["get"], url_path="export-activity-excel")
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="export-activity-excel",
+        **BINARY_DOWNLOAD_ACTION,
+    )
     def export_activity_excel(self, request):
         """
         GET /api/applications/export-activity-excel/

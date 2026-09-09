@@ -26,6 +26,7 @@ class ProfessionalTextField extends StatefulWidget {
     this.onTap,
     this.maxLines = 1,
     this.enabled = true,
+    this.emptyErrorText,
   });
 
   final TextEditingController controller;
@@ -48,6 +49,9 @@ class ProfessionalTextField extends StatefulWidget {
   final VoidCallback? onTap;
   final int maxLines;
   final bool enabled;
+  /// When set, an empty value is shown in the error (red) state so required
+  /// biodata fields are visible before the user taps save.
+  final String? emptyErrorText;
 
   @override
   State<ProfessionalTextField> createState() => _ProfessionalTextFieldState();
@@ -77,6 +81,11 @@ class _ProfessionalTextFieldState extends State<ProfessionalTextField> {
     super.initState();
     _listenedNode = _focusNode;
     _listenedNode?.addListener(_handleFocusChange);
+    widget.controller.addListener(_onTextChanged);
+  }
+
+  void _onTextChanged() {
+    if (widget.emptyErrorText != null && mounted) setState(() {});
   }
 
   @override
@@ -87,10 +96,15 @@ class _ProfessionalTextFieldState extends State<ProfessionalTextField> {
       _listenedNode = _focusNode;
       _listenedNode?.addListener(_handleFocusChange);
     }
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_onTextChanged);
+      widget.controller.addListener(_onTextChanged);
+    }
   }
 
   @override
   void dispose() {
+    widget.controller.removeListener(_onTextChanged);
     _listenedNode?.removeListener(_handleFocusChange);
     _internalNode?.dispose();
     super.dispose();
@@ -100,6 +114,11 @@ class _ProfessionalTextFieldState extends State<ProfessionalTextField> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
+    final emptyError = widget.emptyErrorText != null &&
+            widget.controller.text.trim().isEmpty
+        ? widget.emptyErrorText
+        : null;
+
     return TextFormField(
       controller: widget.controller,
       focusNode: _focusNode,
@@ -108,6 +127,7 @@ class _ProfessionalTextFieldState extends State<ProfessionalTextField> {
       textInputAction: widget.textInputAction,
       onFieldSubmitted: widget.onSubmitted,
       validator: widget.validator,
+      forceErrorText: emptyError,
       obscureText: widget.obscureText,
       readOnly: widget.readOnly,
       onTap: widget.onTap == null

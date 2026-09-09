@@ -196,7 +196,6 @@ class ApplicantProfileAdmin(admin.ModelAdmin):
                     "register_number",
                     "shoe_size",
                     "shirt_size",
-                    "photo",
                     "notes",
                 ),
             },

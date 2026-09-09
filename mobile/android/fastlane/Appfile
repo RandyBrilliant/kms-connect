@@ -1,0 +1,8 @@
+# frozen_string_literal: true
+
+# Package name must match applicationId in android/app/build.gradle.kts
+package_name("id.kmsconnect.app")
+
+# Path is relative to this Appfile's directory (mobile/android/fastlane/).
+# CI writes the JSON from the PLAY_STORE_JSON secret before invoking Fastlane.
+json_key_file(ENV.fetch("PLAY_STORE_JSON_PATH", File.expand_path("../play-store-key.json", __dir__)))

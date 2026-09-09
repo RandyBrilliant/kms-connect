@@ -37,11 +37,17 @@ class ApiClient {
   Dio get dio => _dio;
 
   /// Binary downloads (PDFs) must never be served from the HTTP cache.
+  ///
+  /// Include JSON in Accept so Django REST Framework can still negotiate
+  /// if a PDF renderer is missing (error bodies are JSON). A PDF-only
+  /// Accept caused HTTP 406 on older API builds.
   static Options uncachedBytes({Duration? receiveTimeout}) {
     return Options(
       responseType: ResponseType.bytes,
       receiveTimeout: receiveTimeout,
-      headers: const {'Accept': 'application/pdf'},
+      headers: const {
+        'Accept': 'application/pdf, application/json;q=0.9',
+      },
       extra: CacheOptions(
         store: null,
         policy: CachePolicy.noCache,

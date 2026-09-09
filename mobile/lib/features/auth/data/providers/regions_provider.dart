@@ -30,7 +30,7 @@ final provincesProvider = FutureProvider<List<Region>>((ref) async {
 });
 
 // ── Regency (Kabupaten/Kota) ──────────────────────────────────────────────────
-/// All regencies – used for "Tempat Lahir" picker (no province filter).
+/// All regencies (no province filter). Address forms use [regenciesByProvinceProvider].
 final regenciesProvider = FutureProvider<List<Region>>((ref) async {
   final response = await ApiClient().dio.get(ApiEndpoints.regencies);
   final data = response.data as List<dynamic>;

@@ -1,0 +1,30 @@
+# frozen_string_literal: true
+
+# Uploads a pre-built AAB to Play Console **internal testing** only.
+# Never touches production, and never rewrites store listing assets.
+
+default_platform(:android)
+
+platform :android do
+  desc "Upload an existing release AAB to the Play internal testing track"
+  lane :internal do
+    aab_path = ENV.fetch(
+      "AAB_PATH",
+      File.expand_path("../../build/app/outputs/bundle/release/app-release.aab", __dir__)
+    )
+
+    UI.user_error!("AAB not found at #{aab_path}") unless File.exist?(aab_path)
+
+    upload_to_play_store(
+      aab: aab_path,
+      track: "internal",
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      skip_upload_apk: true,
+      skip_upload_changelogs: true,
+      changes_not_sent_for_review: true,
+      release_status: "completed"
+    )
+  end
+end

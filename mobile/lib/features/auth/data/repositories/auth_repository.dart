@@ -251,7 +251,7 @@ class AuthRepository {
         if (phoneNumber != null && phoneNumber.trim().isNotEmpty)
           'phone_number': ProfessionalPhoneField.toIndonesiaE164(phoneNumber),
         if (birthPlaceText != null && birthPlaceText.trim().isNotEmpty)
-          'birth_place_text': birthPlaceText.trim(),
+          'birth_place_text': birthPlaceText.trim().toUpperCase(),
         'birth_date': ?birthDateIso,
         'data_declaration_confirmed': ?dataDeclarationConfirmed,
       });
@@ -335,7 +335,7 @@ class AuthRepository {
         if (fullName != null && fullName.trim().isNotEmpty)
           'full_name': fullName.trim(),
         if (birthPlaceText != null && birthPlaceText.trim().isNotEmpty)
-          'birth_place_text': birthPlaceText.trim(),
+          'birth_place_text': birthPlaceText.trim().toUpperCase(),
         'birth_date': ?birthDateIso,
       });
 

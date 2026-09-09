@@ -152,6 +152,20 @@ def _work_exp_summary(exp) -> str:
     return "  ·  ".join(parts)
 
 
+def pas_foto_bytes(profile) -> bytes | None:
+    """Raw bytes of the pelamar's Pas Foto document (`pas-foto`), or None."""
+    documents = getattr(profile, "_prefetched_objects_cache", {}).get("documents")
+    if documents is None:
+        documents = profile.documents.select_related("document_type").all()
+    for doc in documents:
+        code = getattr(getattr(doc, "document_type", None), "code", "")
+        if code == "pas-foto" and doc.file and doc.file.name:
+            data = _read_field_file_bytes(doc.file)
+            if data:
+                return data
+    return None
+
+
 def _read_field_file_bytes(field_file) -> bytes | None:
     """
     Read raw bytes from a Django FieldFile, working for both storage backends:
@@ -380,10 +394,13 @@ def generate_biodata_pdf(profile) -> bytes:
     draw(_F_KETERANGAN_1, note_line1)
     draw(_F_KETERANGAN_2, note_line2)
 
-    # ── 5. Photo ──────────────────────────────────────────────────────────────
-    if profile.photo and profile.photo.name:
-        photo_data = _read_field_file_bytes(profile.photo)
-        if photo_data:
+    # ── 5. Photo (Pas Foto document) ─────────────────────────────────────────
+    try:
+        photo_data = pas_foto_bytes(profile)
+    except Exception:
+        photo_data = None
+    if photo_data:
+        try:
             photo_bytes    = io.BytesIO(photo_data)
             photo_x        = _FX_PHOTO * PAGE_W
             photo_y_bottom = (1.0 - _FY_PHOTO) * PAGE_H - PHOTO_H_PT
@@ -396,6 +413,9 @@ def generate_biodata_pdf(profile) -> bytes:
                 preserveAspectRatio=True,
                 anchor="nw",
             )
+        except Exception:
+            # Unreadable pas foto must not abort biodata generation.
+            pass
 
     # ── 6. Debug grid ─────────────────────────────────────────────────────────
     if DEBUG_GRID:

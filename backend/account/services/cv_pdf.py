@@ -18,7 +18,7 @@ from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfgen import canvas
 
-from account.services.biodata_pdf import _read_field_file_bytes
+from account.services.biodata_pdf import pas_foto_bytes
 
 DEBUG_GRID = False
 
@@ -252,20 +252,7 @@ def _photo_cover(data: bytes, width_pt: float, height_pt: float) -> io.BytesIO:
 
 
 def _photo_bytes(profile) -> bytes | None:
-    if profile.photo and profile.photo.name:
-        data = _read_field_file_bytes(profile.photo)
-        if data:
-            return data
-    documents = getattr(profile, "_prefetched_objects_cache", {}).get("documents")
-    if documents is None:
-        documents = profile.documents.select_related("document_type").all()
-    for doc in documents:
-        code = getattr(getattr(doc, "document_type", None), "code", "")
-        if code == "pas-foto" and doc.file and doc.file.name:
-            data = _read_field_file_bytes(doc.file)
-            if data:
-                return data
-    return None
+    return pas_foto_bytes(profile)
 
 
 def _draw_debug(c: canvas.Canvas) -> None:

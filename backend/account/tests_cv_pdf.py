@@ -7,7 +7,14 @@ from django.core.files.base import ContentFile
 from django.test import TestCase
 from PIL import Image
 
-from account.models import ApplicantProfile, CustomUser, UserRole, WorkExperience
+from account.models import (
+    ApplicantDocument,
+    ApplicantProfile,
+    CustomUser,
+    DocumentType,
+    UserRole,
+    WorkExperience,
+)
 from account.services.cv_pdf import cv_pdf_http_response, generate_cv_pdf, _sr_staff_name
 
 
@@ -15,6 +22,16 @@ def _tiny_jpeg() -> ContentFile:
     buf = BytesIO()
     Image.new("RGB", (90, 120), color=(180, 140, 100)).save(buf, format="JPEG")
     return ContentFile(buf.getvalue(), name="pasfoto.jpg")
+
+
+def _attach_pas_foto(profile, content: ContentFile) -> ApplicantDocument:
+    doc_type, _ = DocumentType.objects.get_or_create(
+        code="pas-foto",
+        defaults={"name": "Pas Foto"},
+    )
+    doc = ApplicantDocument(applicant_profile=profile, document_type=doc_type)
+    doc.file.save("pasfoto.jpg", content, save=True)
+    return doc
 
 
 class CvPdfTests(TestCase):
@@ -38,7 +55,7 @@ class CvPdfTests(TestCase):
             education_major="TEKNIK MESIN",
             has_passport=True,
         )
-        profile.photo.save("pasfoto.jpg", _tiny_jpeg(), save=True)
+        _attach_pas_foto(profile, _tiny_jpeg())
         WorkExperience.objects.create(
             applicant_profile=profile,
             company_name="PT MAJU JAYA",
@@ -69,10 +86,9 @@ class CvPdfTests(TestCase):
             user=user,
             contact_phone="081298765432",
         )
-        profile.photo.save(
-            "pasfoto.jpg",
+        _attach_pas_foto(
+            profile,
             ContentFile(b"not-a-valid-image", name="pasfoto.jpg"),
-            save=True,
         )
 
         pdf = generate_cv_pdf(profile)

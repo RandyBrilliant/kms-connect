@@ -29,6 +29,9 @@ Panduan lengkap untuk membuat APK Android dari aplikasi KMS Connect untuk keperl
    - [9.11 Update Aplikasi](#911-update-aplikasi-rilis-selanjutnya)
    - [9.12 Checklist Sebelum Submit](#912-checklist-sebelum-submit-ke-play-store)
 
+> **Automated uploads (Play internal + TestFlight):** see [`STORE_RELEASE.md`](STORE_RELEASE.md).
+> That path never promotes production and never deploys the backend.
+
 ---
 
 ## 1. Prasyarat

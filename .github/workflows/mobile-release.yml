@@ -1,0 +1,260 @@
+name: Mobile Store Release
+
+# Uploads Flutter builds to Play **internal** testing and TestFlight only.
+# Does NOT deploy the backend, touch the VPS/database, or promote store production.
+#
+# Triggers:
+#   - Manual: Actions → Mobile Store Release → Run workflow
+#   - Tag:   git tag mobile-v1.0.24 && git push origin mobile-v1.0.24
+#
+# Never runs on push to main (backend deploy stays independent).
+
+on:
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: "Which platforms to build and upload"
+        required: true
+        type: choice
+        default: both
+        options:
+          - both
+          - android
+          - ios
+  push:
+    tags:
+      - "mobile-v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-release
+  cancel-in-progress: false
+
+env:
+  FLUTTER_VERSION: "3.44.8"
+  PACKAGE_NAME: id.kmsconnect.app
+
+jobs:
+  android:
+    name: Android → Play internal
+    if: >-
+      github.event_name == 'push' ||
+      github.event.inputs.platforms == 'both' ||
+      github.event.inputs.platforms == 'android'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Write google-services.json
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -z "$GOOGLE_SERVICES_JSON" ]; then
+            echo "::error::Missing secret GOOGLE_SERVICES_JSON"
+            exit 1
+          fi
+          printf '%s\n' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+
+      - name: Write release keystore + key.properties
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          for v in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_PASSWORD ANDROID_KEY_ALIAS; do
+            if [ -z "${!v}" ]; then
+              echo "::error::Missing secret $v"
+              exit 1
+            fi
+          done
+          mkdir -p "$RUNNER_TEMP/android-signing"
+          KEYSTORE_PATH="$RUNNER_TEMP/android-signing/kmsconnect-release.jks"
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$KEYSTORE_PATH"
+          {
+            echo "storePassword=$ANDROID_KEYSTORE_PASSWORD"
+            echo "keyPassword=$ANDROID_KEY_PASSWORD"
+            echo "keyAlias=$ANDROID_KEY_ALIAS"
+            echo "storeFile=$KEYSTORE_PATH"
+          } > android/key.properties
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build release app bundle
+        # No --dart-define=API_BASE_URL — Env defaults to production.
+        run: flutter build appbundle --release
+
+      - name: Setup Ruby + Fastlane
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+          working-directory: mobile/android
+
+      - name: Write Play Store service account JSON
+        env:
+          PLAY_STORE_JSON: ${{ secrets.PLAY_STORE_JSON }}
+        run: |
+          if [ -z "$PLAY_STORE_JSON" ]; then
+            echo "::error::Missing secret PLAY_STORE_JSON"
+            exit 1
+          fi
+          printf '%s\n' "$PLAY_STORE_JSON" > "$RUNNER_TEMP/play-store-key.json"
+
+      - name: Upload AAB to Play internal track
+        working-directory: mobile/android
+        env:
+          PLAY_STORE_JSON_PATH: ${{ runner.temp }}/play-store-key.json
+          AAB_PATH: ${{ github.workspace }}/mobile/build/app/outputs/bundle/release/app-release.aab
+        run: bundle exec fastlane internal
+
+      - name: Scrub signing material
+        if: always()
+        run: |
+          rm -f android/key.properties android/app/google-services.json
+          rm -rf "$RUNNER_TEMP/android-signing" "$RUNNER_TEMP/play-store-key.json"
+
+  ios:
+    name: iOS → TestFlight
+    if: >-
+      github.event_name == 'push' ||
+      github.event.inputs.platforms == 'both' ||
+      github.event.inputs.platforms == 'ios'
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Write GoogleService-Info.plist
+        env:
+          GOOGLE_SERVICE_INFO_PLIST: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}
+        run: |
+          if [ -z "$GOOGLE_SERVICE_INFO_PLIST" ]; then
+            echo "::error::Missing secret GOOGLE_SERVICE_INFO_PLIST"
+            exit 1
+          fi
+          printf '%s\n' "$GOOGLE_SERVICE_INFO_PLIST" > ios/Runner/GoogleService-Info.plist
+
+      - name: Install Apple certificate and provisioning profile
+        env:
+          IOS_DIST_CERT_P12: ${{ secrets.IOS_DIST_CERT_P12 }}
+          IOS_DIST_CERT_PASSWORD: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
+          IOS_PROVISIONING_PROFILE: ${{ secrets.IOS_PROVISIONING_PROFILE }}
+        run: |
+          set -euo pipefail
+          for v in IOS_DIST_CERT_P12 IOS_DIST_CERT_PASSWORD IOS_PROVISIONING_PROFILE; do
+            if [ -z "${!v}" ]; then
+              echo "::error::Missing secret $v"
+              exit 1
+            fi
+          done
+
+          CERT_DIR="$RUNNER_TEMP/ios-signing"
+          mkdir -p "$CERT_DIR"
+          KEYCHAIN_PATH="$CERT_DIR/build.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 32)"
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+          echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD" >> "$GITHUB_ENV"
+
+          echo "$IOS_DIST_CERT_P12" | base64 -d > "$CERT_DIR/dist.p12"
+          echo "$IOS_PROVISIONING_PROFILE" | base64 -d > "$CERT_DIR/profile.mobileprovision"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_DIR/dist.p12" \
+            -P "$IOS_DIST_CERT_PASSWORD" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH" login.keychain-db
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          PROFILE_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$PROFILE_DIR"
+          PROFILE_UUID="$(/usr/libexec/PlistBuddy -c 'Print UUID' /dev/stdin <<< "$(security cms -D -i "$CERT_DIR/profile.mobileprovision")")"
+          cp "$CERT_DIR/profile.mobileprovision" "$PROFILE_DIR/$PROFILE_UUID.mobileprovision"
+          echo "Installed provisioning profile $PROFILE_UUID"
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Install CocoaPods
+        run: |
+          cd ios
+          pod install --repo-update
+
+      - name: Build release IPA
+        # No --dart-define=API_BASE_URL — Env defaults to production.
+        # Manual signing via ExportOptions.plist (team RLQHLFX576).
+        run: flutter build ipa --release --export-options-plist=ios/ExportOptions.plist
+
+      - name: Setup Ruby + Fastlane
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+          working-directory: mobile/ios
+
+      - name: Write App Store Connect API key
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_P8: ${{ secrets.APP_STORE_CONNECT_KEY_P8 }}
+        run: |
+          set -euo pipefail
+          for v in APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_KEY_P8; do
+            if [ -z "${!v}" ]; then
+              echo "::error::Missing secret $v"
+              exit 1
+            fi
+          done
+          KEY_PATH="$RUNNER_TEMP/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8"
+          printf '%s\n' "$APP_STORE_CONNECT_KEY_P8" > "$KEY_PATH"
+          echo "ASC_KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
+          echo "ASC_KEY_ID=$APP_STORE_CONNECT_KEY_ID" >> "$GITHUB_ENV"
+          echo "ASC_ISSUER_ID=$APP_STORE_CONNECT_ISSUER_ID" >> "$GITHUB_ENV"
+
+      - name: Upload IPA to TestFlight (internal)
+        working-directory: mobile/ios
+        run: |
+          set -euo pipefail
+          IPA="$(ls -1 "${{ github.workspace }}/mobile/build/ios/ipa/"*.ipa | head -n 1)"
+          if [ -z "$IPA" ] || [ ! -f "$IPA" ]; then
+            echo "::error::IPA not found under build/ios/ipa/"
+            exit 1
+          fi
+          export IPA_PATH="$IPA"
+          bundle exec fastlane testflight_internal
+
+      - name: Scrub signing material
+        if: always()
+        run: |
+          rm -f ios/Runner/GoogleService-Info.plist
+          rm -rf "$RUNNER_TEMP/ios-signing"
+          rm -f "$RUNNER_TEMP"/AuthKey_*.p8
+          if [ -n "${KEYCHAIN_PATH:-}" ] && [ -f "${KEYCHAIN_PATH:-}" ]; then
+            security delete-keychain "$KEYCHAIN_PATH" || true
+          fi

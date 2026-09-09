@@ -44,7 +44,7 @@ from .models import (
     AccountDeletionRequest,
 )
 from .permissions import IsBackofficeAdmin, IsMasterAdmin, IsApplicant
-from .pdf_renderers import PdfBinaryViewMixin
+from .pdf_renderers import BINARY_DOWNLOAD_ACTION, PdfBinaryViewMixin
 from .throttles import AuthPublicRateThrottle
 from .email_utils import (
     send_verification_email,
@@ -457,7 +457,7 @@ class ApplicantUserViewSet(AuditedMixin, DeactivateActivateMixin, viewsets.Model
     def destroy(self, request, *args, **kwargs):
         return destroy_disallowed_response()
 
-    @action(detail=False, methods=["get"], url_path="export")
+    @action(detail=False, methods=["get"], url_path="export", **BINARY_DOWNLOAD_ACTION)
     def export(self, request):
         """
         Export applicants to Excel file.
@@ -584,7 +584,12 @@ class ApplicantUserViewSet(AuditedMixin, DeactivateActivateMixin, viewsets.Model
             status=status.HTTP_200_OK,
         )
 
-    @action(detail=True, methods=["get"], url_path="download-documents")
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="download-documents",
+        **BINARY_DOWNLOAD_ACTION,
+    )
     def download_documents(self, request, pk=None):
         """
         GET /api/applicants/{id}/download-documents/
