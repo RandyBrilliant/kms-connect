@@ -114,8 +114,10 @@ function ApplicantSidebar({
     setIsViewingCvPdf(true)
     try {
       await viewCvPdf(applicant.id)
-    } catch {
-      toast.error("Gagal membuka CV PDF", "Coba lagi nanti")
+    } catch (err: unknown) {
+      const detail =
+        err instanceof Error && err.message ? err.message : "Coba lagi nanti"
+      toast.error("Gagal membuka CV PDF", detail)
     } finally {
       setIsViewingCvPdf(false)
     }

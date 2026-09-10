@@ -21,6 +21,7 @@ except ImportError:
 
 
 from django.core.exceptions import ImproperlyConfigured
+from corsheaders.defaults import default_headers
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
@@ -310,6 +311,14 @@ CORS_ALLOWED_ORIGINS = (
     else []
 )
 CORS_ALLOW_CREDENTIALS = True
+# Cetak CV used to send Cache-Control/Pragma; those are not in django-cors-headers
+# defaults and the browser blocked the cross-origin GET. Allow them, and stop
+# sending them from the SPA.
+CORS_ALLOW_HEADERS = (
+    *default_headers,
+    "cache-control",
+    "pragma",
+)
 
 # Frontend & email links (untuk tautan verifikasi & reset password)
 FRONTEND_URL = _env("FRONTEND_URL", "http://localhost:3000")

@@ -364,117 +364,6 @@ export async function downloadApplicantDocuments(
   URL.revokeObjectURL(url)
 }
 
-/**
- * GET /api/applicants/:id/biodata-pdf/
- * Fetches the Biodata CPMI PDF and opens it in a new browser tab for viewing.
- */
-export async function viewBiodataPdf(applicantId: number): Promise<void> {
-  const response = await api.get(
-    `/api/applicants/${applicantId}/biodata-pdf/`,
-    { responseType: "blob" }
-  )
-  const blob = new Blob([response.data as BlobPart], { type: "application/pdf" })
-  const url = URL.createObjectURL(blob)
-  const tab = window.open(url, "_blank")
-  if (tab) {
-    tab.addEventListener("load", () => URL.revokeObjectURL(url), { once: true })
-  } else {
-    setTimeout(() => URL.revokeObjectURL(url), 10_000)
-  }
-}
-
-/**
- * GET /api/applicants/:id/cv-pdf/
- * Official CPMI CV (daftar riwayat hidup) filled from biodata + pas foto.
- */
-export async function viewCvPdf(applicantId: number): Promise<void> {
-  const response = await api.get(
-    `/api/applicants/${applicantId}/cv-pdf/`,
-    {
-      responseType: "blob",
-      params: { _: Date.now() },
-      headers: {
-        "Cache-Control": "no-cache",
-        Pragma: "no-cache",
-      },
-    }
-  )
-  const blob = new Blob([response.data as BlobPart], { type: "application/pdf" })
-  const url = URL.createObjectURL(blob)
-  const tab = window.open(url, "_blank")
-  if (tab) {
-    tab.addEventListener("load", () => URL.revokeObjectURL(url), { once: true })
-  } else {
-    setTimeout(() => URL.revokeObjectURL(url), 10_000)
-  }
-}
-
-/**
- * GET /api/applicants/:id/inbond-pdf/
- * Fetches the Tanda Terima Pengembalian Biaya Transportasi (Inbond Cost) PDF
- * and opens it in a new browser tab. Admin-only.
- */
-export async function viewInbondPdf(applicantId: number): Promise<void> {
-  const response = await api.get(
-    `/api/applicants/${applicantId}/inbond-pdf/`,
-    { responseType: "blob" }
-  )
-  const blob = new Blob([response.data as BlobPart], { type: "application/pdf" })
-  const url = URL.createObjectURL(blob)
-  const tab = window.open(url, "_blank")
-  if (tab) {
-    tab.addEventListener("load", () => URL.revokeObjectURL(url), { once: true })
-  } else {
-    setTimeout(() => URL.revokeObjectURL(url), 10_000)
-  }
-}
-
-/**
- * GET /api/applicants/:id/psychology-referral-pdf/
- * Surat Pengantar Tes Psikologi CPMI (admin).
- */
-export async function viewPsychologyReferralPdf(applicantId: number): Promise<void> {
-  const response = await api.get(
-    `/api/applicants/${applicantId}/psychology-referral-pdf/`,
-    { responseType: "blob" }
-  )
-  const blob = new Blob([response.data as BlobPart], { type: "application/pdf" })
-  const url = URL.createObjectURL(blob)
-  const tab = window.open(url, "_blank")
-  if (tab) {
-    tab.addEventListener("load", () => URL.revokeObjectURL(url), { once: true })
-  } else {
-    setTimeout(() => URL.revokeObjectURL(url), 10_000)
-  }
-}
-
-/**
- * GET /api/applicants/:id/medical-referral-pdf/
- * Surat Pengantar Medical Check Up (admin).
- */
-export async function viewMedicalReferralPdf(applicantId: number): Promise<void> {
-  const response = await api.get(
-    `/api/applicants/${applicantId}/medical-referral-pdf/`,
-    { responseType: "blob" }
-  )
-  const blob = new Blob([response.data as BlobPart], { type: "application/pdf" })
-  const url = URL.createObjectURL(blob)
-  const tab = window.open(url, "_blank")
-  if (tab) {
-    tab.addEventListener("load", () => URL.revokeObjectURL(url), { once: true })
-  } else {
-    setTimeout(() => URL.revokeObjectURL(url), 10_000)
-  }
-}
-
-export type BulkReferralPdfKind = "medical" | "psychology"
-
-function filenameFromContentDisposition(header: string | undefined): string | null {
-  if (!header) return null
-  const match = /filename="([^"]+)"/.exec(header)
-  return match?.[1] ?? null
-}
-
 function triggerBlobDownload(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")
@@ -485,6 +374,147 @@ function triggerBlobDownload(blob: Blob, filename: string): void {
   a.click()
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
+}
+
+async function messageFromPdfError(err: unknown, fallback: string): Promise<string> {
+  const data = (err as { response?: { data?: unknown } })?.response?.data
+  if (data instanceof Blob) {
+    try {
+      const json = JSON.parse(await data.text()) as { detail?: string }
+      if (json.detail) return json.detail
+    } catch {
+      /* not JSON */
+    }
+  }
+  if (err instanceof Error && err.message && err.message !== "Network Error") {
+    return err.message
+  }
+  return fallback
+}
+
+async function blobLooksLikePdf(blob: Blob): Promise<boolean> {
+  const prefix = new Uint8Array(await blob.slice(0, 5).arrayBuffer())
+  return (
+    prefix.length >= 4 &&
+    prefix[0] === 0x25 &&
+    prefix[1] === 0x50 &&
+    prefix[2] === 0x44 &&
+    prefix[3] === 0x46
+  )
+}
+
+async function openPdfInBrowser(
+  response: { data: BlobPart; headers?: { [key: string]: unknown } },
+  downloadName: string
+): Promise<void> {
+  const contentType = String(response.headers?.["content-type"] ?? "")
+  const raw = response.data
+  const blob =
+    raw instanceof Blob ? raw : new Blob([raw], { type: "application/pdf" })
+  const isPdf = contentType.includes("pdf") || (await blobLooksLikePdf(blob))
+  if (!isPdf) {
+    const text = await blob.text()
+    try {
+      const json = JSON.parse(text) as { detail?: string }
+      throw new Error(json.detail || "Gagal membuat PDF")
+    } catch (e) {
+      if (e instanceof SyntaxError) {
+        throw new Error("Gagal membuat PDF")
+      }
+      throw e
+    }
+  }
+  const pdfBlob =
+    blob.type === "application/pdf"
+      ? blob
+      : new Blob([blob], { type: "application/pdf" })
+  const url = URL.createObjectURL(pdfBlob)
+  const tab = window.open(url, "_blank")
+  if (tab) {
+    tab.addEventListener("load", () => URL.revokeObjectURL(url), { once: true })
+    return
+  }
+  triggerBlobDownload(pdfBlob, downloadName)
+}
+
+async function fetchAndOpenPdf(path: string, downloadName: string): Promise<void> {
+  try {
+    const response = await api.get(path, {
+      responseType: "blob",
+      params: { _: Date.now() },
+    })
+    await openPdfInBrowser(response, downloadName)
+  } catch (err) {
+    throw new Error(await messageFromPdfError(err, "Gagal membuka PDF"))
+  }
+}
+
+/**
+ * GET /api/applicants/:id/biodata-pdf/
+ * Fetches the Biodata CPMI PDF and opens it in a new browser tab for viewing.
+ */
+export async function viewBiodataPdf(applicantId: number): Promise<void> {
+  await fetchAndOpenPdf(
+    `/api/applicants/${applicantId}/biodata-pdf/`,
+    `Biodata_${applicantId}.pdf`
+  )
+}
+
+/**
+ * GET /api/applicants/:id/cv-pdf/
+ * Official CPMI CV (daftar riwayat hidup) filled from biodata + pas foto.
+ *
+ * Do not send Cache-Control / Pragma request headers: they are not in the
+ * API CORS allow-list, so the browser blocks the cross-origin GET (biodata
+ * works because it never sent those headers).
+ */
+export async function viewCvPdf(applicantId: number): Promise<void> {
+  await fetchAndOpenPdf(
+    `/api/applicants/${applicantId}/cv-pdf/`,
+    `CV_${applicantId}.pdf`
+  )
+}
+
+/**
+ * GET /api/applicants/:id/inbond-pdf/
+ * Fetches the Tanda Terima Pengembalian Biaya Transportasi (Inbond Cost) PDF
+ * and opens it in a new browser tab. Admin-only.
+ */
+export async function viewInbondPdf(applicantId: number): Promise<void> {
+  await fetchAndOpenPdf(
+    `/api/applicants/${applicantId}/inbond-pdf/`,
+    `Inbond_${applicantId}.pdf`
+  )
+}
+
+/**
+ * GET /api/applicants/:id/psychology-referral-pdf/
+ * Surat Pengantar Tes Psikologi CPMI (admin).
+ */
+export async function viewPsychologyReferralPdf(applicantId: number): Promise<void> {
+  await fetchAndOpenPdf(
+    `/api/applicants/${applicantId}/psychology-referral-pdf/`,
+    `Pengantar_Psikologi_${applicantId}.pdf`
+  )
+}
+
+/**
+ * GET /api/applicants/:id/medical-referral-pdf/
+ * Surat Pengantar Medical Check Up (admin).
+ */
+export async function viewMedicalReferralPdf(applicantId: number): Promise<void> {
+  await fetchAndOpenPdf(
+    `/api/applicants/${applicantId}/medical-referral-pdf/`,
+    `Pengantar_Medical_${applicantId}.pdf`
+  )
+}
+
+export type BulkReferralPdfKind = "medical" | "psychology"
+
+function filenameFromContentDisposition(header: string | undefined): string | null {
+  if (!header) return null
+  const match = /filename="([^"]+)"/.exec(header)
+  return match?.[1] ?? null
 }
 
 /**
