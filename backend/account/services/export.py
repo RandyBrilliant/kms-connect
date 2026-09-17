@@ -600,7 +600,7 @@ def generate_applicants_excel(applicants: Iterable[Any], request: Any = None) ->
         "Ijazah",
         "Kartu Keluarga",
         "Paspor",
-        "Pas Photo",
+        "Pas Foto",
         "CV",
         "Bukti Penyerahan Dokumen",
         "Surat Izin Keluarga (Form Biru)",

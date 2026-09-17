@@ -12,7 +12,7 @@ Signals for account app.
 from django.db.models.signals import pre_save, post_save, post_delete
 from django.dispatch import receiver
 
-from .document_specs import MAX_IMAGE_BYTES, is_image_type
+from .document_specs import MAX_IMAGE_BYTES, should_compress_as_image
 from .models import (
     ApplicantDocument,
     ApplicantProfile,
@@ -88,7 +88,7 @@ def queue_optimize_image_on_upload(sender, instance: ApplicantDocument, created,
     """
     if not instance.file or not instance.document_type_id:
         return
-    if not is_image_type(instance.document_type.code):
+    if not should_compress_as_image(instance.file, instance.document_type.code):
         return
     if not _file_was_created_or_replaced(instance, created):
         return

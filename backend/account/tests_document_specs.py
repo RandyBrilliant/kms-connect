@@ -75,3 +75,9 @@ class ValidateDocumentFileTests(TestCase):
 
     def test_real_cv_pdf_is_accepted(self):
         validate_document_file(_pdf(), "cv")
+
+    def test_ijasah_pdf_is_accepted(self):
+        validate_document_file(_pdf("ijasah.pdf"), "ijasah")
+
+    def test_ijasah_jpeg_is_accepted_during_app_transition(self):
+        validate_document_file(_jpeg("ijasah.jpg"), "ijasah")

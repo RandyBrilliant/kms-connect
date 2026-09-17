@@ -153,16 +153,22 @@ def _work_exp_summary(exp) -> str:
 
 
 def pas_foto_bytes(profile) -> bytes | None:
-    """Raw bytes of the pelamar's Pas Foto document (`pas-foto`), or None."""
+    """Raw bytes of the pelamar's Pas Foto document (`pas-foto` or legacy `pas-photo`)."""
     documents = getattr(profile, "_prefetched_objects_cache", {}).get("documents")
     if documents is None:
         documents = profile.documents.select_related("document_type").all()
+    by_code = {}
     for doc in documents:
         code = getattr(getattr(doc, "document_type", None), "code", "")
-        if code == "pas-foto" and doc.file and doc.file.name:
-            data = _read_field_file_bytes(doc.file)
-            if data:
-                return data
+        if code in ("pas-foto", "pas-photo") and doc.file and doc.file.name:
+            by_code.setdefault(code, doc)
+    for code in ("pas-foto", "pas-photo"):
+        doc = by_code.get(code)
+        if not doc:
+            continue
+        data = _read_field_file_bytes(doc.file)
+        if data:
+            return data
     return None
 
 

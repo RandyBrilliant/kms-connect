@@ -67,12 +67,12 @@ def optimize_document_image(self, document_id: int):
     from django.core.files.base import ContentFile
 
     from .models import ApplicantDocument
-    from .document_specs import is_image_type, MAX_IMAGE_BYTES
+    from .document_specs import should_compress_as_image, MAX_IMAGE_BYTES
 
     doc = ApplicantDocument.objects.filter(pk=document_id).select_related("document_type").first()
     if not doc or not doc.file or not doc.document_type:
         return
-    if not is_image_type(doc.document_type.code):
+    if not should_compress_as_image(doc.file, doc.document_type.code):
         return
     try:
         size = doc.file.size

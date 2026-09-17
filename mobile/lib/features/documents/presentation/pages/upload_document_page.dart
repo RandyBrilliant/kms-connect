@@ -35,6 +35,7 @@ class UploadDocumentPage extends ConsumerStatefulWidget {
 
 // PDF document type codes — must match backend document_specs.py
 const _pdfDocCodes = {
+  'ijasah',
   'cv',
   'sertifikat-keterampilan',
   'bukti-penyerahan-dokumen',

@@ -31,7 +31,11 @@ from .permissions import IsApplicant
 from .pdf_renderers import PdfBinaryViewMixin
 from .api_responses import success_response, error_response, ApiCode, ApiMessage
 from .document_file_access import DocumentFileAccessMixin
-from .document_specs import validate_document_file, compress_image_file, is_image_type
+from .document_specs import (
+    validate_document_file,
+    compress_image_file,
+    should_compress_as_image,
+)
 from .services.biodata_pdf import generate_biodata_pdf
 from .services.cv_pdf import cv_pdf_http_response, generate_cv_pdf
 from .services.pdf_cache import cached_pdf_bytes
@@ -293,7 +297,6 @@ class ApplicantDocumentSelfServiceViewSet(
         Mengembalikan 201 untuk dokumen baru, 200 untuk penggantian.
         """
         from rest_framework.exceptions import ValidationError, NotFound
-        from .document_specs import is_image_type
 
         profile = self.get_applicant_profile()
         if not profile:
@@ -330,7 +333,7 @@ class ApplicantDocumentSelfServiceViewSet(
             raise ValidationError({"file": str(e)})
 
         # Compress image files before saving (synchronous)
-        if is_image_type(document_type.code):
+        if should_compress_as_image(file, document_type.code):
             file = compress_image_file(file)
 
         existing = ApplicantDocument.objects.filter(

@@ -14,7 +14,7 @@ POST = DocumentType.PHASE_POST_INTERVIEW
 DOCUMENT_NAMES = {
     # ── INITIAL ──────────────────────────────────────────────────────────────
     "ktp":                            ("KTP",                               True,  1,  "JPG/PNG, maks. 500 KB.", INITIAL),
-    "ijasah":                         ("Ijazah",                            True,  2,  "JPG/PNG, maks. 500 KB.", INITIAL),
+    "ijasah":                         ("Ijazah",                            True,  2,  "PDF (disarankan) atau JPG/PNG. PDF maks. 2 MB.", INITIAL),
     "kartu-keluarga":                 ("Kartu Keluarga",                    True,  3,  "JPG/PNG, maks. 500 KB.", INITIAL),
     "kartu-bpjs":                     ("Kartu BPJS Kesehatan",              True,  4,  "JPG/PNG, maks. 500 KB.", INITIAL),
     "paspor":                         ("Paspor",                            True,  5,  "JPG/PNG, maks. 500 KB.", INITIAL),

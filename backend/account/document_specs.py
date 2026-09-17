@@ -3,7 +3,7 @@ Spesifikasi dokumen TKI: format (PDF/JPG), ukuran maks, dan validasi.
 
 Fase INITIAL (diunggah saat pendaftaran):
   1. KTP
-  2. Ijazah
+  2. Ijazah (PDF; JPG/PNG masih diterima sampai aplikasi mobile terbit)
   3. Kartu Keluarga
   4. Kartu BPJS Kesehatan
   5. Paspor
@@ -42,7 +42,8 @@ _PDF_MAGIC = b"%PDF-"
 DOCUMENT_SPECS = {
     # ── INITIAL ──────────────────────────────────────────────────────────────
     "ktp":                    {"format": "image", "extensions": IMAGE_EXTENSIONS, "max_bytes": MAX_IMAGE_BYTES},
-    "ijasah":                 {"format": "image", "extensions": IMAGE_EXTENSIONS, "max_bytes": MAX_IMAGE_BYTES},
+    # pdf_or_image: new app/admin upload PDF; old app still sends JPG until store review lands.
+    "ijasah":                 {"format": "pdf_or_image", "extensions": PDF_EXTENSIONS + IMAGE_EXTENSIONS, "max_bytes": MAX_PDF_BYTES},
     "kartu-keluarga":         {"format": "image", "extensions": IMAGE_EXTENSIONS, "max_bytes": MAX_IMAGE_BYTES},
     "kartu-bpjs":             {"format": "image", "extensions": IMAGE_EXTENSIONS, "max_bytes": MAX_IMAGE_BYTES},
     "paspor":                 {"format": "image", "extensions": IMAGE_EXTENSIONS, "max_bytes": MAX_IMAGE_BYTES},
@@ -150,12 +151,11 @@ def validate_document_file(file, doc_type_code: str) -> None:
         )
 
     kind = sniff_file_kind(file)
-    if spec["format"] == "image":
-        if kind not in ("jpeg", "png"):
-            raise ValidationError(
-                _("Isi berkas bukan gambar JPG atau PNG."),
-                code="invalid_content",
-            )
+    fmt = spec["format"]
+    allow_image = fmt in ("image", "pdf_or_image")
+    allow_pdf = fmt in ("pdf", "pdf_or_image")
+
+    if allow_image and kind in ("jpeg", "png"):
         _assert_image_decodes(file)
         if file.size > MAX_IMAGE_UPLOAD_BYTES:
             max_mb = MAX_IMAGE_UPLOAD_BYTES / (1024 * 1024)
@@ -165,17 +165,29 @@ def validate_document_file(file, doc_type_code: str) -> None:
             )
         return
 
-    if kind != "pdf":
+    if allow_pdf and kind == "pdf":
+        if file.size > spec["max_bytes"]:
+            max_mb = spec["max_bytes"] / (1024 * 1024)
+            raise ValidationError(
+                _("Ukuran berkas melebihi %(max)s MB. Harap kompres PDF lalu unggah lagi.") % {"max": max_mb},
+                code="file_too_large",
+            )
+        return
+
+    if allow_pdf and allow_image:
+        raise ValidationError(
+            _("Isi berkas harus PDF, JPG, atau PNG."),
+            code="invalid_content",
+        )
+    if allow_pdf:
         raise ValidationError(
             _("Isi berkas bukan PDF."),
             code="invalid_content",
         )
-    if file.size > spec["max_bytes"]:
-        max_mb = spec["max_bytes"] / (1024 * 1024)
-        raise ValidationError(
-            _("Ukuran berkas melebihi %(max)s MB. Harap kompres PDF lalu unggah lagi.") % {"max": max_mb},
-            code="file_too_large",
-        )
+    raise ValidationError(
+        _("Isi berkas bukan gambar JPG atau PNG."),
+        code="invalid_content",
+    )
 
 
 def get_max_size_for_code(doc_type_code: str) -> int | None:
@@ -185,9 +197,22 @@ def get_max_size_for_code(doc_type_code: str) -> int | None:
 
 
 def is_image_type(doc_type_code: str) -> bool:
-    """True if this document type expects an image (JPG)."""
+    """True if this document type expects an image (JPG) only."""
     spec = get_spec_for_code(doc_type_code)
     return spec is not None and spec.get("format") == "image"
+
+
+def should_compress_as_image(file, doc_type_code: str) -> bool:
+    """True when this upload is an image we should compress (incl. dual-format types)."""
+    spec = get_spec_for_code(doc_type_code)
+    if not spec:
+        return False
+    fmt = spec.get("format")
+    if fmt == "image":
+        return True
+    if fmt == "pdf_or_image":
+        return sniff_file_kind(file) in ("jpeg", "png")
+    return False
 
 
 def compress_image_file(file, target_bytes: int = MAX_IMAGE_BYTES):
