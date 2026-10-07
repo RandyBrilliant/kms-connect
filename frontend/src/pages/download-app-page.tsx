@@ -1,447 +1,226 @@
-import {
-  IconBrandAndroid,
-  IconDownload,
-  IconShieldCheck,
-  IconBell,
-  IconBriefcase,
-  IconUserCheck,
-  IconMessageCircle,
-  IconClockHour4,
-  IconStarFilled,
-  IconChevronRight,
-  IconDeviceMobile,
-  IconCheck,
-  IconBrandApple,
-} from "@tabler/icons-react"
+import type { ReactNode } from "react"
+import { Link } from "react-router-dom"
+
 import { usePageTitle } from "@/hooks/use-page-title"
+import homeShot from "@/img/download/home.png"
 import logo from "@/img/logo.png"
+import loginShot from "@/img/download/login.png"
 
-// ─── Configuration ────────────────────────────────────────────────────────────
-const APK_DOWNLOAD_URL: string | null = "https://drive.google.com/drive/folders/1_MYWuuqusSMrAAIT2qYNdRIZdiXbh2tS?usp=sharing"
-const APPLE_STORE_URL: string | null = "https://apps.apple.com/id/app/kms-connect/id6760560231"
-const APP_VERSION = "1.0.0"
-const APK_SIZE = "28 MB"
-const MIN_ANDROID = "Android 8.0 (Oreo)"
+const APP_VERSION = "1.0.25"
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+const PLAY_STORE_URL =
+  "https://play.google.com/store/apps/details?id=id.kmsconnect.app&hl=id"
+const APP_STORE_URL = "https://apps.apple.com/id/app/kms-connect/id6760560231"
 
-function FeatureCard({
-  icon: Icon,
-  title,
-  description,
-}: {
-  icon: React.ElementType
-  title: string
-  description: string
-}) {
-  return (
-    <div className="group flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur-sm transition-all duration-300 hover:bg-white/10 hover:border-white/20">
-      <div className="flex size-11 items-center justify-center rounded-xl bg-linear-to-br from-emerald-400/30 to-teal-400/30 ring-1 ring-emerald-400/20">
-        <Icon className="size-5 text-emerald-300" stroke={1.8} />
-      </div>
-      <div>
-        <h3 className="font-semibold text-white text-sm">{title}</h3>
-        <p className="mt-1 text-xs leading-relaxed text-white/60">{description}</p>
-      </div>
-    </div>
-  )
-}
-
-function RequirementRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between py-3 border-b border-white/10 last:border-0">
-      <span className="text-sm text-white/50">{label}</span>
-      <span className="text-sm font-medium text-white">{value}</span>
-    </div>
-  )
-}
-
-function StepBadge({ number, text }: { number: number; text: string }) {
-  return (
-    <div className="flex items-center gap-3">
-      <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-emerald-500 to-teal-500 text-xs font-bold text-white shadow-lg shadow-emerald-500/25">
-        {number}
-      </div>
-      <span className="text-sm text-white/80">{text}</span>
-    </div>
-  )
-}
-
-// ─── Main Page ────────────────────────────────────────────────────────────────
+const STEPS = [
+  {
+    index: "01",
+    title: "Lowongan",
+    detail: "Posisi, syarat, lokasi, dan batas pendaftaran, sebelum Anda melamar.",
+  },
+  {
+    index: "02",
+    title: "Status",
+    detail: "Pra-seleksi, interview, diterima, sampai penempatan. Diperbarui saat ada kabar.",
+  },
+  {
+    index: "03",
+    title: "Dokumen",
+    detail: "KTP dan ijazah PDF diunggah sekali, lalu dipakai untuk lamaran berikutnya.",
+  },
+  {
+    index: "04",
+    title: "Kabar",
+    detail: "Notifikasi status, pengumuman, dan chat langsung dengan tim rekrutmen.",
+  },
+] as const
 
 export function DownloadAppPage() {
   usePageTitle("Download Aplikasi")
 
-  const handleDownload = () => {
-    if (APK_DOWNLOAD_URL) {
-      window.open(APK_DOWNLOAD_URL, "_blank", "noopener,noreferrer")
-    }
-  }
-
-  const handleAppleStoreDownload = () => {
-    if (APPLE_STORE_URL) {
-      window.open(APPLE_STORE_URL, "_blank", "noopener,noreferrer")
-    }
-  }
-
   return (
-    <div className="min-h-svh bg-[#0a0f1c] text-white">
-      {/* ── Background decoration ─────────────────────────────────────────── */}
-      <div
-        aria-hidden
-        className="pointer-events-none fixed inset-0 overflow-hidden"
-      >
-        {/* Radial glow top-left */}
-        <div className="absolute -top-32 -left-32 size-150 rounded-full bg-emerald-600/15 blur-[120px]" />
-        {/* Radial glow bottom-right */}
-        <div className="absolute -bottom-32 -right-32 size-125 rounded-full bg-teal-600/15 blur-[120px]" />
-        {/* Subtle grid */}
-        <div
-          className="absolute inset-0 opacity-[0.04]"
-          style={{
-            backgroundImage:
-              "linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)",
-            backgroundSize: "50px 50px",
-          }}
-        />
-      </div>
-
-      {/* ── Header ────────────────────────────────────────────────────────── */}
-      <header className="relative z-10 border-b border-white/5 bg-white/2 backdrop-blur-md">
-        <div className="mx-auto flex max-w-5xl items-center gap-3 px-6 py-4">
-          <img src={logo} alt="KMS Connect" className="size-8 rounded-lg object-contain" />
-          <span className="font-bold tracking-tight text-white">KMS Connect</span>
-          <span className="ml-auto rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-400">
-            v{APP_VERSION}
-          </span>
+    <div className="min-h-svh bg-[#f7f6f3] text-[#1a1a1a]">
+      <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
+        <div className="flex items-center gap-2.5">
+          <img src={logo} alt="" className="size-8 object-contain" />
+          <span className="text-sm font-semibold tracking-tight">KMS Connect</span>
         </div>
+        <Link
+          to="/privacy"
+          className="text-sm text-[#5c5c5c] underline-offset-4 hover:text-[#1a1a1a] hover:underline"
+        >
+          Kebijakan Privasi
+        </Link>
       </header>
 
-      {/* ── Hero Section ─────────────────────────────────────────────────── */}
-      <section className="relative z-10 mx-auto max-w-5xl px-6 pb-16 pt-20">
-        <div className="flex flex-col items-center gap-10 lg:flex-row lg:items-start lg:gap-16">
-          {/* Left: text + CTA */}
-          <div className="flex flex-1 flex-col items-center text-center lg:items-start lg:text-left">
-            {/* Badge */}
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-400">
-              <IconBrandAndroid className="size-4" />
-              <span>Tersedia untuk Android</span>
-              <span className="text-white/30">•</span>
-              <IconBrandApple className="size-4" />
-              <span>iOS</span>
-            </div>
-
-            <h1 className="text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl">
-              Download{" "}
-              <span className="bg-linear-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">
-                KMS Connect
-              </span>
+      <main>
+        <section className="mx-auto grid max-w-6xl items-end gap-14 px-6 pb-8 pt-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:pt-16">
+          <div className="max-w-xl pb-4">
+            <p className="text-sm font-medium text-[#2B6E36]">
+              Platform rekrutmen PMI
+            </p>
+            <h1 className="mt-4 text-[2.75rem] font-semibold leading-[0.95] tracking-[-0.045em] sm:text-6xl lg:text-[4.25rem]">
+              Lamaran kerja,
               <br />
-              Sekarang
+              dari ponsel.
             </h1>
-
-            <p className="mt-5 max-w-lg text-base leading-relaxed text-white/60">
-              Pantau status lamaran kerja Anda kapan saja dan di mana saja.
-              Dapatkan notifikasi real-time, komunikasi langsung dengan tim
-              rekrutmen, dan akses penuh ke semua fitur KMS.
+            <p className="mt-6 max-w-md text-[17px] leading-relaxed text-[#4a4a4a]">
+              Aplikasi resmi PT. Karyatama Mitra Sejati. Cari lowongan,
+              kirim lamaran, dan ikuti proses seleksi tanpa menunggu kabar
+              lewat telepon.
             </p>
 
-            {/* Rating */}
-            <div className="mt-5 flex items-center gap-2">
-              <div className="flex items-center gap-0.5">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <IconStarFilled key={i} className="size-4 text-amber-400" />
-                ))}
-              </div>
-              <span className="text-sm text-white/50">
-                Tersedia segera di Google Play Store
-              </span>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <StoreBadge
+                href={PLAY_STORE_URL}
+                kicker="Dapatkan di"
+                name="Google Play"
+                icon={<PlayMark />}
+              />
+              <StoreBadge
+                href={APP_STORE_URL}
+                kicker="Unduh di"
+                name="App Store"
+                icon={<AppleMark />}
+              />
             </div>
 
-            {/* Download CTA */}
-            <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row lg:items-start">
-              {APK_DOWNLOAD_URL ? (
-                <button
-                  onClick={handleDownload}
-                  className="group flex items-center gap-3 rounded-2xl bg-linear-to-r from-emerald-500 to-teal-500 px-7 py-4 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 transition-all duration-200 hover:shadow-emerald-500/50 hover:scale-[1.02] active:scale-[0.98]"
-                >
-                  <IconBrandAndroid className="size-5 transition-transform duration-200 group-hover:-translate-y-0.5" />
-                  Download Android
-                  <IconChevronRight className="size-4 opacity-60" />
-                </button>
-              ) : (
-                <div className="flex flex-col items-center gap-2 sm:flex-row sm:items-start lg:items-start">
-                  <button
-                    disabled
-                    className="flex cursor-not-allowed items-center gap-3 rounded-2xl bg-linear-to-r from-emerald-500/50 to-teal-500/50 px-7 py-4 text-sm font-semibold text-white/60 shadow-lg"
-                  >
-                    <IconDownload className="size-5" />
-                    Download APK
-                    <IconChevronRight className="size-4 opacity-60" />
-                  </button>
-                  <div className="flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-xs text-amber-400">
-                    <IconClockHour4 className="size-4 shrink-0" />
-                    <span>
-                      Segera tersedia — menunggu persetujuan
-                      <br className="hidden sm:block" /> Google Play Store
-                    </span>
-                  </div>
-                </div>
-              )}
-              {APPLE_STORE_URL && (
-                <button
-                  onClick={handleAppleStoreDownload}
-                  className="group flex items-center gap-3 rounded-2xl bg-linear-to-r from-gray-700 to-gray-800 px-7 py-4 text-sm font-semibold text-white shadow-lg shadow-gray-700/30 transition-all duration-200 hover:shadow-gray-700/50 hover:scale-[1.02] active:scale-[0.98]"
-                >
-                  <IconBrandApple className="size-5 transition-transform duration-200 group-hover:-translate-y-0.5" />
-                  Download iOS
-                  <IconChevronRight className="size-4 opacity-60" />
-                </button>
-              )}
-            </div>
-
-            {/* Trust badges */}
-            <div className="mt-6 flex flex-wrap items-center justify-center gap-4 lg:justify-start">
-              {[
-                { icon: IconShieldCheck, text: "Aman & Terverifikasi" },
-                { icon: IconBrandAndroid, text: "Android 8.0+" },
-                { icon: IconCheck, text: "Gratis Selamanya" },
-              ].map(({ icon: Icon, text }) => (
-                <div key={text} className="flex items-center gap-1.5 text-xs text-white/40">
-                  <Icon className="size-3.5 text-emerald-500" />
-                  {text}
-                </div>
-              ))}
-            </div>
+            <p className="mt-6 text-sm text-[#6b6b6b]">
+              Versi {APP_VERSION}
+              <span className="px-2 text-[#c4c4c4]">/</span>
+              Gratis
+              <span className="px-2 text-[#c4c4c4]">/</span>
+              Android 7.0+
+              <span className="px-2 text-[#c4c4c4]">/</span>
+              iOS 16+
+            </p>
           </div>
 
-          {/* Right: phone mockup */}
-          <div className="relative shrink-0">
-            <div className="relative flex size-65 items-center justify-center sm:size-75">
-              {/* Glow ring */}
-              <div className="absolute inset-0 rounded-full bg-linear-to-br from-emerald-500/20 to-teal-500/20 blur-3xl" />
-              {/* Phone frame */}
-              <div className="relative flex h-65 w-32.5 flex-col overflow-hidden rounded-[2.5rem] border border-white/20 bg-linear-to-b from-white/10 to-white/5 shadow-2xl ring-1 ring-white/10 sm:h-75 sm:w-37.5">
-                {/* Notch */}
-                <div className="mx-auto mt-3 h-3 w-16 rounded-full bg-black/60" />
-                {/* Screen content placeholder */}
-                <div className="flex flex-1 flex-col items-center justify-center gap-3 p-3">
-                  <img src={logo} alt="" className="size-14 rounded-2xl object-contain shadow-lg" />
-                  <div className="space-y-1.5 w-full">
-                    {[100, 85, 70].map((w) => (
-                      <div
-                        key={w}
-                        className="h-2 rounded-full bg-linear-to-r from-emerald-500/40 to-teal-500/20"
-                        style={{ width: `${w}%` }}
-                      />
-                    ))}
-                  </div>
-                  <div className="mt-2 flex w-full items-center justify-center rounded-xl bg-linear-to-r from-emerald-500/30 to-teal-500/30 py-2.5">
-                    <IconDeviceMobile className="size-4 text-emerald-400 mr-1" />
-                    <span className="text-[10px] font-medium text-emerald-300">KMS Connect</span>
-                  </div>
-                </div>
-              </div>
-              {/* Floating notification bubble */}
-              <div className="absolute -right-4 top-8 flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-[11px] font-medium text-white shadow-xl backdrop-blur-md">
-                <div className="size-2 rounded-full bg-emerald-400 animate-pulse" />
-                Lamaran Disetujui!
-              </div>
-              {/* Floating message bubble */}
-              <div className="absolute -left-4 bottom-12 flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-[11px] font-medium text-white shadow-xl backdrop-blur-md">
-                <IconMessageCircle className="size-3.5 text-teal-400" />
-                Pesan Baru
-              </div>
+          <div className="relative mx-auto w-full max-w-xl">
+            <div
+              aria-hidden
+              className="absolute inset-x-6 top-10 bottom-0 rounded-[2rem] bg-[#2B6E36]"
+            />
+            <div className="relative flex items-end justify-center gap-3 px-4 pt-16 sm:gap-5 sm:px-8">
+              <img
+                src={loginShot}
+                alt="Layar masuk KMS Connect"
+                className="mb-10 hidden w-[42%] rounded-[1.4rem] shadow-[0_20px_50px_-24px_rgba(0,0,0,0.55)] ring-1 ring-black/10 sm:block"
+              />
+              <img
+                src={homeShot}
+                alt="Beranda KMS Connect, dengan status lamaran dan pengumuman"
+                className="w-[78%] rounded-[1.6rem] shadow-[0_28px_60px_-20px_rgba(0,0,0,0.45)] ring-1 ring-black/15 sm:w-[48%]"
+              />
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* ── Features ─────────────────────────────────────────────────────── */}
-      <section className="relative z-10 mx-auto max-w-5xl px-6 pb-20">
-        <div className="mb-8 text-center">
-          <h2 className="text-2xl font-bold">Fitur Unggulan</h2>
-          <p className="mt-2 text-sm text-white/50">
-            Semua yang Anda butuhkan ada di satu aplikasi
-          </p>
-        </div>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <FeatureCard
-            icon={IconBriefcase}
-            title="Pantau Lamaran Kerja"
-            description="Lihat status lamaran Anda secara real-time — dari pengajuan hingga penerimaan."
-          />
-          <FeatureCard
-            icon={IconBell}
-            title="Notifikasi Real-Time"
-            description="Dapatkan pemberitahuan instan setiap ada update terkait lamaran atau rekrutmen Anda."
-          />
-          <FeatureCard
-            icon={IconUserCheck}
-            title="Profil & Biodata Lengkap"
-            description="Kelola profil dan unggah dokumen penting langsung dari smartphone Anda."
-          />
-          <FeatureCard
-            icon={IconMessageCircle}
-            title="Chat Langsung"
-            description="Berkomunikasi langsung dengan tim rekrutmen KMS tanpa perlu keluar dari aplikasi."
-          />
-          <FeatureCard
-            icon={IconShieldCheck}
-            title="Keamanan Data"
-            description="Data Anda dilindungi dengan enkripsi end-to-end dan standar keamanan industri."
-          />
-          <FeatureCard
-            icon={IconClockHour4}
-            title="Akses 24/7"
-            description="Cek status lamaran kapan saja dan di mana saja, tanpa batasan waktu."
-          />
-        </div>
-      </section>
-
-      {/* ── Installation Guide + Requirements ────────────────────────────── */}
-      <section className="relative z-10 mx-auto max-w-5xl px-6 pb-20">
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* How to install */}
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
-            <h2 className="mb-6 text-lg font-bold">Cara Install APK</h2>
-            <div className="flex flex-col gap-4">
-              <StepBadge
-                number={1}
-                text='Download file APK menggunakan tombol "Download APK" di atas.'
-              />
-              <StepBadge
-                number={2}
-                text='Buka Pengaturan → Keamanan → Aktifkan "Sumber Tidak Dikenal" (Unknown Sources).'
-              />
-              <StepBadge
-                number={3}
-                text="Buka file APK yang telah diunduh dari folder Downloads."
-              />
-              <StepBadge
-                number={4}
-                text='Ketuk "Install" dan tunggu proses instalasi selesai.'
-              />
-              <StepBadge
-                number={5}
-                text="Buka aplikasi KMS Connect dan login dengan akun Anda."
-              />
-            </div>
-            <div className="mt-6 rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-xs leading-relaxed text-amber-300/80">
-              <strong className="text-amber-400">Mengapa izin "Sumber Tidak Dikenal"?</strong>
-              <br />
-              Karena aplikasi ini belum tersedia di Play Store, Anda perlu mengizinkan
-              instalasi dari luar toko secara sementara. Aplikasi ini aman dan berasal
-              langsung dari PT. Karyatama Mitra Sejati.
-            </div>
-          </div>
-
-          {/* Requirements */}
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
-            <h2 className="mb-6 text-lg font-bold">Persyaratan Sistem</h2>
-            <div className="divide-white/5">
-              <RequirementRow label="Sistem Operasi" value={MIN_ANDROID} />
-              <RequirementRow label="Ukuran File" value={APK_SIZE} />
-              <RequirementRow label="Versi Aplikasi" value={`v${APP_VERSION}`} />
-              <RequirementRow label="Koneksi Internet" value="Diperlukan" />
-              <RequirementRow label="Platform" value="Android & iOS" />
-              <RequirementRow label="iOS (iPhone)" value="Tersedia di App Store" />
-            </div>
-
-            {/* Store Status */}
-            <div className="mt-6 flex flex-col gap-3">
-              <div className="flex items-center gap-4 rounded-xl border border-white/10 bg-white/5 p-4">
-                <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-white/10">
-                  <IconBrandAndroid className="size-6 text-emerald-400" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-white">Google Play Store</p>
-                  <p className="mt-0.5 text-xs text-white/50">
-                    Dalam proses review — segera tersedia
-                  </p>
-                </div>
-                <div className="ml-auto rounded-full border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 text-[11px] font-medium text-amber-400">
-                  Pending
-                </div>
-              </div>
-              {APPLE_STORE_URL && (
-                <div className="flex items-center gap-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4">
-                  <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-white/10">
-                    <IconBrandApple className="size-6 text-emerald-400" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-white">Apple App Store</p>
-                    <p className="mt-0.5 text-xs text-white/50">
-                      Tersedia sekarang — download gratis
-                    </p>
-                  </div>
-                  <div className="ml-auto rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 text-[11px] font-medium text-emerald-400">
-                    Live
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Bottom CTA ───────────────────────────────────────────────────── */}
-      <section className="relative z-10 mx-auto max-w-5xl px-6 pb-24">
-        <div className="overflow-hidden rounded-3xl bg-linear-to-br from-emerald-600/30 to-teal-600/20 p-10 text-center ring-1 ring-white/10">
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0 rounded-3xl bg-linear-to-br from-emerald-500/10 to-transparent"
-          />
-          <h2 className="text-2xl font-bold">
-            Siap Memulai Karir Anda?
-          </h2>
-          <p className="mt-3 text-sm text-white/60">
-            Download aplikasi KMS Connect dan pantau perjalanan rekrutmen Anda
-            dari mana saja.
-          </p>
-          <div className="mt-8 flex flex-col gap-3 items-center sm:flex-row sm:justify-center">
-            {APK_DOWNLOAD_URL ? (
-              <button
-                onClick={handleDownload}
-                className="inline-flex items-center gap-3 rounded-2xl bg-linear-to-r from-emerald-500 to-teal-500 px-8 py-4 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 transition-all duration-200 hover:scale-[1.02] hover:shadow-emerald-500/50 active:scale-[0.98]"
+        <section className="mx-auto max-w-6xl px-6 pb-16 pt-20 sm:pb-20 sm:pt-24">
+          <ul>
+            {STEPS.map((step) => (
+              <li
+                key={step.index}
+                className="grid grid-cols-[2.5rem_1fr] gap-x-4 border-t border-black/10 py-7 sm:grid-cols-[4rem_14rem_1fr] sm:items-baseline sm:gap-x-8 sm:py-8"
               >
-                <IconBrandAndroid className="size-5" />
-                Download Android
-              </button>
-            ) : (
-              <div className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-sm text-white/50">
-                <IconClockHour4 className="size-4" />
-                Link download akan segera tersedia
-              </div>
-            )}
-            {APPLE_STORE_URL && (
-              <button
-                onClick={handleAppleStoreDownload}
-                className="inline-flex items-center gap-3 rounded-2xl bg-linear-to-r from-gray-700 to-gray-800 px-8 py-4 text-sm font-semibold text-white shadow-lg shadow-gray-700/30 transition-all duration-200 hover:scale-[1.02] hover:shadow-gray-700/50 active:scale-[0.98]"
-              >
-                <IconBrandApple className="size-5" />
-                Download iOS
-              </button>
-            )}
-          </div>
-        </div>
-      </section>
+                <span className="pt-1 text-sm tabular-nums text-[#2B6E36]">
+                  {step.index}
+                </span>
+                <h2 className="text-2xl font-medium tracking-tight sm:text-[1.75rem]">
+                  {step.title}
+                </h2>
+                <p className="col-start-2 mt-2 text-[15px] leading-relaxed text-[#4a4a4a] sm:col-start-3 sm:mt-0">
+                  {step.detail}
+                </p>
+              </li>
+            ))}
+          </ul>
+          <div className="border-t border-black/10" />
+        </section>
 
-      {/* ── Footer ───────────────────────────────────────────────────────── */}
-      <footer className="relative z-10 border-t border-white/5 py-8">
-        <div className="mx-auto flex max-w-5xl flex-col items-center gap-2 px-6 text-center">
-          <div className="flex items-center gap-2">
-            <img src={logo} alt="KMS Connect" className="size-5 rounded object-contain opacity-60" />
-            <span className="text-sm font-medium text-white/40">KMS Connect</span>
+        <section className="mx-auto flex max-w-6xl flex-col gap-8 px-6 pb-20 sm:flex-row sm:items-end sm:justify-between">
+          <div className="max-w-xl">
+            <p className="text-sm text-[#6b6b6b]">Versi {APP_VERSION}</p>
+            <p className="mt-3 text-[15px] leading-relaxed text-[#4a4a4a]">
+              Ijazah diunggah sebagai PDF, maksimal 2 MB. Pas Foto tidak lagi
+              muncul dua kali. Unggah dokumen lebih stabil. Rilis yang sama di
+              Google Play dan App Store.
+            </p>
           </div>
-          <p className="text-xs text-white/30">
-            &copy; {new Date().getFullYear()} PT. Karyatama Mitra Sejati. Seluruh hak cipta dilindungi.
-          </p>
-          <p className="text-xs text-white/20">
-            Versi {APP_VERSION} &middot; {MIN_ANDROID}+
-          </p>
+          <div className="flex flex-wrap gap-3">
+            <StoreBadge
+              href={PLAY_STORE_URL}
+              kicker="Dapatkan di"
+              name="Google Play"
+              icon={<PlayMark />}
+            />
+            <StoreBadge
+              href={APP_STORE_URL}
+              kicker="Unduh di"
+              name="App Store"
+              icon={<AppleMark />}
+            />
+          </div>
+        </section>
+      </main>
+
+      <footer className="border-t border-black/10">
+        <div className="mx-auto flex max-w-6xl flex-col gap-2 px-6 py-6 text-sm text-[#6b6b6b] sm:flex-row sm:items-center sm:justify-between">
+          <p>© {new Date().getFullYear()} PT. Karyatama Mitra Sejati</p>
+          <p>KMS Connect {APP_VERSION}</p>
         </div>
       </footer>
     </div>
+  )
+}
+
+function StoreBadge({
+  href,
+  kicker,
+  name,
+  icon,
+}: {
+  href: string
+  kicker: string
+  name: string
+  icon: ReactNode
+}) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-3 rounded-xl bg-[#111] px-4 py-2.5 text-white transition-colors hover:bg-[#2a2a2a]"
+    >
+      {icon}
+      <span className="text-left leading-none">
+        <span className="block text-[10px] tracking-wide text-white/70">
+          {kicker}
+        </span>
+        <span className="mt-1 block text-[15px] font-medium">{name}</span>
+      </span>
+    </a>
+  )
+}
+
+function PlayMark() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-6" aria-hidden>
+      <path fill="#34A853" d="M3.5 20.6 13.2 12 3.5 3.4z" />
+      <path fill="#FBBC04" d="m13.2 12 2.7 2.5-9.2 5.3z" />
+      <path fill="#4285F4" d="M20.2 10.6 15.9 8.1 13.2 12l2.7 2.5 4.3-2.5c.7-.4.7-1.4 0-1.4z" />
+      <path fill="#EA4335" d="M3.5 3.4 13.2 12l2.7-3.9L6.7 2.8c-.8-.5-1.8 0-2.2.6z" />
+    </svg>
+  )
+}
+
+function AppleMark() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-6" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M16.4 12.6c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.2-2.8.8-3.5.8s-1.8-.8-3-.8c-1.5 0-3 .9-3.8 2.3-1.6 2.8-.4 7 1.2 9.3.8 1.1 1.7 2.3 2.9 2.3 1.2 0 1.6-.7 3-.7s1.8.7 3 .7 2-.1 2.9-2.3c.7-1 1.2-2.1 1.5-3.2-3.9-1.5-3.8-5.8-3.8-6.1zM14.7 6.2c.6-.8 1.1-1.9.9-3-1 .1-2.1.6-2.8 1.4-.6.7-1.2 1.8-1 2.9 1.1.1 2.2-.5 2.9-1.3z"
+      />
+    </svg>
   )
 }
