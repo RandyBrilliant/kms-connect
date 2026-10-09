@@ -19,6 +19,8 @@ String _sectionTitle(ProfileSetupSection s) {
       return 'Pendidikan & Fisik';
     case ProfileSetupSection.addressKtp:
       return 'Alamat KTP';
+    case ProfileSetupSection.currentAddress:
+      return 'Alamat tempat tinggal sekarang';
     case ProfileSetupSection.documents:
       return 'Data Dokumen';
     case ProfileSetupSection.passport:
@@ -40,6 +42,8 @@ IconData _sectionIcon(ProfileSetupSection s) {
       return Icons.school_outlined;
     case ProfileSetupSection.addressKtp:
       return Icons.home_outlined;
+    case ProfileSetupSection.currentAddress:
+      return Icons.location_on_outlined;
     case ProfileSetupSection.documents:
       return Icons.folder_outlined;
     case ProfileSetupSection.passport:

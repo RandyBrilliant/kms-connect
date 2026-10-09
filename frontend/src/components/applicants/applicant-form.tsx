@@ -70,6 +70,7 @@ function applicantTextChange(
 /** Build applicant_profile from parsed create payload (omit account-only fields). */
 const PROFILE_KEYS = [
   "full_name", "nik", "birth_place_text", "birth_date", "address", "postal_code", "province", "district", "village",
+  "current_address", "current_postal_code", "current_province", "current_district", "current_village",
   "contact_phone", "gender", "sibling_count", "birth_order", "father_name", "father_age", "father_occupation",
   "father_almarhum", "mother_name", "mother_age", "mother_occupation", "mother_almarhum", "spouse_name", "spouse_age", "spouse_occupation", "spouse_almarhum",
   "family_address", "family_postal_code", "family_province", "family_district", "family_village", "father_phone", "mother_phone",
@@ -181,6 +182,11 @@ const defaultBiodata = {
   district: null as number | null,
   village: null as number | null,
   postal_code: "",
+  current_address: "",
+  current_postal_code: "",
+  current_province: null as number | null,
+  current_district: null as number | null,
+  current_village: null as number | null,
 }
 
 export function ApplicantForm({
@@ -524,6 +530,70 @@ export function ApplicantForm({
                     <form.Field name="village">
                       {(fv) => (
                         <RegionAddressFields
+                          value={{
+                            province: fp.state.value ?? null,
+                            district: fd.state.value ?? null,
+                            village: fv.state.value ?? null,
+                          }}
+                          onChange={(v) => {
+                            fp.handleChange(v.province)
+                            fd.handleChange(v.district)
+                            fv.handleChange(v.village)
+                          }}
+                          disabled={isSubmitting}
+                        />
+                      )}
+                    </form.Field>
+                  )}
+                </form.Field>
+              )}
+            </form.Field>
+
+            <form.Field name="current_address">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>
+                    Alamat tempat tinggal sekarang
+                  </FieldLabel>
+                  <Input
+                    id={field.name}
+                    type="text"
+                    placeholder="Bukan alamat KTP. Ini yang tercetak di CV."
+                    value={field.state.value}
+                    onChange={applicantTextChange(field.name, field.handleChange)}
+                    onBlur={field.handleBlur}
+                  />
+                </Field>
+              )}
+            </form.Field>
+
+            <form.Field name="current_postal_code">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>
+                    Kode pos tempat tinggal sekarang
+                  </FieldLabel>
+                  <Input
+                    id={field.name}
+                    type="text"
+                    placeholder="Contoh: 20111"
+                    maxLength={20}
+                    value={field.state.value}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    onBlur={field.handleBlur}
+                  />
+                </Field>
+              )}
+            </form.Field>
+
+            <form.Field name="current_province">
+              {(fp) => (
+                <form.Field name="current_district">
+                  {(fd) => (
+                    <form.Field name="current_village">
+                      {(fv) => (
+                        <RegionAddressFields
+                          labelPrefix="Alamat sekarang"
                           value={{
                             province: fp.state.value ?? null,
                             district: fd.state.value ?? null,

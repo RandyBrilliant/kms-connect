@@ -39,6 +39,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   final _birthPlaceCtrl = TextEditingController();
   final _birthDate = TextEditingController();
   final _address = TextEditingController();
+  final _currentAddress = TextEditingController();
+  final _currentPostalCode = TextEditingController();
   final _phone = TextEditingController();
   final _siblingCount = TextEditingController();
   final _birthOrder = TextEditingController();
@@ -89,6 +91,12 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   Region? _kabupaten;   // Kabupaten/Kota (regency)
   Region? _kecamatan;   // Kecamatan (district)
   Region? _kelurahan;   // Kelurahan/Desa (village)
+
+  // ── Region state – alamat tempat tinggal sekarang ─────────────────────
+  Region? _currentProvince;
+  Region? _currentKabupaten;
+  Region? _currentKecamatan;
+  Region? _currentKelurahan;
 
   // ── Region state – Alamat Keluarga (cascading) ────────────────────────
   Region? _familyProvince;
@@ -141,14 +149,20 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   /// Async-fetches the parent kecamatan (district) for [villageId] and
   /// sets [_kecamatan] (or [_familyKecamatan]) so the cascading kelurahan
   /// picker is pre-filled.
-  Future<void> _loadKecamatan(int villageId, {bool isFamily = false}) async {
+  Future<void> _loadKecamatan(
+    int villageId, {
+    bool isFamily = false,
+    bool isCurrent = false,
+  }) async {
     try {
       final kecamatan = await ref.read(
         kecamatanFromVillageProvider(villageId).future,
       );
       if (mounted) {
         setState(() {
-          if (isFamily) {
+          if (isCurrent) {
+            _currentKecamatan = kecamatan;
+          } else if (isFamily) {
             _familyKecamatan = kecamatan;
           } else {
             _kecamatan = kecamatan;
@@ -163,7 +177,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   @override
   void dispose() {
     for (final c in [
-      _fullName, _nik, _birthPlaceCtrl, _birthDate, _address, _phone,
+      _fullName, _nik, _birthPlaceCtrl, _birthDate, _address, _currentAddress,
+      _currentPostalCode, _phone,
       _siblingCount, _birthOrder, _fatherName, _fatherAge, _fatherOccupation,
       _motherName, _motherAge, _motherOccupation, _familyAddress,
       _familyPostalCode, _fatherPhone,
@@ -186,6 +201,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     _populate(profile);
     if (profile.villageId != null) {
       _loadKecamatan(profile.villageId!, isFamily: false);
+    }
+    if (profile.currentVillageId != null) {
+      _loadKecamatan(profile.currentVillageId!, isCurrent: true);
     }
     if (profile.familyVillageId != null) {
       _loadKecamatan(profile.familyVillageId!, isFamily: true);
@@ -232,6 +250,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     }
     _gender = _normalizeGender(p.gender);
     _address.text = (p.address ?? '').toUpperCase();
+    _currentAddress.text = (p.currentAddress ?? '').toUpperCase();
+    _currentPostalCode.text = p.currentPostalCode ?? '';
     _phone.text = p.contactPhone ?? '';
     _siblingCount.text = p.siblingCount?.toString() ?? '';
     _birthOrder.text = p.birthOrder?.toString() ?? '';
@@ -328,6 +348,28 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
       _kelurahan = Region(id: p.villageId!, code: '', name: p.villageName!);
     }
 
+    if (p.currentProvinceId != null && p.currentProvinceName != null) {
+      _currentProvince = Region(
+        id: p.currentProvinceId!,
+        code: '',
+        name: p.currentProvinceName!,
+      );
+    }
+    if (p.currentDistrictId != null && p.currentDistrictName != null) {
+      _currentKabupaten = Region(
+        id: p.currentDistrictId!,
+        code: '',
+        name: p.currentDistrictName!,
+      );
+    }
+    if (p.currentVillageId != null && p.currentVillageName != null) {
+      _currentKelurahan = Region(
+        id: p.currentVillageId!,
+        code: '',
+        name: p.currentVillageName!,
+      );
+    }
+
     // Family address regions
     if (p.familyProvinceId != null && p.familyProvinceName != null) {
       _familyProvince = Region(id: p.familyProvinceId!, code: '', name: p.familyProvinceName!);
@@ -372,6 +414,11 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
         'birth_date': DateFormat('yyyy-MM-dd').format(_pickedDate!),
       if (_gender != null) 'gender': _gender,
       'address': _address.text.trim(),
+      'current_address': _currentAddress.text.trim(),
+      'current_postal_code': _currentPostalCode.text.trim(),
+      if (_currentProvince != null) 'current_province': _currentProvince!.id,
+      if (_currentKabupaten != null) 'current_district': _currentKabupaten!.id,
+      if (_currentKelurahan != null) 'current_village': _currentKelurahan!.id,
       if (_province != null) 'province': _province!.id,
       if (_kabupaten != null) 'district': _kabupaten!.id,
       if (_kelurahan != null) 'village': _kelurahan!.id,
@@ -583,6 +630,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
         // Kecamatan is not stored on profile; derive from village (same as initState path).
         if (profile.villageId != null) {
           _loadKecamatan(profile.villageId!, isFamily: false);
+        }
+        if (profile.currentVillageId != null) {
+          _loadKecamatan(profile.currentVillageId!, isCurrent: true);
         }
         if (profile.familyVillageId != null) {
           _loadKecamatan(profile.familyVillageId!, isFamily: true);
@@ -1145,6 +1195,162 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                             if (picked != null) {
                               setState(
                                   () => _kelurahan = picked);
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // ─── Alamat tempat tinggal sekarang ────────────────
+                    _SectionCard(
+                      icon: Icons.location_on_outlined,
+                      label: 'Alamat tempat tinggal sekarang',
+                      children: [
+                        M3TextField(
+                          controller: _currentAddress,
+                          label: 'Alamat Lengkap',
+                          hint: 'Tempat tinggal saat ini, bukan alamat KTP',
+                          prefixIcon: Icons.edit_road_outlined,
+                          maxLines: 2,
+                          upperCase: true,
+                          emptyErrorText: 'Alamat tempat tinggal sekarang wajib diisi',
+                        ),
+                        const SizedBox(height: 14),
+                        M3TextField(
+                          controller: _currentPostalCode,
+                          label: 'Kode Pos',
+                          hint: 'Contoh: 20111',
+                          prefixIcon: Icons.local_post_office_outlined,
+                          keyboardType: TextInputType.number,
+                          upperCase: false,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            LengthLimitingTextInputFormatter(20),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        _RegionPickerField(
+                          label: 'Provinsi',
+                          hint: 'Pilih provinsi',
+                          prefixIcon: Icons.map_outlined,
+                          selected: _currentProvince,
+                          emptyErrorText: 'Provinsi wajib dipilih',
+                          onTap: () async {
+                            final items = await readRegionListWithRetry(
+                              ref,
+                              () => ref.read(provincesProvider.future),
+                              () => ref.invalidate(provincesProvider),
+                            );
+                            if (!mounted) return;
+                            final picked = await _showRegionPicker(
+                                title: 'Pilih Provinsi',
+                                items: items,
+                                selected: _currentProvince);
+                            if (picked != null) {
+                              setState(() {
+                                _currentProvince = picked;
+                                _currentKabupaten = null;
+                                _currentKecamatan = null;
+                                _currentKelurahan = null;
+                              });
+                            }
+                          },
+                        ),
+                        const SizedBox(height: 14),
+                        _RegionPickerField(
+                          label: 'Kabupaten / Kota',
+                          hint: _currentProvince == null
+                              ? 'Pilih provinsi dahulu'
+                              : 'Pilih kab/kota',
+                          prefixIcon: Icons.location_city_outlined,
+                          selected: _currentKabupaten,
+                          enabled: _currentProvince != null,
+                          emptyErrorText: 'Kabupaten/kota wajib dipilih',
+                          onTap: () async {
+                            if (_currentProvince == null) return;
+                            final pid = _currentProvince!.id;
+                            final items = await readRegionListWithRetry(
+                              ref,
+                              () => ref.read(
+                                  regenciesByProvinceProvider(pid).future),
+                              () => ref.invalidate(
+                                  regenciesByProvinceProvider(pid)),
+                            );
+                            if (!mounted) return;
+                            final picked = await _showRegionPicker(
+                                title: 'Pilih Kab/Kota',
+                                items: items,
+                                selected: _currentKabupaten);
+                            if (picked != null) {
+                              setState(() {
+                                _currentKabupaten = picked;
+                                _currentKecamatan = null;
+                                _currentKelurahan = null;
+                              });
+                            }
+                          },
+                        ),
+                        const SizedBox(height: 14),
+                        _RegionPickerField(
+                          label: 'Kecamatan',
+                          hint: _currentKabupaten == null
+                              ? 'Pilih kab/kota dahulu'
+                              : 'Pilih kecamatan',
+                          prefixIcon: Icons.place_outlined,
+                          selected: _currentKecamatan,
+                          enabled: _currentKabupaten != null,
+                          onTap: () async {
+                            if (_currentKabupaten == null) return;
+                            final rid = _currentKabupaten!.id;
+                            final items = await readRegionListWithRetry(
+                              ref,
+                              () => ref.read(
+                                  districtsByRegencyProvider(rid).future),
+                              () => ref.invalidate(
+                                  districtsByRegencyProvider(rid)),
+                            );
+                            if (!mounted) return;
+                            final picked = await _showRegionPicker(
+                                title: 'Pilih Kecamatan',
+                                items: items,
+                                selected: _currentKecamatan);
+                            if (picked != null) {
+                              setState(() {
+                                _currentKecamatan = picked;
+                                _currentKelurahan = null;
+                              });
+                            }
+                          },
+                        ),
+                        const SizedBox(height: 14),
+                        _RegionPickerField(
+                          label: 'Kelurahan / Desa',
+                          hint: _currentKecamatan == null
+                              ? 'Pilih kecamatan dahulu'
+                              : 'Pilih kelurahan',
+                          prefixIcon: Icons.villa_outlined,
+                          selected: _currentKelurahan,
+                          enabled: _currentKecamatan != null,
+                          emptyErrorText: 'Kelurahan/desa wajib dipilih',
+                          onTap: () async {
+                            if (_currentKecamatan == null) return;
+                            final did = _currentKecamatan!.id;
+                            final items = await readRegionListWithRetry(
+                              ref,
+                              () => ref.read(
+                                  villagesByDistrictProvider(did).future),
+                              () => ref.invalidate(
+                                  villagesByDistrictProvider(did)),
+                            );
+                            if (!mounted) return;
+                            final picked = await _showRegionPicker(
+                                title: 'Pilih Kelurahan/Desa',
+                                items: items,
+                                selected: _currentKelurahan);
+                            if (picked != null) {
+                              setState(() => _currentKelurahan = picked);
                             }
                           },
                         ),

@@ -103,7 +103,17 @@ class ApplicantProfileAdmin(admin.ModelAdmin):
     list_filter = ("gender", "verification_status", "destination_country", "province", "religion", "education_level", "created_at")
     search_fields = ("user__full_name", "user__email", "nik", "contact_phone")
     raw_id_fields = ("user", "referrer", "verified_by")
-    autocomplete_fields = ("province", "district", "village", "family_province", "family_district", "family_village")
+    autocomplete_fields = (
+        "province",
+        "district",
+        "village",
+        "current_province",
+        "current_district",
+        "current_village",
+        "family_province",
+        "family_district",
+        "family_village",
+    )
     readonly_fields = ("register_number", "created_at", "updated_at")
     inlines = [WorkExperienceInline, ApplicantDocumentInline]
 
@@ -126,6 +136,11 @@ class ApplicantProfileAdmin(admin.ModelAdmin):
                     "district",
                     "province",
                     "village",
+                    "current_address",
+                    "current_postal_code",
+                    "current_district",
+                    "current_province",
+                    "current_village",
                     "contact_phone",
                     "sibling_count",
                     "birth_order",

@@ -13,12 +13,11 @@ from datetime import date
 
 from django.http import HttpResponse
 from django.utils import timezone
-from PIL import Image
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfgen import canvas
 
-from account.services.biodata_pdf import pas_foto_bytes
+from account.services.biodata_pdf import pas_foto_bytes, photo_cover
 
 DEBUG_GRID = False
 
@@ -102,10 +101,6 @@ def _str(value, fallback: str = "") -> str:
     return s if s else fallback
 
 
-def _mentions_medan(*parts: str) -> bool:
-    return any("MEDAN" in (p or "").upper() for p in parts if p)
-
-
 def _place_name(obj) -> str:
     if obj is None:
         return ""
@@ -186,13 +181,6 @@ def _draw_fitted(
         c.drawString(x1 + pad, y + (len(lines) - 1 - i) * line_h, line)
 
 
-def _draw_check(c: canvas.Canvas, rect: tuple[float, float, float, float]) -> None:
-    x1, y1, x2, y2 = rect
-    c.setFillColorRGB(0, 0, 0)
-    c.setFont(FONT_BOLD, 9)
-    c.drawCentredString((x1 + x2) / 2.0, y1 + 2.5, "X")
-
-
 def _work_pair(exp) -> tuple[str, str]:
     company = _str(exp.company_name)
     position = _str(exp.position)
@@ -213,42 +201,39 @@ def _work_pair(exp) -> tuple[str, str]:
     return line1, line2
 
 
+def _joined_address(*parts: str) -> str:
+    """Keep the street first; drop empty or repeated place names."""
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for part in parts:
+        text = _str(part)
+        key = text.upper()
+        if not text or key in seen:
+            continue
+        seen.add(key)
+        ordered.append(text)
+    return ", ".join(ordered)
+
+
 def _ktp_text(profile) -> str:
-    parts = [
+    return _joined_address(
         _str(profile.address),
         _place_name(getattr(profile, "village", None)),
         _place_name(getattr(profile, "district", None)),
         _place_name(getattr(profile, "province", None)),
         _str(getattr(profile, "postal_code", "")),
-    ]
-    # Keep address first; drop duplicates while preserving order.
-    seen: set[str] = set()
-    ordered: list[str] = []
-    for part in parts:
-        key = part.upper()
-        if not part or key in seen:
-            continue
-        seen.add(key)
-        ordered.append(part)
-    return ", ".join(ordered)
+    )
 
 
-def _photo_cover(data: bytes, width_pt: float, height_pt: float) -> io.BytesIO:
-    """Center-crop the pas foto to fill the template well."""
-    src = Image.open(io.BytesIO(data)).convert("RGB")
-    tw = max(32, int(width_pt * 3))
-    th = max(32, int(height_pt * 3))
-    scale = max(tw / src.width, th / src.height)
-    new_w = max(tw, int(src.width * scale))
-    new_h = max(th, int(src.height * scale))
-    resized = src.resize((new_w, new_h), Image.Resampling.LANCZOS)
-    left = (new_w - tw) // 2
-    top = (new_h - th) // 2
-    cropped = resized.crop((left, top, left + tw, top + th))
-    out = io.BytesIO()
-    cropped.save(out, format="JPEG", quality=90)
-    out.seek(0)
-    return out
+def _current_address_text(profile) -> str:
+    """Current residence only. Never fall back to the KTP address."""
+    return _joined_address(
+        _str(getattr(profile, "current_address", "")),
+        _place_name(getattr(profile, "current_village", None)),
+        _place_name(getattr(profile, "current_district", None)),
+        _place_name(getattr(profile, "current_province", None)),
+        _str(getattr(profile, "current_postal_code", "")),
+    )
 
 
 def _photo_bytes(profile) -> bytes | None:
@@ -343,16 +328,14 @@ def generate_cv_pdf(profile) -> bytes:
     work_exps = list(profile.work_experiences.all()[:3])
     ktp_text = _ktp_text(profile)
     ktp_lines = _wrap(ktp_text, _R_ALAMAT_KTP[0][2] - _R_ALAMAT_KTP[0][0] - 5, FONT_NAME, 7.2, 3)
-
-    from_medan = _mentions_medan(_place_name(getattr(profile, "district", None)))
-    family_bits = (
-        _str(profile.family_address),
-        _place_name(getattr(profile, "family_village", None)),
-        _place_name(getattr(profile, "family_district", None)),
-        _place_name(getattr(profile, "family_province", None)),
+    current_text = _current_address_text(profile)
+    current_lines = _wrap(
+        current_text,
+        _R_ALAMAT_SEKARANG[0][2] - _R_ALAMAT_SEKARANG[0][0] - 5,
+        FONT_NAME,
+        7.2,
+        len(_R_ALAMAT_SEKARANG),
     )
-    family_in_medan = _mentions_medan(*family_bits)
-    saudara_addr = ", ".join(p for p in family_bits if p) if family_in_medan else ""
 
     _draw_fitted(c, _R_SR, _sr_staff_name(profile), font=FONT_BOLD, size=8)
     _draw_fitted(c, _R_NAMA, full_name, font=FONT_BOLD, size=11)
@@ -365,25 +348,14 @@ def generate_cv_pdf(profile) -> bytes:
         _draw_fitted(c, _R_WORK[i * 2], line1, size=7.5)
         _draw_fitted(c, _R_WORK[i * 2 + 1], line2, size=7.0)
 
-    if profile.has_passport is True:
-        _draw_check(c, _R_PASPOR_YA)
-        _draw_check(c, _R_AJUKAN_PASPOR_YA)
-    elif profile.has_passport is False:
-        _draw_check(c, _R_PASPOR_TIDAK)
-
-    if not from_medan:
-        if family_in_medan:
-            _draw_check(c, _R_SAUDARA_MEDAN_YA)
-            _draw_fitted(c, _R_ALAMAT_SAUDARA, saudara_addr, size=7.0)
-        elif any(family_bits):
-            _draw_check(c, _R_SAUDARA_MEDAN_TIDAK)
+    # Paspor, ajukan paspor, and saudara di Medan stay blank. The pelamar
+    # marks Ya/Tidak on the printed CV.
 
     _draw_fitted(c, _R_TELP, phone, size=7.5)
     _draw_fitted(c, _R_EMAIL, email, size=7.0)
     for rect, line in zip(_R_ALAMAT_KTP, ktp_lines):
         _draw_fitted(c, rect, line, size=7.0)
-    # Current address is not stored separately; reuse KTP when present.
-    for rect, line in zip(_R_ALAMAT_SEKARANG, ktp_lines[:2]):
+    for rect, line in zip(_R_ALAMAT_SEKARANG, current_lines):
         _draw_fitted(c, rect, line, size=7.0)
 
     # Kemampuan and bahasa stay blank so the pelamar can fill them by hand.
@@ -402,7 +374,7 @@ def generate_cv_pdf(profile) -> bytes:
                 clip.roundRect(px, py, pw, ph, _PHOTO_RADIUS)
                 c.clipPath(clip, stroke=0, fill=0)
                 c.drawImage(
-                    ImageReader(_photo_cover(photo_data, pw, ph)),
+                    ImageReader(photo_cover(photo_data, pw, ph)),
                     px,
                     py,
                     width=pw,

@@ -1,5 +1,8 @@
 """CV PDF generation using the official CPMI template."""
 
+import base64
+import re
+import zlib
 from datetime import date
 from io import BytesIO
 
@@ -22,6 +25,24 @@ def _tiny_jpeg() -> ContentFile:
     buf = BytesIO()
     Image.new("RGB", (90, 120), color=(180, 140, 100)).save(buf, format="JPEG")
     return ContentFile(buf.getvalue(), name="pasfoto.jpg")
+
+
+def _pdf_text(pdf: bytes) -> bytes:
+    """Decompress page content streams so drawn strings can be asserted."""
+    parts: list[bytes] = []
+    for match in re.finditer(rb"stream\r?\n(.*?)endstream", pdf, re.S):
+        raw = match.group(1).strip()
+        if len(raw) > 20_000:
+            continue
+        try:
+            if raw.endswith(b"~>"):
+                raw = base64.a85decode(raw[:-2])
+            decoded = zlib.decompress(raw)
+        except Exception:
+            continue
+        if b"Tj" in decoded:
+            parts.append(decoded)
+    return b"\n".join(parts)
 
 
 def _attach_pas_foto(profile, content: ContentFile) -> ApplicantDocument:
@@ -129,3 +150,26 @@ class CvPdfTests(TestCase):
         staff.save(update_fields=["full_name"])
         profile.referrer = staff
         self.assertEqual(_sr_staff_name(profile), "RUJUKAN STAFF")
+
+    def test_cv_uses_current_address_and_leaves_statements_blank(self):
+        user = CustomUser.objects.create_user(
+            email="cvaddress@example.com",
+            password="testpass123",
+            role=UserRole.APPLICANT,
+            full_name="Adinda Pratiwi",
+            is_active=True,
+            email_verified=True,
+        )
+        profile = ApplicantProfile.objects.create(
+            user=user,
+            address="JL KTP SATU",
+            has_passport=True,
+            family_address="JALAN SAUDARA MEDAN",
+            current_address="JL KOST DUA",
+        )
+        text = _pdf_text(generate_cv_pdf(profile))
+        self.assertIn(b"JL KTP SATU", text)
+        self.assertEqual(text.count(b"JL KTP SATU"), 1)
+        self.assertIn(b"JL KOST DUA", text)
+        self.assertNotIn(b"JALAN SAUDARA MEDAN", text)
+        self.assertNotIn(b"(X)", text)

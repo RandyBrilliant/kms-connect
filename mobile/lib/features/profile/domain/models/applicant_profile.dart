@@ -69,6 +69,16 @@ class ApplicantProfile {
   final int? villageId;
   final String? villageName;
 
+  // Current residence — separate from the KTP address (printed on the CV).
+  final String? currentAddress;
+  final String? currentPostalCode;
+  final int? currentProvinceId;
+  final String? currentProvinceName;
+  final int? currentDistrictId;
+  final String? currentDistrictName;
+  final int? currentVillageId;
+  final String? currentVillageName;
+
   // Contact
   final String? contactPhone;
 
@@ -164,6 +174,14 @@ class ApplicantProfile {
     this.districtName,
     this.villageId,
     this.villageName,
+    this.currentAddress,
+    this.currentPostalCode,
+    this.currentProvinceId,
+    this.currentProvinceName,
+    this.currentDistrictId,
+    this.currentDistrictName,
+    this.currentVillageId,
+    this.currentVillageName,
     this.contactPhone,
     this.nik,
     this.religion,
@@ -251,6 +269,7 @@ class ApplicantProfile {
     // Backend returns region FK fields as plain integer PKs.
     // Region *names* are embedded in the display helper dicts.
     final vd = json['village_display'] as Map<String, dynamic>?;
+    final cvd = json['current_village_display'] as Map<String, dynamic>?;
     final fvd = json['family_village_display'] as Map<String, dynamic>?;
     final rd = json['referrer_display'] as Map<String, dynamic>?;
     final inboundRaw = json['inbound_transport_stage_costs'] as List<dynamic>?;
@@ -277,6 +296,17 @@ class ApplicantProfile {
       districtName: _str(vd?['regency']) ?? _nameFromField(json['district']),
       villageId: _idFromField(json['village']),
       villageName: _str(vd?['village']) ?? _nameFromField(json['village']),
+      currentAddress: _str(json['current_address']),
+      currentPostalCode: _str(json['current_postal_code']),
+      currentProvinceId: _idFromField(json['current_province']),
+      currentProvinceName:
+          _str(cvd?['province']) ?? _nameFromField(json['current_province']),
+      currentDistrictId: _idFromField(json['current_district']),
+      currentDistrictName:
+          _str(cvd?['regency']) ?? _nameFromField(json['current_district']),
+      currentVillageId: _idFromField(json['current_village']),
+      currentVillageName:
+          _str(cvd?['village']) ?? _nameFromField(json['current_village']),
       contactPhone: _str(json['contact_phone']),
       nik: _str(json['nik']),
       religion: _str(json['religion']),
@@ -362,6 +392,11 @@ class ApplicantProfile {
     'province': provinceId,
     'district': districtId,
     'village': villageId,
+    'current_address': currentAddress,
+    'current_postal_code': currentPostalCode,
+    'current_province': currentProvinceId,
+    'current_district': currentDistrictId,
+    'current_village': currentVillageId,
     'contact_phone': contactPhone,
     'nik': nik,
     'sibling_count': siblingCount,

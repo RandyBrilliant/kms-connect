@@ -24,6 +24,7 @@ import io
 import os
 from datetime import date
 
+from PIL import Image, ImageOps
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
@@ -109,12 +110,11 @@ _STRIKE_SUAMI = (0.285, 0.325, 0.410)
 _STRIKE_IBU   = (0.240, 0.260, 0.454)
 _STRIKE_ISTRI = (0.273, 0.300, 0.454)
 
-# Photo box — top-left corner of the 3×4 placeholder (top-right of form)
-# Adjust _FX_PHOTO / _FY_PHOTO to move; PHOTO_W_PT / PHOTO_H_PT for size.
-_FX_PHOTO  = 0.790
-_FY_PHOTO  = 0.076   # y_top_frac
-PHOTO_W_PT = 92.0
-PHOTO_H_PT = 115.0   # 3:4 ratio
+# Pas-foto frame on biodata_template.png (2550×3300), inside the gray stroke.
+# The printed box is nearly square even though the label says "ukuran 3x4".
+# Pixel origin is top-left. tests_biodata_pdf checks these still match the art.
+_TEMPLATE_PX = (2550, 3300)
+_PHOTO_BOX_PX = (1890, 190, 2242, 550)  # x1, y1, x2, y2
 
 
 def _fmt_date(d) -> str:
@@ -150,6 +150,44 @@ def _work_exp_summary(exp) -> str:
     if period:
         parts.append(f"({period})")
     return "  ·  ".join(parts)
+
+
+def photo_box_pt() -> tuple[float, float, float, float]:
+    """Pas-foto frame as ``(x, y_bottom, width, height)`` in PDF points.
+
+    Mapped from the template pixels onto the A4 page the same way the
+    background image is stretched, so the photo stays inside the gray box.
+    """
+    x1, y1, x2, y2 = _PHOTO_BOX_PX
+    tw, th = _TEMPLATE_PX
+    x = x1 / tw * PAGE_W
+    width = (x2 - x1) / tw * PAGE_W
+    height = (y2 - y1) / th * PAGE_H
+    y_bottom = PAGE_H - (y2 / th * PAGE_H)
+    return x, y_bottom, width, height
+
+
+def photo_cover(data: bytes, width_pt: float, height_pt: float) -> io.BytesIO:
+    """Center-crop a pas foto so it fills ``width_pt`` × ``height_pt``.
+
+    Phone uploads are often landscape, square, or stored sideways. Cover-crop
+    (after applying EXIF orientation) keeps the face in frame and removes the
+    gaps or overflow that ``preserveAspectRatio`` leaves around the box.
+    """
+    src = ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert("RGB")
+    tw = max(32, int(width_pt * 3))
+    th = max(32, int(height_pt * 3))
+    scale = max(tw / src.width, th / src.height)
+    new_w = max(tw, int(src.width * scale))
+    new_h = max(th, int(src.height * scale))
+    resized = src.resize((new_w, new_h), Image.Resampling.LANCZOS)
+    left = (new_w - tw) // 2
+    top = (new_h - th) // 2
+    cropped = resized.crop((left, top, left + tw, top + th))
+    out = io.BytesIO()
+    cropped.save(out, format="JPEG", quality=90)
+    out.seek(0)
+    return out
 
 
 def pas_foto_bytes(profile) -> bytes | None:
@@ -407,18 +445,22 @@ def generate_biodata_pdf(profile) -> bytes:
         photo_data = None
     if photo_data:
         try:
-            photo_bytes    = io.BytesIO(photo_data)
-            photo_x        = _FX_PHOTO * PAGE_W
-            photo_y_bottom = (1.0 - _FY_PHOTO) * PAGE_H - PHOTO_H_PT
-            c.drawImage(
-                ImageReader(photo_bytes),
-                photo_x,
-                photo_y_bottom,
-                width=PHOTO_W_PT,
-                height=PHOTO_H_PT,
-                preserveAspectRatio=True,
-                anchor="nw",
-            )
+            photo_x, photo_y, photo_w, photo_h = photo_box_pt()
+            c.saveState()
+            try:
+                clip = c.beginPath()
+                clip.rect(photo_x, photo_y, photo_w, photo_h)
+                c.clipPath(clip, stroke=0, fill=0)
+                c.drawImage(
+                    ImageReader(photo_cover(photo_data, photo_w, photo_h)),
+                    photo_x,
+                    photo_y,
+                    width=photo_w,
+                    height=photo_h,
+                    preserveAspectRatio=False,
+                )
+            finally:
+                c.restoreState()
         except Exception:
             # Unreadable pas foto must not abort biodata generation.
             pass
@@ -447,7 +489,7 @@ def generate_biodata_pdf(profile) -> bytes:
             "nohp_kel":        _F_NOHP_KEL,
             "keterangan_1":    _F_KETERANGAN_1,
             "keterangan_2":    _F_KETERANGAN_2,
-            "photo_tl":        _frac(_FX_PHOTO, _FY_PHOTO),
+            "photo_bl":        photo_box_pt()[:2],
         })
 
     c.save()

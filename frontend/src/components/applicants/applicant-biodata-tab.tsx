@@ -55,6 +55,8 @@ type BiodataFormValues = {
   birth_date: string
   address: string
   postal_code: string
+  current_address: string
+  current_postal_code: string
   contact_phone: string
   gender: string
   sibling_count: string
@@ -82,6 +84,9 @@ type BiodataFormValues = {
   province: number | null
   district: number | null
   village: number | null
+  current_province: number | null
+  current_district: number | null
+  current_village: number | null
   family_province: number | null
   family_district: number | null
   family_village: number | null
@@ -110,6 +115,8 @@ function toFormValues(p: ApplicantProfile): BiodataFormValues {
     birth_date: p.birth_date || "",
     address: p.address || "",
     postal_code: p.postal_code || "",
+    current_address: p.current_address || "",
+    current_postal_code: p.current_postal_code || "",
     contact_phone: p.contact_phone || "",
     gender: p.gender === "M" || p.gender === "F" ? p.gender : "",
     sibling_count: p.sibling_count != null ? String(p.sibling_count) : "",
@@ -137,6 +144,9 @@ function toFormValues(p: ApplicantProfile): BiodataFormValues {
     province: p.province ?? null,
     district: p.district ?? null,
     village: p.village ?? null,
+    current_province: p.current_province ?? null,
+    current_district: p.current_district ?? null,
+    current_village: p.current_village ?? null,
     family_province: p.family_province ?? null,
     family_district: p.family_district ?? null,
     family_village: p.family_village ?? null,
@@ -184,6 +194,8 @@ export function ApplicantBiodataTab({
         birth_date: value.birth_date || null,
         address: value.address || undefined,
         postal_code: value.postal_code || undefined,
+        current_address: value.current_address || undefined,
+        current_postal_code: value.current_postal_code || undefined,
         contact_phone: value.contact_phone || undefined,
         gender: (value.gender || undefined) as "M" | "F" | undefined,
         sibling_count: toNum(value.sibling_count),
@@ -212,6 +224,9 @@ export function ApplicantBiodataTab({
         province: value.province ?? undefined,
         district: value.district ?? undefined,
         village: value.village ?? undefined,
+        current_province: value.current_province ?? undefined,
+        current_district: value.current_district ?? undefined,
+        current_village: value.current_village ?? undefined,
         family_province: value.family_province ?? undefined,
         family_district: value.family_district ?? undefined,
         family_village: value.family_village ?? undefined,
@@ -432,6 +447,69 @@ export function ApplicantBiodataTab({
                     <form.Field name="village">
                       {(fv) => (
                         <RegionAddressFields
+                          value={{
+                            province: fp.state.value ?? null,
+                            district: fd.state.value ?? null,
+                            village: fv.state.value ?? null,
+                          }}
+                          onChange={(v) => {
+                            fp.handleChange(v.province)
+                            fd.handleChange(v.district)
+                            fv.handleChange(v.village)
+                          }}
+                          disabled={isSubmitting}
+                        />
+                      )}
+                    </form.Field>
+                  )}
+                </form.Field>
+              )}
+            </form.Field>
+
+            <form.Field name="current_address">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>
+                    Alamat tempat tinggal sekarang
+                  </FieldLabel>
+                  <Input
+                    id={field.name}
+                    value={field.state.value}
+                    onChange={(e) => field.handleChange(e.target.value.toUpperCase())}
+                    onBlur={field.handleBlur}
+                    placeholder="Bukan alamat KTP. Ini yang tercetak di CV."
+                    className="uppercase"
+                  />
+                </Field>
+              )}
+            </form.Field>
+
+            <form.Field name="current_postal_code">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>
+                    Kode pos tempat tinggal sekarang
+                  </FieldLabel>
+                  <Input
+                    id={field.name}
+                    value={field.state.value}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    onBlur={field.handleBlur}
+                    placeholder="Contoh: 20111"
+                    maxLength={20}
+                  />
+                </Field>
+              )}
+            </form.Field>
+
+            <form.Field name="current_province">
+              {(fp) => (
+                <form.Field name="current_district">
+                  {(fd) => (
+                    <form.Field name="current_village">
+                      {(fv) => (
+                        <RegionAddressFields
+                          labelPrefix="Alamat sekarang"
                           value={{
                             province: fp.state.value ?? null,
                             district: fd.state.value ?? null,

@@ -119,6 +119,11 @@ export function ApplicantDetailPreviewDialog({
                   <FieldItem label="Tempat Lahir" value={profile.birth_place_display ?? "-"} />
                   <FieldItem label="Tanggal Lahir" value={formatDate(profile.birth_date)} />
                   <FieldItem label="Alamat" value={profile.address} className="lg:col-span-3" />
+                  <FieldItem
+                    label="Alamat tempat tinggal sekarang"
+                    value={profile.current_address}
+                    className="lg:col-span-3"
+                  />
                   <FieldItem label="Provinsi" value={profile.village_display?.province ?? "-"} />
                   <FieldItem label="Kab/Kota" value={profile.village_display?.regency ?? "-"} />
                   <FieldItem label="Kecamatan" value={profile.village_display?.district ?? "-"} />

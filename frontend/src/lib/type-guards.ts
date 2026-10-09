@@ -254,7 +254,10 @@ export function hasCompleteBiodata(profile: ApplicantProfile): boolean {
     profile.contact_phone &&
     profile.address &&
     profile.district &&
-    profile.province
+    profile.province &&
+    profile.current_address &&
+    profile.current_district &&
+    profile.current_province
   )
 }
 

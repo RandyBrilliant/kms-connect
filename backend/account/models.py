@@ -521,6 +521,46 @@ class ApplicantProfile(models.Model):
         verbose_name=_("kelurahan / desa (alamat KTP)"),
         help_text=_("Pilih kelurahan/desa untuk alamat KTP (provinsi, kabupaten, kecamatan terisi otomatis)."),
     )
+    current_address = models.TextField(
+        _("alamat tempat tinggal sekarang"),
+        blank=True,
+        help_text=_(
+            "Alamat tempat tinggal saat ini untuk CV. Tidak disalin dari alamat KTP."
+        ),
+    )
+    current_postal_code = models.CharField(
+        _("kode pos tempat tinggal sekarang"),
+        max_length=20,
+        blank=True,
+        help_text=_("Kode pos alamat tempat tinggal saat ini."),
+    )
+    current_province = models.ForeignKey(
+        "regions.Province",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="applicant_profiles_current",
+        verbose_name=_("provinsi (tempat tinggal sekarang)"),
+        help_text=_("Provinsi alamat tempat tinggal saat ini."),
+    )
+    current_district = models.ForeignKey(
+        "regions.Regency",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="applicant_profiles_current_district",
+        verbose_name=_("kota / kabupaten (tempat tinggal sekarang)"),
+        help_text=_("Kota atau Kabupaten alamat tempat tinggal saat ini."),
+    )
+    current_village = models.ForeignKey(
+        "regions.Village",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="applicant_profiles_current_address",
+        verbose_name=_("kelurahan / desa (tempat tinggal sekarang)"),
+        help_text=_("Kelurahan/desa alamat tempat tinggal saat ini."),
+    )
     contact_phone = models.CharField(
         _("no. HP / WA yang aktif"),
         max_length=50,
@@ -1399,6 +1439,17 @@ class ApplicantProfile(models.Model):
         if self.family_village_id and not self.family_district_id:
             try:
                 self.family_district = self.family_village.district.regency
+            except Exception:
+                pass
+
+        if self.current_village_id and not self.current_province_id:
+            try:
+                self.current_province = self.current_village.district.regency.province
+            except Exception:
+                pass
+        if self.current_village_id and not self.current_district_id:
+            try:
+                self.current_district = self.current_village.district.regency
             except Exception:
                 pass
 

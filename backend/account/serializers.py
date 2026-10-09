@@ -342,6 +342,7 @@ _BIODATA_UPPER_STR_FIELDS = frozenset(
         "spouse_name",
         "spouse_occupation",
         "family_address",
+        "current_address",
         "heir_name",
         "notes",
         "hasil_medical",
@@ -385,6 +386,7 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
 
     village_display = serializers.SerializerMethodField(read_only=True)
     family_village_display = serializers.SerializerMethodField(read_only=True)
+    current_village_display = serializers.SerializerMethodField(read_only=True)
     birth_place_display = serializers.SerializerMethodField(read_only=True)
     heir_relationship_display = serializers.SerializerMethodField(read_only=True)
     # Write-only field so applicants can set their referrer via code string
@@ -449,6 +451,12 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
             "province",
             "village",
             "village_display",
+            "current_address",
+            "current_postal_code",
+            "current_district",
+            "current_province",
+            "current_village",
+            "current_village_display",
             "contact_phone",
             "sibling_count",
             "birth_order",
@@ -683,6 +691,16 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
             getattr(obj, "family_province", None) if obj.family_province_id else None,
             getattr(obj, "family_district", None) if obj.family_district_id else None,
             getattr(obj, "family_village", None) if obj.family_village_id else None,
+        )
+
+    def get_current_village_display(self, obj):
+        """Full hierarchy for the current residence, separate from the KTP address."""
+        if not obj:
+            return None
+        return self._build_region_hierarchy(
+            getattr(obj, "current_province", None) if obj.current_province_id else None,
+            getattr(obj, "current_district", None) if obj.current_district_id else None,
+            getattr(obj, "current_village", None) if obj.current_village_id else None,
         )
 
     def get_score_breakdown(self, obj):

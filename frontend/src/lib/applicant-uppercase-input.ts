@@ -7,6 +7,7 @@ export const APPLICANT_UPPERCASE_TEXT_FIELDS = new Set([
   "full_name",
   "birth_place_text",
   "address",
+  "current_address",
   "father_name",
   "father_occupation",
   "mother_name",

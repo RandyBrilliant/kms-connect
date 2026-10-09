@@ -5,6 +5,7 @@ enum ProfileSetupSection {
   personal,
   educationPhysical,
   addressKtp,
+  currentAddress,
   documents,
   passport,
   family,
@@ -71,6 +72,11 @@ ProfileCompletionReport evaluateProfileCompletion(ApplicantProfile p) {
       p.districtId != null &&
       p.villageId != null;
 
+  final currentAddress = _nonEmpty(p.currentAddress) &&
+      p.currentProvinceId != null &&
+      p.currentDistrictId != null &&
+      p.currentVillageId != null;
+
   // ── Data dokumen (BPJS/KIS optional)
   final documents = _nonEmpty(p.familyCardNumber) &&
       _nonEmpty(p.diplomaNumber);
@@ -105,6 +111,7 @@ ProfileCompletionReport evaluateProfileCompletion(ApplicantProfile p) {
     ProfileSetupSection.personal: personal,
     ProfileSetupSection.educationPhysical: educationPhysical,
     ProfileSetupSection.addressKtp: addressKtp,
+    ProfileSetupSection.currentAddress: currentAddress,
     ProfileSetupSection.documents: documents,
     ProfileSetupSection.passport: passport,
     ProfileSetupSection.family: family,

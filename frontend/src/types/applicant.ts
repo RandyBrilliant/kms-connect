@@ -118,6 +118,13 @@ export interface ApplicantProfile {
   /** Village FK id (regions.Village) */
   village: number | null
   village_display?: RegionDisplay | null
+  /** Alamat tempat tinggal saat ini. Not copied from the KTP address. */
+  current_address: string
+  current_postal_code: string
+  current_province: number | null
+  current_district: number | null
+  current_village: number | null
+  current_village_display?: RegionDisplay | null
   contact_phone: string
   sibling_count: number | null
   birth_order: number | null
