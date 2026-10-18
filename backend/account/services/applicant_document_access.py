@@ -2,8 +2,8 @@
 Document-type visibility for applicant self-service (upload checklist).
 
 Bukti Penyerahan Dokumen is only available once the pelamar has at least one
-lamaran in INTERVIEW or a later pipeline status — not during initial registration
-or pra-seleksi alone.
+lamaran in INTERVIEW or a later pipeline status. The other POST_INTERVIEW
+documents ("Setelah wawancara") unlock only at DITERIMA or later.
 """
 from __future__ import annotations
 
@@ -28,16 +28,6 @@ def applicant_has_interview_stage_lamaran(profile: ApplicantProfile) -> bool:
     ).exists()
 
 
-def applicant_has_confirmed_pra_seleksi(profile: ApplicantProfile) -> bool:
-    from main.models import JobApplication
-
-    # Keep pra confirmation even after status advances past PRA_SELEKSI.
-    return JobApplication.objects.filter(
-        applicant=profile,
-        pra_seleksi_confirmed_at__isnull=False,
-    ).exists()
-
-
 def applicant_has_diterima_or_later(profile: ApplicantProfile) -> bool:
     from main.models import ApplicationStatus, JobApplication
 
@@ -55,31 +45,19 @@ def get_applicant_document_types_queryset(profile: ApplicantProfile) -> QuerySet
     """
     Document types the pelamar may see/upload, based on lamaran progress.
 
-    - Default: INITIAL phase only.
-    - INTERVIEW (without pra shortcut): INITIAL + bukti penyerahan.
-    - Pra-seleksi confirmed (still PRA_SELEKSI): all except bukti penyerahan.
-    - INTERVIEW with pra confirmed: all types (incl. bukti penyerahan).
+    - Default (incl. pra-seleksi, confirmed or not): INITIAL phase only.
+    - INTERVIEW: INITIAL + bukti penyerahan.
     - DITERIMA+ (lulus interview / diterima): all types.
     """
-    has_interview = applicant_has_interview_stage_lamaran(profile)
-    has_pra_confirmed = applicant_has_confirmed_pra_seleksi(profile)
-    has_diterima = applicant_has_diterima_or_later(profile)
-
-    if has_diterima or (has_interview and has_pra_confirmed):
+    if applicant_has_diterima_or_later(profile):
         return DocumentType.objects.all().order_by("sort_order", "code")
 
-    if has_interview:
+    if applicant_has_interview_stage_lamaran(profile):
         return (
             DocumentType.objects.filter(
                 Q(phase=DocumentType.PHASE_INITIAL)
                 | Q(code=BUKTI_PENYERAHAN_CODE)
             )
-            .order_by("sort_order", "code")
-        )
-
-    if has_pra_confirmed:
-        return (
-            DocumentType.objects.exclude(code=BUKTI_PENYERAHAN_CODE)
             .order_by("sort_order", "code")
         )
 

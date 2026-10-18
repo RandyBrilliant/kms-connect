@@ -21,7 +21,7 @@ DOCUMENT_NAMES = {
     "pas-foto":                      ("Pas Foto",                         True,  6,  "JPG/PNG, maks. 500 KB.", INITIAL),
     "cv":                            ("Daftar Riwayat Hidup (CV)",        False, 7,  "Contoh format tersedia di aplikasi. PDF, maks. 2 MB.", INITIAL),
     "sertifikat-keterampilan":        ("Sertifikat Keterampilan",           False, 8,  "Jika ada. PDF, maks. 2 MB.", INITIAL),
-    # ── POST_INTERVIEW (beberapa tersedia lebih awal — lihat applicant_document_access) ──
+    # ── POST_INTERVIEW (bukti penyerahan dari INTERVIEW, sisanya dari DITERIMA — lihat applicant_document_access) ──
     "bukti-penyerahan-dokumen":       ("Bukti Penyerahan Dokumen",          False, 9,  "Template PDF tersedia di aplikasi setelah tahap interview. PDF, maks. 2 MB.", POST),
     "ijin-keluarga":                  ("Surat Izin Keluarga (Form Biru)",   True,  10, "Template PDF tersedia di aplikasi. PDF, maks. 2 MB.", POST),
     "surat-keterangan-pemberi-ijin":  ("Surat Keterangan Pemberi Izin",     True,  11, "PDF, maks. 2 MB.", POST),
