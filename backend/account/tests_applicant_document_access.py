@@ -60,11 +60,11 @@ class ApplicantDocumentTypeVisibilityTests(TestCase):
         )
         self.assertEqual(self._codes(), {"ktp", "pas-foto"})
 
-    def test_interview_adds_bukti_penyerahan_only(self):
+    def test_interview_does_not_unlock_bukti_penyerahan(self):
         self._apply(
             ApplicationStatus.INTERVIEW, pra_seleksi_confirmed_at=timezone.now()
         )
-        self.assertEqual(self._codes(), {"ktp", "pas-foto", BUKTI_PENYERAHAN_CODE})
+        self.assertEqual(self._codes(), {"ktp", "pas-foto"})
 
     def test_diterima_sees_all_types(self):
         self._apply(ApplicationStatus.DITERIMA)

@@ -19,10 +19,7 @@ const _kDocPhaseInitialSubtitle =
 
 /// Matches PHASE_POST_INTERVIEW in the same seed/specs.
 const _kDocPhasePostSubtitle =
-    'Setelah lulus wawancara: surat izin keluarga, surat kesehatan, perjanjian penempatan, buku nikah (opsional), dll.';
-
-const _kDocPhaseInterviewSubtitle =
-    'Saat tahap interview: bukti penyerahan dokumen (unduh template, isi, unggah PDF).';
+    'Setelah lulus wawancara: bukti penyerahan dokumen, surat izin keluarga, surat kesehatan, perjanjian penempatan, buku nikah (opsional), dll.';
 
 class DocumentsPage extends ConsumerWidget {
   const DocumentsPage({super.key});
@@ -121,12 +118,6 @@ class DocumentsPage extends ConsumerWidget {
                     final postInterview = items
                         .where((i) => i.type.isPostInterviewPhase)
                         .toList();
-                    final interviewStage = postInterview
-                        .where((i) => i.type.code == 'bukti-penyerahan-dokumen')
-                        .toList();
-                    final postAfterInterview = postInterview
-                        .where((i) => i.type.code != 'bukti-penyerahan-dokumen')
-                        .toList();
                     final otherPhase = items
                         .where(
                           (i) =>
@@ -159,14 +150,7 @@ class DocumentsPage extends ConsumerWidget {
                           ..._buildPhaseSection(
                             context,
                             ref,
-                            interviewStage,
-                            'Tahap interview',
-                            _kDocPhaseInterviewSubtitle,
-                          ),
-                          ..._buildPhaseSection(
-                            context,
-                            ref,
-                            postAfterInterview,
+                            postInterview,
                             'Setelah wawancara',
                             _kDocPhasePostSubtitle,
                           ),

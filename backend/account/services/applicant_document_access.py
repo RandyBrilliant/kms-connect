@@ -1,13 +1,12 @@
 """
 Document-type visibility for applicant self-service (upload checklist).
 
-Bukti Penyerahan Dokumen is only available once the pelamar has at least one
-lamaran in INTERVIEW or a later pipeline status. The other POST_INTERVIEW
-documents ("Setelah wawancara") unlock only at DITERIMA or later.
+All POST_INTERVIEW documents ("Setelah wawancara"), including Bukti Penyerahan
+Dokumen, unlock only once the pelamar has passed the interview (DITERIMA or later).
 """
 from __future__ import annotations
 
-from django.db.models import Q, QuerySet
+from django.db.models import QuerySet
 
 from account.models import ApplicantProfile, DocumentType
 
@@ -45,21 +44,11 @@ def get_applicant_document_types_queryset(profile: ApplicantProfile) -> QuerySet
     """
     Document types the pelamar may see/upload, based on lamaran progress.
 
-    - Default (incl. pra-seleksi, confirmed or not): INITIAL phase only.
-    - INTERVIEW: INITIAL + bukti penyerahan.
-    - DITERIMA+ (lulus interview / diterima): all types.
+    - Default (incl. pra-seleksi and interview): INITIAL phase only.
+    - DITERIMA+ (lulus interview / diterima): all types, incl. bukti penyerahan.
     """
     if applicant_has_diterima_or_later(profile):
         return DocumentType.objects.all().order_by("sort_order", "code")
-
-    if applicant_has_interview_stage_lamaran(profile):
-        return (
-            DocumentType.objects.filter(
-                Q(phase=DocumentType.PHASE_INITIAL)
-                | Q(code=BUKTI_PENYERAHAN_CODE)
-            )
-            .order_by("sort_order", "code")
-        )
 
     return DocumentType.objects.filter(phase=DocumentType.PHASE_INITIAL).order_by(
         "sort_order", "code"

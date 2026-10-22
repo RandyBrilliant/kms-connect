@@ -320,7 +320,7 @@ class ApplicantDocumentSelfServiceViewSet(
             if document_type.code == BUKTI_PENYERAHAN_CODE:
                 detail = (
                     "Bukti penyerahan dokumen dapat diunggah setelah "
-                    "lamaran Anda masuk tahap interview."
+                    "Anda dinyatakan lulus interview."
                 )
             else:
                 detail = "Dokumen ini belum tersedia untuk tahap lamaran Anda saat ini."
