@@ -42,6 +42,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import type { ApplicantProfile } from "@/types/applicant"
+import { bankLabel } from "@/constants/applicant"
 import { INBOUND_TRANSPORT_STAGES } from "@/lib/inbound-transport-stages"
 import { applicantProfileUpdateSchema } from "@/schemas/applicant"
 import { formatApiValidationErrors } from "@/lib/format-api-validation-errors"
@@ -119,8 +120,6 @@ type AdminProcessFormValues = {
   biaya_ready_paspor: string
   pengembalian_biaya: string
   tgl_pengembalian: string
-  bank: string
-  no_rek: string
   tanggal_pengembalian: string
   tgl_kirim_bio_ke_mly: string
   tgl_calling_visa: string
@@ -147,8 +146,6 @@ function toFormValues(p: ApplicantProfile): AdminProcessFormValues {
     biaya_ready_paspor: p.biaya_ready_paspor != null ? String(p.biaya_ready_paspor) : "",
     pengembalian_biaya: p.pengembalian_biaya != null ? String(p.pengembalian_biaya) : "",
     tgl_pengembalian: p.tgl_pengembalian ?? "",
-    bank: p.bank ?? "",
-    no_rek: p.no_rek ?? "",
     tanggal_pengembalian: p.tanggal_pengembalian ?? "",
     tgl_kirim_bio_ke_mly: p.tgl_kirim_bio_ke_mly ?? "",
     tgl_calling_visa: p.tgl_calling_visa ?? "",
@@ -268,8 +265,6 @@ export function ApplicantAdminProcessTab({
           biaya_ready_paspor: toNumber(value.biaya_ready_paspor),
           pengembalian_biaya: toNumber(value.pengembalian_biaya),
           tgl_pengembalian: value.tgl_pengembalian || null,
-          bank: value.bank || "",
-          no_rek: value.no_rek || "",
           tanggal_pengembalian: value.tanggal_pengembalian || null,
           tgl_kirim_bio_ke_mly: value.tgl_kirim_bio_ke_mly || null,
           tgl_calling_visa: value.tgl_calling_visa || null,
@@ -611,36 +606,17 @@ export function ApplicantAdminProcessTab({
               {renderDateField("tgl_pengembalian", "Tgl. Pengembalian", "Pilih tanggal pengembalian")}
             </div>
 
-            <div className={g3}>
-              <form.Field name="bank">
-                {(field) => (
-                  <Field>
-                    <FieldLabel htmlFor={field.name}>Bank</FieldLabel>
-                    <Input
-                      id={field.name}
-                      value={field.state.value}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                      disabled={isSubmitting}
-                      placeholder="Contoh: BCA"
-                    />
-                    <FieldError errors={field.state.meta.errors as any} />
-                  </Field>
-                )}
-              </form.Field>
-              <form.Field name="no_rek">
-                {(field) => (
-                  <Field>
-                    <FieldLabel htmlFor={field.name}>No. Rekening</FieldLabel>
-                    <Input
-                      id={field.name}
-                      value={field.state.value}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                      disabled={isSubmitting}
-                    />
-                    <FieldError errors={field.state.meta.errors as any} />
-                  </Field>
-                )}
-              </form.Field>
+            <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+              <p className="text-muted-foreground">
+                Rekening tujuan pengembalian (Data Rekening PMI, ubah di tab Biodata):
+              </p>
+              <p className="font-medium">
+                {profile.bank || profile.no_rek
+                  ? [bankLabel(profile.bank), profile.bank_account_holder, profile.no_rek]
+                      .filter(Boolean)
+                      .join(" · ")
+                  : "Belum diisi"}
+              </p>
             </div>
 
             {renderDateField(

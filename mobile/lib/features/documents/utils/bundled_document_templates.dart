@@ -92,7 +92,8 @@ Future<void> openSuratStatusPerkawinanTemplateDoc(BuildContext context) {
   );
 }
 
-/// Bukti penyerahan dokumen — formulir PDF (unduh, isi, unggah).
+/// Bukti penyerahan dokumen — formulir kosong (3 halaman: bukti penyerahan,
+/// surat pernyataan, quisioner RBA/OTL). Fallback bila versi terisi gagal diunduh.
 Future<void> openBuktiPenyerahanDokumenPdf(BuildContext context) {
   return _openBundledAsset(
     context,

@@ -509,6 +509,17 @@ export async function viewMedicalReferralPdf(applicantId: number): Promise<void>
   )
 }
 
+/**
+ * GET /api/applicants/:id/bukti-penyerahan-pdf/
+ * Bukti Penyerahan Dokumen + Surat Pernyataan + Quisioner RBA/OTL (admin).
+ */
+export async function viewBuktiPenyerahanPdf(applicantId: number): Promise<void> {
+  await fetchAndOpenPdf(
+    `/api/applicants/${applicantId}/bukti-penyerahan-pdf/`,
+    `Bukti_Penyerahan_Dokumen_${applicantId}.pdf`
+  )
+}
+
 export type BulkReferralPdfKind = "medical" | "psychology"
 
 function filenameFromContentDisposition(header: string | undefined): string | null {

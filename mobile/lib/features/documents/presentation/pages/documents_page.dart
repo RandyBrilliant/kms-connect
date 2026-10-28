@@ -804,26 +804,46 @@ class _ChecklistCard extends StatelessWidget {
                     const SizedBox(height: 8),
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: TextButton.icon(
-                        onPressed: () =>
-                            openBuktiPenyerahanDokumenPdf(context),
-                        icon: Icon(
-                          Icons.picture_as_pdf_outlined,
-                          size: 18,
-                          color: AppColors.primaryDarkGreen,
-                        ),
-                        label: Text(
-                          'Unduh template bukti penyerahan (PDF)',
-                          style: tt.labelLarge?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.primaryDarkGreen,
-                          ),
-                        ),
-                        style: TextButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          foregroundColor: AppColors.primaryDarkGreen,
-                        ),
+                      child: Consumer(
+                        builder: (context, ref, _) {
+                          final pdfState = ref.watch(buktiPenyerahanPdfProvider);
+                          return TextButton.icon(
+                            onPressed: pdfState.isLoading
+                                ? null
+                                : () async {
+                                    final ok = await ref
+                                        .read(buktiPenyerahanPdfProvider.notifier)
+                                        .open();
+                                    if (ok || !context.mounted) return;
+                                    CustomToast.show(
+                                      context,
+                                      message:
+                                          'Gagal mengunduh formulir terisi. Membuka template kosong.',
+                                      type: ToastType.warning,
+                                    );
+                                    await openBuktiPenyerahanDokumenPdf(context);
+                                  },
+                            icon: Icon(
+                              Icons.picture_as_pdf_outlined,
+                              size: 18,
+                              color: AppColors.primaryDarkGreen,
+                            ),
+                            label: Text(
+                              pdfState.isLoading
+                                  ? 'Menyiapkan formulir...'
+                                  : 'Unduh bukti penyerahan terisi (PDF)',
+                              style: tt.labelLarge?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.primaryDarkGreen,
+                              ),
+                            ),
+                            style: TextButton.styleFrom(
+                              padding: EdgeInsets.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              foregroundColor: AppColors.primaryDarkGreen,
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ],

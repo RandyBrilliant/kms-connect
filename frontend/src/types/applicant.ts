@@ -191,7 +191,9 @@ export interface ApplicantProfile {
   tgl_pengembalian: string | null
   /** Sum of inbound per-stage amounts; read-only from API (not a stored column). */
   jlh_uang_transport: number | null
+  /** Data Rekening PMI: bank code (INDONESIAN_BANKS), nama penerima, nomor rekening (digits). */
   bank: string
+  bank_account_holder: string
   no_rek: string
   tanggal_pengembalian: string | null
   tgl_kirim_bio_ke_mly: string | null

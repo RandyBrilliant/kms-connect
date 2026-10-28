@@ -155,7 +155,12 @@ export const applicantProfileUpdateSchema = z.object({
   pengembalian_biaya: z.number().nullable().optional(),
   tgl_pengembalian: z.string().nullable().optional(),
   bank: z.string().optional(),
-  no_rek: z.string().optional(),
+  bank_account_holder: z.string().max(150).optional(),
+  no_rek: z
+    .string()
+    .regex(/^\d*$/, "Nomor rekening harus berisi angka saja")
+    .max(100)
+    .optional(),
   tanggal_pengembalian: z.string().nullable().optional(),
   tgl_kirim_bio_ke_mly: z.string().nullable().optional(),
   tgl_calling_visa: z.string().nullable().optional(),

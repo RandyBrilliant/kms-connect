@@ -216,6 +216,16 @@ class ApplicantProfileAdmin(admin.ModelAdmin):
             },
         ),
         (
+            _("Data Rekening PMI"),
+            {
+                "fields": (
+                    "bank",
+                    "bank_account_holder",
+                    "no_rek",
+                ),
+            },
+        ),
+        (
             _("Verifikasi / seleksi"),
             {
                 "fields": (

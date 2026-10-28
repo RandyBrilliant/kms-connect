@@ -56,6 +56,7 @@ import {
 import { toast } from "@/lib/toast"
 import {
   viewBiodataPdf,
+  viewBuktiPenyerahanPdf,
   viewCvPdf,
   viewInbondPdf,
   viewMedicalReferralPdf,
@@ -97,6 +98,7 @@ function ApplicantSidebar({
   const [isViewingInbond, setIsViewingInbond] = useState(false)
   const [isViewingPsychReferral, setIsViewingPsychReferral] = useState(false)
   const [isViewingMedicalReferral, setIsViewingMedicalReferral] = useState(false)
+  const [isViewingBuktiPenyerahan, setIsViewingBuktiPenyerahan] = useState(false)
   const [sendSummaryDialogOpen, setSendSummaryDialogOpen] = useState(false)
 
   const handleViewBiodataPdf = async () => {
@@ -153,6 +155,17 @@ function ApplicantSidebar({
       toast.error("Gagal membuka PDF pengantar medical", "Coba lagi nanti")
     } finally {
       setIsViewingMedicalReferral(false)
+    }
+  }
+
+  const handleViewBuktiPenyerahanPdf = async () => {
+    setIsViewingBuktiPenyerahan(true)
+    try {
+      await viewBuktiPenyerahanPdf(applicant.id)
+    } catch {
+      toast.error("Gagal membuka PDF bukti penyerahan dokumen", "Coba lagi nanti")
+    } finally {
+      setIsViewingBuktiPenyerahan(false)
     }
   }
 
@@ -793,6 +806,29 @@ function ApplicantSidebar({
           >
             <IconFileTypePdf className="mr-2 size-4" />
             {isViewingMedicalReferral ? "Memproses..." : "Lihat PDF pengantar medical"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Bukti Penyerahan Dokumen */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Bukti penyerahan dokumen</CardTitle>
+          <CardDescription>
+            Bukti penyerahan dokumen, surat pernyataan, dan quisioner RBA/OTL — terisi data CPMI.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="cursor-pointer"
+            onClick={handleViewBuktiPenyerahanPdf}
+            disabled={isViewingBuktiPenyerahan}
+          >
+            <IconFileTypePdf className="mr-2 size-4" />
+            {isViewingBuktiPenyerahan ? "Memproses..." : "Lihat PDF bukti penyerahan"}
           </Button>
         </CardContent>
       </Card>

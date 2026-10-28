@@ -231,7 +231,7 @@ def generate_inbond_pdf(profile) -> bytes:
 
     kota_asal = _str(profile.district.name if profile.district else "")
     no_rek    = _str(profile.no_rek)
-    bank      = _str(profile.bank)
+    bank      = _str(profile.get_bank_display())
 
     # Destination company — use the most recent approved/accepted application
     perusahaan = ""

@@ -11,6 +11,7 @@ from . import views
 from . import applicant_self_service_views
 from .applicant_self_service_views import (
     ApplicantBiodataPdfView,
+    ApplicantBuktiPenyerahanPdfView,
     ApplicantCvPdfView,
     ApplicantMedicalReferralPdfView,
     ApplicantPsychologyReferralPdfView,
@@ -152,6 +153,11 @@ applicant_self_service_paths = [
         ApplicantMedicalReferralPdfView.as_view(),
         name="applicant-me-medical-referral-pdf",
     ),
+    path(
+        "applicants/me/bukti-penyerahan-pdf/",
+        ApplicantBuktiPenyerahanPdfView.as_view(),
+        name="applicant-me-bukti-penyerahan-pdf",
+    ),
 ]
 
 # Admin dashboard (applicants overview)
@@ -204,6 +210,11 @@ report_paths = [
         "applicants/<int:pk>/medical-referral-pdf/",
         views.AdminMedicalReferralPdfView.as_view(),
         name="applicant-medical-referral-pdf",
+    ),
+    path(
+        "applicants/<int:pk>/bukti-penyerahan-pdf/",
+        views.AdminBuktiPenyerahanPdfView.as_view(),
+        name="applicant-bukti-penyerahan-pdf",
     ),
     path(
         "applicants/bulk-referral-pdf/",

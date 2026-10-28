@@ -78,6 +78,7 @@ from .services.export import (
     generate_applicants_excel,
 )
 from .services.biodata_pdf import generate_biodata_pdf
+from .services.bukti_penyerahan_pdf import generate_bukti_penyerahan_pdf
 from .services.cv_pdf import cv_pdf_http_response, generate_cv_pdf
 from .services.pdf_cache import cached_pdf_bytes
 from .services.inbond_pdf import generate_inbond_pdf
@@ -1784,6 +1785,42 @@ class AdminMedicalReferralPdfView(PdfBinaryViewMixin, APIView):
         response["Content-Disposition"] = f'inline; filename="{filename}"'
         return response
 
+
+
+class AdminBuktiPenyerahanPdfView(PdfBinaryViewMixin, APIView):
+    """
+    Bukti Penyerahan Dokumen + Surat Pernyataan + Quisioner RBA/OTL CPMI.
+    GET /api/applicants/<pk>/bukti-penyerahan-pdf/
+    """
+
+    permission_classes = [IsBackofficeAdmin]
+
+    def get(self, request, pk):
+        applicant = get_object_or_404(
+            ApplicantProfile.objects.select_related(
+                "user",
+                "birth_place",
+                "district",
+                "referrer",
+            ),
+            user__id=pk,
+        )
+        try:
+            pdf_bytes = generate_bukti_penyerahan_pdf(applicant)
+        except Exception as e:
+            return Response(
+                error_response(
+                    detail=f"Gagal membuat PDF: {str(e)}",
+                    code=ApiCode.INTERNAL_ERROR,
+                ),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        safe_name = (applicant.user.full_name or "cpmi").replace(" ", "_")
+        filename = f"Bukti_Penyerahan_Dokumen_{safe_name}.pdf"
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'inline; filename="{filename}"'
+        return response
 
 _REFERRAL_PDF_GENERATORS = {
     "medical": (generate_pengantar_medical_pdf, "Pengantar_Medical"),

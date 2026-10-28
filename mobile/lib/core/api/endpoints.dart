@@ -51,6 +51,8 @@ class ApiEndpoints {
       '$baseUrl/applicants/me/psychology-referral-pdf/';
   static const String myMedicalReferralPdf =
       '$baseUrl/applicants/me/medical-referral-pdf/';
+  static const String myBuktiPenyerahanPdf =
+      '$baseUrl/applicants/me/bukti-penyerahan-pdf/';
 
   // Account Deletion
   static const String myDeletionRequest = '$baseUrl/deletion-requests/my/';

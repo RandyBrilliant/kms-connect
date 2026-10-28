@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useApplicantQuery } from "@/hooks/use-applicants-query"
-import { getVerificationStatusLabel } from "@/constants/applicant"
+import { bankLabel, getVerificationStatusLabel } from "@/constants/applicant"
 import { formatDate } from "@/lib/formatters"
 import { formatParentAge, formatParentName } from "@/lib/parent-display"
 import { cn } from "@/lib/utils"
@@ -264,7 +264,8 @@ export function ApplicantDetailPreviewDialog({
                     label="Jumlah Uang Transport"
                     value={profile.jlh_uang_transport}
                   />
-                  <FieldItem label="Bank" value={profile.bank} />
+                  <FieldItem label="Bank" value={bankLabel(profile.bank)} />
+                  <FieldItem label="Nama Penerima" value={profile.bank_account_holder} />
                   <FieldItem label="No Rekening" value={profile.no_rek} />
                   <FieldItem
                     label="Tanggal Pengembalian Transfer"

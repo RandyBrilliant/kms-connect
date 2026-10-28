@@ -37,12 +37,14 @@ from .document_specs import (
     should_compress_as_image,
 )
 from .services.biodata_pdf import generate_biodata_pdf
+from .services.bukti_penyerahan_pdf import generate_bukti_penyerahan_pdf
 from .services.cv_pdf import cv_pdf_http_response, generate_cv_pdf
 from .services.pdf_cache import cached_pdf_bytes
 from .services.pengantar_medical_pdf import generate_pengantar_medical_pdf
 from .services.pengantar_psikologi_pdf import generate_pengantar_psikologi_pdf
 from .services.applicant_document_access import (
     BUKTI_PENYERAHAN_CODE,
+    applicant_has_diterima_or_later,
     applicant_may_upload_document_type,
     get_applicant_document_types_queryset,
 )
@@ -753,6 +755,60 @@ class ApplicantMedicalReferralPdfView(PdfBinaryViewMixin, APIView):
 
         safe_name = (profile.user.full_name or "cpmi").replace(" ", "_")
         filename = f"Pengantar_Medical_{safe_name}.pdf"
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+
+
+class ApplicantBuktiPenyerahanPdfView(PdfBinaryViewMixin, APIView):
+    """
+    GET /api/applicants/me/bukti-penyerahan-pdf/
+
+    Bukti Penyerahan Dokumen + Surat Pernyataan + Quisioner RBA/OTL, terisi data
+    pelamar — tersedia sejak lulus interview (Diterima atau setelahnya).
+    """
+
+    permission_classes = [IsAuthenticated, IsApplicant]
+
+    def get(self, request):
+        try:
+            profile = ApplicantProfile.objects.select_related(
+                "user",
+                "birth_place",
+                "district",
+                "referrer",
+            ).get(user=request.user)
+        except ApplicantProfile.DoesNotExist:
+            return Response(
+                error_response(
+                    detail="Profil pelamar tidak ditemukan.",
+                    code=ApiCode.NOT_FOUND,
+                ),
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if not applicant_has_diterima_or_later(profile):
+            return Response(
+                error_response(
+                    detail="Bukti penyerahan dokumen hanya tersedia setelah Anda lulus interview.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        try:
+            pdf_bytes = generate_bukti_penyerahan_pdf(profile)
+        except Exception as e:
+            return Response(
+                error_response(
+                    detail=f"Gagal membuat PDF: {str(e)}",
+                    code=ApiCode.INTERNAL_ERROR,
+                ),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        safe_name = (profile.user.full_name or "cpmi").replace(" ", "_")
+        filename = f"Bukti_Penyerahan_Dokumen_{safe_name}.pdf"
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response

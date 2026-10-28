@@ -35,6 +35,8 @@ class ProfileCompletionReport {
 
 bool _nonEmpty(String? s) => s != null && s.trim().isNotEmpty;
 
+bool _digitsOnly(String? s) => s != null && RegExp(r'^\d+$').hasMatch(s.trim());
+
 bool _nikOk(String? nik) =>
     nik != null && nik.trim().length == 16;
 
@@ -153,4 +155,18 @@ bool shouldBlockForIncompleteProfile(ApplicantProfile? p) {
     return false;
   }
   return !evaluateProfileCompletion(p).isFullyComplete;
+}
+
+/// Data Rekening PMI is required but deliberately not part of
+/// [evaluateProfileCompletion]: missing bank data must not lock existing
+/// applicants out of the app. Instead the profile page prompts for it.
+/// ACCEPTED / REJECTED profiles are skipped (pelamar can no longer edit).
+bool needsBankAccount(ApplicantProfile? p) {
+  if (p == null) return false;
+  if (p.verificationStatus == 'ACCEPTED' || p.verificationStatus == 'REJECTED') {
+    return false;
+  }
+  return !(_nonEmpty(p.bank) &&
+      _nonEmpty(p.bankAccountHolder) &&
+      _digitsOnly(p.noRek));
 }

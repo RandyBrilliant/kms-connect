@@ -291,6 +291,33 @@ class ProfileRepository {
     }
   }
 
+  /// Bukti Penyerahan Dokumen + Surat Pernyataan + Quisioner RBA/OTL, terisi
+  /// data pelamar (requires lamaran DITERIMA or later).
+  Future<void> downloadAndOpenBuktiPenyerahanPdf() async {
+    final cacheBust = DateTime.now().millisecondsSinceEpoch;
+    final response = await _apiClient.dio.get<List<int>>(
+      ApiEndpoints.myBuktiPenyerahanPdf,
+      queryParameters: {'_': cacheBust},
+      options: ApiClient.uncachedBytes(
+        receiveTimeout: const Duration(seconds: 60),
+      ),
+    );
+
+    final bytes = response.data;
+    if (bytes == null || bytes.isEmpty) {
+      throw Exception('Server mengembalikan file kosong.');
+    }
+
+    final tmpDir = await getTemporaryDirectory();
+    final file = File('${tmpDir.path}/bukti_penyerahan_dokumen_$cacheBust.pdf');
+    await file.writeAsBytes(bytes, flush: true);
+
+    final result = await OpenFilex.open(file.path, type: 'application/pdf');
+    if (result.type != ResultType.done) {
+      throw Exception('Tidak dapat membuka PDF: ${result.message}');
+    }
+  }
+
   /// Get the current user's deletion request (if any)
   Future<AccountDeletionRequest?> getMyDeletionRequest() async {
     try {

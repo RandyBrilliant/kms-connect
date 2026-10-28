@@ -12,6 +12,10 @@ import '../../../notifications/data/providers/notification_provider.dart';
 import '../../../notifications/data/providers/notification_settings_provider.dart';
 import '../../data/providers/profile_provider.dart';
 import '../../domain/models/applicant_profile.dart';
+import '../../domain/profile_completion.dart';
+
+/// Ask for Data Rekening PMI at most once per app session.
+bool _bankPromptShownThisSession = false;
 
 /// Professional profile page with modern Material Design 3 styling
 class ProfilePage extends ConsumerStatefulWidget {
@@ -114,6 +118,68 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
     if (mounted) context.go('/login');
   }
 
+  void _maybePromptBankAccount(ApplicantProfile? profile) {
+    if (_bankPromptShownThisSession || !needsBankAccount(profile)) return;
+    _bankPromptShownThisSession = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final goEdit = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          icon: Icon(
+            Icons.account_balance_outlined,
+            color: AppColors.primaryDarkGreen,
+          ),
+          title: Text(
+            'Lengkapi Data Rekening',
+            style: GoogleFonts.plusJakartaSans(
+              fontWeight: FontWeight.w700,
+              color: AppColors.textDark,
+            ),
+          ),
+          content: Text(
+            'Mohon isi Data Rekening PMI (bank, nama penerima, dan nomor '
+            'rekening) di profil Anda.',
+            style: GoogleFonts.plusJakartaSans(
+              color: AppColors.textMedium,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(
+                'Nanti',
+                style: GoogleFonts.plusJakartaSans(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textMedium,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryDarkGreen,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(
+                'Lengkapi Sekarang',
+                style: GoogleFonts.plusJakartaSans(
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+      if (goEdit == true && mounted) context.push('/profile/edit');
+    });
+  }
+
   Future<void> _openBuktiPenyerahanUpload() async {
     try {
       final types = await ref.read(documentTypesProvider.future);
@@ -182,6 +248,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
     final medicalPdfState = ref.watch(medicalReferralPdfProvider);
 
     final profile = profileState.profile;
+    _maybePromptBankAccount(profile);
     final fullName = profile?.fullName?.isNotEmpty == true
         ? profile!.fullName!
         : authState.user?.fullName?.isNotEmpty == true

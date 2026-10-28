@@ -15,6 +15,7 @@ from django.db import models
 from django.db.models import Q
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
+from django.core.validators import RegexValidator
 from django.core.cache import cache
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -181,6 +182,75 @@ class NextOfKinRelationship(models.TextChoices):
 
 
 NEXT_OF_KIN_RELATIONSHIP_MAX_LENGTH = 7  # LAINNYA
+
+
+class IndonesianBank(models.TextChoices):
+    """
+    Bank rekening PMI. Keep in sync with frontend ``INDONESIAN_BANKS`` and
+    mobile ``kIndonesianBanks``.
+    """
+
+    BRI = "BRI", _("Bank Rakyat Indonesia (BRI)")
+    BNI = "BNI", _("Bank Negara Indonesia (BNI)")
+    MANDIRI = "MANDIRI", _("Bank Mandiri")
+    BTN = "BTN", _("Bank Tabungan Negara (BTN)")
+    BSI = "BSI", _("Bank Syariah Indonesia (BSI)")
+    BCA = "BCA", _("Bank Central Asia (BCA)")
+    CIMB_NIAGA = "CIMB_NIAGA", _("Bank CIMB Niaga")
+    DANAMON = "DANAMON", _("Bank Danamon")
+    PERMATA = "PERMATA", _("Bank Permata")
+    PANIN = "PANIN", _("Panin Bank")
+    MAYBANK = "MAYBANK", _("Maybank Indonesia")
+    OCBC = "OCBC", _("Bank OCBC Indonesia (OCBC NISP)")
+    SMBC = "SMBC", _("Bank SMBC Indonesia (d/h BTPN / Jenius)")
+    MEGA = "MEGA", _("Bank Mega")
+    SINARMAS = "SINARMAS", _("Bank Sinarmas")
+    KB_BANK = "KB_BANK", _("KB Bank (d/h Bukopin)")
+    MUAMALAT = "MUAMALAT", _("Bank Muamalat")
+    BCA_SYARIAH = "BCA_SYARIAH", _("BCA Syariah")
+    BANK_RAYA = "BANK_RAYA", _("Bank Raya")
+    MAYAPADA = "MAYAPADA", _("Bank Mayapada")
+    ARTHA_GRAHA = "ARTHA_GRAHA", _("Bank Artha Graha")
+    MNC = "MNC", _("Bank MNC Internasional")
+    SAMPOERNA = "SAMPOERNA", _("Bank Sahabat Sampoerna")
+    UOB = "UOB", _("UOB Indonesia")
+    HSBC = "HSBC", _("HSBC Indonesia")
+    DBS = "DBS", _("DBS Indonesia")
+    CCB = "CCB", _("China Construction Bank Indonesia")
+    ICBC = "ICBC", _("ICBC Indonesia")
+    JAGO = "JAGO", _("Bank Jago")
+    SEABANK = "SEABANK", _("SeaBank Indonesia")
+    BLU = "BLU", _("BCA Digital (blu)")
+    NEO = "NEO", _("Bank Neo Commerce")
+    ALLO = "ALLO", _("Allo Bank")
+    SUMUT = "SUMUT", _("Bank Sumut")
+    ACEH = "ACEH", _("Bank Aceh Syariah")
+    NAGARI = "NAGARI", _("Bank Nagari")
+    BRK_SYARIAH = "BRK_SYARIAH", _("BRK Syariah (Riau Kepri)")
+    JAMBI = "JAMBI", _("Bank Jambi")
+    SUMSEL_BABEL = "SUMSEL_BABEL", _("Bank Sumsel Babel")
+    BENGKULU = "BENGKULU", _("Bank Bengkulu")
+    LAMPUNG = "LAMPUNG", _("Bank Lampung")
+    DKI = "DKI", _("Bank DKI")
+    BJB = "BJB", _("Bank BJB")
+    BANTEN = "BANTEN", _("Bank Banten")
+    JATENG = "JATENG", _("Bank Jateng")
+    BPD_DIY = "BPD_DIY", _("BPD DIY")
+    JATIM = "JATIM", _("Bank Jatim")
+    BPD_BALI = "BPD_BALI", _("Bank BPD Bali")
+    NTB_SYARIAH = "NTB_SYARIAH", _("Bank NTB Syariah")
+    NTT = "NTT", _("Bank NTT")
+    KALBAR = "KALBAR", _("Bank Kalbar")
+    KALTENG = "KALTENG", _("Bank Kalteng")
+    KALSEL = "KALSEL", _("Bank Kalsel")
+    KALTIMTARA = "KALTIMTARA", _("Bank Kaltimtara")
+    SULSELBAR = "SULSELBAR", _("Bank Sulselbar")
+    SULTENG = "SULTENG", _("Bank Sulteng")
+    SULTRA = "SULTRA", _("Bank Sultra")
+    SULUTGO = "SULUTGO", _("Bank SulutGo")
+    MALUKU_MALUT = "MALUKU_MALUT", _("Bank Maluku Malut")
+    PAPUA = "PAPUA", _("Bank Papua")
+
 
 
 # ---------------------------------------------------------------------------
@@ -953,17 +1023,31 @@ class ApplicantProfile(models.Model):
         blank=True,
         help_text=_("Tanggal pengembalian biaya dilakukan."),
     )
+    # ---- Data Rekening PMI (diisi pelamar / admin; juga tujuan pengembalian biaya) ----
     bank = models.CharField(
         _("bank"),
         max_length=100,
+        choices=IndonesianBank.choices,
         blank=True,
-        help_text=_("Nama bank tujuan pengembalian/transfer."),
+        help_text=_("Kode bank rekening PMI (lihat IndonesianBank)."),
+    )
+    bank_account_holder = models.CharField(
+        _("nama penerima (pemilik rekening)"),
+        max_length=150,
+        blank=True,
     )
     no_rek = models.CharField(
         _("nomor rekening"),
         max_length=100,
         blank=True,
-        help_text=_("Nomor rekening tujuan."),
+        validators=[
+            RegexValidator(
+                r"^\d+$",
+                _("Nomor rekening harus berisi angka saja."),
+                code="no_rek_not_numeric",
+            )
+        ],
+        help_text=_("Nomor rekening PMI (angka saja)."),
     )
     tanggal_pengembalian = models.DateField(
         _("tanggal pengembalian (transfer)"),

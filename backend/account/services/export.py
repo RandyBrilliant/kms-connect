@@ -106,6 +106,7 @@ EXPORT_COLUMNS = [
     ("Tgl. Pengembalian", "tgl_pengembalian"),
     ("Jlh Uang Transport", "jlh_uang_transport"),
     ("Bank", "bank"),
+    ("Nama Penerima Rekening", "bank_account_holder"),
     ("No. Rekening", "no_rek"),
     ("Tanggal Pengembalian (Transfer)", "tanggal_pengembalian"),
     ("Tgl. Kirim Bio ke MY", "tgl_kirim_bio_ke_mly"),
@@ -687,6 +688,9 @@ def generate_applicants_excel(applicants: Iterable[Any], request: Any = None) ->
                     value = t
                 else:
                     value = _safe_name(getattr(profile, "birth_place", None))
+            elif field_path == "bank":
+                # Kode → nama bank; nilai lama yang belum terpetakan tampil apa adanya.
+                value = profile.get_bank_display() or "-"
             elif field_path == "gender":
                 gender = _get_nested_value(profile, "gender", "")
                 value = _format_gender(gender) if gender != "-" else "-"

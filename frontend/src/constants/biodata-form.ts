@@ -55,6 +55,10 @@ export const BIODATA_SECTIONS = {
     title: "Ahli Waris",
     description: "Data ahli waris / kontak darurat terdekat.",
   },
+  rekeningPmi: {
+    title: "Data Rekening PMI",
+    description: "Rekening PMI, juga dipakai sebagai tujuan pengembalian biaya.",
+  },
 } as const
 
 /** Check if a field key is required on create. */

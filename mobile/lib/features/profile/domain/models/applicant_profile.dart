@@ -140,6 +140,11 @@ class ApplicantProfile {
   final String? heirRelationship;
   final String? heirContactPhone;
 
+  // Data Rekening PMI (bank = kode IndonesianBank, noRek = angka saja)
+  final String? bank;
+  final String? bankAccountHolder;
+  final String? noRek;
+
   // Notes
   final String? notes;
 
@@ -233,6 +238,9 @@ class ApplicantProfile {
     this.heirName,
     this.heirRelationship,
     this.heirContactPhone,
+    this.bank,
+    this.bankAccountHolder,
+    this.noRek,
     this.notes,
     this.inboundTransportStageCosts,
     this.hasDiterimaLamaran = false,
@@ -361,6 +369,9 @@ class ApplicantProfile {
       heirName: _str(json['heir_name']),
       heirRelationship: _str(json['heir_relationship']),
       heirContactPhone: _str(json['heir_contact_phone']),
+      bank: _str(json['bank']),
+      bankAccountHolder: _str(json['bank_account_holder']),
+      noRek: _str(json['no_rek']),
       notes: _str(json['notes']),
       inboundTransportStageCosts: inboundCosts,
       hasDiterimaLamaran: json['has_diterima_lamaran'] == true,
@@ -423,6 +434,9 @@ class ApplicantProfile {
     'heir_name': heirName,
     'heir_relationship': heirRelationship,
     'heir_contact_phone': heirContactPhone,
+    'bank': bank,
+    'bank_account_holder': bankAccountHolder,
+    'no_rek': noRek,
     'verification_status': verificationStatus,
     'score': score,
   };

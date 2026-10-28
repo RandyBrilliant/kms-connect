@@ -298,6 +298,48 @@ final medicalReferralPdfProvider =
   return MedicalReferralPdfNotifier(ref.read(profileRepositoryProvider));
 });
 
+// ─── Bukti penyerahan dokumen PDF (lamaran DITERIMA or later) ───────────────
+
+class BuktiPenyerahanPdfState {
+  final bool isLoading;
+  final String? error;
+  const BuktiPenyerahanPdfState({this.isLoading = false, this.error});
+  BuktiPenyerahanPdfState copyWith({bool? isLoading, String? error}) {
+    return BuktiPenyerahanPdfState(
+      isLoading: isLoading ?? this.isLoading,
+      error: error,
+    );
+  }
+}
+
+class BuktiPenyerahanPdfNotifier
+    extends StateNotifier<BuktiPenyerahanPdfState> {
+  final ProfileRepository _repository;
+  BuktiPenyerahanPdfNotifier(this._repository)
+      : super(const BuktiPenyerahanPdfState());
+
+  Future<bool> open() async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      await _repository.downloadAndOpenBuktiPenyerahanPdf();
+      state = state.copyWith(isLoading: false);
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: e.toString().replaceAll('Exception: ', ''),
+      );
+      return false;
+    }
+  }
+}
+
+final buktiPenyerahanPdfProvider =
+    StateNotifierProvider<BuktiPenyerahanPdfNotifier, BuktiPenyerahanPdfState>(
+        (ref) {
+  return BuktiPenyerahanPdfNotifier(ref.read(profileRepositoryProvider));
+});
+
 final profileNotifierProvider = StateNotifierProvider<ProfileNotifier, ProfileState>((ref) {
   return ProfileNotifier(ref.read(profileRepositoryProvider));
 });

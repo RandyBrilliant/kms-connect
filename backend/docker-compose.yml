@@ -2,6 +2,9 @@
 # Usage: docker compose up --build
 # .env must have: SQL_DATABASE, SQL_USER, SQL_PASSWORD (and optionally DATABASE_URL, CELERY_BROKER_URL)
 
+# Explicit project name so volumes don't collide with other projects in a "backend/" folder
+name: kms-connect
+
 services:
   api:
     container_name: kms-backend

@@ -266,3 +266,76 @@ export function getNextOfKinRelationshipLabel(
 ): string {
   return NEXT_OF_KIN_RELATIONSHIP_LABELS[rel as NextOfKinRelationship] || rel
 }
+
+// ============================================================================
+// Bank (Data Rekening PMI) — keep in sync with backend IndonesianBank
+// ============================================================================
+
+export const INDONESIAN_BANKS: readonly { value: string; label: string }[] = [
+  { value: "BRI", label: "Bank Rakyat Indonesia (BRI)" },
+  { value: "BNI", label: "Bank Negara Indonesia (BNI)" },
+  { value: "MANDIRI", label: "Bank Mandiri" },
+  { value: "BTN", label: "Bank Tabungan Negara (BTN)" },
+  { value: "BSI", label: "Bank Syariah Indonesia (BSI)" },
+  { value: "BCA", label: "Bank Central Asia (BCA)" },
+  { value: "CIMB_NIAGA", label: "Bank CIMB Niaga" },
+  { value: "DANAMON", label: "Bank Danamon" },
+  { value: "PERMATA", label: "Bank Permata" },
+  { value: "PANIN", label: "Panin Bank" },
+  { value: "MAYBANK", label: "Maybank Indonesia" },
+  { value: "OCBC", label: "Bank OCBC Indonesia (OCBC NISP)" },
+  { value: "SMBC", label: "Bank SMBC Indonesia (d/h BTPN / Jenius)" },
+  { value: "MEGA", label: "Bank Mega" },
+  { value: "SINARMAS", label: "Bank Sinarmas" },
+  { value: "KB_BANK", label: "KB Bank (d/h Bukopin)" },
+  { value: "MUAMALAT", label: "Bank Muamalat" },
+  { value: "BCA_SYARIAH", label: "BCA Syariah" },
+  { value: "BANK_RAYA", label: "Bank Raya" },
+  { value: "MAYAPADA", label: "Bank Mayapada" },
+  { value: "ARTHA_GRAHA", label: "Bank Artha Graha" },
+  { value: "MNC", label: "Bank MNC Internasional" },
+  { value: "SAMPOERNA", label: "Bank Sahabat Sampoerna" },
+  { value: "UOB", label: "UOB Indonesia" },
+  { value: "HSBC", label: "HSBC Indonesia" },
+  { value: "DBS", label: "DBS Indonesia" },
+  { value: "CCB", label: "China Construction Bank Indonesia" },
+  { value: "ICBC", label: "ICBC Indonesia" },
+  { value: "JAGO", label: "Bank Jago" },
+  { value: "SEABANK", label: "SeaBank Indonesia" },
+  { value: "BLU", label: "BCA Digital (blu)" },
+  { value: "NEO", label: "Bank Neo Commerce" },
+  { value: "ALLO", label: "Allo Bank" },
+  { value: "SUMUT", label: "Bank Sumut" },
+  { value: "ACEH", label: "Bank Aceh Syariah" },
+  { value: "NAGARI", label: "Bank Nagari" },
+  { value: "BRK_SYARIAH", label: "BRK Syariah (Riau Kepri)" },
+  { value: "JAMBI", label: "Bank Jambi" },
+  { value: "SUMSEL_BABEL", label: "Bank Sumsel Babel" },
+  { value: "BENGKULU", label: "Bank Bengkulu" },
+  { value: "LAMPUNG", label: "Bank Lampung" },
+  { value: "DKI", label: "Bank DKI" },
+  { value: "BJB", label: "Bank BJB" },
+  { value: "BANTEN", label: "Bank Banten" },
+  { value: "JATENG", label: "Bank Jateng" },
+  { value: "BPD_DIY", label: "BPD DIY" },
+  { value: "JATIM", label: "Bank Jatim" },
+  { value: "BPD_BALI", label: "Bank BPD Bali" },
+  { value: "NTB_SYARIAH", label: "Bank NTB Syariah" },
+  { value: "NTT", label: "Bank NTT" },
+  { value: "KALBAR", label: "Bank Kalbar" },
+  { value: "KALTENG", label: "Bank Kalteng" },
+  { value: "KALSEL", label: "Bank Kalsel" },
+  { value: "KALTIMTARA", label: "Bank Kaltimtara" },
+  { value: "SULSELBAR", label: "Bank Sulselbar" },
+  { value: "SULTENG", label: "Bank Sulteng" },
+  { value: "SULTRA", label: "Bank Sultra" },
+  { value: "SULUTGO", label: "Bank SulutGo" },
+  { value: "MALUKU_MALUT", label: "Bank Maluku Malut" },
+  { value: "PAPUA", label: "Bank Papua" },
+] as const
+
+/** Bank code → display name; unknown legacy free-text values are returned as-is. */
+export function bankLabel(code: string | null | undefined): string {
+  if (!code) return ""
+  return INDONESIAN_BANKS.find((b) => b.value === code)?.label ?? code
+}

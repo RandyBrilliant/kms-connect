@@ -17,6 +17,7 @@ import '../../../../core/widgets/professional_dropdown_field.dart';
 import '../../../auth/data/providers/regions_provider.dart';
 import '../../data/providers/profile_provider.dart';
 import '../../data/profile_patch.dart';
+import '../../domain/indonesian_banks.dart';
 import '../../domain/models/applicant_profile.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -62,6 +63,10 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   final _heirName = TextEditingController();
   final _heirContactPhone = TextEditingController();
 
+  // Data Rekening PMI
+  final _bankAccountHolder = TextEditingController();
+  final _noRek = TextEditingController();
+
   // Date-of-birth pickers for family members
   final _fatherBirthDateCtrl = TextEditingController();
   final _motherBirthDateCtrl = TextEditingController();
@@ -106,6 +111,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
 
   String? _gender;
   String? _heirRelationship;
+  String? _bank;
   DateTime? _pickedDate;
   DateTime? _pickedFatherBirthDate;
   DateTime? _pickedMotherBirthDate;
@@ -184,7 +190,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
       _familyPostalCode, _fatherPhone,
       _motherPhone,
       _spouseName, _spouseAge, _spouseOccupation,
-      _heirName, _heirContactPhone,
+      _heirName, _heirContactPhone, _bankAccountHolder, _noRek,
       _fatherBirthDateCtrl, _motherBirthDateCtrl, _spouseBirthDateCtrl,
       _educationMajor, _educationSchool, _heightCm, _weightKg, _shoeSize,
       _passportNumber, _passportIssuePlace, _passportIssueDateCtrl,
@@ -324,6 +330,11 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     _heirName.text = (p.heirName ?? '').toUpperCase();
     _heirRelationship = _normalizeDropdownKey(p.heirRelationship);
     _heirContactPhone.text = p.heirContactPhone ?? '';
+
+    // Data Rekening PMI
+    _bank = _normalizeDropdownKey(p.bank);
+    _bankAccountHolder.text = (p.bankAccountHolder ?? '').toUpperCase();
+    _noRek.text = p.noRek ?? '';
 
     final referrerName = (p.referrerName ?? '').trim();
     final referrerCode = (p.referrerCode ?? '').trim();
@@ -476,6 +487,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
       'heir_name': _heirName.text.trim(),
       if (_heirRelationship != null) 'heir_relationship': _heirRelationship,
       'heir_contact_phone': _heirContactPhone.text.trim(),
+      if (_bank != null) 'bank': _bank,
+      'bank_account_holder': _bankAccountHolder.text.trim(),
+      'no_rek': _noRek.text.trim(),
     };
   }
 
@@ -1881,6 +1895,47 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                             if (v == null || v.trim().isEmpty) return null;
                             return validatePhoneNumber(v);
                           },
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // ─── Data Rekening PMI ─────────────────────────────
+                    _SectionCard(
+                      icon: Icons.account_balance_outlined,
+                      label: 'Data Rekening PMI',
+                      subtitle: 'Rekening untuk pengembalian biaya / transfer',
+                      children: [
+                        _DropdownField<String>(
+                          label: 'Bank',
+                          prefixIcon: Icons.account_balance_outlined,
+                          value: _bank,
+                          hint: 'Cari atau pilih bank',
+                          emptyErrorText: 'Bank wajib dipilih',
+                          items: kIndonesianBanks,
+                          onChanged: (v) => setState(() => _bank = v),
+                        ),
+                        const SizedBox(height: 14),
+                        M3TextField(
+                          controller: _bankAccountHolder,
+                          label: 'Nama Penerima',
+                          hint: 'Sesuai buku tabungan',
+                          prefixIcon: Icons.person_outline_rounded,
+                          upperCase: true,
+                          emptyErrorText: 'Nama penerima wajib diisi',
+                        ),
+                        const SizedBox(height: 14),
+                        M3TextField(
+                          controller: _noRek,
+                          label: 'Nomor Rekening',
+                          hint: 'Angka saja',
+                          prefixIcon: Icons.numbers_rounded,
+                          keyboardType: TextInputType.number,
+                          emptyErrorText: 'Nomor rekening wajib diisi',
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
                         ),
                       ],
                     ),

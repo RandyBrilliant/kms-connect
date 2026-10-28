@@ -83,6 +83,19 @@ class _UploadDocumentPageState extends ConsumerState<UploadDocumentPage> {
     await openCvTemplatePdf(context);
   }
 
+  Future<void> _openFilledBuktiPenyerahan() async {
+    if (ref.read(buktiPenyerahanPdfProvider).isLoading) return;
+    final ok = await ref.read(buktiPenyerahanPdfProvider.notifier).open();
+    if (ok || !mounted) return;
+    // Raw DioException text is not user-facing; the fallback is self-explanatory.
+    CustomToast.show(
+      context,
+      message: 'Gagal mengunduh formulir terisi. Membuka template kosong.',
+      type: ToastType.warning,
+    );
+    await openBuktiPenyerahanDokumenPdf(context);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -505,12 +518,11 @@ class _UploadDocumentPageState extends ConsumerState<UploadDocumentPage> {
                               if (_selectedType?.code ==
                                   'bukti-penyerahan-dokumen') ...[
                                 _BundledTemplateBanner(
-                                  title: 'Template Bukti Penyerahan Dokumen',
+                                  title: 'Bukti Penyerahan Dokumen',
                                   subtitle:
-                                      'Buka formulir PDF ini, lengkapi sesuai petunjuk, lalu unggah PDF di bawah.',
+                                      'Unduh formulir (3 halaman) yang sudah terisi data Anda, lengkapi centang & tanda tangan, lalu unggah PDF di bawah.',
                                   usePdfIcon: true,
-                                  onOpen: () =>
-                                      openBuktiPenyerahanDokumenPdf(context),
+                                  onOpen: _openFilledBuktiPenyerahan,
                                 ),
                                 const SizedBox(height: 12),
                               ],

@@ -34,6 +34,7 @@ import {
   WRITING_HAND_LABELS,
   MARITAL_STATUS_LABELS,
   NEXT_OF_KIN_RELATIONSHIP_OPTIONS,
+  INDONESIAN_BANKS,
 } from "@/constants/applicant"
 import { BIODATA_SECTIONS, RequiredStar } from "./biodata-form-shared"
 import { RegionAddressFields } from "./region-address-fields"
@@ -105,7 +106,13 @@ type BiodataFormValues = {
   passport_expiry_date: string
   passport_issue_place: string
   referrer: number | null
+  bank: string
+  bank_account_holder: string
+  no_rek: string
 }
+
+/** SearchableSelect works on numeric ids — use the bank's index in INDONESIAN_BANKS. */
+const BANK_SELECT_ITEMS = INDONESIAN_BANKS.map((b, i) => ({ id: i, name: b.label }))
 
 function toFormValues(p: ApplicantProfile): BiodataFormValues {
   return {
@@ -165,6 +172,9 @@ function toFormValues(p: ApplicantProfile): BiodataFormValues {
     passport_expiry_date: p.passport_expiry_date || "",
     passport_issue_place: p.passport_issue_place || "",
     referrer: p.referrer ?? null,
+    bank: p.bank || "",
+    bank_account_holder: p.bank_account_holder || "",
+    no_rek: p.no_rek || "",
   }
 }
 
@@ -250,6 +260,9 @@ export function ApplicantBiodataTab({
         passport_expiry_date: value.passport_expiry_date || null,
         passport_issue_place: value.passport_issue_place || undefined,
         referrer: value.referrer ?? undefined,
+        bank: value.bank,
+        bank_account_holder: value.bank_account_holder.trim(),
+        no_rek: value.no_rek,
       }
 
       const result = applicantProfileUpdateSchema.safeParse(payload)
@@ -1294,6 +1307,81 @@ export function ApplicantBiodataTab({
                     disabled={isSubmitting}
                     placeholder="No. HP ahli waris"
                   />
+                </Field>
+              )}
+            </form.Field>
+          </FieldGroup>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{BIODATA_SECTIONS.rekeningPmi.title}</CardTitle>
+          <CardDescription>{BIODATA_SECTIONS.rekeningPmi.description}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <FieldGroup>
+            <form.Field name="bank">
+              {(field) => {
+                const idx = INDONESIAN_BANKS.findIndex((b) => b.value === field.state.value)
+                return (
+                  <Field>
+                    <FieldLabel htmlFor={field.name}>Bank</FieldLabel>
+                    <SearchableSelect
+                      items={BANK_SELECT_ITEMS}
+                      value={idx >= 0 ? idx : null}
+                      onChange={(id) =>
+                        field.handleChange(id == null ? "" : INDONESIAN_BANKS[id].value)
+                      }
+                      placeholder="Cari atau pilih bank..."
+                      clearLabel="Kosongkan"
+                      disabled={isSubmitting}
+                    />
+                    {field.state.value && idx < 0 && (
+                      <p className="text-sm text-amber-600">
+                        Data lama: "{field.state.value}". Pilih bank dari daftar.
+                      </p>
+                    )}
+                    <FieldError errors={errors.bank ? [{ message: errors.bank }] : []} />
+                  </Field>
+                )
+              }}
+            </form.Field>
+
+            <form.Field name="bank_account_holder">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>Nama Penerima</FieldLabel>
+                  <Input
+                    id={field.name}
+                    value={field.state.value}
+                    onChange={(e) => field.handleChange(e.target.value.toUpperCase())}
+                    onBlur={field.handleBlur}
+                    placeholder="Nama pemilik rekening sesuai buku tabungan"
+                    className="uppercase"
+                    disabled={isSubmitting}
+                  />
+                  <FieldError
+                    errors={errors.bank_account_holder ? [{ message: errors.bank_account_holder }] : []}
+                  />
+                </Field>
+              )}
+            </form.Field>
+
+            <form.Field name="no_rek">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>Nomor Rekening</FieldLabel>
+                  <Input
+                    id={field.name}
+                    inputMode="numeric"
+                    value={field.state.value}
+                    onChange={(e) => field.handleChange(e.target.value.replace(/\D/g, ""))}
+                    onBlur={field.handleBlur}
+                    placeholder="Angka saja"
+                    disabled={isSubmitting}
+                  />
+                  <FieldError errors={errors.no_rek ? [{ message: errors.no_rek }] : []} />
                 </Field>
               )}
             </form.Field>
