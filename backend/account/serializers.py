@@ -432,6 +432,7 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
     jlh_uang_transport = serializers.SerializerMethodField(read_only=True)
     has_diterima_lamaran = serializers.SerializerMethodField(read_only=True)
     has_interview_lamaran = serializers.SerializerMethodField(read_only=True)
+    has_lulus_interview = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = ApplicantProfile
@@ -541,6 +542,7 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
             "score_breakdown",
             "has_diterima_lamaran",
             "has_interview_lamaran",
+            "has_lulus_interview",
             "created_at",
             "updated_at",
         ]
@@ -551,6 +553,7 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
             "register_number",
             "has_diterima_lamaran",
             "has_interview_lamaran",
+            "has_lulus_interview",
             "created_at",
             "updated_at",
         ]
@@ -590,6 +593,7 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
         if not self.context.get("is_own_profile"):
             self.fields.pop("has_diterima_lamaran", None)
             self.fields.pop("has_interview_lamaran", None)
+            self.fields.pop("has_lulus_interview", None)
         if self.context.get("is_own_profile"):
             for f in (
                 "referrer",
@@ -733,6 +737,16 @@ class ApplicantProfileSerializer(serializers.ModelSerializer):
             applicant_id=obj.pk,
             status=ApplicationStatus.DITERIMA,
         ).exists()
+
+    def get_has_lulus_interview(self, obj):
+        """Lulus interview (Diterima+): unlocks post-interview documents and Data Rekening PMI."""
+        if not obj or not getattr(obj, "pk", None):
+            return False
+        from account.services.applicant_document_access import (
+            applicant_has_diterima_or_later,
+        )
+
+        return applicant_has_diterima_or_later(obj)
 
     def get_has_interview_lamaran(self, obj):
         """True if at least one lamaran is in INTERVIEW or a later pipeline status."""

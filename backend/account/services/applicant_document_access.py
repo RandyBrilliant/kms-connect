@@ -12,6 +12,10 @@ from account.models import ApplicantProfile, DocumentType
 
 BUKTI_PENYERAHAN_CODE = "bukti-penyerahan-dokumen"
 
+# Data Rekening PMI — pelamar may fill these once lulus interview (DITERIMA+),
+# even when the rest of the profile is locked (ACCEPTED).
+BANK_ACCOUNT_FIELDS = frozenset({"bank", "bank_account_holder", "no_rek"})
+
 
 def applicant_has_interview_stage_lamaran(profile: ApplicantProfile) -> bool:
     from main.models import ApplicationStatus, JobApplication

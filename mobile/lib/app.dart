@@ -18,6 +18,7 @@ import 'features/auth/presentation/pages/social_complete_profile_page.dart';
 import 'features/home/presentation/pages/home_page.dart';
 import 'features/profile/presentation/pages/profile_page.dart';
 import 'features/profile/presentation/pages/edit_profile_page.dart';
+import 'features/profile/presentation/pages/bank_account_page.dart';
 import 'features/profile/presentation/pages/profile_complete_page.dart';
 import 'features/profile/presentation/pages/work_experiences_page.dart';
 import 'features/profile/presentation/pages/change_password_page.dart';
@@ -202,6 +203,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/profile/edit',
         name: 'edit-profile',
         builder: (context, state) => const EditProfilePage(),
+      ),
+      GoRoute(
+        path: '/profile/bank-account',
+        name: 'bank-account',
+        builder: (context, state) => const BankAccountPage(),
       ),
       GoRoute(
         path: '/profile/work-experiences',

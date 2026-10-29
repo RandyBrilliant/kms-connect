@@ -62,3 +62,12 @@ const kIndonesianBanks = <(String, String)>[
   ('MALUKU_MALUT', 'Bank Maluku Malut'),
   ('PAPUA', 'Bank Papua'),
 ];
+
+/// Bank code → display name; unknown values are returned as-is.
+String bankLabel(String? code) {
+  if (code == null || code.isEmpty) return '';
+  for (final b in kIndonesianBanks) {
+    if (b.$1 == code) return b.$2;
+  }
+  return code;
+}

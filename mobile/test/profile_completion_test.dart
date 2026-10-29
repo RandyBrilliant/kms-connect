@@ -4,6 +4,7 @@ import 'package:mobile/features/profile/domain/profile_completion.dart';
 
 ApplicantProfile _profile({
   String status = 'SUBMITTED',
+  bool lulusInterview = true,
   String? bank,
   String? holder,
   String? noRek,
@@ -11,6 +12,7 @@ ApplicantProfile _profile({
     ApplicantProfile(
       id: 1,
       verificationStatus: status,
+      hasLulusInterview: lulusInterview,
       bank: bank,
       bankAccountHolder: holder,
       noRek: noRek,
@@ -30,6 +32,14 @@ void main() {
     );
   });
 
+  test('not prompted before lulus interview', () {
+    expect(needsBankAccount(_profile(lulusInterview: false)), isFalse);
+  });
+
+  test('accepted profile is still prompted after lulus interview', () {
+    expect(needsBankAccount(_profile(status: 'ACCEPTED')), isTrue);
+  });
+
   test('complete rekening does not prompt', () {
     expect(
       needsBankAccount(
@@ -44,10 +54,5 @@ void main() {
       needsBankAccount(_profile(bank: 'BRI', holder: 'SITI', noRek: '0021-01')),
       isTrue,
     );
-  });
-
-  test('accepted / rejected profiles are never prompted', () {
-    expect(needsBankAccount(_profile(status: 'ACCEPTED')), isFalse);
-    expect(needsBankAccount(_profile(status: 'REJECTED')), isFalse);
   });
 }

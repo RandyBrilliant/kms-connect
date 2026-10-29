@@ -17,8 +17,8 @@ import '../../../../core/widgets/professional_dropdown_field.dart';
 import '../../../auth/data/providers/regions_provider.dart';
 import '../../data/providers/profile_provider.dart';
 import '../../data/profile_patch.dart';
-import '../../domain/indonesian_banks.dart';
 import '../../domain/models/applicant_profile.dart';
+import '../widgets/option_picker_field.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Page
@@ -62,10 +62,6 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   // Ahli Waris (Next of Kin)
   final _heirName = TextEditingController();
   final _heirContactPhone = TextEditingController();
-
-  // Data Rekening PMI
-  final _bankAccountHolder = TextEditingController();
-  final _noRek = TextEditingController();
 
   // Date-of-birth pickers for family members
   final _fatherBirthDateCtrl = TextEditingController();
@@ -111,7 +107,6 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
 
   String? _gender;
   String? _heirRelationship;
-  String? _bank;
   DateTime? _pickedDate;
   DateTime? _pickedFatherBirthDate;
   DateTime? _pickedMotherBirthDate;
@@ -190,7 +185,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
       _familyPostalCode, _fatherPhone,
       _motherPhone,
       _spouseName, _spouseAge, _spouseOccupation,
-      _heirName, _heirContactPhone, _bankAccountHolder, _noRek,
+      _heirName, _heirContactPhone,
       _fatherBirthDateCtrl, _motherBirthDateCtrl, _spouseBirthDateCtrl,
       _educationMajor, _educationSchool, _heightCm, _weightKg, _shoeSize,
       _passportNumber, _passportIssuePlace, _passportIssueDateCtrl,
@@ -330,11 +325,6 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     _heirName.text = (p.heirName ?? '').toUpperCase();
     _heirRelationship = _normalizeDropdownKey(p.heirRelationship);
     _heirContactPhone.text = p.heirContactPhone ?? '';
-
-    // Data Rekening PMI
-    _bank = _normalizeDropdownKey(p.bank);
-    _bankAccountHolder.text = (p.bankAccountHolder ?? '').toUpperCase();
-    _noRek.text = p.noRek ?? '';
 
     final referrerName = (p.referrerName ?? '').trim();
     final referrerCode = (p.referrerCode ?? '').trim();
@@ -487,9 +477,6 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
       'heir_name': _heirName.text.trim(),
       if (_heirRelationship != null) 'heir_relationship': _heirRelationship,
       'heir_contact_phone': _heirContactPhone.text.trim(),
-      if (_bank != null) 'bank': _bank,
-      'bank_account_holder': _bankAccountHolder.text.trim(),
-      'no_rek': _noRek.text.trim(),
     };
   }
 
@@ -895,7 +882,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           },
                         ),
                         const SizedBox(height: 14),
-                        _DropdownField<String>(
+                        OptionPickerField<String>(
                           label: 'Agama',
                           prefixIcon: Icons.mosque_outlined,
                           value: _religion,
@@ -912,7 +899,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           onChanged: (v) => setState(() => _religion = v),
                         ),
                         const SizedBox(height: 14),
-                        _DropdownField<String>(
+                        OptionPickerField<String>(
                           label: 'Status Perkawinan',
                           prefixIcon: Icons.family_restroom_outlined,
                           value: _maritalStatus,
@@ -936,7 +923,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                       icon: Icons.school_outlined,
                       label: 'Pendidikan & Fisik',
                       children: [
-                        _DropdownField<String>(
+                        OptionPickerField<String>(
                           label: 'Pendidikan Terakhir',
                           prefixIcon: Icons.school_outlined,
                           value: _educationLevel,
@@ -1002,7 +989,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           ],
                         ),
                         const SizedBox(height: 14),
-                        _DropdownField<bool>(
+                        OptionPickerField<bool>(
                           label: 'Memakai Kacamata?',
                           prefixIcon: Icons.visibility_outlined,
                           value: _wearsGlasses,
@@ -1015,7 +1002,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           onChanged: (v) => setState(() => _wearsGlasses = v),
                         ),
                         const SizedBox(height: 14),
-                        _DropdownField<String>(
+                        OptionPickerField<String>(
                           label: 'Menulis dengan Tangan',
                           prefixIcon: Icons.draw_outlined,
                           value: _writingHand,
@@ -1045,7 +1032,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                             ),
                             const SizedBox(width: 14),
                             Expanded(
-                              child: _DropdownField<String>(
+                              child: OptionPickerField<String>(
                                 label: 'Ukuran Baju',
                                 prefixIcon: Icons.checkroom_outlined,
                                 value: _shirtSize,
@@ -1413,7 +1400,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                       icon: Icons.flight_outlined,
                       label: 'Data Paspor',
                       children: [
-                        _DropdownField<bool>(
+                        OptionPickerField<bool>(
                           label: 'Memiliki Paspor?',
                           prefixIcon: Icons.article_outlined,
                           value: _hasPassport,
@@ -1900,47 +1887,6 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                     ),
 
                     const SizedBox(height: 20),
-
-                    // ─── Data Rekening PMI ─────────────────────────────
-                    _SectionCard(
-                      icon: Icons.account_balance_outlined,
-                      label: 'Data Rekening PMI',
-                      subtitle: 'Rekening untuk pengembalian biaya / transfer',
-                      children: [
-                        _DropdownField<String>(
-                          label: 'Bank',
-                          prefixIcon: Icons.account_balance_outlined,
-                          value: _bank,
-                          hint: 'Cari atau pilih bank',
-                          emptyErrorText: 'Bank wajib dipilih',
-                          items: kIndonesianBanks,
-                          onChanged: (v) => setState(() => _bank = v),
-                        ),
-                        const SizedBox(height: 14),
-                        M3TextField(
-                          controller: _bankAccountHolder,
-                          label: 'Nama Penerima',
-                          hint: 'Sesuai buku tabungan',
-                          prefixIcon: Icons.person_outline_rounded,
-                          upperCase: true,
-                          emptyErrorText: 'Nama penerima wajib diisi',
-                        ),
-                        const SizedBox(height: 14),
-                        M3TextField(
-                          controller: _noRek,
-                          label: 'Nomor Rekening',
-                          hint: 'Angka saja',
-                          prefixIcon: Icons.numbers_rounded,
-                          keyboardType: TextInputType.number,
-                          emptyErrorText: 'Nomor rekening wajib diisi',
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                          ],
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 28),
 
                     // ─── Informasi Staff Rujukan (read-only) ───────────
                     _SectionCard(
@@ -2487,272 +2433,6 @@ class _SubLabel extends StatelessWidget {
 }
 
 /// Non-null wrapper so a bottom sheet can return "clear" vs user dismissing (null).
-class _OptionPick<T> {
-  const _OptionPick(this.value);
-  final T? value;
-}
-
-String? _dropdownLabelForValue<T>(T? value, List<(T, String)> items) {
-  if (value == null) return null;
-  for (final i in items) {
-    if (i.$1 == value) return i.$2;
-  }
-  if (value is String) {
-    final vu = value.toUpperCase();
-    for (final i in items) {
-      if (i.$1 is String && (i.$1 as String).toUpperCase() == vu) {
-        return i.$2;
-      }
-    }
-  }
-  return null;
-}
-
-/// Generic dropdown field matching professional white style + registration sheets.
-class _DropdownField<T> extends StatelessWidget {
-  const _DropdownField({
-    required this.label,
-    required this.prefixIcon,
-    required this.value,
-    required this.hint,
-    required this.items,
-    required this.onChanged,
-    this.emptyErrorText,
-    super.key,
-  });
-
-  final String label;
-  final IconData prefixIcon;
-  final T? value;
-  final String hint;
-  /// Each item is `(value, displayLabel)`.
-  final List<(T, String)> items;
-  final ValueChanged<T?> onChanged;
-  final String? emptyErrorText;
-
-  @override
-  Widget build(BuildContext context) {
-    final selectedLabel = _dropdownLabelForValue(value, items);
-    return ProfessionalDropdownField(
-      valueText: selectedLabel ?? '',
-      label: label,
-      hint: hint,
-      prefixIcon: prefixIcon,
-      emptyErrorText: emptyErrorText,
-      onTap: () async {
-        final result = await showModalBottomSheet<_OptionPick<T>?>(
-          context: context,
-          isScrollControlled: true,
-          backgroundColor: Colors.transparent,
-          builder: (_) => _SimpleOptionSheet<T>(
-            title: label,
-            hint: hint,
-            value: value,
-            items: items,
-          ),
-        );
-        if (result == null) return;
-        onChanged(result.value);
-      },
-    );
-  }
-}
-
-class _SimpleOptionSheet<T> extends StatefulWidget {
-  const _SimpleOptionSheet({
-    required this.title,
-    required this.hint,
-    required this.value,
-    required this.items,
-  });
-
-  final String title;
-  final String hint;
-  final T? value;
-  final List<(T, String)> items;
-
-  @override
-  State<_SimpleOptionSheet<T>> createState() => _SimpleOptionSheetState<T>();
-}
-
-class _SimpleOptionSheetState<T> extends State<_SimpleOptionSheet<T>> {
-  final _searchCtrl = TextEditingController();
-
-  @override
-  void dispose() {
-    _searchCtrl.dispose();
-    super.dispose();
-  }
-
-  bool _selected(T? a, T? b) {
-    if (a == null && b == null) return true;
-    if (a == null || b == null) return false;
-    if (a == b) return true;
-    if (a is String && b is String) {
-      return (a as String).toUpperCase() == (b as String).toUpperCase();
-    }
-    return false;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final q = _searchCtrl.text.trim().toLowerCase();
-    final filtered = widget.items
-        .where((i) => i.$2.toLowerCase().contains(q))
-        .toList();
-    return DraggableScrollableSheet(
-      initialChildSize: 0.72,
-      minChildSize: 0.4,
-      maxChildSize: 0.92,
-      expand: false,
-      builder: (_, scrollCtrl) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-          ),
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 12, bottom: 4),
-                child: Container(
-                  width: 32,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.divider,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        widget.title,
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.textDark,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.close, color: AppColors.textMedium),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                child: TextField(
-                  controller: _searchCtrl,
-                  onChanged: (_) => setState(() {}),
-                  style: GoogleFonts.plusJakartaSans(
-                      fontSize: 14, color: AppColors.textDark),
-                  decoration: InputDecoration(
-                    hintText: 'Cari...',
-                    hintStyle: GoogleFonts.plusJakartaSans(
-                      fontSize: 14,
-                      color: AppColors.textLight,
-                    ),
-                    prefixIcon:
-                        Icon(Icons.search, color: AppColors.textMedium, size: 20),
-                    suffixIcon: _searchCtrl.text.isNotEmpty
-                        ? IconButton(
-                            icon: Icon(Icons.clear,
-                                color: AppColors.textMedium, size: 18),
-                            onPressed: () => _searchCtrl.clear(),
-                          )
-                        : null,
-                    filled: true,
-                    fillColor: AppColors.backgroundOffWhite,
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 14),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                        color: AppColors.primaryDarkGreen,
-                        width: 1.5,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Divider(height: 1, color: AppColors.divider),
-              Expanded(
-                child: ListView.builder(
-                  controller: scrollCtrl,
-                  itemCount: filtered.length + 1,
-                  itemBuilder: (_, index) {
-                    if (index == 0) {
-                      return ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 2),
-                        title: Text(
-                          'Kosongkan pilihan',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textMedium,
-                          ),
-                        ),
-                        onTap: () => Navigator.pop(
-                            context, _OptionPick<T>(null)),
-                      );
-                    }
-                    final item = filtered[index - 1];
-                    final selected = _selected(item.$1, widget.value);
-                    return ListTile(
-                      onTap: () => Navigator.pop(
-                          context, _OptionPick<T>(item.$1)),
-                      selected: selected,
-                      selectedTileColor:
-                          AppColors.primaryDarkGreen.withValues(alpha: 0.1),
-                      tileColor: Colors.white,
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 2),
-                      title: Text(
-                        item.$2,
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 14,
-                          fontWeight: selected
-                              ? FontWeight.w700
-                              : FontWeight.w500,
-                          color: selected
-                              ? AppColors.primaryDarkGreen
-                              : AppColors.textDark,
-                        ),
-                      ),
-                      trailing: selected
-                          ? Icon(Icons.check_circle_rounded,
-                              color: AppColors.primaryDarkGreen, size: 20)
-                          : null,
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
 /// M3 SegmentedButton gender picker.
 class _GenderSelector extends StatelessWidget {
   const _GenderSelector({
@@ -2846,7 +2526,7 @@ class _HeirRelationshipSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _DropdownField<String>(
+    return OptionPickerField<String>(
       label: 'Hubungan',
       prefixIcon: Icons.family_restroom_outlined,
       value: selected,

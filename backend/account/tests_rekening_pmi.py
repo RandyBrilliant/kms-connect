@@ -2,9 +2,17 @@
 
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.test import APIClient
 
-from account.models import ApplicantProfile, CustomUser, IndonesianBank, UserRole
+from account.models import (
+    ApplicantProfile,
+    ApplicantVerificationStatus,
+    CustomUser,
+    IndonesianBank,
+    UserRole,
+)
+from main.models import ApplicationStatus, JobApplication, LowonganKerja
 
 
 class RekeningPmiTests(TestCase):
@@ -27,6 +35,43 @@ class RekeningPmiTests(TestCase):
             "account:applicant-me-profile-detail", kwargs={"pk": self.profile.pk}
         )
         self.client.force_authenticate(user=self.user)
+        self.job = LowonganKerja.objects.create(title="Operator", slug="operator")
+        self.application = JobApplication.objects.create(
+            applicant=self.profile, job=self.job, status=ApplicationStatus.DITERIMA
+        )
+
+    def _rekening(self):
+        return {
+            "bank": "BRI",
+            "bank_account_holder": "siti aminah",
+            "no_rek": "002101000123456",
+        }
+
+    def test_rekening_locked_until_lulus_interview(self):
+        self.application.status = ApplicationStatus.INTERVIEW
+        self.application.save()
+        self.assertFalse(self.client.get(self.url).json()["data"]["has_lulus_interview"])
+        response = self.client.patch(self.url, self._rekening(), format="json")
+        self.assertEqual(response.status_code, 400)
+        # Other biodata stays editable before the interview result.
+        response = self.client.patch(self.url, {"address": "JL. MERDEKA"}, format="json")
+        self.assertEqual(response.status_code, 200, response.content)
+
+    def test_accepted_profile_can_still_save_rekening_only(self):
+        self.profile.verification_status = ApplicantVerificationStatus.ACCEPTED
+        self.profile.verified_at = timezone.now()
+        self.profile.save()
+        self.assertTrue(self.client.get(self.url).json()["data"]["has_lulus_interview"])
+
+        response = self.client.patch(self.url, self._rekening(), format="json")
+        self.assertEqual(response.status_code, 200, response.content)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.no_rek, "002101000123456")
+
+        response = self.client.patch(
+            self.url, {**self._rekening(), "address": "JL. LAIN"}, format="json"
+        )
+        self.assertEqual(response.status_code, 400)
 
     def test_applicant_can_save_rekening(self):
         response = self.client.patch(

@@ -11,6 +11,7 @@ import '../../../home/presentation/widgets/bottom_nav_bar.dart';
 import '../../../notifications/data/providers/notification_provider.dart';
 import '../../../notifications/data/providers/notification_settings_provider.dart';
 import '../../data/providers/profile_provider.dart';
+import '../../domain/indonesian_banks.dart';
 import '../../domain/models/applicant_profile.dart';
 import '../../domain/profile_completion.dart';
 
@@ -140,8 +141,8 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
             ),
           ),
           content: Text(
-            'Mohon isi Data Rekening PMI (bank, nama penerima, dan nomor '
-            'rekening) di profil Anda.',
+            'Selamat, Anda lulus interview! Mohon isi Data Rekening PMI '
+            '(bank, nama penerima, dan nomor rekening).',
             style: GoogleFonts.plusJakartaSans(
               color: AppColors.textMedium,
             ),
@@ -176,7 +177,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
           ],
         ),
       );
-      if (goEdit == true && mounted) context.push('/profile/edit');
+      if (goEdit == true && mounted) context.push('/profile/bank-account');
     });
   }
 
@@ -317,6 +318,19 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                           subtitle: '$expCount riwayat pekerjaan',
                           onTap: () => context.push('/profile/work-experiences'),
                         ),
+                        if (profile?.hasLulusInterview == true)
+                          _ProfessionalMenuItem(
+                            icon: Icons.account_balance_outlined,
+                            color: const Color(0xFF0EA5E9),
+                            title: 'Data Rekening PMI',
+                            subtitle: hasCompleteBankAccount(profile!)
+                                ? bankLabel(profile.bank)
+                                : 'Wajib diisi setelah lulus interview',
+                            badge: hasCompleteBankAccount(profile)
+                                ? null
+                                : 'Wajib',
+                            onTap: () => context.push('/profile/bank-account'),
+                          ),
                       ],
                     ),
                     0.30,

@@ -43,6 +43,7 @@ from .services.pdf_cache import cached_pdf_bytes
 from .services.pengantar_medical_pdf import generate_pengantar_medical_pdf
 from .services.pengantar_psikologi_pdf import generate_pengantar_psikologi_pdf
 from .services.applicant_document_access import (
+    BANK_ACCOUNT_FIELDS,
     BUKTI_PENYERAHAN_CODE,
     applicant_has_diterima_or_later,
     applicant_may_upload_document_type,
@@ -111,8 +112,23 @@ class ApplicantProfileSelfServiceViewSet(ApplicantSelfServiceMixin, viewsets.Mod
         """Update profil sendiri. Beberapa field read-only (verification_status, dll)."""
         instance = self.get_object()
 
-        # Once profile has been ACCEPTED, pelamar tidak boleh mengubah data diri lagi
-        if instance.verification_status == ApplicantVerificationStatus.ACCEPTED:
+        # Data Rekening PMI hanya diisi setelah lulus interview (seperti dokumen pasca-interview).
+        sent_keys = set(request.data.keys())
+        bank_keys = sent_keys & BANK_ACCOUNT_FIELDS
+        if bank_keys and not applicant_has_diterima_or_later(instance):
+            return Response(
+                error_response(
+                    detail="Data rekening dapat diisi setelah Anda lulus interview.",
+                    code=ApiCode.VALIDATION_ERROR,
+                ),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Once profile has been ACCEPTED, pelamar tidak boleh mengubah data diri lagi —
+        # kecuali Data Rekening PMI (biasanya baru diminta setelah profil diterima).
+        if instance.verification_status == ApplicantVerificationStatus.ACCEPTED and not (
+            sent_keys and sent_keys <= BANK_ACCOUNT_FIELDS
+        ):
             return Response(
                 error_response(
                     detail="Profil sudah diterima. Data diri tidak dapat diubah lagi.",

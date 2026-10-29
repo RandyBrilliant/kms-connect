@@ -157,6 +157,10 @@ class ApplicantProfile {
   /// GET profil sendiri: lamaran di tahap INTERVIEW atau setelahnya (bukti penyerahan).
   final bool hasInterviewLamaran;
 
+  /// Lulus interview (lamaran Diterima atau setelahnya): unlocks
+  /// post-interview documents and Data Rekening PMI.
+  final bool hasLulusInterview;
+
   // Verification
   final String verificationStatus;
   final double? score;
@@ -245,6 +249,7 @@ class ApplicantProfile {
     this.inboundTransportStageCosts,
     this.hasDiterimaLamaran = false,
     this.hasInterviewLamaran = false,
+    this.hasLulusInterview = false,
     required this.verificationStatus,
     this.score,
     this.submittedAt,
@@ -376,6 +381,7 @@ class ApplicantProfile {
       inboundTransportStageCosts: inboundCosts,
       hasDiterimaLamaran: json['has_diterima_lamaran'] == true,
       hasInterviewLamaran: json['has_interview_lamaran'] == true,
+      hasLulusInterview: json['has_lulus_interview'] == true,
       verificationStatus: _str(json['verification_status']) ?? 'SUBMITTED',
       score: json['score'] != null ? (json['score'] as num).toDouble() : null,
       submittedAt: ApiDateTime.parse(json['submitted_at']),
