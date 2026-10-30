@@ -57,6 +57,18 @@ class RekeningPmiTests(TestCase):
         response = self.client.patch(self.url, {"address": "JL. MERDEKA"}, format="json")
         self.assertEqual(response.status_code, 200, response.content)
 
+    def test_legacy_app_biodata_save_ignores_rekening_before_lulus_interview(self):
+        # APK <= 1.0.27 sends rekening fields with every biodata save.
+        self.application.status = ApplicationStatus.INTERVIEW
+        self.application.save()
+        response = self.client.patch(
+            self.url, {**self._rekening(), "address": "JL. MERDEKA"}, format="json"
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.address, "JL. MERDEKA")
+        self.assertFalse(self.profile.no_rek)
+
     def test_accepted_profile_can_still_save_rekening_only(self):
         self.profile.verification_status = ApplicantVerificationStatus.ACCEPTED
         self.profile.verified_at = timezone.now()

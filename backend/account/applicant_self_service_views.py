@@ -113,9 +113,15 @@ class ApplicantProfileSelfServiceViewSet(ApplicantSelfServiceMixin, viewsets.Mod
         instance = self.get_object()
 
         # Data Rekening PMI hanya diisi setelah lulus interview (seperti dokumen pasca-interview).
-        sent_keys = set(request.data.keys())
+        data = request.data
+        sent_keys = set(data.keys())
         bank_keys = sent_keys & BANK_ACCOUNT_FIELDS
         if bank_keys and not applicant_has_diterima_or_later(instance):
+            # APK lama (<= 1.0.27) selalu mengirim field rekening bersama biodata;
+            # abaikan field tsb agar simpan biodata tetap berhasil.
+            sent_keys -= bank_keys
+            data = {k: v for k, v in data.items() if k in sent_keys}
+        if bank_keys and not sent_keys:
             return Response(
                 error_response(
                     detail="Data rekening dapat diisi setelah Anda lulus interview.",
@@ -139,7 +145,7 @@ class ApplicantProfileSelfServiceViewSet(ApplicantSelfServiceMixin, viewsets.Mod
 
         serializer = self.get_serializer(
             instance,
-            data=request.data,
+            data=data,
             partial=True,
             context={"request": request, "is_own_profile": True},
         )

@@ -427,9 +427,12 @@ class ProfileRepository {
   static String userFacingMessage(Object error, {String fallback = 'Gagal menyimpan profil'}) {
     if (error is DioException) {
       final msg = error.message?.trim();
+      // Dio's default badResponse text ("This exception was thrown because the
+      // response has a status code of 400...") is not user-facing.
       if (msg != null &&
           msg.isNotEmpty &&
-          !msg.toLowerCase().contains('dioexception')) {
+          !msg.toLowerCase().contains('dioexception') &&
+          !msg.contains('This exception was thrown')) {
         return msg;
       }
       final data = error.response?.data;
