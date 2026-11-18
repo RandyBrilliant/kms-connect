@@ -8,6 +8,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
 from . import views
+from .pdf_renderers import BINARY_DOWNLOAD_ACTION
 from . import applicant_self_service_views
 from .applicant_self_service_views import (
     ApplicantBiodataPdfView,
@@ -88,6 +89,38 @@ nested_applicant = [
         "applicants/<int:applicant_pk>/documents/<int:pk>/file-url/",
         views.ApplicantDocumentViewSet.as_view({"get": "file_url"}),
         name="applicant-document-file-url",
+    ),
+    # Dokumen pendukung (admin-only). download-all must precede <int:pk>/.
+    path(
+        "applicants/<int:applicant_pk>/supporting-documents/",
+        views.ApplicantSupportingDocumentViewSet.as_view({"get": "list", "post": "create"}),
+        name="applicant-supporting-documents",
+    ),
+    path(
+        "applicants/<int:applicant_pk>/supporting-documents/download-all/",
+        # path() routing skips @action's initkwargs, so pass the binary
+        # renderers here or a file Accept header gets a 406.
+        views.ApplicantSupportingDocumentViewSet.as_view(
+            {"get": "download_all"}, **BINARY_DOWNLOAD_ACTION
+        ),
+        name="applicant-supporting-documents-download-all",
+    ),
+    path(
+        "applicants/<int:applicant_pk>/supporting-documents/<int:pk>/",
+        views.ApplicantSupportingDocumentViewSet.as_view(
+            {"get": "retrieve", "patch": "partial_update", "delete": "destroy"}
+        ),
+        name="applicant-supporting-document-detail",
+    ),
+    path(
+        "applicants/<int:applicant_pk>/supporting-documents/<int:pk>/file/",
+        views.ApplicantSupportingDocumentViewSet.as_view({"get": "file_redirect"}),
+        name="applicant-supporting-document-file",
+    ),
+    path(
+        "applicants/<int:applicant_pk>/supporting-documents/<int:pk>/file-url/",
+        views.ApplicantSupportingDocumentViewSet.as_view({"get": "file_url"}),
+        name="applicant-supporting-document-file-url",
     ),
     # Next of kin (ahli waris) fields are now part of ApplicantProfile;
     # update via PATCH /api/applicants/<pk>/ (heir_name, heir_relationship, heir_contact_phone).

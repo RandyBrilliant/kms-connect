@@ -21,6 +21,7 @@ from .models import (
     NextOfKinRelationship,
     DocumentType,
     ApplicantDocument,
+    ApplicantSupportingDocument,
     ApplicantVerificationStatus,
     DocumentReviewStatus,
     Broadcast,
@@ -37,6 +38,7 @@ from .api_responses import (
     validate_nik_unique,
 )
 from .validators import normalize_indonesian_phone
+from .document_specs import validate_supporting_pdf
 
 
 # ---------------------------------------------------------------------------
@@ -1601,6 +1603,93 @@ class ApplicantDocumentSerializer(serializers.ModelSerializer):
 
         instance.save()
         return instance
+
+
+# ---------------------------------------------------------------------------
+# ApplicantSupportingDocument (dokumen pendukung, admin-only)
+# ---------------------------------------------------------------------------
+
+class ApplicantSupportingDocumentSerializer(serializers.ModelSerializer):
+    """
+    Dokumen pendukung internal admin: PDF + label bebas.
+
+    The file can only be set on create. To replace a file, delete the row and
+    upload again. PATCH changes the label only.
+    """
+
+    file = serializers.FileField(write_only=True)
+    uploaded_by_name = serializers.SerializerMethodField(read_only=True)
+    file_access_url = serializers.SerializerMethodField(read_only=True)
+    file_view_url = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = ApplicantSupportingDocument
+        fields = [
+            "id",
+            "label",
+            "file",
+            "original_filename",
+            "file_size",
+            "uploaded_by_name",
+            "created_at",
+            "updated_at",
+            "file_access_url",
+            "file_view_url",
+        ]
+        read_only_fields = [
+            "id",
+            "original_filename",
+            "file_size",
+            "uploaded_by_name",
+            "created_at",
+            "updated_at",
+        ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance is not None:
+            # Updates are label-only; ignore any file sent with a PATCH/PUT.
+            self.fields["file"].required = False
+            self.fields["file"].read_only = True
+
+    def validate_label(self, value):
+        value = (value or "").strip()
+        if not value:
+            raise serializers.ValidationError("Label wajib diisi.")
+        return value
+
+    def validate_file(self, value):
+        try:
+            validate_supporting_pdf(value)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(list(exc.messages))
+        return value
+
+    def get_uploaded_by_name(self, obj) -> str | None:
+        user = getattr(obj, "uploaded_by", None)
+        if not user:
+            return None
+        return user.full_name or user.email
+
+    def _file_endpoint(self, obj, suffix: str) -> str | None:
+        request = self.context.get("request")
+        file_field = getattr(obj, "file", None)
+        if not request or not file_field or not file_field.name:
+            return None
+        try:
+            path = reverse(
+                f"account:applicant-supporting-document-{suffix}",
+                kwargs={"applicant_pk": obj.applicant_profile.user_id, "pk": obj.pk},
+            )
+        except NoReverseMatch:
+            return None
+        return request.build_absolute_uri(path)
+
+    def get_file_access_url(self, obj) -> str | None:
+        return self._file_endpoint(obj, "file-url")
+
+    def get_file_view_url(self, obj) -> str | None:
+        return self._file_endpoint(obj, "file")
 
 
 # ---------------------------------------------------------------------------

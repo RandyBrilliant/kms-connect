@@ -36,6 +36,7 @@ from .models import (
     ApplicantProfile,
     WorkExperience,
     ApplicantDocument,
+    ApplicantSupportingDocument,
     DocumentType,
     ApplicantVerificationStatus,
     Broadcast,
@@ -60,6 +61,7 @@ from .serializers import (
     ReferrerListSerializer,
     WorkExperienceSerializer,
     ApplicantDocumentSerializer,
+    ApplicantSupportingDocumentSerializer,
     DocumentTypeSerializer,
     NotificationSerializer,
     BroadcastSerializer,
@@ -778,6 +780,8 @@ class ApplicantUserViewSet(AuditedMixin, DeactivateActivateMixin, viewsets.Model
                 # Pastikan berkas dokumen dihapus dari storage (CASCADE SQL tidak memanggil delete() per objek).
                 for doc in list(profile.documents.all()):
                     doc.delete()
+                for doc in list(profile.supporting_documents.all()):
+                    doc.delete()
             applicant.delete()
 
         from audit.models import AuditAction
@@ -1316,6 +1320,142 @@ class ApplicantDocumentViewSet(
         serializer.save(applicant_profile=self.get_applicant_profile())
         from audit.models import AuditAction
         self._emit_audit(AuditAction.CREATE, serializer.instance)
+
+
+# ---------------------------------------------------------------------------
+# ApplicantSupportingDocument (dokumen pendukung, admin-only)
+# ---------------------------------------------------------------------------
+
+def _zip_safe_component(value: str, fallback: str) -> str:
+    """Filesystem-safe name segment: letters, digits, '-', '_' only."""
+    import re
+    import unicodedata
+
+    text = unicodedata.normalize("NFKD", value or "").encode("ascii", "ignore").decode()
+    text = re.sub(r"[^A-Za-z0-9_-]+", "_", text).strip("_")
+    text = re.sub(r"_+", "_", text)
+    return text[:80] or fallback
+
+
+class ApplicantSupportingDocumentViewSet(
+    DocumentFileAccessMixin, AuditedMixin, viewsets.ModelViewSet
+):
+    """
+    Dokumen pendukung (internal admin). Nested:
+    /api/applicants/<applicant_pk>/supporting-documents/
+
+    Multiple PDFs per pelamar, each with a free-text label. Only MASTER_ADMIN
+    and ADMIN can see or manage them; applicants and companies never do.
+    """
+
+    audit_resource_type = AuditResourceType.DOCUMENT
+    serializer_class = ApplicantSupportingDocumentSerializer
+    permission_classes = [IsBackofficeAdmin]
+    pagination_class = None
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    def get_audit_resource_label(self, instance) -> str:
+        return f"Dokumen pendukung: {instance.label}"[:255]
+
+    def get_queryset(self):
+        applicant_pk = self.kwargs.get("applicant_pk")
+        if not applicant_pk:
+            return ApplicantSupportingDocument.objects.none()
+        return (
+            ApplicantSupportingDocument.objects.filter(
+                applicant_profile__user_id=applicant_pk
+            )
+            .select_related("uploaded_by", "applicant_profile")
+            .order_by("created_at", "id")
+        )
+
+    def get_applicant_profile(self):
+        applicant_pk = self.kwargs.get("applicant_pk")
+        return get_object_or_404(
+            ApplicantProfile.objects.select_related("user"), user_id=applicant_pk
+        )
+
+    def perform_create(self, serializer):
+        upload = serializer.validated_data["file"]
+        serializer.save(
+            applicant_profile=self.get_applicant_profile(),
+            uploaded_by=self.request.user,
+            original_filename=(getattr(upload, "name", "") or "")[:255],
+            file_size=getattr(upload, "size", 0) or 0,
+        )
+        from audit.models import AuditAction
+        self._emit_audit(AuditAction.CREATE, serializer.instance)
+
+    @action(detail=False, methods=["get"], url_path="download-all", **BINARY_DOWNLOAD_ACTION)
+    def download_all(self, request, applicant_pk=None):
+        """
+        GET /api/applicants/<applicant_pk>/supporting-documents/download-all/
+
+        ZIP with one folder:
+
+            <Nama>_<NIK>_Dokumen_Pendukung/
+                01_<label>.pdf
+                02_<label>.pdf
+
+        The index prefix keeps entries unique when labels repeat. Files missing
+        from storage are skipped and listed (by id) in `X-Missing-Files`.
+        """
+        import io
+        import zipfile
+
+        profile = self.get_applicant_profile()
+        documents = list(self.get_queryset())
+        if not documents:
+            return Response(
+                error_response(
+                    detail="Pelamar belum memiliki dokumen pendukung.",
+                    code=ApiCode.NOT_FOUND,
+                ),
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        safe_name = _zip_safe_component(profile.user.full_name or "", "pelamar")
+        nik = _zip_safe_component(profile.nik or "", "")
+        base = f"{safe_name}_{nik}" if nik else f"{safe_name}_{profile.user_id}"
+        folder = f"{base}_Dokumen_Pendukung"
+
+        width = max(2, len(str(len(documents))))
+        buffer = io.BytesIO()
+        missing = []
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            for index, doc in enumerate(documents, start=1):
+                label = _zip_safe_component(doc.label, "dokumen")
+                arc_name = f"{folder}/{index:0{width}d}_{label}.pdf"
+                try:
+                    with doc.file.open("rb") as fh:
+                        zf.writestr(arc_name, fh.read())
+                except Exception:
+                    logger.warning(
+                        "Supporting document %s missing from storage", doc.pk,
+                        exc_info=True,
+                    )
+                    missing.append(str(doc.pk))
+
+        from audit.models import AuditAction
+        from audit.services import emit
+
+        emit(
+            action=AuditAction.EXPORT,
+            resource_type=AuditResourceType.DOCUMENT,
+            resource_id=profile.user_id,
+            resource_label=f"Dokumen pendukung: {profile.user.email}"[:255],
+            summary=f"Mengunduh {len(documents) - len(missing)} dokumen pendukung pelamar {profile.user.email}",
+            actor=request.user,
+            request=request,
+            metadata={"count": len(documents), "missing": missing},
+        )
+
+        response = HttpResponse(buffer.getvalue(), content_type="application/zip")
+        response["Content-Disposition"] = f'attachment; filename="Dokumen_Pendukung_{base}.zip"'
+        response["Cache-Control"] = "private, no-store"
+        if missing:
+            response["X-Missing-Files"] = ",".join(missing)
+        return response
 
 
 # ---------------------------------------------------------------------------

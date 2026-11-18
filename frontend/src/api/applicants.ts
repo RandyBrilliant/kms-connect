@@ -15,6 +15,7 @@ import type {
   WorkExperience,
   WorkExperienceCreateInput,
   ApplicantDocument,
+  ApplicantSupportingDocument,
   DocumentType,
 } from "@/types/applicant"
 
@@ -362,6 +363,84 @@ export async function downloadApplicantDocuments(
   a.click()
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
+}
+
+// --- Dokumen Pendukung (admin-only) ---
+/** GET /api/applicants/:applicantId/supporting-documents/ */
+export async function getSupportingDocuments(
+  applicantId: number
+): Promise<ApplicantSupportingDocument[]> {
+  const { data } = await api.get<ApplicantSupportingDocument[]>(
+    `/api/applicants/${applicantId}/supporting-documents/`
+  )
+  return Array.isArray(data)
+    ? data
+    : (data as { results?: ApplicantSupportingDocument[] }).results ?? []
+}
+
+/** POST /api/applicants/:applicantId/supporting-documents/ - one PDF per request */
+export async function uploadSupportingDocument(
+  applicantId: number,
+  input: { label: string; file: File }
+): Promise<ApplicantSupportingDocument> {
+  const formData = new FormData()
+  formData.append("label", input.label)
+  formData.append("file", input.file)
+  const { data } = await api.post<ApplicantSupportingDocument>(
+    `/api/applicants/${applicantId}/supporting-documents/`,
+    formData,
+    { headers: { "Content-Type": "multipart/form-data" } }
+  )
+  return data
+}
+
+/** PATCH /api/applicants/:applicantId/supporting-documents/:id/ - label only */
+export async function updateSupportingDocumentLabel(
+  applicantId: number,
+  id: number,
+  label: string
+): Promise<ApplicantSupportingDocument> {
+  const { data } = await api.patch<ApplicantSupportingDocument>(
+    `/api/applicants/${applicantId}/supporting-documents/${id}/`,
+    { label }
+  )
+  return data
+}
+
+/** DELETE /api/applicants/:applicantId/supporting-documents/:id/ */
+export async function deleteSupportingDocument(
+  applicantId: number,
+  id: number
+): Promise<void> {
+  await api.delete(`/api/applicants/${applicantId}/supporting-documents/${id}/`)
+}
+
+/**
+ * GET /api/applicants/:applicantId/supporting-documents/download-all/
+ * ZIP with one folder holding every dokumen pendukung. Returns the list of
+ * document ids the server could not find in storage (X-Missing-Files).
+ */
+export async function downloadAllSupportingDocuments(
+  applicantId: number,
+  displayName: string
+): Promise<{ missing: string[] }> {
+  const response = await api.get(
+    `/api/applicants/${applicantId}/supporting-documents/download-all/`,
+    { responseType: "blob" }
+  )
+  const disposition: string = response.headers["content-disposition"] ?? ""
+  const match = disposition.match(/filename="?([^"]+)"?/)
+  const safeName = displayName
+    .replace(/[^a-zA-Z0-9\s_-]/g, "")
+    .trim()
+    .replace(/\s+/g, "_")
+  const filename = match?.[1] ?? `Dokumen_Pendukung_${safeName || applicantId}.zip`
+  triggerBlobDownload(
+    new Blob([response.data as BlobPart], { type: "application/zip" }),
+    filename
+  )
+  const missingHeader: string = response.headers["x-missing-files"] ?? ""
+  return { missing: missingHeader ? missingHeader.split(",") : [] }
 }
 
 function triggerBlobDownload(blob: Blob, filename: string): void {

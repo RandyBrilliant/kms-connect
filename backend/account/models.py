@@ -2045,6 +2045,73 @@ class ApplicantDocument(models.Model):
         }
 
 
+def supporting_document_upload_to(instance, filename: str) -> str:
+    """
+    account/documents/<applicant_profile_id>/pendukung/<32-hex>.pdf
+
+    Same opaque naming as applicant_document_upload_to: no name, NIK or label
+    in the storage key. The label lives in the database only.
+    """
+    profile = instance.applicant_profile
+    safe_original = get_valid_filename(filename) or "document.pdf"
+    _, ext = os.path.splitext(safe_original)
+    ext = (ext or ".pdf").lower()
+    return f"account/documents/{profile.id}/pendukung/{uuid.uuid4().hex}{ext}"
+
+
+class ApplicantSupportingDocument(models.Model):
+    """
+    Dokumen pendukung: internal PDFs that admins attach to a pelamar.
+
+    Admin-only. Unlike ApplicantDocument there is no document type and no
+    one-per-type limit. Each file has a free-text label, so the set can differ
+    per pelamar (e.g. 3 documents for one placement, 2 for another). These
+    files are never exposed to the applicant, the mobile app, or companies,
+    and they do not count toward the applicant's score.
+    """
+
+    applicant_profile = models.ForeignKey(
+        ApplicantProfile,
+        on_delete=models.CASCADE,
+        related_name="supporting_documents",
+        verbose_name=_("profil pelamar"),
+    )
+    label = models.CharField(_("label"), max_length=150)
+    file = models.FileField(
+        _("berkas"),
+        upload_to=supporting_document_upload_to,
+        max_length=255,
+        storage=private_document_storage,
+    )
+    original_filename = models.CharField(
+        _("nama berkas asli"), max_length=255, blank=True
+    )
+    file_size = models.PositiveIntegerField(_("ukuran berkas (byte)"), default=0)
+    uploaded_by = models.ForeignKey(
+        "account.CustomUser",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="uploaded_supporting_documents",
+        verbose_name=_("diunggah oleh"),
+    )
+    created_at = models.DateTimeField(_("diunggah pada"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("diperbarui pada"), auto_now=True)
+
+    class Meta:
+        verbose_name = _("dokumen pendukung")
+        verbose_name_plural = _("dokumen pendukung")
+        ordering = ["created_at", "id"]
+
+    def __str__(self):
+        return f"{self.label} ({self.applicant_profile_id})"
+
+    def delete(self, *args, **kwargs):
+        if self.file:
+            self.file.delete(save=False)
+        return super().delete(*args, **kwargs)
+
+
 # ---------------------------------------------------------------------------
 # Company profile (Pihak perusahaan)
 # ---------------------------------------------------------------------------

@@ -34,6 +34,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { ApplicantBiodataTab } from "@/components/applicants/applicant-biodata-tab"
 import { ApplicantWorkExperienceTab } from "@/components/applicants/applicant-work-experience-tab"
 import { ApplicantDocumentsTab } from "@/components/applicants/applicant-documents-tab"
+import { ApplicantSupportingDocumentsTab } from "@/components/applicants/applicant-supporting-documents-tab"
 import { ApplicantAdminProcessTab } from "../components/applicants/applicant-admin-process-tab"
 import { ApplicantApplicationsTab } from "@/components/applicants/applicant-applications-tab"
 import {
@@ -1057,6 +1058,9 @@ export function AdminPelamarDetailPage() {
           <TabsTrigger value="dokumen" className="cursor-pointer">
             Dokumen
           </TabsTrigger>
+          <TabsTrigger value="dokumen-pendukung" className="cursor-pointer">
+            Dokumen Pendukung
+          </TabsTrigger>
           <TabsTrigger value="lamaran" className="cursor-pointer">
             Lamaran
           </TabsTrigger>
@@ -1101,6 +1105,13 @@ export function AdminPelamarDetailPage() {
 
         <TabsContent value="dokumen">
           <ApplicantDocumentsTab
+            applicantId={applicant.id}
+            fullName={profile?.full_name || applicant.email}
+          />
+        </TabsContent>
+
+        <TabsContent value="dokumen-pendukung">
+          <ApplicantSupportingDocumentsTab
             applicantId={applicant.id}
             fullName={profile?.full_name || applicant.email}
           />

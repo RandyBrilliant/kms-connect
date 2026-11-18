@@ -190,6 +190,33 @@ def validate_document_file(file, doc_type_code: str) -> None:
     )
 
 
+MAX_SUPPORTING_PDF_BYTES = MAX_PDF_BYTES
+
+
+def validate_supporting_pdf(file) -> None:
+    """
+    Validate an admin-only dokumen pendukung: must be a real PDF (by magic
+    bytes, not just extension) and at most MAX_SUPPORTING_PDF_BYTES.
+    """
+    name = getattr(file, "name", "") or ""
+    if not name.lower().endswith(PDF_EXTENSIONS):
+        raise ValidationError(
+            _("Format berkas harus PDF."),
+            code="invalid_format",
+        )
+    if sniff_file_kind(file) != "pdf":
+        raise ValidationError(
+            _("Isi berkas bukan PDF."),
+            code="invalid_content",
+        )
+    if (getattr(file, "size", 0) or 0) > MAX_SUPPORTING_PDF_BYTES:
+        max_mb = MAX_SUPPORTING_PDF_BYTES // (1024 * 1024)
+        raise ValidationError(
+            _("Ukuran berkas melebihi %(max)s MB. Harap kompres PDF lalu unggah lagi.") % {"max": max_mb},
+            code="file_too_large",
+        )
+
+
 def get_max_size_for_code(doc_type_code: str) -> int | None:
     """Return max size in bytes for document type, or None."""
     spec = get_spec_for_code(doc_type_code)

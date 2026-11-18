@@ -22,6 +22,10 @@ import {
   createApplicantDocument,
   updateApplicantDocument,
   deleteApplicantDocument,
+  getSupportingDocuments,
+  uploadSupportingDocument,
+  updateSupportingDocumentLabel,
+  deleteSupportingDocument,
   getDocumentTypes,
   sendVerificationEmail,
   sendPasswordResetEmail,
@@ -47,6 +51,8 @@ export const applicantsKeys = {
     [...applicantsKeys.detail(applicantId), "work_experiences"] as const,
   documents: (applicantId: number | "pending") =>
     [...applicantsKeys.detail(applicantId), "documents"] as const,
+  supportingDocuments: (applicantId: number | "pending") =>
+    [...applicantsKeys.detail(applicantId), "supporting_documents"] as const,
 }
 
 export const documentTypesKeys = {
@@ -319,6 +325,53 @@ export function useDeleteApplicantDocumentMutation(applicantId: number) {
         queryKey: applicantsKeys.documents(applicantId),
       })
       queryClient.invalidateQueries({ queryKey: applicantsKeys.detail(applicantId) })
+    },
+  })
+}
+
+// --- Dokumen Pendukung (admin-only) ---
+export function useSupportingDocumentsQuery(applicantId: number | null) {
+  return useQuery({
+    queryKey: applicantsKeys.supportingDocuments(applicantId ?? "pending"),
+    queryFn: () => getSupportingDocuments(applicantId!),
+    enabled: applicantId != null && applicantId > 0,
+  })
+}
+
+export function useUploadSupportingDocumentMutation(applicantId: number) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: { label: string; file: File }) =>
+      uploadSupportingDocument(applicantId, input),
+    onSettled: () => {
+      queryClient.invalidateQueries({
+        queryKey: applicantsKeys.supportingDocuments(applicantId),
+      })
+    },
+  })
+}
+
+export function useUpdateSupportingDocumentMutation(applicantId: number) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, label }: { id: number; label: string }) =>
+      updateSupportingDocumentLabel(applicantId, id, label),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: applicantsKeys.supportingDocuments(applicantId),
+      })
+    },
+  })
+}
+
+export function useDeleteSupportingDocumentMutation(applicantId: number) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => deleteSupportingDocument(applicantId, id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: applicantsKeys.supportingDocuments(applicantId),
+      })
     },
   })
 }

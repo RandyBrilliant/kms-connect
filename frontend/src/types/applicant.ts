@@ -365,6 +365,22 @@ export interface ApplicantDocument {
   reviewed_by_name?: string | null
 }
 
+/** Dokumen pendukung: admin-only internal PDFs, free-text label, many per pelamar. */
+export interface ApplicantSupportingDocument {
+  id: number
+  label: string
+  original_filename: string
+  /** Bytes */
+  file_size: number
+  uploaded_by_name: string | null
+  created_at: string
+  updated_at: string
+  /** Redirects to a short-lived signed URL. Authenticates via the session cookie. */
+  file_view_url: string | null
+  /** Returns {url, expires_in} as JSON. */
+  file_access_url: string | null
+}
+
 export interface ApplicantsListParams {
   page?: number
   page_size?: number
