@@ -378,7 +378,7 @@ export async function getSupportingDocuments(
     : (data as { results?: ApplicantSupportingDocument[] }).results ?? []
 }
 
-/** POST /api/applicants/:applicantId/supporting-documents/ - one PDF per request */
+/** POST /api/applicants/:applicantId/supporting-documents/ - one file (PDF/JPG/PNG) per request */
 export async function uploadSupportingDocument(
   applicantId: number,
   input: { label: string; file: File }

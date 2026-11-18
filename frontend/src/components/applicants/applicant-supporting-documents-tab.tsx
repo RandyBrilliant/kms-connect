@@ -1,7 +1,7 @@
 /**
- * Dokumen Pendukung tab — admin-only internal PDFs for a pelamar.
+ * Dokumen Pendukung tab — admin-only internal files for a pelamar.
  *
- * Any number of PDFs, each with a free-text label (the set differs per
+ * Any number of PDF/JPG/PNG files, each with a free-text label (the set differs per
  * placement). Pelamar, companies and the mobile app never see these files.
  */
 
@@ -41,7 +41,9 @@ import { downloadAllSupportingDocuments } from "@/api/applicants"
 import { toast } from "@/lib/toast"
 import type { ApplicantSupportingDocument } from "@/types/applicant"
 
-const MAX_PDF_BYTES = 2 * 1024 * 1024
+const MAX_FILE_BYTES = 2 * 1024 * 1024
+const ACCEPTED_MIME = ["application/pdf", "image/jpeg", "image/png"]
+const ACCEPTED_EXT = /\.(pdf|jpe?g|png)$/i
 const MAX_LABEL_LENGTH = 150
 const LABEL_SUGGESTIONS_ID = "supporting-document-label-suggestions"
 
@@ -66,13 +68,13 @@ function formatBytes(bytes: number): string {
 }
 
 function defaultLabel(fileName: string): string {
-  return fileName.replace(/\.pdf$/i, "").replace(/[_-]+/g, " ").trim().slice(0, MAX_LABEL_LENGTH)
+  return fileName.replace(ACCEPTED_EXT, "").replace(/[_-]+/g, " ").trim().slice(0, MAX_LABEL_LENGTH)
 }
 
 function clientFileError(file: File): string | undefined {
-  const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name)
-  if (!isPdf) return "Hanya file PDF yang diperbolehkan."
-  if (file.size > MAX_PDF_BYTES) return "Ukuran file melebihi 2 MB."
+  const accepted = ACCEPTED_EXT.test(file.name) && (!file.type || ACCEPTED_MIME.includes(file.type))
+  if (!accepted) return "Hanya file PDF, JPG, atau PNG yang diperbolehkan."
+  if (file.size > MAX_FILE_BYTES) return "Ukuran file melebihi 2 MB."
   return undefined
 }
 
@@ -276,7 +278,7 @@ export function ApplicantSupportingDocumentsTab({
         <CardHeader>
           <CardTitle>Dokumen Pendukung</CardTitle>
           <CardDescription>
-            PDF internal dengan label bebas. Jumlah dan jenisnya boleh berbeda untuk tiap pelamar.
+            PDF atau gambar (JPG/PNG) internal dengan label bebas. Jumlah dan jenisnya boleh berbeda untuk tiap pelamar.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -295,7 +297,7 @@ export function ApplicantSupportingDocumentsTab({
                 onClick={() => setUploadOpen(true)}
               >
                 <IconFileUpload className="mr-2 size-4" />
-                Unggah PDF
+                Unggah Dokumen
               </Button>
             </div>
           ) : (
@@ -391,7 +393,7 @@ export function ApplicantSupportingDocumentsTab({
               ref={fileInputRef}
               type="file"
               multiple
-              accept="application/pdf,.pdf"
+              accept="application/pdf,.pdf,image/jpeg,.jpg,.jpeg,image/png,.png"
               className="hidden"
               onChange={(e) => handleFilesSelected(e.target.files)}
             />
@@ -403,7 +405,7 @@ export function ApplicantSupportingDocumentsTab({
               onClick={() => fileInputRef.current?.click()}
             >
               <IconFileUpload className="size-4" />
-              {pending.length ? "Tambah file lain" : "Pilih file PDF (bisa lebih dari satu, maks 2 MB per file)"}
+              {pending.length ? "Tambah file lain" : "Pilih file PDF, JPG, atau PNG (bisa lebih dari satu, maks 2 MB per file)"}
             </Button>
 
             {pending.length > 0 && (
@@ -467,7 +469,7 @@ export function ApplicantSupportingDocumentsTab({
 
             {hasInvalidFile && (
               <p className="text-destructive text-xs">
-                Hapus file yang bukan PDF atau lebih dari 2 MB dari daftar sebelum mengunggah.
+                Hapus file yang bukan PDF/JPG/PNG atau lebih dari 2 MB dari daftar sebelum mengunggah.
               </p>
             )}
 

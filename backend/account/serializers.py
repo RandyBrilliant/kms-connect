@@ -38,7 +38,7 @@ from .api_responses import (
     validate_nik_unique,
 )
 from .validators import normalize_indonesian_phone
-from .document_specs import validate_supporting_pdf
+from .document_specs import validate_supporting_file
 
 
 # ---------------------------------------------------------------------------
@@ -1611,7 +1611,7 @@ class ApplicantDocumentSerializer(serializers.ModelSerializer):
 
 class ApplicantSupportingDocumentSerializer(serializers.ModelSerializer):
     """
-    Dokumen pendukung internal admin: PDF + label bebas.
+    Dokumen pendukung internal admin: PDF/JPG/PNG + label bebas.
 
     The file can only be set on create. To replace a file, delete the row and
     upload again. PATCH changes the label only.
@@ -1660,7 +1660,7 @@ class ApplicantSupportingDocumentSerializer(serializers.ModelSerializer):
 
     def validate_file(self, value):
         try:
-            validate_supporting_pdf(value)
+            validate_supporting_file(value)
         except DjangoValidationError as exc:
             raise serializers.ValidationError(list(exc.messages))
         return value

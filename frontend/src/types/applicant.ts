@@ -365,7 +365,7 @@ export interface ApplicantDocument {
   reviewed_by_name?: string | null
 }
 
-/** Dokumen pendukung: admin-only internal PDFs, free-text label, many per pelamar. */
+/** Dokumen pendukung: admin-only internal PDF/JPG/PNG files, free-text label, many per pelamar. */
 export interface ApplicantSupportingDocument {
   id: number
   label: string

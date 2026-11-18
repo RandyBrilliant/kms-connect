@@ -2047,7 +2047,7 @@ class ApplicantDocument(models.Model):
 
 def supporting_document_upload_to(instance, filename: str) -> str:
     """
-    account/documents/<applicant_profile_id>/pendukung/<32-hex>.pdf
+    account/documents/<applicant_profile_id>/pendukung/<32-hex>.<pdf|jpg|png>
 
     Same opaque naming as applicant_document_upload_to: no name, NIK or label
     in the storage key. The label lives in the database only.
@@ -2056,12 +2056,14 @@ def supporting_document_upload_to(instance, filename: str) -> str:
     safe_original = get_valid_filename(filename) or "document.pdf"
     _, ext = os.path.splitext(safe_original)
     ext = (ext or ".pdf").lower()
+    if ext == ".jpeg":
+        ext = ".jpg"
     return f"account/documents/{profile.id}/pendukung/{uuid.uuid4().hex}{ext}"
 
 
 class ApplicantSupportingDocument(models.Model):
     """
-    Dokumen pendukung: internal PDFs that admins attach to a pelamar.
+    Dokumen pendukung: internal files (PDF, JPG, PNG) admins attach to a pelamar.
 
     Admin-only. Unlike ApplicantDocument there is no document type and no
     one-per-type limit. Each file has a free-text label, so the set can differ

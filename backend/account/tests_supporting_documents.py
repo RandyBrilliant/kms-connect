@@ -4,12 +4,14 @@ import io
 import tempfile
 import zipfile
 
+from PIL import Image
+
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APIClient
 
-from account.document_specs import MAX_SUPPORTING_PDF_BYTES
+from account.document_specs import MAX_SUPPORTING_FILE_BYTES
 from account.models import (
     ApplicantProfile,
     ApplicantSupportingDocument,
@@ -29,6 +31,12 @@ local_media = override_settings(
 )
 
 PDF_BYTES = b"%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n"
+
+
+def _image(name="foto.jpg", fmt="JPEG"):
+    buf = io.BytesIO()
+    Image.new("RGB", (40, 30), color=(120, 120, 120)).save(buf, format=fmt)
+    return SimpleUploadedFile(name, buf.getvalue())
 
 
 def _pdf(name="surat.pdf", content=PDF_BYTES):
@@ -152,12 +160,32 @@ class SupportingDocumentTests(TestCase):
         self.assertEqual(res.status_code, 400)
         self.assertFalse(ApplicantSupportingDocument.objects.exists())
 
-    def test_rejects_non_pdf_extension(self):
+    def test_accepts_jpg_and_png(self):
+        self.assertEqual(self._upload("Foto", _image("foto.jpeg")).status_code, 201)
+        self.assertEqual(self._upload("Scan", _image("scan.png", "PNG")).status_code, 201)
+        names = sorted(d.file.name for d in ApplicantSupportingDocument.objects.all())
+        self.assertTrue(names[0].endswith(".jpg"), names)
+        self.assertTrue(names[1].endswith(".png"), names)
+
+    def test_rejects_unsupported_extension(self):
+        res = self._upload(file=SimpleUploadedFile("dok.docx", PDF_BYTES))
+        self.assertEqual(res.status_code, 400)
+
+    def test_rejects_pdf_renamed_to_jpg(self):
         res = self._upload(file=SimpleUploadedFile("foto.jpg", PDF_BYTES))
         self.assertEqual(res.status_code, 400)
 
+    def test_rejects_image_that_does_not_decode(self):
+        res = self._upload(file=SimpleUploadedFile("rusak.jpg", b"\xff\xd8\xff" + b"garbage"))
+        self.assertEqual(res.status_code, 400)
+
+    def test_rejects_oversized_image(self):
+        big = _image().read() + b"0" * MAX_SUPPORTING_FILE_BYTES
+        res = self._upload(file=SimpleUploadedFile("besar.jpg", big))
+        self.assertEqual(res.status_code, 400)
+
     def test_rejects_oversized_pdf(self):
-        big = PDF_BYTES + b"0" * MAX_SUPPORTING_PDF_BYTES
+        big = PDF_BYTES + b"0" * MAX_SUPPORTING_FILE_BYTES
         res = self._upload(file=_pdf("besar.pdf", big))
         self.assertEqual(res.status_code, 400)
 
@@ -222,6 +250,7 @@ class SupportingDocumentTests(TestCase):
         self._upload("Surat Sponsor PT A", _pdf("a.pdf", PDF_BYTES + b"A"))
         self._upload("Kontrak / Kerja", _pdf("b.pdf", PDF_BYTES + b"B"))
         self._upload("Kontrak / Kerja", _pdf("c.pdf", PDF_BYTES + b"C"))
+        self._upload("Foto KTP Wali", _image("ktp.jpg"))
 
         res = self.client.get(self._zip_url(), HTTP_ACCEPT="application/zip")
         self.assertEqual(res.status_code, 200)
@@ -238,6 +267,7 @@ class SupportingDocumentTests(TestCase):
                     f"{folder}/01_Surat_Sponsor_PT_A.pdf",
                     f"{folder}/02_Kontrak_Kerja.pdf",
                     f"{folder}/03_Kontrak_Kerja.pdf",
+                    f"{folder}/04_Foto_KTP_Wali.jpg",
                 ],
             )
             self.assertEqual(zf.read(f"{folder}/02_Kontrak_Kerja.pdf"), PDF_BYTES + b"B")

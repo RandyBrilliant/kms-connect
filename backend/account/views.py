@@ -1344,7 +1344,7 @@ class ApplicantSupportingDocumentViewSet(
     Dokumen pendukung (internal admin). Nested:
     /api/applicants/<applicant_pk>/supporting-documents/
 
-    Multiple PDFs per pelamar, each with a free-text label. Only MASTER_ADMIN
+    Multiple files (PDF/JPG/PNG) per pelamar, each with a free-text label. Only MASTER_ADMIN
     and ADMIN can see or manage them; applicants and companies never do.
     """
 
@@ -1395,12 +1395,13 @@ class ApplicantSupportingDocumentViewSet(
 
             <Nama>_<NIK>_Dokumen_Pendukung/
                 01_<label>.pdf
-                02_<label>.pdf
+                02_<label>.jpg
 
         The index prefix keeps entries unique when labels repeat. Files missing
         from storage are skipped and listed (by id) in `X-Missing-Files`.
         """
         import io
+        import os
         import zipfile
 
         profile = self.get_applicant_profile()
@@ -1425,7 +1426,8 @@ class ApplicantSupportingDocumentViewSet(
         with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
             for index, doc in enumerate(documents, start=1):
                 label = _zip_safe_component(doc.label, "dokumen")
-                arc_name = f"{folder}/{index:0{width}d}_{label}.pdf"
+                ext = os.path.splitext(doc.file.name)[1].lower() or ".pdf"
+                arc_name = f"{folder}/{index:0{width}d}_{label}{ext}"
                 try:
                     with doc.file.open("rb") as fh:
                         zf.writestr(arc_name, fh.read())
